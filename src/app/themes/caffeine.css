@@ -1,0 +1,92 @@
+:root {
+  --background: hsl(0 0% 97%);
+  --foreground: hsl(0 0% 12%);
+  --card: hsl(0 0% 99%);
+  --card-foreground: hsl(0 0% 12%);
+  --popover: hsl(0 0% 99%);
+  --popover-foreground: hsl(0 0% 12%);
+  --primary: hsl(17 22% 32%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary: hsl(35 100% 85%);
+  --secondary-foreground: hsl(17 52% 23%);
+  --muted: hsl(0 0% 93%);
+  --muted-foreground: hsl(0 0% 39%);
+  --accent: hsl(0 0% 91%);
+  --accent-foreground: hsl(0 0% 12%);
+  --destructive: hsl(10 77% 55%);
+  --border: hsl(0 0% 84%);
+  --input: hsl(0 0% 84%);
+  --ring: hsl(17 22% 32%);
+  --chart-1: hsl(17 22% 32%);
+  --chart-2: hsl(35 100% 85%);
+  --chart-3: hsl(0 0% 91%);
+  --chart-4: hsl(34 100% 89%);
+  --chart-5: hsl(17 22% 32%);
+  --sidebar: hsl(0 0% 99%);
+  --sidebar-foreground: hsl(0 0% 14%);
+  --sidebar-primary: hsl(0 0% 21%);
+  --sidebar-primary-foreground: hsl(0 0% 99%);
+  --sidebar-accent: hsl(0 0% 97%);
+  --sidebar-accent-foreground: hsl(0 0% 21%);
+  --sidebar-border: hsl(0 0% 92%);
+  --sidebar-ring: hsl(0 0% 71%);
+
+  --font-sans: 'Geist', 'Geist Fallback', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  --font-serif: "Geist", "Geist Fallback", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+  --radius: 0.5rem;
+  
+  --shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
+  --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
+  --shadow-sm: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 1px 2px -1px hsl(0 0% 0% / 0.10);
+  --shadow: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 1px 2px -1px hsl(0 0% 0% / 0.10);
+  --shadow-md: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 2px 4px -1px hsl(0 0% 0% / 0.10);
+  --shadow-lg: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 4px 6px -1px hsl(0 0% 0% / 0.10);
+  --shadow-xl: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 8px 10px -1px hsl(0 0% 0% / 0.10);
+  --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
+  
+}
+
+.dark {
+  --background: hsl(0 0% 7%);
+  --foreground: hsl(0 0% 93%);
+  --card: hsl(0 0% 9%);
+  --card-foreground: hsl(0 0% 93%);
+  --popover: hsl(0 0% 9%);
+  --popover-foreground: hsl(0 0% 93%);
+  --primary: hsl(30 91% 87%);
+  --primary-foreground: hsl(184 44% 7%);
+  --secondary: hsl(30 18% 19%);
+  --secondary-foreground: hsl(30 91% 87%);
+  --muted: hsl(0 0% 13%);
+  --muted-foreground: hsl(0 0% 71%);
+  --accent: hsl(0 0% 17%);
+  --accent-foreground: hsl(0 0% 93%);
+  --destructive: hsl(10 77% 55%);
+  --border: hsl(43 12% 12%);
+  --input: hsl(0 0% 28%);
+  --ring: hsl(30 91% 87%);
+  --chart-1: hsl(30 91% 87%);
+  --chart-2: hsl(30 18% 19%);
+  --chart-3: hsl(0 0% 17%);
+  --chart-4: hsl(30 16% 22%);
+  --chart-5: hsl(30 91% 87%);
+  --sidebar: hsl(240 9% 10%);
+  --sidebar-foreground: hsl(0 0% 96%);
+  --sidebar-primary: hsl(224 77% 48%);
+  --sidebar-primary-foreground: hsl(0 0% 100%);
+  --sidebar-accent: hsl(240 6% 16%);
+  --sidebar-accent-foreground: hsl(0 0% 96%);
+  --sidebar-border: hsl(240 6% 16%);
+  --sidebar-ring: hsl(240 10% 84%);
+  
+  --shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
+  --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
+  --shadow-sm: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 1px 2px -1px hsl(0 0% 0% / 0.10);
+  --shadow: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 1px 2px -1px hsl(0 0% 0% / 0.10);
+  --shadow-md: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 2px 4px -1px hsl(0 0% 0% / 0.10);
+  --shadow-lg: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 4px 6px -1px hsl(0 0% 0% / 0.10);
+  --shadow-xl: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 8px 10px -1px hsl(0 0% 0% / 0.10);
+  --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
+}

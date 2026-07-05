@@ -1,0 +1,634 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String    @id
+  name          String
+  email         String
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now()) @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+
+  role String? // "admin", "teacher", "student"
+
+  banned     Boolean?  @default(false)
+  banReason  String?
+  banExpires DateTime?
+
+  // Relations
+  coursesCreated        Course[]               @relation("TeacherCourses")
+  enrollments           Enrollment[]
+  submissions           Submission[]
+  evaluationsCreated    Evaluation[]           @relation("EvaluationAuthor")
+  evaluationSubmissions EvaluationSubmission[]
+  profile               Profile?
+  attendances           Attendance[]
+  remarks               Remark[]
+  remarksCreated        Remark[]               @relation("TeacherRemarks")
+  sharedContentCreated  SharedContent[]        @relation("TeacherSharedContent")
+  docProjectsCreated    DocProject[]           @relation("TeacherDocProjects")
+  encryptedGeminiApiKey String?
+  encryptedGithubToken  String?
+  aiProvider            String?
+  aiModel               String?
+  aiUrl                 String?
+  aiUsages              AIUsage[]
+  docProgress           DocProgress[]
+  docViewLogs           DocViewLog[]
+  docAiChats            DocAiChat[]
+
+  // Teacher Global Application Appearance & Policies
+  appThemeMode                String            @default("STUDENT") // "STUDENT", "LIGHT", "DARK"
+  appThemeColor               String?           @default("zinc")
+  appAllowThemeColorChange    Boolean           @default(true)
+  appCodeTheme                String            @default("one-dark-pro")
+  appAllowCodeThemeChange     Boolean           @default(true)
+
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Profile {
+  id                        String    @id @default(cuid())
+  identificacion            String
+  nombres                   String
+  apellido                  String
+  telefono                  String?
+  userId                    String    @unique
+  user                      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+  dataProcessingConsent     Boolean   @default(false)
+  dataProcessingConsentDate DateTime?
+
+  @@map("profile")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  impersonatedBy String?
+
+  @@unique([token])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@map("verification")
+}
+
+model Course {
+  id                   String    @id @default(cuid())
+  title                String
+  description          String?
+  registrationOpen     Boolean   @default(true)
+  registrationDeadline DateTime?
+  startDate            DateTime?
+  endDate              DateTime?
+  teacherId            String
+  teacher              User      @relation("TeacherCourses", fields: [teacherId], references: [id], onDelete: Cascade)
+  externalUrl          String? // Optional external course URL (e.g., Google Classroom, Moodle)
+  docProjectId         String?
+  docProject           DocProject? @relation(fields: [docProjectId], references: [id], onDelete: SetNull)
+  lateCode             String?
+  lateCodeExpiresAt    DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  
+  docTrackingEnabled   Boolean           @default(true)
+  docAiTutorEnabled    Boolean           @default(false)
+  docAiQuestionsLimit  Int               @default(5) // por hora
+  docThemeMode         String            @default("STUDENT") // "STUDENT", "LIGHT", "DARK"
+  docCodeTheme         String            @default("one-dark-pro")
+  docAllowCodeThemeChange Boolean        @default(true)
+  docThemeColor        String?           @default("zinc")
+  docAllowThemeColorChange Boolean       @default(true)
+
+  enrollments        Enrollment[]
+  activities         Activity[]
+  attendances        Attendance[]
+  remarks            Remark[]
+  sharedContent      SharedContent[]
+  evaluationAttempts EvaluationAttempt[] @relation("CourseEvaluationAttempts")
+  gradeCategories    GradeCategory[]
+  gradeGroups        GradeGroup[]
+
+  @@map("course")
+}
+
+model Enrollment {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId  String
+  course    Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdAt DateTime         @default(now())
+  status    EnrollmentStatus @default(APPROVED)
+
+  @@unique([userId, courseId])
+  @@map("enrollment")
+}
+
+enum EnrollmentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ActivityType {
+  GITHUB
+  MANUAL
+  GOOGLE_COLAB
+  PDF_REVIEW
+  CODE_PROJECT
+}
+
+model Activity {
+  id                  String       @id @default(cuid())
+  title               String
+  description         String? // Rubric or instructions
+  statement           String? // Activity statement / Enunciado
+  filePaths           String? // Comma separated list of file paths to grade
+  deadline            DateTime
+  type                ActivityType @default(GITHUB)
+  weight              Float        @default(1.0)
+  maxAttempts         Int          @default(1)
+  order               Int          @default(0)
+  openDate            DateTime?
+  allowLinkSubmission Boolean      @default(false) // For MANUAL activities - allows students to submit links
+  courseId            String
+  course              Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  submissions     Submission[]
+  gradeGroupItems GradeGroupItem[]
+
+  @@map("activity")
+}
+
+model Submission {
+  id               String   @id @default(cuid())
+  url              String
+  grade            Float?
+  feedback         String?
+  apiRequestsCount Int?     @default(0)
+  attemptCount     Int      @default(1)
+  lastSubmittedAt  DateTime @default(now())
+  activityId       String
+  activity         Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([userId, activityId])
+  @@map("submission")
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  EXCUSED
+  LATE
+}
+
+model Attendance {
+  id               String           @id @default(cuid())
+  date             DateTime
+  status           AttendanceStatus @default(ABSENT)
+  arrivalTime      DateTime?
+  justification    String?
+  justificationUrl String?
+  courseId         String
+  course           Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@unique([courseId, userId, date])
+  @@map("attendance")
+}
+
+enum RemarkType {
+  ATTENTION
+  COMMENDATION
+}
+
+model Remark {
+  id          String     @id @default(cuid())
+  type        RemarkType
+  title       String
+  description String
+  date        DateTime   @default(now())
+  courseId    String
+  course      Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teacherId   String
+  teacher     User       @relation("TeacherRemarks", fields: [teacherId], references: [id], onDelete: Cascade)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@map("remark")
+}
+
+
+
+
+enum GeminiApiKeyMode {
+  GLOBAL
+  USER
+}
+
+model SystemSettings {
+  id                    String           @id @default("settings")
+  institutionName       String?
+  institutionLogo       String?
+  siteTitle             String?
+  siteLogo              String?
+  socialLinks           String?          @default("[]")
+  defaultTheme          String?          @default("default")
+  defaultAppearance     String?          @default("system")
+  defaultCodeTheme      String?          @default("one-dark-pro")
+  forceDefaultSettings  Boolean          @default(false)
+  institutionHeroImage  String?
+  geminiApiKeyMode      GeminiApiKeyMode @default(GLOBAL)
+  encryptedGlobalApiKey String?
+  encryptedGithubToken  String?
+  footerText            String?
+  auditLogEnabled       Boolean          @default(true)
+  
+  // App Visual Identity (Global)
+  appThemeMode                String            @default("STUDENT") // "STUDENT", "LIGHT", "DARK"
+  appThemeColor               String?           @default("zinc")
+  appAllowThemeColorChange    Boolean           @default(true)
+  appCodeTheme                String            @default("one-dark-pro")
+  appAllowCodeThemeChange     Boolean           @default(true)
+  
+  updatedAt             DateTime         @updatedAt
+
+  @@map("system_settings")
+}
+
+
+enum LogAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  EXPORT
+  GRADE
+  SUBMIT
+  ENROLL
+  UNENROLL
+  ATTENDANCE_MARK
+  REMARK_CREATE
+  OTHER
+}
+
+enum LogEntity {
+  USER
+  COURSE
+  ACTIVITY
+  SUBMISSION
+  ENROLLMENT
+  ATTENDANCE
+  REMARK
+  EVALUATION
+  EVALUATION_SUBMISSION
+  SYSTEM
+  OTHER
+}
+
+model AuditLog {
+  id           String    @id @default(cuid())
+  action       LogAction
+  entity       LogEntity
+  entityId     String? // ID of the affected entity
+  userId       String? // User who performed the action
+  userName     String? // Cached user name for faster queries
+  userRole     String? // Cached user role
+  description  String // Human-readable description
+  metadata     String? // JSON string with additional data
+  ipAddress    String?
+  userAgent    String?
+  success      Boolean   @default(true)
+  errorMessage String?
+  createdAt    DateTime  @default(now())
+
+  @@index([action])
+  @@index([entity])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([success])
+  @@map("audit_log")
+}
+
+model SharedContent {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  links       Json     @default("[]") // [{ label: string, url: string }]
+  files       Json     @default("[]") // [{ name: string, content: string, language: string }]
+  courseId    String
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  teacherId   String
+  teacher     User     @relation("TeacherSharedContent", fields: [teacherId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("shared_content")
+}
+
+// Modelo para Evaluación
+model Evaluation {
+  id                    String              @id @default(cuid())
+  title                 String
+  description           String?
+  helpUrl               String? // URL de ayuda o recursos adicionales
+  authorId              String
+  author                User                @relation("EvaluationAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  questions             Question[]          @relation("EvaluationQuestions")
+  attempts              EvaluationAttempt[] @relation("EvaluationAttempts")
+  maxSupportAttempts    Int                 @default(3) // Máximo número de peticiones de ayuda/IA por pregunta
+  aiSupportDelaySeconds Int                 @default(60) // Tiempo en segundos de espera entre peticiones a la IA
+  expulsionPenalty      Float               @default(0) // Puntos a restar por cada expulsión del estudiante (0 = sólo registrar)
+  wildcardAiHints       Int                 @default(0) // Cantidad de comodines "Pista de IA" disponibles (0 = deshabilitado)
+  wildcardSecondChance  Int                 @default(0) // Cantidad de comodines "Segunda Oportunidad" disponibles (0 = deshabilitado)
+
+  @@map("evaluation")
+}
+
+// Modelo para Pregunta
+model Question {
+  id           String             @id @default(cuid())
+  evaluationId String
+  evaluation   Evaluation         @relation("EvaluationQuestions", fields: [evaluationId], references: [id], onDelete: Cascade)
+  text         String             @db.Text // Contenido del editor markdown
+  type         String //"Code", "Text"
+  language     String? // Lenguaje de programación para preguntas de tipo CODE
+  referenceAnswer String? @db.Text // Respuesta ideal de referencia suministrada por el profesor
+  order        Int                @default(0)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  answers      EvaluationAnswer[] @relation("QuestionAnswers")
+
+  @@map("question")
+}
+
+// Modelo para Intento (EvaluationAttempt)
+model EvaluationAttempt {
+  id           String                 @id @default(cuid())
+  evaluationId String
+  evaluation   Evaluation             @relation("EvaluationAttempts", fields: [evaluationId], references: [id], onDelete: Cascade)
+  startTime    DateTime
+  endTime      DateTime
+  courseId     String? // Relación opcional para asignar a un grupo específico
+  course       Course?                @relation("CourseEvaluationAttempts", fields: [courseId], references: [id], onDelete: Cascade)
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  submissions  EvaluationSubmission[] @relation("AttemptSubmissions")
+  gradeGroupItems GradeGroupItem[]
+
+  @@map("evaluation_attempt")
+}
+
+// Modelo para Presentación (EvaluationSubmission)
+model EvaluationSubmission {
+  id            String             @id @default(cuid())
+  attemptId     String
+  attempt       EvaluationAttempt  @relation("AttemptSubmissions", fields: [attemptId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  score         Float? // Calificación (añadido previamente)  
+  submittedAt   DateTime? // Fecha y hora de envío
+  expulsions    Int                @default(0) // Cantidad de expulsiones registradas durante la evaluación
+  wildcardsUsed Json?              @default("{}") // JSON: { aiHintsUsed: 0, secondChanceUsed: 0, secondChanceQuestions: [] }
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  answersList   EvaluationAnswer[] @relation("SubmissionAnswers")
+  deviceId      String? // Identificador único de dispositivo/sesión
+
+  @@map("evaluation_submission")
+}
+
+// Modelo para Respuesta (EvaluationAnswer)
+model EvaluationAnswer {
+  id              String               @id @default(cuid())
+  submissionId    String
+  submission      EvaluationSubmission @relation("SubmissionAnswers", fields: [submissionId], references: [id], onDelete: Cascade)
+  questionId      String
+  question        Question             @relation("QuestionAnswers", fields: [questionId], references: [id], onDelete: Cascade)
+  answer          String               @db.Text // Respuesta del estudiante
+  score           Float? // Puntuación máxima específica de esta respuesta
+  aiFeedback      Json? // JSON Array: [{ attempt: 1, feedback: "", score: 0.0, isCorrect: boolean }]
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  supportAttempts Int                  @default(0) // Contador de veces que se ha solicitado ayuda/IA
+
+  @@map("evaluation_answer")
+}
+
+model GradeCategory {
+  id        String       @id @default(cuid())
+  name      String       // Label like "Primer Corte", "Segundo Corte"
+  weight    Float        @default(1.0) // Weight for final course grade (0-100)
+  courseId  String
+  course    Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  groups    GradeGroup[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@map("grade_category")
+}
+
+model GradeGroup {
+  id          String           @id @default(cuid())
+  name        String           // Label like "Talleres", "Exámenes"
+  weight      Float            @default(1.0) // Weight for category grade (0-100)
+  categoryId  String?
+  category    GradeCategory?    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  courseId    String // Kept for legacy/convenience
+  course      Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  items       GradeGroupItem[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@map("grade_group")
+}
+
+model GradeGroupItem {
+  id                  String             @id @default(cuid())
+  groupId             String
+  group               GradeGroup         @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  activityId          String?
+  activity            Activity?          @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  evaluationAttemptId String?
+  evaluationAttempt   EvaluationAttempt? @relation(fields: [evaluationAttemptId], references: [id], onDelete: SetNull)
+  weight              Float              @default(1.0) // Internal weight within the group
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  @@map("grade_group_item")
+}
+
+model DocProject {
+  id               String            @id @default(cuid())
+  name             String
+  description      String?
+  imageUrl         String?
+  icon             String?           @default("lucide:book")
+  isPublic         Boolean           @default(false)
+  order            Int               @default(0)
+  slug             String            @unique
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  pages            DocPage[]
+  courses          Course[]
+  aiChats          DocAiChat[]
+  viewLogs         DocViewLog[]
+  
+  teacherId        String?
+  teacher          User?             @relation("TeacherDocProjects", fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@map("doc_project")
+}
+
+model DocPage {
+  id               String            @id @default(cuid())
+  docProjectId     String
+  docProject       DocProject        @relation(fields: [docProjectId], references: [id], onDelete: Cascade)
+  slug             String            // ej: "introduccion" o "tema1/leccion1"
+  title            String
+  description      String?
+  content          String            @db.Text
+  category         String?           @default("General")
+  order            Int               @default(0)
+  categoryOrder    Int               @default(0)
+  icon             String?
+  draft            Boolean           @default(false)
+  publishDate      DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  progress         DocProgress[]
+  viewLogs         DocViewLog[]
+
+
+  @@unique([docProjectId, slug])
+  @@index([docProjectId])
+  @@map("doc_page")
+}
+
+model AIUsage {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider     String
+  model        String
+  action       String   // e.g. "grade", "generate_content", "test_connection"
+  promptTokens Int      @default(0)
+  completionTokens Int  @default(0)
+  totalTokens  Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@map("ai_usage")
+}
+
+model DocProgress {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pageId       String
+  page         DocPage  @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  completed    Boolean  @default(false)
+  timeSpent    Int      @default(0) // en segundos
+  lastViewedAt DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([userId, pageId])
+  @@map("doc_progress")
+}
+
+model DocViewLog {
+  id           String     @id @default(cuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  docProjectId String?
+  docProject   DocProject? @relation(fields: [docProjectId], references: [id], onDelete: Cascade)
+  pageId       String?
+  page         DocPage?   @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  viewedAt     DateTime   @default(now())
+  duration     Int?       // duración de la sesión de lectura en segundos
+
+  @@index([userId, docProjectId, viewedAt])
+  @@map("doc_view_log")
+}
+
+model DocAiChat {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  docProjectId String
+  docProject   DocProject @relation(fields: [docProjectId], references: [id], onDelete: Cascade)
+  question     String   @db.Text
+  answer       String   @db.Text
+  createdAt    DateTime @default(now())
+
+  @@index([userId, docProjectId, createdAt])
+  @@map("doc_ai_chat")
+}
