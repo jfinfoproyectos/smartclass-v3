@@ -23,7 +23,7 @@ export async function createActivityAction(formData: FormData) {
     const deadlineStr = formData.get("deadline") as string;
     const openDateStr = formData.get("openDate") as string;
     const courseId = formData.get("courseId") as string;
-    const type = formData.get("type") as "GITHUB" | "MANUAL" | "GOOGLE_COLAB" | "PDF_REVIEW" | "CODE_PROJECT";
+    const type = formData.get("type") as "GITHUB" | "MANUAL" | "PDF_REVIEW" | "CODE_PROJECT";
     const weightStr = formData.get("weight") as string;
     const maxAttemptsStr = formData.get("maxAttempts") as string;
     const allowLinkSubmissionStr = formData.get("allowLinkSubmission") as string;
@@ -71,7 +71,7 @@ export async function updateActivityAction(formData: FormData) {
     const deadlineStr = formData.get("deadline") as string | null;
     const openDateStr = formData.get("openDate") as string | null;
     const courseId = formData.get("courseId") as string;
-    const type = formData.get("type") as "GITHUB" | "MANUAL" | "GOOGLE_COLAB" | "PDF_REVIEW" | "CODE_PROJECT" | null;
+    const type = formData.get("type") as "GITHUB" | "MANUAL" | "PDF_REVIEW" | "CODE_PROJECT" | null;
     const weightStr = formData.get("weight") as string | null;
     const maxAttemptsStr = formData.get("maxAttempts") as string | null;
     const allowLinkSubmissionStr = formData.get("allowLinkSubmission") as string | null;

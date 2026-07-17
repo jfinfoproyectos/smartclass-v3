@@ -19,7 +19,7 @@ export async function getVisualSettingsAction() {
         return { 
             themeMode: settings?.appThemeMode || "STUDENT",
             themeColor: settings?.appThemeColor || "zinc",
-            allowThemeColorChange: settings?.appAllowThemeColorChange ?? true
+            allowThemeColorChange: true
         };
     } catch (error) {
         console.error("Error fetching settings, using defaults:", error);

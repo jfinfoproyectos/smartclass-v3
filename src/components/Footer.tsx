@@ -17,7 +17,7 @@ export function Footer() {
     if (!footerText) return null;
 
     return (
-        <footer className="w-full py-2 text-center text-xs text-muted-foreground bg-muted/30 border-t mt-auto">
+        <footer className="shrink-0 w-full py-1.5 text-center text-xs text-muted-foreground bg-background/95 backdrop-blur-sm border-t">
             <div
                 className="container mx-auto px-4"
                 dangerouslySetInnerHTML={{ __html: footerText }}

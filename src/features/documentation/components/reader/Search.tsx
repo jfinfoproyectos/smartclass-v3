@@ -161,12 +161,12 @@ export default function Search({ projectId }: { projectId?: string }) {
       <button
         onClick={mounted ? toggleSearch : undefined}
         disabled={!mounted}
-        className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-xl transition-all group w-full max-w-[280px] bg-muted/40 border border-border/30 hover:border-primary/50 hover:bg-muted/60"
+        className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-xl transition-all group w-full max-w-[280px] bg-muted/80 dark:bg-white/[0.04] border border-border/60 dark:border-white/10 hover:border-primary/50 dark:hover:border-primary/40 hover:bg-muted dark:hover:bg-white/[0.08]"
       >
-        <SearchIcon className="w-3.5 h-3.5 text-muted-foreground/50 group-hover:text-primary transition-colors" />
-        <span className="flex-1 text-left text-muted-foreground/50 group-hover:text-foreground/70 transition-colors text-xs font-medium">Buscar...</span>
+        <SearchIcon className="w-3.5 h-3.5 text-muted-foreground/70 group-hover:text-primary transition-colors" />
+        <span className="flex-1 text-left text-muted-foreground/70 group-hover:text-foreground/90 transition-colors text-xs font-medium">Buscar...</span>
         {mounted && (
-          <kbd className="hidden md:flex flex-row items-center gap-1 bg-background px-1.5 py-0.5 rounded text-[10px] font-mono border border-border/50 opacity-40 group-hover:opacity-100">
+          <kbd className="hidden md:flex flex-row items-center gap-1 bg-background dark:bg-white/[0.05] px-1.5 py-0.5 rounded text-[10px] font-mono border border-border/50 dark:border-white/10 opacity-60 group-hover:opacity-100">
             <span className="text-[8px]">Ctrl</span> K
           </kbd>
         )}
@@ -190,9 +190,9 @@ export default function Search({ projectId }: { projectId?: string }) {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.98, y: -10 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="relative w-full max-w-2xl bg-card border border-white/10 shadow-[0_24px_48px_-12px_rgba(0,0,0,0.5)] rounded-2xl overflow-hidden pointer-events-auto flex flex-col"
+              className="relative w-full max-w-2xl bg-card border border-border/80 dark:border-white/10 shadow-[0_24px_48px_-12px_rgba(0,0,0,0.5)] rounded-2xl overflow-hidden pointer-events-auto flex flex-col"
             >
-              <div className="flex items-center px-6 border-b border-white/5 h-16 bg-background/50">
+              <div className="flex items-center px-6 border-b border-border/40 dark:border-white/5 h-16 bg-background/50">
                 <SearchIcon className="w-5 h-5 text-primary mr-4 opacity-70" />
                 <input
                   ref={inputRef}
@@ -201,17 +201,17 @@ export default function Search({ projectId }: { projectId?: string }) {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={onKeyDown}
-                  className="flex-1 bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground/40 h-full py-2 text-lg font-medium tracking-tight"
+                  className="flex-1 bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground/60 h-full py-2 text-lg font-medium tracking-tight"
                 />
                 <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-white/5 border border-white/10 text-[10px] font-mono text-muted-foreground/60">
+                  <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-muted dark:bg-white/5 border border-border/60 dark:border-white/10 text-[10px] font-mono text-muted-foreground/60">
                     ESC
                   </div>
                   <button 
                     onClick={() => setIsOpen(false)}
-                    className="p-1 hover:bg-white/5 rounded-md transition-colors"
+                    className="p-1 hover:bg-muted dark:hover:bg-white/5 rounded-md transition-colors"
                   >
-                    <X className="w-5 h-5 text-muted-foreground/40" />
+                    <X className="w-5 h-5 text-muted-foreground/60" />
                   </button>
                 </div>
               </div>

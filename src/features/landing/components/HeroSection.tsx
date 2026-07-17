@@ -2,7 +2,7 @@
 
 import React from "react";
 import { motion } from "framer-motion";
-import { BrainCircuit, Github } from "lucide-react";
+import { BrainCircuit } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { LampContainer } from "@/components/ui/lamp";
@@ -47,7 +47,6 @@ export function HeroSection() {
           </div>
 
           <div className="text-slate-500 mt-10 text-sm flex items-center gap-6">
-            <span className="flex items-center gap-2"><Github className="size-4" /> GitHub Integration</span>
             <span className="flex items-center gap-2"><BrainCircuit className="size-4" /> Gemini AI</span>
           </div>
         </motion.div>

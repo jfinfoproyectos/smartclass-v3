@@ -8,8 +8,6 @@ import * as adminService from "../services/admin-docs";
 import prisma from "@/lib/prisma";
 
 import { getRoleFromUser } from "@/features/auth/services/authService";
-import { remarkMermaid } from "../utils/remark-mermaid";
-import { remarkP5Sketch } from "../utils/remark-p5";
 
 async function verifyAdmin() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -94,17 +92,58 @@ export async function createItemAction(
   const path = normalizedParent ? `${normalizedParent}/${name}` : name;
   const finalSlug = path.replace(/\.md$/, '');
   
-  const initialContent = content || `# ${metadata?.title || name}\n\nEscribe aquí tu contenido...`;
+  let finalContent = content || `# ${metadata?.title || name}\n\nEscribe aquí tu contenido...`;
   
-  const saveMetadata = {
+  const saveMetadata: {
+    title: string;
+    order?: number;
+    category?: string;
+    categoryOrder?: number;
+    draft?: boolean;
+    publishDate?: Date | null;
+    icon?: string;
+  } = {
     title: metadata?.title || name,
     order: metadata?.order ? parseInt(metadata.order) : undefined
   };
+
+  // If content is provided, parse frontmatter using gray-matter
+  if (content && content.trim().startsWith("---")) {
+    try {
+      const parsed = matter(content);
+      finalContent = parsed.content;
+      if (parsed.data) {
+        if (parsed.data.title) {
+          saveMetadata.title = parsed.data.title;
+        }
+        if (parsed.data.draft !== undefined) {
+          saveMetadata.draft = String(parsed.data.draft) === 'true';
+        }
+        if (parsed.data.date) {
+          saveMetadata.publishDate = new Date(parsed.data.date);
+        }
+        if (parsed.data.order !== undefined) {
+          saveMetadata.order = parseInt(String(parsed.data.order));
+        }
+        if (parsed.data.category) {
+          saveMetadata.category = parsed.data.category;
+        }
+        if (parsed.data.categoryOrder !== undefined) {
+          saveMetadata.categoryOrder = parseInt(String(parsed.data.categoryOrder));
+        }
+        if (parsed.data.icon) {
+          saveMetadata.icon = parsed.data.icon;
+        }
+      }
+    } catch (err) {
+      console.warn("Error parsing frontmatter on createItemAction:", err);
+    }
+  }
   
   if (type === 'file') {
-    await adminService.saveFileContent(project.slug, finalSlug, initialContent, saveMetadata);
+    await adminService.saveFileContent(project.slug, finalSlug, finalContent, saveMetadata);
   } else {
-    await adminService.saveFileContent(project.slug, `${finalSlug}/index`, initialContent, saveMetadata);
+    await adminService.saveFileContent(project.slug, `${finalSlug}/index`, finalContent, saveMetadata);
   }
   
   revalidatePath(`/dashboard/teacher/docs/${project.slug}`, "page");
@@ -166,58 +205,7 @@ export async function deleteProjectAction(projectId: string) {
   return { success: true };
 }
 
-import remarkGfm from "remark-gfm";
-import rehypeSlug from "rehype-slug";
-import rehypePrettyCode from "rehype-pretty-code";
-import { resolveShikiTheme } from "../utils/shiki-themes";
-import MarkdownRenderer from "../components/MarkdownRenderer";
 
-export async function renderMdxPreviewAction(content: string) {
-  await verifyAdmin();
-  
-  // Limpiar caracteres especiales de Windows y espacios extra
-  const rawContent = content.replace(/\r\n/g, "\n").trim();
-  
-  // Intentar separar el frontmatter del contenido
-  let mdxContent = rawContent;
-  let displayTitle = "";
-
-  try {
-    const { data, content: strippedContent } = matter(rawContent);
-    displayTitle = data.title || "";
-    // Solo usamos strippedContent si realmente había frontmatter
-    if (rawContent.startsWith("---")) {
-      mdxContent = strippedContent.trim();
-    }
-  } catch (e) {
-    console.error("Error parsing matter:", e);
-  }
-
-  let mdxSource;
-  try {
-    // Rendereamos el Server Component directamente para enviarlo al cliente
-    // Esto evita usar serialize() de next-mdx-remote, que causa errores de módulo no encontrado
-    // en Vercel con Turbopack debido a cómo se compila JSX internamente.
-    const previewNode = <MarkdownRenderer content={mdxContent} isPreview={true} />;
-
-    return {
-      success: true as const,
-      displayTitle,
-      previewNode,
-    };
-  } catch (compilationError: any) {
-    console.error("MDX Compilation Error in preview:", compilationError);
-    let errorMessage = compilationError?.message || compilationError?.reason || String(compilationError);
-    if (!errorMessage || errorMessage === "[object Object]") {
-      errorMessage = JSON.stringify(compilationError, Object.getOwnPropertyNames(compilationError));
-    }
-    return {
-      success: false as const,
-      error: `Error interno Vercel: ${errorMessage}`,
-      displayTitle,
-    };
-  }
-}
 
 export async function moveItemAction(projectId: string, oldPath: string, newParentPath: string, sha: string) {
   const session = await verifyAdmin();
@@ -663,6 +651,12 @@ export async function exportProjectAction(projectId: string) {
   return project.pages.map((p: any) => ({
     slug: p.slug,
     title: p.title,
-    content: p.content
+    content: p.content,
+    category: p.category || "General",
+    order: p.order ?? 0,
+    categoryOrder: p.categoryOrder ?? 0,
+    draft: p.draft ?? false,
+    publishDate: p.publishDate ? (p.publishDate as Date).toISOString() : null,
+    icon: p.icon || null
   }));
 }

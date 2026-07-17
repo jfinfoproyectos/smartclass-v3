@@ -168,7 +168,7 @@ export function StudentActivityDetails({ enrollment }: StudentActivityDetailsPro
 
     return (
         <div className="flex flex-col h-full">
-            <div className="flex items-center justify-between px-6 py-4 border-b">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between items-start gap-4 px-6 py-4 border-b">
                 <div className="flex items-center gap-4">
                     <Avatar className="h-10 w-10">
                         <AvatarImage src={enrollment.user.image} />
@@ -190,7 +190,7 @@ export function StudentActivityDetails({ enrollment }: StudentActivityDetailsPro
                         </div>
                     </div>
                 </div>
-                <div className="flex items-center gap-2 pr-8">
+                <div className="flex flex-wrap items-center gap-2 pr-8">
                     <Button
                         variant="outline"
                         size="sm"
@@ -256,12 +256,12 @@ export function StudentActivityDetails({ enrollment }: StudentActivityDetailsPro
             </div>
 
             <div className="flex-1 overflow-y-auto p-6">
-                <div className="mb-6 flex items-center justify-between bg-muted/30 p-4 rounded-lg border">
+                <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between bg-muted/30 p-4 rounded-lg border gap-4">
                     <div>
                         <p className="text-sm font-medium text-muted-foreground">Curso</p>
                         <p className="font-semibold">{enrollment.course.title}</p>
                     </div>
-                    <div className="text-right">
+                    <div className="sm:text-right">
                         <p className="text-sm font-medium text-muted-foreground">Promedio Acumulado</p>
                         <p className="text-2xl font-bold text-primary">
                             {enrollment.averageGrade > 0 ? enrollment.averageGrade.toFixed(1) : "-"}
@@ -290,8 +290,8 @@ export function StudentActivityDetails({ enrollment }: StudentActivityDetailsPro
                     </TooltipProvider>
                 </div>
 
-                <div className="rounded-md border">
-                    <Table>
+                <div className="rounded-md border overflow-x-auto">
+                    <Table className="min-w-[650px]">
                         <TableHeader>
                             <TableRow>
                                 <TableHead className="w-[50px]">#</TableHead>
@@ -421,8 +421,8 @@ export function StudentActivityDetails({ enrollment }: StudentActivityDetailsPro
                     {loadingRemarks ? (
                         <div className="text-sm text-muted-foreground">Cargando observaciones...</div>
                     ) : remarks.length > 0 ? (
-                        <div className="rounded-md border">
-                            <Table>
+                        <div className="rounded-md border overflow-x-auto">
+                            <Table className="min-w-[600px]">
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>Fecha</TableHead>

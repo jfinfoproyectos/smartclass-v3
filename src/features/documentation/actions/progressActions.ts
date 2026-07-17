@@ -9,91 +9,21 @@ import { revalidatePath } from "next/cache";
  * Registra una visita al sitio de documentación (proyecto) en general.
  */
 export async function recordProjectVisitAction(projectId: string) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) return;
-
-  try {
-    // Evitar conteo múltiple en la misma sesión (enfriamiento de 30 min para visitas al sitio)
-    const recentLog = await prisma.docViewLog.findFirst({
-      where: {
-        userId: session.user.id,
-        docProjectId: projectId,
-        viewedAt: { gte: new Date(Date.now() - 10 * 60 * 1000) } // 10 minutos
-      }
-    });
-
-    if (!recentLog) {
-      await prisma.docViewLog.create({
-        data: {
-          userId: session.user.id,
-          docProjectId: projectId,
-        }
-      });
-    }
-
-    return { success: true };
-  } catch (error) {
-    console.error("Error recording project visit:", error);
-    return { success: false };
-  }
+  return { success: true };
 }
 
 /**
  * Registra el acceso a una página específica (solo para actualizar el timestamp de actividad).
  */
 export async function recordPageViewAction(pageId: string) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) return;
-
-  try {
-    await prisma.docProgress.upsert({
-      where: {
-        userId_pageId: {
-          userId: session.user.id,
-          pageId: pageId,
-        }
-      },
-      update: {
-        lastViewedAt: new Date(),
-      },
-      create: {
-        userId: session.user.id,
-        pageId: pageId,
-      }
-    });
-  } catch (error) {
-    console.error("Error updating activity timestamp:", error);
-  }
+  return;
 }
 
 /**
  * Actualiza el tiempo dedicado a una página (telemetría de tiempo).
  */
 export async function updatePageProgressAction(pageId: string, timeSpentSeconds: number) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) return;
-
-  try {
-    await prisma.docProgress.upsert({
-      where: {
-        userId_pageId: {
-          userId: session.user.id,
-          pageId: pageId,
-        }
-      },
-      update: {
-        timeSpent: { increment: Math.round(timeSpentSeconds) },
-        lastViewedAt: new Date(),
-      },
-      create: {
-        userId: session.user.id,
-        pageId: pageId,
-        timeSpent: Math.round(timeSpentSeconds),
-      }
-    });
-  } catch (error) {
-    console.error("Error updating study time:", error);
-  }
+  return;
 }
 
 /**
@@ -182,16 +112,16 @@ export async function getProjectAnalyticsAction(docProjectId: string, courseId?:
       aiQuestionsLimit: projectSettings.docAiQuestionsLimit,
       themeMode: projectSettings.docThemeMode,
       codeTheme: projectSettings.docCodeTheme,
-      allowCodeThemeChange: projectSettings.docAllowCodeThemeChange,
+      allowCodeThemeChange: true,
       themeColor: projectSettings.docThemeColor,
-      allowThemeColorChange: projectSettings.docAllowThemeColorChange,
+      allowThemeColorChange: true,
       // Default values from teacher global settings
       teacherDefaults: {
           themeMode: (projectSettings as any)?.teacher?.appThemeMode,
           codeTheme: (projectSettings as any)?.teacher?.appCodeTheme,
-          allowCodeThemeChange: (projectSettings as any)?.teacher?.appAllowCodeThemeChange,
+          allowCodeThemeChange: true,
           themeColor: (projectSettings as any)?.teacher?.appThemeColor,
-          allowThemeColorChange: (projectSettings as any)?.teacher?.appAllowThemeColorChange
+          allowThemeColorChange: true
       }
     } : null
   };

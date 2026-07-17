@@ -11,17 +11,13 @@ export default async function Page() {
     redirect("/signin");
   }
 
-  const availableCourses = await courseService.getAllCourses();
   const myEnrollments = await courseService.getStudentEnrollments(session.user.id);
-  const pendingEnrollments = await courseService.getStudentPendingEnrollments(session.user.id);
 
   const themes = await getAvailableThemes();
 
   return <StudentDashboard
-    availableCourses={availableCourses}
     myEnrollments={myEnrollments}
     studentName={session.user.name}
-    pendingEnrollments={pendingEnrollments}
     themes={themes}
   />;
 }

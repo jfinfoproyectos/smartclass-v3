@@ -4,7 +4,6 @@ import dynamic from 'next/dynamic';
 
 const GithubActivityDetails = dynamic(() => import('./GithubActivityDetails').then(m => m.GithubActivityDetails), { ssr: false });
 const ManualActivityDetails = dynamic(() => import('./ManualActivityDetails').then(m => m.ManualActivityDetails), { ssr: false });
-const GoogleColabActivityDetails = dynamic(() => import('./GoogleColabActivityDetails').then(m => m.GoogleColabActivityDetails), { ssr: false });
 const PdfReviewActivityDetails = dynamic(() => import('./PdfReviewActivityDetails').then(m => m.PdfReviewActivityDetails), { ssr: false });
 const CodeProjectActivityDetails = dynamic(() => import('./CodeProjectActivityDetails').then(m => m.CodeProjectActivityDetails), { ssr: false });
 import { Button } from "@/components/ui/button";
@@ -40,8 +39,7 @@ function ActivityContent({ activity, userId, studentName }: ActivityDetailsProps
     switch (activity.type) {
         case "GITHUB":
             return <GithubActivityDetails activity={activity} userId={userId} studentName={studentName} />;
-        case "GOOGLE_COLAB":
-            return <GoogleColabActivityDetails activity={activity} userId={userId} studentName={studentName} />;
+
         case "MANUAL":
             return <ManualActivityDetails activity={activity} userId={userId} studentName={studentName} />;
         case "PDF_REVIEW":

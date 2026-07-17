@@ -90,9 +90,9 @@ export const attendanceService = {
         }
 
         // Find existing attendance record for "today" (UTC range)
-        // We define "today" as the current UTC date
+        // We define "today" as the current UTC date (server always runs in UTC)
         const now = new Date();
-        const todayUTC = toUTCStartOfDayFromLocal(now);
+        const todayUTC = toUTCStartOfDay(now);
 
         // We look for a record with exactly this date, or create one if it doesn't exist (though late usually implies there was a session)
         // Adjusting logic: Late arrival means they missed the roll call earlier TODAY.
@@ -311,7 +311,7 @@ export const attendanceService = {
     },
 
     async getAbsentStudentsForToday(courseId: string) {
-        const today = toUTCStartOfDayFromLocal(new Date());
+        const today = toUTCStartOfDay(new Date());
         return await prisma.attendance.findMany({
             where: {
                 courseId,

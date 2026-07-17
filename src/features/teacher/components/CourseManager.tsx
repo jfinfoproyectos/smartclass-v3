@@ -23,10 +23,9 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { createCourseAction, deleteCourseAction, cloneCourseAction } from "@/features/teacher/actions/courseActions";
-import { updateRegistrationSettingsAction } from "@/features/teacher/actions/courseActions";;
+import { createCourseAction, deleteCourseAction, cloneCourseAction, generateEnrollmentCodeAction, toggleCourseRegistrationSimpleAction } from "@/features/teacher/actions/courseActions";
 import { getCourseCompleteDataAction } from "@/features/teacher/actions/reportActions";
-import { Plus, Trash2, Eye, Lock, Unlock, Calendar, Settings, X, Copy, FileWarning, Download, Users, BookOpen, Clock } from "lucide-react";
+import { Trash2, Settings, Copy, Users, BookOpen, Pencil, RefreshCw, Check, Maximize2, FolderArchive, Loader2 } from "lucide-react";
 import {
     Tooltip,
     TooltipContent,
@@ -36,17 +35,7 @@ import {
 
 import Link from "next/link";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardFooter,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card";
 import { updateCourseAction } from "@/features/teacher/actions/courseActions";
-import { Pencil } from "lucide-react";
 import {
     Select,
     SelectContent,
@@ -55,6 +44,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { getMultiCourseGradesReportAction } from "@/features/teacher/actions/reportActions";
 import { exportMultiSheetExcel } from "@/lib/export-utils";
@@ -62,6 +52,10 @@ import { FileSpreadsheet } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { formatCalendarDate } from "@/lib/dateUtils";
+import { Badge } from "@/components/ui/badge";
+import { EnrollmentRequests } from "./EnrollmentRequests";
+import JSZip from "jszip";
+import { exportCourseAction } from "@/features/teacher/actions/courseZipActions";
 
 // Helper function to format date consistently on server and client
 function formatDateTime(date: Date | string): string {
@@ -88,9 +82,9 @@ interface Course {
     description: string | null;
     startDate: Date | string | null;
     endDate: Date | string | null;
-    externalUrl: string | null;
     registrationOpen: boolean;
     registrationDeadline: Date | string | null;
+    enrollmentCode: string | null;
     schedules: Schedule[];
     _count: {
         enrollments: number;
@@ -113,144 +107,7 @@ interface PendingEnrollment {
 }
 
 
-function RegistrationSettingsDialog({ course }: { course: Course }) {
-    const [isOpen, setIsOpen] = useState(false);
-    const [isOpenStatus, setIsOpenStatus] = useState(course.registrationOpen);
-    const [mode, setMode] = useState<"date">( "date");
-    const [deadline, setDeadline] = useState(course.registrationDeadline ? format(new Date(course.registrationDeadline), "yyyy-MM-dd'T'HH:mm") : "");
 
-    const setQuickDeadline = (minutes: number) => {
-        const now = new Date();
-        const future = new Date(now.getTime() + minutes * 60000);
-        setDeadline(format(future, "yyyy-MM-dd'T'HH:mm"));
-        setIsOpenStatus(true);
-    };
-    // ... rest of the function (no change needed in body if types match)
-
-    // I need to be careful with replace_file_content, I cannot assume body content.
-    // I will use multi_replace.
-
-
-
-    return (
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <Tooltip>
-                <DialogTrigger asChild>
-                    <span className="inline-block">
-                        <TooltipTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
-                            >
-                                {course.registrationOpen ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-                            </Button>
-                        </TooltipTrigger>
-                    </span>
-                </DialogTrigger>
-                <TooltipContent>
-                    <p>{course.registrationOpen ? "Cerrar Inscripción" : "Abrir Inscripción"}</p>
-                </TooltipContent>
-            </Tooltip>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Configurar Inscripción</DialogTitle>
-                    <DialogDescription>
-                        Gestiona la disponibilidad del curso para nuevos estudiantes.
-                    </DialogDescription>
-                </DialogHeader>
-                <form action={async (formData) => {
-                    if (deadline) {
-                        formData.set("deadline", new Date(deadline).toISOString());
-                    }
-                    await updateRegistrationSettingsAction(formData);
-                    setIsOpen(false);
-                }} className="space-y-4">
-                    <input type="hidden" name="courseId" value={course.id} />
-
-                    <div className="space-y-2">
-                        <Label>Estado de Inscripción</Label>
-                        <RadioGroup 
-                            name="isOpen" 
-                            value={isOpenStatus ? "true" : "false"}
-                            onValueChange={(v) => setIsOpenStatus(v === "true")}
-                        >
-                            <div className="flex items-center space-x-2">
-                                <RadioGroupItem value="true" id="open" />
-                                <Label htmlFor="open">Abierta</Label>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                                <RadioGroupItem value="false" id="closed" />
-                                <Label htmlFor="closed">Cerrada</Label>
-                            </div>
-                        </RadioGroup>
-                    </div>
-
-                    {isOpenStatus && (
-                        <div className="space-y-4 pt-2 border-t">
-                            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Opciones de Apertura Rápida</Label>
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                <Button 
-                                    type="button" 
-                                    variant="outline" 
-                                    size="sm" 
-                                    className="h-9 gap-1.5"
-                                    onClick={() => setQuickDeadline(15)}
-                                >
-                                    <Clock className="h-3.5 w-3.5" /> 15m
-                                </Button>
-                                <Button 
-                                    type="button" 
-                                    variant="outline" 
-                                    size="sm" 
-                                    className="h-9 gap-1.5"
-                                    onClick={() => setQuickDeadline(30)}
-                                >
-                                    <Clock className="h-3.5 w-3.5" /> 30m
-                                </Button>
-                                <Button 
-                                    type="button" 
-                                    variant="outline" 
-                                    size="sm" 
-                                    className="h-9 gap-1.5"
-                                    onClick={() => setQuickDeadline(60)}
-                                >
-                                    <Clock className="h-3.5 w-3.5" /> 1h
-                                </Button>
-                                <Button 
-                                    type="button" 
-                                    variant="outline" 
-                                    size="sm" 
-                                    className="h-9 gap-1.5"
-                                    onClick={() => setQuickDeadline(120)}
-                                >
-                                    <Clock className="h-3.5 w-3.5" /> 2h
-                                </Button>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="deadline" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">O Fecha Límite Personalizada</Label>
-                                <Input
-                                    id="deadline"
-                                    name="deadline"
-                                    type="datetime-local"
-                                    value={deadline}
-                                    onChange={(e) => setDeadline(e.target.value)}
-                                    required={isOpenStatus}
-                                />
-                                <p className="text-[10px] text-muted-foreground">La inscripción se cerrará automáticamente en la fecha y hora indicadas.</p>
-                            </div>
-                        </div>
-                    )}
-
-                    <DialogFooter>
-                        <Button type="submit">Guardar Cambios</Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
-    );
-}
 
 
 
@@ -268,7 +125,7 @@ function DeleteCourseDialog({ courseId, courseTitle }: { courseId: string, cours
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-4 w-4 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20 p-0"
+                                className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20"
                             >
                                 <Trash2 className="h-4 w-4" />
                             </Button>
@@ -326,8 +183,6 @@ function DeleteCourseDialog({ courseId, courseTitle }: { courseId: string, cours
     );
 }
 
-import { EnrollmentRequests } from "./EnrollmentRequests";
-import { Badge } from "@/components/ui/badge";
 
 export function CourseManager({ 
     initialCourses, 
@@ -350,6 +205,33 @@ export function CourseManager({
     const now = currentDate ? new Date(currentDate) : new Date();
     const activeCourses = initialCourses.filter(course => !course.endDate || new Date(course.endDate) >= now);
     const archivedCourses = initialCourses.filter(course => course.endDate && new Date(course.endDate) < now);
+
+    const [exportingCourseId, setExportingCourseId] = useState<string | null>(null);
+
+    const handleExportCourseZip = async (courseId: string, courseTitle: string) => {
+        setExportingCourseId(courseId);
+        const toastId = toast.loading("Exportando curso y preparando archivo ZIP...");
+        try {
+            const courseJSON = await exportCourseAction(courseId);
+            const zip = new JSZip();
+            zip.file("course_data.json", JSON.stringify(courseJSON, null, 2));
+            const blob = await zip.generateAsync({ type: "blob" });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `Curso_${courseTitle.replace(/[^a-z0-9]/gi, '_')}.zip`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            toast.success("Curso exportado exitosamente como ZIP", { id: toastId });
+        } catch (error: any) {
+            console.error("Export error:", error);
+            toast.error(error.message || "Error al exportar el curso", { id: toastId });
+        } finally {
+            setExportingCourseId(null);
+        }
+    };
 
     const handleExportMulti = async () => {
         setIsExporting(true);
@@ -385,7 +267,7 @@ export function CourseManager({
         }
     };
 
-    const CourseGrid = ({ courses }: { courses: Course[] }) => {
+    const CourseTable = ({ courses }: { courses: Course[] }) => {
         if (courses.length === 0) {
             return (
                 <motion.div 
@@ -405,147 +287,277 @@ export function CourseManager({
             );
         }
 
+        const currentInViewIds = courses.map(c => c.id);
+        const allSelected = currentInViewIds.length > 0 && currentInViewIds.every(id => selectedCourses.includes(id));
+
         return (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
-                {courses.map((course) => (
-                    <div key={course.id} className="relative group">
-                        <div className="absolute inset-0 bg-primary/10 rounded-[2rem] blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                        <Card className="h-full flex flex-col relative bg-background/60 backdrop-blur-xl border-border/50 rounded-[1.8rem] overflow-hidden hover:border-primary/30 transition-all duration-300 shadow-sm hover:shadow-xl">
-                            <div className="absolute top-0 left-0 w-full h-1 bg-primary/20" />
-                            
-                            <div className="absolute top-3 right-3 z-20">
+            <div className="rounded-xl border border-border/50 overflow-x-auto shadow-sm">
+                <Table className="w-full min-w-[800px]">
+                    <TableHeader>
+                        <TableRow className="bg-muted/30 hover:bg-muted/30">
+                            <TableHead className="w-10 pl-4">
                                 <Checkbox
-                                    id={`select-${course.id}`}
-                                    checked={selectedCourses.includes(course.id)}
-                                    onCheckedChange={() => toggleCourseSelection(course.id)}
-                                    className="h-4 w-4 rounded-sm border-muted-foreground/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary transition-all shadow-sm"
+                                    id="select-all"
+                                    checked={allSelected}
+                                    onCheckedChange={toggleAllInView}
+                                    className="h-4 w-4 rounded border-muted-foreground/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                                 />
-                            </div>
+                            </TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs">Curso</TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Inscritos</TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden md:table-cell">Inicio</TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden md:table-cell">Fin</TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Código</TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden lg:table-cell">Inscripción</TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Acciones</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {courses.map((course, idx) => (
+                            <TableRow
+                                key={course.id}
+                                className="group hover:bg-muted/20 transition-colors border-border/30"
+                            >
+                                <TableCell className="pl-4">
+                                    <Checkbox
+                                        id={`select-${course.id}`}
+                                        checked={selectedCourses.includes(course.id)}
+                                        onCheckedChange={() => toggleCourseSelection(course.id)}
+                                        className="h-4 w-4 rounded border-muted-foreground/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                                    />
+                                </TableCell>
 
-                            <CardHeader className="pb-1 pt-5 px-5 text-center relative">
-                                <div className="flex flex-col items-center gap-2">
-                                    <Badge variant="outline" className="text-[8px] px-2 h-4 uppercase font-black tracking-widest bg-primary/5 text-primary border-primary/20 rounded-full">
-                                        <Users className="h-2 w-2 mr-1" /> {course._count.enrollments} Inscritos
+                                <TableCell>
+                                    <div className="flex flex-col gap-0.5">
+                                        <span className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors leading-tight">
+                                            {course.title}
+                                        </span>
+                                        {course.description && (
+                                            <span className="text-xs text-muted-foreground line-clamp-1 hidden sm:block">
+                                                {course.description}
+                                            </span>
+                                        )}
+                                    </div>
+                                </TableCell>
+
+                                <TableCell className="text-center">
+                                    <Badge variant="outline" className="text-xs font-bold bg-primary/5 text-primary border-primary/20 gap-1">
+                                        <Users className="h-3 w-3" />
+                                        {course._count.enrollments}
                                     </Badge>
-                                    <CardTitle className="text-sm font-bold leading-tight group-hover:text-primary transition-colors w-full uppercase tracking-tight">
-                                        {course.title}
-                                    </CardTitle>
-                                </div>
-                            </CardHeader>
+                                </TableCell>
 
-                            <CardContent className="flex-1 px-5 py-2 space-y-4 flex flex-col justify-center">
-                                <div className="grid grid-cols-2 gap-2 w-full">
-                                    <div className="flex flex-col items-center p-2 rounded-xl bg-muted/20 border border-border/10">
-                                        <span className="text-[8px] font-black text-muted-foreground uppercase tracking-tighter">Inicio</span>
-                                        <div className="flex items-center gap-1 mt-0.5 text-[10px] font-bold text-foreground/80">
-                                            <Calendar className="h-2.5 w-2.5 text-primary" />
-                                            {course.startDate ? formatCalendarDate(course.startDate, "dd/MM/yy") : "---"}
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-col items-center p-2 rounded-xl bg-muted/20 border border-border/10">
-                                        <span className="text-[8px] font-black text-muted-foreground uppercase tracking-tighter">Fin</span>
-                                        <div className="flex items-center gap-1 mt-0.5 text-[10px] font-bold text-foreground/80">
-                                            <Calendar className="h-2.5 w-2.5 text-destructive" />
-                                            {course.endDate ? formatCalendarDate(course.endDate, "dd/MM/yy") : "---"}
-                                        </div>
-                                    </div>
-                                </div>
-                            </CardContent>
+                                <TableCell className="text-center hidden md:table-cell">
+                                    <span className="text-xs text-muted-foreground font-medium">
+                                        {course.startDate ? formatCalendarDate(course.startDate, "dd/MM/yy") : "---"}
+                                    </span>
+                                </TableCell>
 
-                            <CardFooter className="px-4 pb-4 pt-2 flex flex-col gap-3">
-                                <div className="flex items-center justify-center gap-1.5 w-full">
+                                <TableCell className="text-center hidden md:table-cell">
+                                    <span className="text-xs text-muted-foreground font-medium">
+                                        {course.endDate ? formatCalendarDate(course.endDate, "dd/MM/yy") : "---"}
+                                    </span>
+                                </TableCell>
+
+                                <TableCell className="text-center">
+                                    {course.enrollmentCode ? (
+                                        <div className="flex items-center justify-center gap-1">
+                                            <code className="bg-primary/5 text-primary border border-primary/10 px-2 py-0.5 rounded font-mono text-xs font-bold tracking-wider">
+                                                {course.enrollmentCode}
+                                            </code>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(course.enrollmentCode || "");
+                                                    toast.success("Código copiado");
+                                                }}
+                                                title="Copiar código"
+                                            >
+                                                <Copy className="h-3 w-3" />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                                onClick={async () => {
+                                                    try {
+                                                        const res = await generateEnrollmentCodeAction(course.id);
+                                                        toast.success(`Código regenerado: ${res.code}`);
+                                                    } catch (e) {
+                                                        toast.error("Error al generar código");
+                                                    }
+                                                }}
+                                                title="Regenerar código"
+                                            >
+                                                <RefreshCw className="h-3 w-3" />
+                                            </Button>
+                                            <Dialog>
+                                                <DialogTrigger asChild>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                                        title="Proyectar código"
+                                                    >
+                                                        <Maximize2 className="h-3 w-3" />
+                                                    </Button>
+                                                </DialogTrigger>
+                                                <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col items-center justify-center p-12">
+                                                    <DialogHeader className="w-full text-center">
+                                                        <DialogTitle className="text-3xl font-black text-center mb-1">Código de Inscripción</DialogTitle>
+                                                        <DialogDescription className="text-lg text-center text-muted-foreground font-semibold">
+                                                            {course.title}
+                                                        </DialogDescription>
+                                                    </DialogHeader>
+                                                    <div className="flex-1 flex flex-col items-center justify-center my-10 w-full">
+                                                        <div className="w-full text-center font-mono text-[9rem] sm:text-[12rem] md:text-[15rem] leading-none font-black tracking-widest select-all text-primary bg-primary/5 rounded-[2.5rem] py-12 px-6 border-2 border-primary/20 shadow-2xl relative overflow-hidden group">
+                                                            <div className="absolute inset-0 bg-gradient-to-tr from-primary/5 to-transparent opacity-50 pointer-events-none" />
+                                                            {course.enrollmentCode}
+                                                        </div>
+                                                        <p className="text-xl md:text-2xl text-center text-muted-foreground font-bold tracking-tight mt-8">
+                                                            Ingresa a la aplicación, haz clic en <span className="text-primary font-black">"Inscribirse a un curso"</span> e ingresa este código.
+                                                        </p>
+                                                    </div>
+                                                </DialogContent>
+                                            </Dialog>
+                                        </div>
+                                    ) : (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-7 text-[10px] uppercase font-bold tracking-wider px-2"
+                                            onClick={async () => {
+                                                try {
+                                                    const res = await generateEnrollmentCodeAction(course.id);
+                                                    toast.success(`Código generado: ${res.code}`);
+                                                } catch (e) {
+                                                    toast.error("Error al generar código");
+                                                }
+                                            }}
+                                        >
+                                            Generar
+                                        </Button>
+                                    )}
+                                </TableCell>
+
+                                <TableCell className="text-center hidden lg:table-cell">
+                                    <div className="flex items-center justify-center gap-2">
+                                        <Switch
+                                            checked={course.registrationOpen}
+                                            onCheckedChange={async () => {
+                                                try {
+                                                    await toggleCourseRegistrationSimpleAction(course.id);
+                                                    toast.success(course.registrationOpen ? "Inscripción cerrada" : "Inscripción abierta");
+                                                } catch (e) {
+                                                    toast.error("Error al cambiar inscripción");
+                                                }
+                                            }}
+                                        />
+                                        <span className="text-[10px] font-bold select-none min-w-[45px] text-left">
+                                            {course.registrationOpen ? "Abierta" : "Cerrada"}
+                                        </span>
+                                    </div>
+                                </TableCell>
+
+                                <TableCell>
                                     <TooltipProvider>
-                                        <div className="flex items-center justify-center gap-1 bg-muted/30 p-1 rounded-lg border border-border/20">
+                                        <div className="flex items-center justify-center gap-0.5">
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
-                                                        className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-background rounded-md transition-colors"
+                                                        className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-colors"
                                                         onClick={() => onEdit?.(course)}
                                                     >
-                                                        <Pencil className="h-3 w-3" />
+                                                        <Pencil className="h-3.5 w-3.5" />
                                                     </Button>
                                                 </TooltipTrigger>
                                                 <TooltipContent className="text-[10px]">Editar</TooltipContent>
                                             </Tooltip>
 
-                                            <div className="w-[1px] h-3 bg-border/50" />
-
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
-                                                        className="h-7 w-7 text-muted-foreground hover:text-blue-500 hover:bg-background rounded-md transition-colors"
+                                                        className="h-8 w-8 text-muted-foreground hover:text-blue-500 hover:bg-blue-500/10 rounded-md transition-colors"
                                                         onClick={() => onClone?.(course)}
                                                     >
-                                                        <Copy className="h-3 w-3" />
+                                                        <Copy className="h-3.5 w-3.5" />
                                                     </Button>
                                                 </TooltipTrigger>
                                                 <TooltipContent className="text-[10px]">Clonar</TooltipContent>
                                             </Tooltip>
 
-                                            <div className="w-[1px] h-3 bg-border/50" />
-
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
-                                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-emerald-500 hover:bg-background rounded-md transition-colors" asChild>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-emerald-500 hover:bg-emerald-500/10 rounded-md transition-colors" asChild>
                                                         <Link href={`/dashboard/teacher/courses/${course.id}?tab=students`}>
-                                                            <Users className="h-3 w-3" />
+                                                            <Users className="h-3.5 w-3.5" />
                                                         </Link>
                                                     </Button>
                                                 </TooltipTrigger>
                                                 <TooltipContent className="text-[10px]">Alumnos</TooltipContent>
                                             </Tooltip>
 
-                                            <div className="w-[1px] h-3 bg-border/50" />
-                                            
-                                            <div className="flex items-center">
-                                                <RegistrationSettingsDialog course={course} />
-                                            </div>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-8 w-8 text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10 rounded-md transition-colors"
+                                                        onClick={() => handleExportCourseZip(course.id, course.title)}
+                                                        disabled={exportingCourseId === course.id}
+                                                    >
+                                                        {exportingCourseId === course.id ? (
+                                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                        ) : (
+                                                            <FolderArchive className="h-3.5 w-3.5" />
+                                                        )}
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent className="text-[10px]">Exportar (ZIP)</TooltipContent>
+                                            </Tooltip>
 
-                                            <div className="w-[1px] h-3 bg-border/50" />
-                                            
                                             <DeleteCourseDialog courseId={course.id} courseTitle={course.title} />
+
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button
+                                                        variant="default"
+                                                        size="sm"
+                                                        className="h-8 px-3 font-bold text-[10px] uppercase tracking-wider shadow-sm hover:shadow-primary/20 transition-all ml-1"
+                                                        asChild
+                                                    >
+                                                        <Link href={`/dashboard/teacher/courses/${course.id}`}>
+                                                            <Settings className="h-3.5 w-3.5 mr-1" />
+                                                            <span className="hidden xl:inline">Ingresar</span>
+                                                        </Link>
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent className="text-[10px]">Ingresar al Aula</TooltipContent>
+                                            </Tooltip>
                                         </div>
                                     </TooltipProvider>
-                                </div>
-
-                                <Link href={`/dashboard/teacher/courses/${course.id}`} className="w-full">
-                                    <Button className="w-full font-black text-[10px] uppercase tracking-widest shadow-md hover:shadow-primary/20 transition-all active:scale-[0.98] h-9 rounded-xl border border-primary/20">
-                                        <Settings className="mr-2 h-3.5 w-3.5" /> Ingresar al Aula
-                                    </Button>
-                                </Link>
-                            </CardFooter>
-                        </Card>
-                    </div>
-                ))}
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
             </div>
         );
     };
 
-    return (
-        <div className="space-y-6">
-            {(filter === "active" ? activeCourses : archivedCourses).length > 0 && (
-                <div className="flex items-center justify-between gap-4 px-6 py-3 bg-muted/20 border border-border/50 rounded-2xl backdrop-blur-sm">
-                    <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-3">
-                            <Checkbox 
-                                id="select-all" 
-                                checked={(filter === "active" ? activeCourses : archivedCourses).length > 0 && (filter === "active" ? activeCourses : archivedCourses).every(c => selectedCourses.includes(c.id))}
-                                onCheckedChange={toggleAllInView}
-                                className="h-5 w-5 rounded-md border-muted-foreground/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
-                            />
-                            <Label htmlFor="select-all" className="text-sm font-bold cursor-pointer select-none text-muted-foreground hover:text-foreground transition-colors uppercase tracking-widest">
-                                Seleccionar todos
-                            </Label>
-                        </div>
-                        
-                        {selectedCourses.length > 0 && (
-                            <div className="h-4 w-[2px] bg-border/50 hidden sm:block" />
-                        )}
+    const currentCourses = filter === "active" ? activeCourses : archivedCourses;
 
+    return (
+        <div className="space-y-4">
+            {currentCourses.length > 0 && (
+                <div className="flex items-center justify-between gap-4 px-4 py-2.5 bg-muted/20 border border-border/50 rounded-xl backdrop-blur-sm">
+                    <div className="flex items-center gap-3">
                         {selectedCourses.length > 0 && (
                             <Badge variant="secondary" className="bg-primary/10 text-primary border-none font-bold px-3">
                                 {selectedCourses.length} seleccionados
@@ -574,16 +586,8 @@ export function CourseManager({
                 </div>
             )}
 
-            <div className="mt-4">
-                {filter === "active" ? (
-                    <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                        <CourseGrid courses={activeCourses} />
-                    </div>
-                ) : (
-                    <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                        <CourseGrid courses={archivedCourses} />
-                    </div>
-                )}
+            <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <CourseTable courses={currentCourses} />
             </div>
         </div>
     );

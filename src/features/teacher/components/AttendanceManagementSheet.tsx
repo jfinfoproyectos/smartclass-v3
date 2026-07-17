@@ -107,11 +107,23 @@ export function AttendanceManagementSheet({
         setActionLoading(`${actionKey}-${status}`);
         
         try {
-            const dateToRecord = typeof targetDate === 'string' ? targetDate : targetDate;
-            
+            // Always normalize to "yyyy-MM-dd" string so the service uses new Date("yyyy-MM-dd")
+            // which is UTC midnight — avoiding the toUTCStartOfDayFromLocal timezone shift bug.
+            let dateStr: string;
+            if (typeof targetDate === 'string') {
+                // Already a string; extract just the date part in case it's a full ISO string
+                dateStr = targetDate.split('T')[0];
+            } else {
+                // Date object from BD comes as UTC midnight — use UTC components to get correct date
+                const d = targetDate instanceof Date ? targetDate : new Date(targetDate);
+                const y = d.getUTCFullYear();
+                const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+                const day = String(d.getUTCDate()).padStart(2, '0');
+                dateStr = `${y}-${m}-${day}`;
+            }
+
             if (status === "DELETE") {
-                const dateForDelete = typeof targetDate === 'string' ? targetDate : format(targetDate, "yyyy-MM-dd");
-                await deleteAttendanceAction(courseId, student.id, dateForDelete, recordId);
+                await deleteAttendanceAction(courseId, student.id, dateStr, recordId);
                 toast.success("Registro eliminado");
             } else {
                 let arrivalTimeFinal: Date | undefined = undefined;
@@ -120,11 +132,13 @@ export function AttendanceManagementSheet({
 
                 if (status === "LATE" && timeToUse) {
                     const [hours, minutes] = timeToUse.split(':').map(Number);
-                    arrivalTimeFinal = new Date(typeof targetDate === 'string' ? new Date(targetDate) : new Date(targetDate));
-                    arrivalTimeFinal.setHours(hours, minutes, 0, 0);
+                    // Build arrivalTime using the UTC date so the day is correct
+                    const baseDate = new Date(`${dateStr}T00:00:00Z`);
+                    arrivalTimeFinal = new Date(baseDate);
+                    arrivalTimeFinal.setUTCHours(hours, minutes, 0, 0);
                 }
 
-                await recordAttendanceAction(courseId, student.id, dateToRecord, status, arrivalTimeFinal);
+                await recordAttendanceAction(courseId, student.id, dateStr, status, arrivalTimeFinal);
                 toast.success(`Asistencia marcada como ${getStatusLabel(status)}`);
             }
             await loadStats();
@@ -249,7 +263,7 @@ export function AttendanceManagementSheet({
                                         {date ? format(date, "PPP", { locale: es }) : <span>Seleccionar fecha</span>}
                                     </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="start">
+                                <PopoverContent className="w-auto p-0 z-[200]" align="start">
                                     <Calendar
                                         mode="single"
                                         selected={date}
@@ -354,273 +368,259 @@ export function AttendanceManagementSheet({
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="text-right py-2">
-                                                    <div className="flex justify-end gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <TooltipProvider>
+                                                    <TooltipProvider>
+                                                        {/* Presente */}
+                                                        <Popover>
                                                             <Tooltip>
-                                                                <Popover>
-                                                                    <TooltipTrigger asChild>
-                                                                        <PopoverTrigger asChild>
-                                                                            <Button 
-                                                                                size="icon" 
-                                                                                variant="ghost" 
-                                                                                className="h-8 w-8 text-green-600 hover:bg-green-50"
-                                                                                disabled={!!actionLoading}
-                                                                            >
-                                                                                <Check className="h-4 w-4" />
-                                                                            </Button>
-                                                                        </PopoverTrigger>
-                                                                    </TooltipTrigger>
-                                                                    <PopoverContent className="w-40 p-3" align="end">
-                                                                        <div className="flex flex-col gap-2">
-                                                                            <p className="text-[10px] font-semibold uppercase text-muted-foreground">¿Marcar Presente?</p>
-                                                                            <Button 
-                                                                                size="sm" 
-                                                                                className="h-8 text-xs bg-green-600 hover:bg-green-700"
-                                                                                onClick={() => handleAction(record.date, "PRESENT")}
-                                                                            >
-                                                                                Confirmar
-                                                                            </Button>
-                                                                        </div>
-                                                                    </PopoverContent>
-                                                                </Popover>
+                                                                <TooltipTrigger asChild>
+                                                                    <PopoverTrigger asChild>
+                                                                        <Button 
+                                                                            size="icon" 
+                                                                            variant="ghost" 
+                                                                            className="h-8 w-8 text-green-600 hover:bg-green-50"
+                                                                            disabled={!!actionLoading}
+                                                                        >
+                                                                            <Check className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </PopoverTrigger>
+                                                                </TooltipTrigger>
                                                                 <TooltipContent><p>Presente</p></TooltipContent>
                                                             </Tooltip>
-                                                            
+                                                            <PopoverContent className="w-40 p-3 z-[200]" align="end">
+                                                                <div className="flex flex-col gap-2">
+                                                                    <p className="text-[10px] font-semibold uppercase text-muted-foreground">¿Marcar Presente?</p>
+                                                                    <Button 
+                                                                        size="sm" 
+                                                                        className="h-8 text-xs bg-green-600 hover:bg-green-700"
+                                                                        onClick={() => handleAction(record.date, "PRESENT")}
+                                                                    >
+                                                                        Confirmar
+                                                                    </Button>
+                                                                </div>
+                                                            </PopoverContent>
+                                                        </Popover>
+
+                                                        {/* Ausente */}
+                                                        <Popover>
                                                             <Tooltip>
-                                                                <Popover>
-                                                                    <TooltipTrigger asChild>
-                                                                        <PopoverTrigger asChild>
-                                                                            <Button 
-                                                                                size="icon" 
-                                                                                variant="ghost" 
-                                                                                className="h-8 w-8 text-red-600 hover:bg-red-50"
-                                                                                disabled={!!actionLoading}
-                                                                            >
-                                                                                <X className="h-4 w-4" />
-                                                                            </Button>
-                                                                        </PopoverTrigger>
-                                                                    </TooltipTrigger>
-                                                                    <PopoverContent className="w-40 p-3" align="end">
-                                                                        <div className="flex flex-col gap-2">
-                                                                            <p className="text-[10px] font-semibold uppercase text-muted-foreground">¿Marcar Ausente?</p>
-                                                                            <Button 
-                                                                                size="sm" 
-                                                                                className="h-8 text-xs bg-red-600 hover:bg-red-700"
-                                                                                onClick={() => handleAction(record.date, "ABSENT")}
-                                                                            >
-                                                                                Confirmar
-                                                                            </Button>
-                                                                        </div>
-                                                                    </PopoverContent>
-                                                                </Popover>
+                                                                <TooltipTrigger asChild>
+                                                                    <PopoverTrigger asChild>
+                                                                        <Button 
+                                                                            size="icon" 
+                                                                            variant="ghost" 
+                                                                            className="h-8 w-8 text-red-600 hover:bg-red-50"
+                                                                            disabled={!!actionLoading}
+                                                                        >
+                                                                            <X className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </PopoverTrigger>
+                                                                </TooltipTrigger>
                                                                 <TooltipContent><p>Ausente</p></TooltipContent>
                                                             </Tooltip>
-                                                            
+                                                            <PopoverContent className="w-40 p-3 z-[200]" align="end">
+                                                                <div className="flex flex-col gap-2">
+                                                                    <p className="text-[10px] font-semibold uppercase text-muted-foreground">¿Marcar Ausente?</p>
+                                                                    <Button 
+                                                                        size="sm" 
+                                                                        className="h-8 text-xs bg-red-600 hover:bg-red-700"
+                                                                        onClick={() => handleAction(record.date, "ABSENT")}
+                                                                    >
+                                                                        Confirmar
+                                                                    </Button>
+                                                                </div>
+                                                            </PopoverContent>
+                                                        </Popover>
+
+                                                        {/* Tarde */}
+                                                        <Popover>
                                                             <Tooltip>
-                                                                <Popover>
-                                                                    <TooltipTrigger asChild>
-                                                                        <PopoverTrigger asChild>
-                                                                            <Button 
-                                                                                size="icon" 
-                                                                                variant="ghost" 
-                                                                                className="h-8 w-8 text-yellow-600 hover:bg-yellow-50"
-                                                                                disabled={!!actionLoading}
-                                                                            >
-                                                                                <Clock className="h-4 w-4" />
-                                                                            </Button>
-                                                                        </PopoverTrigger>
-                                                                    </TooltipTrigger>
-                                                                    <PopoverContent className="w-56 p-4" align="end">
-                                                                        <div className="flex flex-col gap-3">
-                                                                            <div className="space-y-1">
-                                                                                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Marcar Tarde</h4>
-                                                                                <p className="text-[10px] text-muted-foreground">Selecciona la hora de llegada para esta fecha.</p>
-                                                                            </div>
-                                                                            <div className="space-y-2">
-                                                                                <Label htmlFor={`time-${record.id}`} className="text-[10px] uppercase text-muted-foreground block">Hora Llegada</Label>
-                                                                                <Input 
-                                                                                    id={`time-${record.id}`} 
-                                                                                    type="time" 
-                                                                                    className="h-9 text-sm"
-                                                                                    defaultValue={record.arrivalTime ? format(new Date(record.arrivalTime), "HH:mm") : format(new Date(), "HH:mm")}
-                                                                                />
-                                                                            </div>
-                                                                            <Button 
-                                                                                size="sm" 
-                                                                                className="w-full h-8 text-xs bg-yellow-600 hover:bg-yellow-700"
-                                                                                onClick={() => {
-                                                                                    const timeInput = document.getElementById(`time-${record.id}`) as HTMLInputElement;
-                                                                                    handleAction(record.date, "LATE", timeInput.value);
-                                                                                }}
-                                                                            >
-                                                                                Confirmar y Guardar
-                                                                            </Button>
-                                                                        </div>
-                                                                    </PopoverContent>
-                                                                </Popover>
+                                                                <TooltipTrigger asChild>
+                                                                    <PopoverTrigger asChild>
+                                                                        <Button 
+                                                                            size="icon" 
+                                                                            variant="ghost" 
+                                                                            className="h-8 w-8 text-yellow-600 hover:bg-yellow-50"
+                                                                            disabled={!!actionLoading}
+                                                                        >
+                                                                            <Clock className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </PopoverTrigger>
+                                                                </TooltipTrigger>
                                                                 <TooltipContent><p>Marcar Tarde (Con Hora)</p></TooltipContent>
                                                             </Tooltip>
+                                                            <PopoverContent className="w-56 p-4 z-[200]" align="end">
+                                                                <div className="flex flex-col gap-3">
+                                                                    <div className="space-y-1">
+                                                                        <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Marcar Tarde</h4>
+                                                                        <p className="text-[10px] text-muted-foreground">Selecciona la hora de llegada para esta fecha.</p>
+                                                                    </div>
+                                                                    <div className="space-y-2">
+                                                                        <Label htmlFor={`time-${record.id}`} className="text-[10px] uppercase text-muted-foreground block">Hora Llegada</Label>
+                                                                        <Input 
+                                                                            id={`time-${record.id}`} 
+                                                                            type="time" 
+                                                                            className="h-9 text-sm"
+                                                                            defaultValue={record.arrivalTime ? format(new Date(record.arrivalTime), "HH:mm") : format(new Date(), "HH:mm")}
+                                                                        />
+                                                                    </div>
+                                                                    <Button 
+                                                                        size="sm" 
+                                                                        className="w-full h-8 text-xs bg-yellow-600 hover:bg-yellow-700"
+                                                                        onClick={() => {
+                                                                            const timeInput = document.getElementById(`time-${record.id}`) as HTMLInputElement;
+                                                                            handleAction(record.date, "LATE", timeInput.value);
+                                                                        }}
+                                                                    >
+                                                                        Confirmar y Guardar
+                                                                    </Button>
+                                                                </div>
+                                                            </PopoverContent>
+                                                        </Popover>
 
-                                                            {record.status === "EXCUSED" && (
+                                                        {/* Excusa */}
+                                                        {record.status === "EXCUSED" && (
+                                                            <Popover>
                                                                 <Tooltip>
-                                                                    <Popover>
-                                                                        <TooltipTrigger asChild>
-                                                                            <PopoverTrigger asChild>
-                                                                                <Button 
-                                                                                    size="icon" 
-                                                                                    variant="ghost" 
-                                                                                    className="h-8 w-8 text-blue-600 hover:bg-blue-50"
-                                                                                >
-                                                                                    <FileText className="h-4 w-4" />
-                                                                                </Button>
-                                                                            </PopoverTrigger>
-                                                                        </TooltipTrigger>
-                                                                        <PopoverContent className="w-80 p-4" align="end">
-                                                                            <div className="flex flex-col gap-3">
-                                                                                <div className="space-y-1">
-                                                                                    <h4 className="text-sm font-semibold flex items-center gap-2">
-                                                                                        <AlertCircle className="h-4 w-4 text-blue-500" />
-                                                                                        Detalles de la Excusa
-                                                                                    </h4>
-                                                                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Fecha: {formatCalendarDate(record.date, "dd/MM/yyyy")}</p>
-                                                                                </div>
-                                                                                
-                                                                                <div className="bg-muted/30 p-3 rounded-lg border text-sm">
-                                                                                    <p className="font-medium mb-1 text-xs text-muted-foreground uppercase">Justificación:</p>
-                                                                                    <p className="text-sm break-words leading-relaxed">
-                                                                                        {record.justification || "Sin descripción de justificación."}
-                                                                                    </p>
-                                                                                </div>
-
-                                                                                {record.justificationUrl && (
-                                                                                    <Button 
-                                                                                        size="sm" 
-                                                                                        variant="outline" 
-                                                                                        className="w-full h-9 gap-2 text-xs"
-                                                                                        asChild
-                                                                                    >
-                                                                                        <a href={record.justificationUrl} target="_blank" rel="noopener noreferrer">
-                                                                                            <ExternalLink className="h-3 w-3" />
-                                                                                            Ver Documento Adjunto
-                                                                                        </a>
-                                                                                    </Button>
-                                                                                )}
-
-                                                                                <div className="pt-2 border-t">
-                                                                                    <Button 
-                                                                                        size="sm" 
-                                                                                        variant="destructive" 
-                                                                                        className="w-full h-8 text-[10px] uppercase font-semibold"
-                                                                                        onClick={() => handleDeleteJustification(record.id)}
-                                                                                        disabled={!!actionLoading}
-                                                                                    >
-                                                                                        <Trash2 className="h-3.5 w-3.5 mr-2" />
-                                                                                        Eliminar mi Justificación
-                                                                                    </Button>
-                                                                                </div>
-                                                                            </div>
-                                                                        </PopoverContent>
-                                                                    </Popover>
-                                                                    <TooltipContent><p>Ver/Eliminar Excusa</p></TooltipContent>
-                                                                </Tooltip>
-                                                            )}
-
-                                                            {record.status === "LATE" && record.justification && (
-                                                                <Tooltip>
-                                                                    <Popover>
-                                                                        <TooltipTrigger asChild>
-                                                                            <PopoverTrigger asChild>
-                                                                                <Button 
-                                                                                    size="icon" 
-                                                                                    variant="ghost" 
-                                                                                    className="h-8 w-8 text-blue-600 hover:bg-blue-50"
-                                                                                >
-                                                                                    <FileText className="h-4 w-4" />
-                                                                                </Button>
-                                                                            </PopoverTrigger>
-                                                                        </TooltipTrigger>
-                                                                        <PopoverContent className="w-80 p-4" align="end">
-                                                                            <div className="flex flex-col gap-3">
-                                                                                <div className="space-y-1">
-                                                                                    <h4 className="text-sm font-semibold flex items-center gap-2">
-                                                                                        <Clock className="h-4 w-4 text-blue-500" />
-                                                                                        Justificación de Tardanza
-                                                                                    </h4>
-                                                                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Fecha: {formatCalendarDate(record.date, "dd/MM/yyyy")}</p>
-                                                                                </div>
-                                                                                
-                                                                                <div className="bg-muted/30 p-3 rounded-lg border text-sm">
-                                                                                    <p className="font-medium mb-1 text-xs text-muted-foreground uppercase">Justificación:</p>
-                                                                                    <p className="text-sm break-words leading-relaxed">
-                                                                                        {record.justification}
-                                                                                    </p>
-                                                                                </div>
-
-                                                                                {record.justificationUrl && (
-                                                                                    <Button 
-                                                                                        size="sm" 
-                                                                                        variant="outline" 
-                                                                                        className="w-full h-9 gap-2 text-xs"
-                                                                                        asChild
-                                                                                    >
-                                                                                        <a href={record.justificationUrl} target="_blank" rel="noopener noreferrer">
-                                                                                            <ExternalLink className="h-3 w-3" />
-                                                                                            Ver Documento Adjunto
-                                                                                        </a>
-                                                                                    </Button>
-                                                                                )}
-
-                                                                                <div className="pt-2 border-t">
-                                                                                    <Button 
-                                                                                        size="sm" 
-                                                                                        variant="destructive" 
-                                                                                        className="w-full h-8 text-[10px] uppercase font-semibold"
-                                                                                        onClick={() => handleDeleteJustification(record.id)}
-                                                                                        disabled={!!actionLoading}
-                                                                                    >
-                                                                                        <Trash2 className="h-3.5 w-3.5 mr-2" />
-                                                                                        Eliminar mi Justificación
-                                                                                    </Button>
-                                                                                </div>
-                                                                            </div>
-                                                                        </PopoverContent>
-                                                                    </Popover>
-                                                                    <TooltipContent><p>Ver/Eliminar Justificación</p></TooltipContent>
-                                                                </Tooltip>
-                                                            )}
-
-                                                            <Tooltip>
-                                                                <Popover>
                                                                     <TooltipTrigger asChild>
                                                                         <PopoverTrigger asChild>
                                                                             <Button 
                                                                                 size="icon" 
                                                                                 variant="ghost" 
-                                                                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                                                                disabled={!!actionLoading}
+                                                                                className="h-8 w-8 text-blue-600 hover:bg-blue-50"
                                                                             >
-                                                                                <RotateCcw className="h-4 w-4" />
+                                                                                <FileText className="h-4 w-4" />
                                                                             </Button>
                                                                         </PopoverTrigger>
                                                                     </TooltipTrigger>
-                                                                    <PopoverContent className="w-40 p-3" align="end">
-                                                                        <div className="flex flex-col gap-2">
-                                                                            <p className="text-[10px] font-semibold uppercase text-muted-foreground">¿Eliminar Registro?</p>
+                                                                    <TooltipContent><p>Ver/Eliminar Excusa</p></TooltipContent>
+                                                                </Tooltip>
+                                                                <PopoverContent className="w-80 p-4 z-[200]" align="end">
+                                                                    <div className="flex flex-col gap-3">
+                                                                        <div className="space-y-1">
+                                                                            <h4 className="text-sm font-semibold flex items-center gap-2">
+                                                                                <AlertCircle className="h-4 w-4 text-blue-500" />
+                                                                                Detalles de la Excusa
+                                                                            </h4>
+                                                                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Fecha: {formatCalendarDate(record.date, "dd/MM/yyyy")}</p>
+                                                                        </div>
+                                                                        <div className="bg-muted/30 p-3 rounded-lg border text-sm">
+                                                                            <p className="font-medium mb-1 text-xs text-muted-foreground uppercase">Justificación:</p>
+                                                                            <p className="text-sm break-words leading-relaxed">
+                                                                                {record.justification || "Sin descripción de justificación."}
+                                                                            </p>
+                                                                        </div>
+                                                                        {record.justificationUrl && (
+                                                                            <Button size="sm" variant="outline" className="w-full h-9 gap-2 text-xs" asChild>
+                                                                                <a href={record.justificationUrl} target="_blank" rel="noopener noreferrer">
+                                                                                    <ExternalLink className="h-3 w-3" />
+                                                                                    Ver Documento Adjunto
+                                                                                </a>
+                                                                            </Button>
+                                                                        )}
+                                                                        <div className="pt-2 border-t">
                                                                             <Button 
                                                                                 size="sm" 
-                                                                                variant="destructive"
-                                                                                className="h-8 text-xs"
-                                                                                onClick={() => handleAction(record.date, "DELETE", undefined, record.id)}
+                                                                                variant="destructive" 
+                                                                                className="w-full h-8 text-[10px] uppercase font-semibold"
+                                                                                onClick={() => handleDeleteJustification(record.id)}
+                                                                                disabled={!!actionLoading}
                                                                             >
-                                                                                Confirmar
+                                                                                <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                                                                Eliminar mi Justificación
                                                                             </Button>
                                                                         </div>
-                                                                    </PopoverContent>
-                                                                </Popover>
+                                                                    </div>
+                                                                </PopoverContent>
+                                                            </Popover>
+                                                        )}
+
+                                                        {/* Justificación tardanza */}
+                                                        {record.status === "LATE" && record.justification && (
+                                                            <Popover>
+                                                                <Tooltip>
+                                                                    <TooltipTrigger asChild>
+                                                                        <PopoverTrigger asChild>
+                                                                            <Button 
+                                                                                size="icon" 
+                                                                                variant="ghost" 
+                                                                                className="h-8 w-8 text-blue-600 hover:bg-blue-50"
+                                                                            >
+                                                                                <FileText className="h-4 w-4" />
+                                                                            </Button>
+                                                                        </PopoverTrigger>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent><p>Ver/Eliminar Justificación</p></TooltipContent>
+                                                                </Tooltip>
+                                                                <PopoverContent className="w-80 p-4 z-[200]" align="end">
+                                                                    <div className="flex flex-col gap-3">
+                                                                        <div className="space-y-1">
+                                                                            <h4 className="text-sm font-semibold flex items-center gap-2">
+                                                                                <Clock className="h-4 w-4 text-blue-500" />
+                                                                                Justificación de Tardanza
+                                                                            </h4>
+                                                                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Fecha: {formatCalendarDate(record.date, "dd/MM/yyyy")}</p>
+                                                                        </div>
+                                                                        <div className="bg-muted/30 p-3 rounded-lg border text-sm">
+                                                                            <p className="font-medium mb-1 text-xs text-muted-foreground uppercase">Justificación:</p>
+                                                                            <p className="text-sm break-words leading-relaxed">{record.justification}</p>
+                                                                        </div>
+                                                                        {record.justificationUrl && (
+                                                                            <Button size="sm" variant="outline" className="w-full h-9 gap-2 text-xs" asChild>
+                                                                                <a href={record.justificationUrl} target="_blank" rel="noopener noreferrer">
+                                                                                    <ExternalLink className="h-3 w-3" />
+                                                                                    Ver Documento Adjunto
+                                                                                </a>
+                                                                            </Button>
+                                                                        )}
+                                                                        <div className="pt-2 border-t">
+                                                                            <Button 
+                                                                                size="sm" 
+                                                                                variant="destructive" 
+                                                                                className="w-full h-8 text-[10px] uppercase font-semibold"
+                                                                                onClick={() => handleDeleteJustification(record.id)}
+                                                                                disabled={!!actionLoading}
+                                                                            >
+                                                                                <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                                                                Eliminar mi Justificación
+                                                                            </Button>
+                                                                        </div>
+                                                                    </div>
+                                                                </PopoverContent>
+                                                            </Popover>
+                                                        )}
+
+                                                        {/* Eliminar registro */}
+                                                        <Popover>
+                                                            <Tooltip>
+                                                                <TooltipTrigger asChild>
+                                                                    <PopoverTrigger asChild>
+                                                                        <Button 
+                                                                            size="icon" 
+                                                                            variant="ghost" 
+                                                                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                                                            disabled={!!actionLoading}
+                                                                        >
+                                                                            <Trash2 className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </PopoverTrigger>
+                                                                </TooltipTrigger>
                                                                 <TooltipContent><p>Eliminar Registro</p></TooltipContent>
                                                             </Tooltip>
-                                                        </TooltipProvider>
-                                                    </div>
+                                                            <PopoverContent className="w-40 p-3 z-[200]" align="end">
+                                                                <div className="flex flex-col gap-2">
+                                                                    <p className="text-[10px] font-semibold uppercase text-muted-foreground">¿Eliminar Registro?</p>
+                                                                    <Button 
+                                                                        size="sm" 
+                                                                        variant="destructive"
+                                                                        className="h-8 text-xs"
+                                                                        onClick={() => handleAction(record.date, "DELETE", undefined, record.id)}
+                                                                    >
+                                                                        Confirmar
+                                                                    </Button>
+                                                                </div>
+                                                            </PopoverContent>
+                                                        </Popover>
+                                                    </TooltipProvider>
                                                 </TableCell>
                                             </TableRow>
                                         ))}

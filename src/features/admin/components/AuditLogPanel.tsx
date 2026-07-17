@@ -462,21 +462,21 @@ export function AuditLogPanel() {
                         </div>
                     ) : (
                         <>
-                            <div className="w-full overflow-x-auto rounded-md border">
+                            <div className="rounded-xl border border-border/50 overflow-x-auto shadow-sm">
                                 <Table className="min-w-[900px]">
                                     <TableHeader>
-                                        <TableRow>
-                                            <TableHead className="w-[180px]">Fecha/Hora</TableHead>
-                                            <TableHead>Acción</TableHead>
-                                            <TableHead>Entidad</TableHead>
-                                            <TableHead>Usuario</TableHead>
-                                            <TableHead>Descripción</TableHead>
-                                            <TableHead className="w-[100px]">Estado</TableHead>
+                                        <TableRow className="bg-muted/30 hover:bg-muted/30">
+                                            <TableHead className="font-bold uppercase tracking-wider text-xs pl-4 w-[180px]">Fecha/Hora</TableHead>
+                                            <TableHead className="font-bold uppercase tracking-wider text-xs">Acción</TableHead>
+                                            <TableHead className="font-bold uppercase tracking-wider text-xs">Entidad</TableHead>
+                                            <TableHead className="font-bold uppercase tracking-wider text-xs">Usuario</TableHead>
+                                            <TableHead className="font-bold uppercase tracking-wider text-xs">Descripción</TableHead>
+                                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center w-[100px]">Estado</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {logs.map((log) => (
-                                            <TableRow key={log.id}>
+                                            <TableRow key={log.id} className="group hover:bg-muted/20 transition-colors border-border/30">
                                                 <TableCell className="text-sm">
                                                     <div>{format(new Date(log.createdAt), 'dd/MM/yyyy')}</div>
                                                     <div className="text-xs text-muted-foreground">

@@ -460,7 +460,7 @@ export function GradesManager({ courseId, courseTitle = "Curso", initialData }: 
                             <p>{courseTitle}</p>
                             <p>Generado el: {new Date().toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
                         </div>
-                        <Table>
+                        <Table className="min-w-[1000px]">
                             <TableHeader>
                                 <TableRow className="bg-muted/50">
                                     <TableHead className="w-[250px] font-bold" rowSpan={2}>Estudiante</TableHead>

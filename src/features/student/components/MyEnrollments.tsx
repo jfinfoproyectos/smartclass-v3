@@ -4,7 +4,7 @@ import { MessageSquare, Users, ClipboardCheck, Clock, BookOpen, GraduationCap, F
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import Link from "next/link";
 import { format } from "date-fns";
@@ -52,63 +52,78 @@ export function MyEnrollments({
 
     if (!selectedCourse) {
         return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 pb-12 w-full max-w-7xl mx-auto">
-                {enrollments.map((enrollment) => (
-                    <div key={enrollment.id} className="relative group flex flex-col">
-                        <div className="absolute inset-0 bg-primary/5 rounded-[2rem] blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                        <Card className="h-full flex flex-col relative bg-background/60 backdrop-blur-xl border-border/50 rounded-[1.8rem] overflow-hidden hover:border-primary/30 transition-all duration-300 shadow-sm hover:shadow-xl text-center">
-                            <div className="absolute top-0 left-0 w-full h-1 bg-primary/20" />
-                            
-                            <CardHeader className="pb-1 pt-5 px-5">
-                                <div className="flex flex-col items-center gap-2">
-                                    <Badge variant="outline" className="text-[8px] px-2 h-4 uppercase font-black tracking-widest bg-primary/5 text-primary border-primary/20 rounded-full">
-                                        Matriculado
+            <div className="rounded-xl border border-border/50 overflow-x-auto shadow-sm">
+                <Table>
+                    <TableHeader>
+                        <TableRow className="bg-muted/30 hover:bg-muted/30">
+                            <TableHead className="font-bold uppercase tracking-wider text-xs pl-4">Curso</TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs hidden sm:table-cell">Docente</TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden md:table-cell">Inicio</TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden md:table-cell">Finaliza</TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden lg:table-cell">Estado</TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Acción</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {enrollments.map((enrollment) => (
+                            <TableRow
+                                key={enrollment.id}
+                                className="group hover:bg-muted/20 transition-colors border-border/30"
+                            >
+                                <TableCell className="pl-4">
+                                    <div className="flex flex-col gap-0.5">
+                                        <span className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors leading-tight">
+                                            {enrollment.course.title}
+                                        </span>
+                                        <Badge variant="outline" className="text-[9px] w-fit px-2 h-4 uppercase font-black tracking-widest bg-primary/5 text-primary border-primary/20 rounded-full mt-0.5">
+                                            Matriculado
+                                        </Badge>
+                                    </div>
+                                </TableCell>
+
+                                <TableCell className="hidden sm:table-cell">
+                                    <div className="flex items-center gap-2">
+                                        <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-[10px] shadow-inner shrink-0">
+                                            {formatName(enrollment.course.teacher.name, enrollment.course.teacher.profile).charAt(0)}
+                                        </div>
+                                        <span className="text-xs font-medium text-muted-foreground truncate max-w-[140px]">
+                                            {formatName(enrollment.course.teacher.name, enrollment.course.teacher.profile)}
+                                        </span>
+                                    </div>
+                                </TableCell>
+
+                                <TableCell className="text-center hidden md:table-cell">
+                                    <span className="text-xs text-muted-foreground font-medium">
+                                        {enrollment.course.startDate ? formatCalendarDate(enrollment.course.startDate, "dd/MM/yy") : "---"}
+                                    </span>
+                                </TableCell>
+
+                                <TableCell className="text-center hidden md:table-cell">
+                                    <span className="text-xs text-muted-foreground font-medium">
+                                        {enrollment.course.endDate ? formatCalendarDate(enrollment.course.endDate, "dd MMM yy") : "Indeterminado"}
+                                    </span>
+                                </TableCell>
+
+                                <TableCell className="text-center hidden lg:table-cell">
+                                    <Badge className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 border font-bold gap-1">
+                                        <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                        Activo
                                     </Badge>
-                                    <CardTitle className="text-sm font-bold leading-tight group-hover:text-primary transition-colors w-full uppercase tracking-tight line-clamp-3 min-h-[3rem] flex items-center justify-center">
-                                        {enrollment.course.title}
-                                    </CardTitle>
-                                    <div className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground mt-1">
-                                        <Users className="h-2.5 w-2.5" />
-                                        {formatName(enrollment.course.teacher.name, enrollment.course.teacher.profile)}
-                                    </div>
-                                </div>
-                            </CardHeader>
+                                </TableCell>
 
-                            <CardContent className="flex-1 px-5 py-4 space-y-4 flex flex-col justify-center">
-                                <div className="grid grid-cols-2 gap-2 w-full">
-                                    <div className="flex flex-col items-center p-2 rounded-xl bg-muted/20 border border-border/10">
-                                        <span className="text-[8px] font-black text-muted-foreground uppercase tracking-tighter">Inicio</span>
-                                        <div className="flex items-center gap-1 mt-0.5 text-[10px] font-bold text-foreground/80">
-                                            <Calendar className="h-2.5 w-2.5 text-primary" />
-                                            {enrollment.course.startDate ? formatCalendarDate(enrollment.course.startDate, "dd/MM/yy") : "---"}
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-col items-center p-2 rounded-xl bg-muted/20 border border-border/10">
-                                        <span className="text-[8px] font-black text-muted-foreground uppercase tracking-tighter">Estado</span>
-                                        <div className="flex items-center gap-1 mt-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                                            <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                            Activo
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <div className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-muted-foreground/60 justify-center">
-                                    <Clock className="h-2.5 w-2.5" />
-                                    Finaliza: {enrollment.course.endDate ? formatCalendarDate(enrollment.course.endDate, "dd MMM yyyy") : "INDETERMINADO"}
-                                </div>
-                            </CardContent>
-
-                            <CardFooter className="px-5 pb-5 pt-0">
-                                <Button 
-                                    className="w-full font-black text-[10px] uppercase tracking-widest shadow-md hover:shadow-primary/20 transition-all active:scale-[0.98] h-10 rounded-xl border border-primary/20"
-                                    onClick={() => onSelectCourse(enrollment.course.id)}
-                                >
-                                    Ingresar al Aula <ArrowRight className="ml-2 h-3.5 w-3.5" />
-                                </Button>
-                            </CardFooter>
-                        </Card>
-                    </div>
-                ))}
+                                <TableCell className="text-center">
+                                    <Button
+                                        size="sm"
+                                        className="h-8 px-3 font-black text-[10px] uppercase tracking-wider shadow-sm hover:shadow-primary/20 transition-all gap-1.5"
+                                        onClick={() => onSelectCourse(enrollment.course.id)}
+                                    >
+                                        Ingresar <ArrowRight className="h-3.5 w-3.5" />
+                                    </Button>
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
             </div>
         );
     }
@@ -144,146 +159,96 @@ export function MyEnrollments({
                                 `}</style>
 
                                 <TooltipProvider delayDuration={300}>
-                                    {/* Row 1: Primary Controls & Identity (h-12) */}
-                                    <div className="flex items-center px-4 h-12 border-b-2 border-foreground/10">
-                                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                                            <div className="flex items-center gap-2">
-                                                <SidebarTrigger className="h-8 w-8 hover:bg-muted/80 rounded-lg transition-colors" />
-                                                <div className="h-6 w-[2px] bg-foreground/15" />
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <Button 
-                                                            variant="ghost" 
-                                                            size="icon" 
-                                                            onClick={() => onSelectCourse(null)}
-                                                            className="h-8 w-8 hover:bg-primary/10 hover:text-primary transition-all rounded-lg"
-                                                        >
-                                                            <ArrowLeft className="h-4 w-4" />
-                                                        </Button>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent side="bottom">Salir del aula</TooltipContent>
-                                                </Tooltip>
-                                            </div>
-                                            
-                                            <div className="h-6 w-[1px] bg-foreground/10 mx-1 hidden sm:block" />
+                                    {/* Row 1: Primary Controls & Identity (h-12 with full-height border dividers) */}
+                                    <div className="flex items-center h-12 border-b border-foreground/10 bg-background/50">
+                                        {/* Left: Sidebar trigger with full-height border */}
+                                        <div className="flex items-center h-full px-3 border-r border-foreground/10">
+                                            <SidebarTrigger className="h-8 w-8 hover:bg-muted/80 rounded-lg transition-colors" />
+                                        </div>
 
-                                            <div className="flex flex-col min-w-0">
-                                                <h2 className="text-[13px] font-black tracking-tight leading-none uppercase truncate opacity-90 transition-opacity">
-                                                    {enrollment.course.title}
-                                                </h2>
-                                                <div className="flex items-center gap-1.5 mt-0.5">
-                                                    <Users className="h-2.5 w-2.5 text-primary/60" />
-                                                    <span className="text-[9px] font-medium text-muted-foreground uppercase tracking-widest truncate">Docente: {formatName(enrollment.course.teacher.name, enrollment.course.teacher.profile)}</span>
-                                                </div>
+                                        {/* Middle: Course details */}
+                                        <div className="flex-1 flex flex-col justify-center h-full px-4 min-w-0">
+                                            <h2 className="text-[13px] font-black tracking-tight leading-none uppercase truncate opacity-90 transition-opacity">
+                                                {enrollment.course.title}
+                                            </h2>
+                                            <div className="flex items-center gap-1.5 mt-0.5">
+                                                <Users className="h-2.5 w-2.5 text-primary/60" />
+                                                <span className="text-[9px] font-medium text-muted-foreground uppercase tracking-widest truncate">Docente: {formatName(enrollment.course.teacher.name, enrollment.course.teacher.profile)}</span>
                                             </div>
                                         </div>
 
-                                        {/* Right utilities */}
-                                        <div className="flex items-center gap-2 ml-auto">
-                                            <div className="hidden md:flex flex-col items-end mr-2 pr-2 border-r border-border/40">
-                                                <span className="text-[8px] text-muted-foreground uppercase tracking-widest font-black leading-none mb-0.5">Tu Progreso</span>
-                                                <div className="flex items-center gap-2">
-                                                    <Badge variant="secondary" className="px-1.5 py-0 h-4 text-[9px] font-black bg-primary/10 text-primary border-none rounded-sm">
-                                                        {progressPercentage}%
-                                                    </Badge>
-                                                </div>
+                                        {/* Right: Progress, Documentation, and Utilities separated by full-height borders */}
+                                        <div className="hidden md:flex flex-col items-end justify-center h-full px-4 border-l border-foreground/10">
+                                            <span className="text-[8px] text-muted-foreground uppercase tracking-widest font-black leading-none mb-0.5">Tu Progreso</span>
+                                            <div className="flex items-center gap-2">
+                                                <Badge variant="secondary" className="px-1.5 py-0 h-4 text-[9px] font-black bg-primary/10 text-primary border-none rounded-sm">
+                                                    {progressPercentage}%
+                                                </Badge>
                                             </div>
+                                        </div>
 
-                                            {enrollment.course.externalUrl && (
-                                                <div className="hidden lg:flex items-center bg-muted/60 hover:bg-muted/80 transition-colors rounded-full px-1 py-1 h-8 gap-1 border border-foreground/10">
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                asChild
-                                                                className="h-6 w-6 rounded-full hover:bg-primary/10 hover:text-primary transition-all"
+                                        {enrollment.course.docProjectId && (
+                                            <div className="flex items-center h-full px-4 border-l border-foreground/10">
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            asChild
+                                                            className="h-8 w-8 hover:bg-primary/10 hover:text-primary transition-all rounded-lg"
+                                                        >
+                                                            <Link 
+                                                              href={`/docs/${enrollment.course.docProject?.slug || enrollment.course.docProjectId}`} 
+                                                              target="_blank" 
+                                                              rel="noopener noreferrer"
+                                                              onClick={() => recordProjectVisitAction(enrollment.course.docProjectId)}
                                                             >
-                                                                <Link href={enrollment.course.externalUrl} target="_blank" rel="noopener noreferrer">
-                                                                    <ExternalLink className="h-3 w-3" />
-                                                                </Link>
-                                                            </Button>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent side="bottom">Documentación externa</TooltipContent>
-                                                    </Tooltip>
-                                                </div>
-                                            )}
-
-                                            {enrollment.course.docProjectId && (
-                                                <div className="flex items-center bg-primary/10 hover:bg-primary/20 transition-colors rounded-full px-1 py-1 h-8 gap-1 border border-primary/20">
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                asChild
-                                                                className="h-6 w-6 rounded-full hover:bg-primary/20 hover:text-primary transition-all"
-                                                            >
-                                                                <Link 
-                                                                  href={`/docs/${enrollment.course.docProject?.slug || enrollment.course.docProjectId}`} 
-                                                                  target="_blank" 
-                                                                  rel="noopener noreferrer"
-                                                                  onClick={() => recordProjectVisitAction(enrollment.course.docProjectId)}
-                                                                >
-                                                                    <BookOpen className="h-3 w-3 text-primary" />
-                                                                </Link>
-                                                            </Button>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent side="bottom">Ver Documentación del Curso</TooltipContent>
-                                                    </Tooltip>
-                                                </div>
-                                            )}
-
-                                            <div className="h-6 w-[2px] bg-foreground/15 mx-1 hidden sm:block" />
-                                            
-                                            <div className="flex items-center gap-1">
-                                                <RefreshButton />
-                                                <ThemeSelector themes={themes} />
-                                                <ModeToggle />
-                                                <CreditsModal />
+                                                                <BookOpen className="h-4 w-4 text-primary" />
+                                                            </Link>
+                                                        </Button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="bottom">Ver Documentación del Aula</TooltipContent>
+                                                </Tooltip>
                                             </div>
+                                        )}
+
+                                        <div className="flex items-center h-full px-3 gap-1.5 border-l border-foreground/10">
+                                            <RefreshButton />
+                                            <ThemeSelector themes={themes} />
+                                            <ModeToggle />
+                                            <CreditsModal />
                                         </div>
                                     </div>
 
-                                    {/* Row 2: Content Navigation (h-10) */}
-                                    <div className="px-4 h-10 flex items-center justify-center bg-muted/5 border-b border-foreground/10 shadow-[0_1px_10px_rgba(0,0,0,0.05)] dark:shadow-none">
-                                        <TabsList className="flex w-full md:w-auto h-10 p-0 bg-transparent gap-0 overflow-x-auto scrollbar-none justify-center">
-                                            <TabsTrigger value="activities" className="group relative flex items-center gap-2 h-10 px-3 text-[10px] uppercase tracking-wider font-bold bg-transparent border-0 data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none transition-all opacity-60 hover:opacity-100 data-[state=active]:opacity-100 data-[state=active]:nav-indicator-active-student">
+                                    {/* Row 2: Content Navigation (h-auto on mobile, compact h-11 on desktop) */}
+                                    <div className="px-4 py-1.5 lg:py-0 lg:h-11 flex items-center justify-center bg-muted/5 border-b border-foreground/10 shadow-sm dark:shadow-none">
+                                        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 h-auto lg:h-9 p-0.5 bg-muted/60 dark:bg-muted/30 rounded-lg gap-0.5 border border-border/30 shadow-none">
+                                            <TabsTrigger value="activities" className="group relative flex items-center justify-center gap-1.5 h-8 px-2.5 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm">
                                                 <ClipboardCheck className="h-3.5 w-3.5 group-data-[state=active]:text-primary" />
                                                 <span className="hidden sm:inline group-data-[state=active]:text-primary">Actividades</span>
                                             </TabsTrigger>
                                             
-                                            <div className="h-5 w-[1px] bg-foreground/15 self-center hidden sm:block" />
-                                            
-                                            <TabsTrigger value="evaluations" className="group relative flex items-center gap-2 h-10 px-3 text-[10px] uppercase tracking-wider font-bold bg-transparent border-0 data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none transition-all opacity-60 hover:opacity-100 data-[state=active]:opacity-100 data-[state=active]:nav-indicator-active-student">
+                                            <TabsTrigger value="evaluations" className="group relative flex items-center justify-center gap-1.5 h-8 px-2.5 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm">
                                                 <FileText className="h-3.5 w-3.5 group-data-[state=active]:text-primary" />
                                                 <span className="hidden sm:inline group-data-[state=active]:text-primary">Evaluaciones</span>
                                             </TabsTrigger>
                                             
-                                            <div className="h-5 w-[1px] bg-foreground/15 self-center hidden sm:block" />
-
-                                            <TabsTrigger value="attendance" className="group relative flex items-center gap-2 h-10 px-3 text-[10px] uppercase tracking-wider font-bold bg-transparent border-0 data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none transition-all opacity-60 hover:opacity-100 data-[state=active]:opacity-100 data-[state=active]:nav-indicator-active-student">
+                                            <TabsTrigger value="attendance" className="group relative flex items-center justify-center gap-1.5 h-8 px-2.5 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm">
                                                 <Clock className="h-3.5 w-3.5 group-data-[state=active]:text-primary" />
                                                 <span className="hidden sm:inline group-data-[state=active]:text-primary">Asistencia</span>
                                             </TabsTrigger>
 
-                                            <div className="h-5 w-[1px] bg-foreground/15 self-center hidden sm:block" />
-
-                                            <TabsTrigger value="grades" className="group relative flex items-center gap-2 h-10 px-3 text-[10px] uppercase tracking-wider font-bold bg-transparent border-0 data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none transition-all opacity-60 hover:opacity-100 data-[state=active]:opacity-100 data-[state=active]:nav-indicator-active-student">
+                                            <TabsTrigger value="grades" className="group relative flex items-center justify-center gap-1.5 h-8 px-2.5 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm">
                                                 <GraduationCap className="h-3.5 w-3.5 group-data-[state=active]:text-primary" />
                                                 <span className="hidden sm:inline group-data-[state=active]:text-primary">Calificaciones</span>
                                             </TabsTrigger>
 
-                                            <div className="h-5 w-[1px] bg-foreground/15 self-center hidden sm:block" />
-
-                                            <TabsTrigger value="remarks" className="group relative flex items-center gap-2 h-10 px-3 text-[10px] uppercase tracking-wider font-bold bg-transparent border-0 data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none transition-all opacity-60 hover:opacity-100 data-[state=active]:opacity-100 data-[state=active]:nav-indicator-active-student">
+                                            <TabsTrigger value="remarks" className="group relative flex items-center justify-center gap-1.5 h-8 px-2.5 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm">
                                                 <MessageSquare className="h-3.5 w-3.5 group-data-[state=active]:text-primary" />
                                                 <span className="hidden sm:inline group-data-[state=active]:text-primary">Observaciones</span>
                                             </TabsTrigger>
 
-                                            <div className="h-5 w-[1px] bg-foreground/15 self-center hidden sm:block" />
-
-                                            <TabsTrigger value="resources" className="group relative flex items-center gap-2 h-10 px-3 text-[10px] uppercase tracking-wider font-bold bg-transparent border-0 data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none transition-all opacity-60 hover:opacity-100 data-[state=active]:opacity-100 data-[state=active]:nav-indicator-active-student">
+                                            <TabsTrigger value="resources" className="group relative flex items-center justify-center gap-1.5 h-8 px-2.5 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm">
                                                 <BookOpen className="h-3.5 w-3.5 group-data-[state=active]:text-primary" />
                                                 <span className="hidden sm:inline group-data-[state=active]:text-primary">Recursos</span>
                                             </TabsTrigger>
@@ -297,18 +262,19 @@ export function MyEnrollments({
                                 <TabsContent value="activities" className="h-full overflow-y-auto p-4 sm:p-6 md:p-8 pt-0 mt-0 scrollbar-thin">
                                     <div className="space-y-4 pt-6">
                                         <h3 className="text-2xl font-bold flex items-center gap-2">
+                                            <ClipboardCheck className="h-4 w-4 text-primary" />
                                             Actividades Pendientes y Entregas
                                         </h3>
                                         {enrollment.course.activities.length > 0 ? (
-                                            <div className="w-full overflow-x-auto rounded-md border text-foreground">
+                                            <div className="rounded-xl border border-border/50 overflow-x-auto shadow-sm text-foreground">
                                                 <Table className="min-w-[700px]">
                                                     <TableHeader>
-                                                        <TableRow>
-                                                            <TableHead className="w-[300px]">Actividad</TableHead>
-                                                            <TableHead>Estado</TableHead>
-                                                            <TableHead className="hidden sm:table-cell">Nota</TableHead>
-                                                            <TableHead className="hidden md:table-cell">Vencimiento</TableHead>
-                                                            <TableHead className="text-right">Acciones</TableHead>
+                                                        <TableRow className="bg-muted/30 hover:bg-muted/30">
+                                                            <TableHead className="font-bold uppercase tracking-wider text-xs pl-4 w-[300px]">Actividad</TableHead>
+                                                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Estado</TableHead>
+                                                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden sm:table-cell">Nota</TableHead>
+                                                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden md:table-cell">Vencimiento</TableHead>
+                                                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Acciones</TableHead>
                                                         </TableRow>
                                                     </TableHeader>
                                                     <TableBody>
@@ -320,7 +286,7 @@ export function MyEnrollments({
                                                             const isOpen = !activity.openDate || new Date() >= new Date(activity.openDate);
 
                                                             return (
-                                                                <TableRow key={activity.id} suppressHydrationWarning className="hover:bg-muted/30 transition-colors">
+                                                                <TableRow key={activity.id} suppressHydrationWarning className="group hover:bg-muted/20 transition-colors border-border/30">
                                                                     <TableCell className="font-medium py-4">
                                                                         <div className="flex items-start gap-3">
                                                                             <div className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary text-xs font-bold">
@@ -421,6 +387,7 @@ export function MyEnrollments({
                                 <TabsContent value="evaluations" className="h-full overflow-y-auto p-4 sm:p-6 md:p-8 pt-0 mt-0 scrollbar-thin">
     <div className="space-y-4 pt-6">
                                         <h3 className="text-2xl font-bold flex items-center gap-2">
+                                            <FileText className="h-4 w-4 text-primary" />
                                             Evaluaciones del Curso
                                         </h3>
                                         {enrollment.course.evaluationAttempts?.length > 0 ? (

@@ -296,12 +296,8 @@ export function AdminSettings({ initialSettings, themes }: AdminSettingsProps) {
                                    <Select 
                                       value={visualSettings.appThemeColor || "zinc"} 
                                       onValueChange={(val) => updateVisualSetting("appThemeColor", val)}
-                                      disabled={visualSettings.appAllowThemeColorChange}
                                    >
-                                      <SelectTrigger className={cn(
-                                          "w-44 h-10 text-xs font-bold bg-background border-primary/20",
-                                          visualSettings.appAllowThemeColorChange && "opacity-50 grayscale cursor-not-allowed"
-                                      )}>
+                                      <SelectTrigger className="w-44 h-10 text-xs font-bold bg-background border-primary/20">
                                           <SelectValue placeholder="Seleccionar" />
                                       </SelectTrigger>
                                       <SelectContent>
@@ -317,17 +313,6 @@ export function AdminSettings({ initialSettings, themes }: AdminSettingsProps) {
                                       </SelectContent>
                                    </Select>
                                 </div>
-                                <div className="flex items-center justify-between group">
-                                   <div className="space-y-0.5">
-                                       <Label className="text-xs font-bold opacity-70 group-hover:opacity-100 transition-opacity">Permitir cambio de tema</Label>
-                                       <p className="text-[9px] text-muted-foreground leading-tight max-w-[200px]">Si se desactiva, el estudiante verá el color fijado arriba.</p>
-                                   </div>
-                                   <Switch 
-                                      checked={visualSettings.appAllowThemeColorChange} 
-                                      onCheckedChange={(val) => updateVisualSetting("appAllowThemeColorChange", val)}
-                                      className="scale-90"
-                                   />
-                                </div>
                             </div>
 
                             {/* Code Style Selection */}
@@ -340,12 +325,8 @@ export function AdminSettings({ initialSettings, themes }: AdminSettingsProps) {
                                    <Select 
                                       value={visualSettings.appCodeTheme} 
                                       onValueChange={(val) => updateVisualSetting("appCodeTheme", val)}
-                                      disabled={visualSettings.appAllowCodeThemeChange}
                                    >
-                                      <SelectTrigger className={cn(
-                                          "w-44 h-10 text-xs font-bold bg-background border-primary/20",
-                                          visualSettings.appAllowCodeThemeChange && "opacity-50 grayscale cursor-not-allowed"
-                                      )}>
+                                      <SelectTrigger className="w-44 h-10 text-xs font-bold bg-background border-primary/20">
                                           <SelectValue placeholder="Seleccionar" />
                                       </SelectTrigger>
                                       <SelectContent>
@@ -357,41 +338,6 @@ export function AdminSettings({ initialSettings, themes }: AdminSettingsProps) {
                                           <SelectItem value="nord">Nord</SelectItem>
                                       </SelectContent>
                                    </Select>
-                                </div>
-                                <div className="flex items-center justify-between group">
-                                   <div className="space-y-0.5">
-                                       <Label className="text-xs font-bold opacity-70 group-hover:opacity-100 transition-opacity">Permitir cambio de estilo de código</Label>
-                                       <p className="text-[9px] text-muted-foreground leading-tight max-w-[200px]">Controla si el estudiante puede elegir otro resaltado.</p>
-                                   </div>
-                                   <Switch 
-                                      checked={visualSettings.appAllowCodeThemeChange} 
-                                      onCheckedChange={(val) => updateVisualSetting("appAllowCodeThemeChange", val)}
-                                      className="scale-90"
-                                   />
-                                </div>
-                            </div>
-
-                            {/* Active Status Visualization */}
-                            <div className="pt-6 mt-auto">
-                                <div className="relative p-5 bg-primary/5 rounded-3xl border border-primary/10 overflow-hidden">
-                                    <div className="flex items-center justify-center gap-10 relative z-10">
-                                        <div className={cn("flex flex-col items-center gap-1.5 transition-all duration-500", visualSettings.appAllowThemeColorChange ? "text-primary scale-110 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]" : "text-muted-foreground/20 scale-90")}>
-                                          <Palette className="w-7 h-7" />
-                                          <span className="text-[9px] font-black uppercase tracking-widest">Branding</span>
-                                        </div>
-                                        <div className={cn("flex flex-col items-center gap-1.5 transition-all duration-500", visualSettings.appAllowCodeThemeChange ? "text-primary scale-110 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]" : "text-muted-foreground/20 scale-90")}>
-                                          <Code className="w-7 h-7" />
-                                          <span className="text-[9px] font-black uppercase tracking-widest">Sintaxis</span>
-                                        </div>
-                                        <div className="w-[1px] h-10 bg-primary/20 rotate-12" />
-                                        <div className={cn("flex flex-col items-center gap-1.5 transition-all duration-500", visualSettings.appThemeMode === "STUDENT" ? "text-primary scale-110 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]" : "text-muted-foreground/20 scale-90")}>
-                                          <Sun className="w-7 h-7" />
-                                          <span className="text-[9px] font-black uppercase tracking-widest">Libertad</span>
-                                        </div>
-                                    </div>
-                                    <p className="text-[8px] text-center text-primary/60 font-black uppercase tracking-[0.4em] mt-5">
-                                       Sincronización Maestra Activa
-                                    </p>
                                 </div>
                             </div>
                         </CardContent>

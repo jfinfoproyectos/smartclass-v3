@@ -480,17 +480,17 @@ export function UserManagement({ initialUsers, totalCount }: UserManagementProps
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <div className="w-full overflow-x-auto rounded-md border">
+                    <div className="rounded-xl border border-border/50 overflow-x-auto shadow-sm">
                         <Table className="min-w-[900px]">
                             <TableHeader>
-                                <TableRow>
-                                    <TableHead>Usuario</TableHead>
-                                    <TableHead className="hidden md:table-cell">Email</TableHead>
-                                    <TableHead>Rol</TableHead>
-                                    <TableHead className="hidden lg:table-cell">Estado</TableHead>
-                                    <TableHead className="hidden xl:table-cell">Estadísticas</TableHead>
-                                    <TableHead className="hidden sm:table-cell">Fecha Registro</TableHead>
-                                    <TableHead className="text-right">Acciones</TableHead>
+                                <TableRow className="bg-muted/30 hover:bg-muted/30">
+                                    <TableHead className="font-bold uppercase tracking-wider text-xs pl-4">Usuario</TableHead>
+                                    <TableHead className="font-bold uppercase tracking-wider text-xs hidden md:table-cell">Email</TableHead>
+                                    <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Rol</TableHead>
+                                    <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden lg:table-cell">Estado</TableHead>
+                                    <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden xl:table-cell">Estadísticas</TableHead>
+                                    <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden sm:table-cell">Fecha Registro</TableHead>
+                                    <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Acciones</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -502,7 +502,7 @@ export function UserManagement({ initialUsers, totalCount }: UserManagementProps
                                     </TableRow>
                                 ) : (
                                     users.map((user) => (
-                                        <TableRow key={user.id}>
+                                        <TableRow key={user.id} className="group hover:bg-muted/20 transition-colors border-border/30">
                                             <TableCell>
                                                 <div className="flex items-center gap-3">
                                                     <UserAvatar
@@ -962,17 +962,17 @@ export function UserManagement({ initialUsers, totalCount }: UserManagementProps
                                                             ) : fullUserDetails?.enrollments?.length > 0 ? (
                                                                 <Table>
                                                                     <TableHeader>
-                                                                        <TableRow>
-                                                                            <TableHead>Curso</TableHead>
-                                                                            <TableHead>Profesor</TableHead>
-                                                                            <TableHead>Fecha Inscripción</TableHead>
-                                                                            <TableHead>Estado</TableHead>
+                                                                        <TableRow className="bg-muted/30 hover:bg-muted/30">
+                                                                            <TableHead className="font-bold uppercase tracking-wider text-xs pl-4">Curso</TableHead>
+                                                                            <TableHead className="font-bold uppercase tracking-wider text-xs">Profesor</TableHead>
+                                                                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Fecha Inscripción</TableHead>
+                                                                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Estado</TableHead>
                                                                         </TableRow>
                                                                     </TableHeader>
                                                                     <TableBody>
                                                                         {fullUserDetails.enrollments.map((enrollment: any) => (
-                                                                            <TableRow key={enrollment.id}>
-                                                                                <TableCell className="font-medium">
+                                                                            <TableRow key={enrollment.id} className="group hover:bg-muted/20 transition-colors border-border/30">
+                                                                                <TableCell className="font-medium pl-4">
                                                                                     {enrollment.course.title}
                                                                                 </TableCell>
                                                                                 <TableCell>
@@ -1011,16 +1011,16 @@ export function UserManagement({ initialUsers, totalCount }: UserManagementProps
                                                             ) : fullUserDetails?.attendances?.length > 0 ? (
                                                                 <Table>
                                                                     <TableHeader>
-                                                                        <TableRow>
-                                                                            <TableHead>Fecha</TableHead>
-                                                                            <TableHead>Curso</TableHead>
-                                                                            <TableHead>Estado</TableHead>
-                                                                            <TableHead>Notas</TableHead>
+                                                                        <TableRow className="bg-muted/30 hover:bg-muted/30">
+                                                                            <TableHead className="font-bold uppercase tracking-wider text-xs pl-4">Fecha</TableHead>
+                                                                            <TableHead className="font-bold uppercase tracking-wider text-xs">Curso</TableHead>
+                                                                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Estado</TableHead>
+                                                                            <TableHead className="font-bold uppercase tracking-wider text-xs">Notas</TableHead>
                                                                         </TableRow>
                                                                     </TableHeader>
                                                                     <TableBody>
                                                                         {fullUserDetails.attendances.map((record: any) => (
-                                                                            <TableRow key={record.id}>
+                                                                            <TableRow key={record.id} className="group hover:bg-muted/20 transition-colors border-border/30">
                                                                                 <TableCell>
                                                                                     {format(new Date(record.date), "PPP - HH:mm")}
                                                                                 </TableCell>
@@ -1067,16 +1067,16 @@ export function UserManagement({ initialUsers, totalCount }: UserManagementProps
                                                             ) : fullUserDetails?.submissions?.length > 0 ? (
                                                                 <Table>
                                                                     <TableHeader>
-                                                                        <TableRow>
-                                                                            <TableHead>Actividad</TableHead>
-                                                                            <TableHead>Curso</TableHead>
-                                                                            <TableHead>Fecha Entrega</TableHead>
-                                                                            <TableHead>Calificación</TableHead>
+                                                                        <TableRow className="bg-muted/30 hover:bg-muted/30">
+                                                                            <TableHead className="font-bold uppercase tracking-wider text-xs pl-4">Actividad</TableHead>
+                                                                            <TableHead className="font-bold uppercase tracking-wider text-xs">Curso</TableHead>
+                                                                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Fecha Entrega</TableHead>
+                                                                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Calificación</TableHead>
                                                                         </TableRow>
                                                                     </TableHeader>
                                                                     <TableBody>
                                                                         {fullUserDetails.submissions.map((sub: any) => (
-                                                                            <TableRow key={sub.id}>
+                                                                            <TableRow key={sub.id} className="group hover:bg-muted/20 transition-colors border-border/30">
                                                                                 <TableCell className="font-medium">
                                                                                     {sub.activity.title}
                                                                                     {sub.url && (

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { format } from "date-fns";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -35,7 +34,6 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [loading, setLoading] = useState(false);
     const [attendanceDate, setAttendanceDate] = useState<Date>(new Date());
-    const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
     const [studentStats, setStudentStats] = useState<{ late: number; excused: number; absences: number; records: any[] } | null>(null);
     const [currentStatus, setCurrentStatus] = useState<"PRESENT" | "ABSENT" | "EXCUSED" | "LATE" | null>(null);
     const [sessionCount, setSessionCount] = useState<number | undefined>(undefined);
@@ -52,7 +50,7 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
         }
     }, [currentIndex, students, isOpen]);
 
-    const loadStudentStats = async (studentId: string) => {
+    const loadStudentStats = async (studentId: string, dateOverride?: Date) => {
         try {
             // Fetch session count if not already fetched
             let currentSessionCount = sessionCount;
@@ -70,20 +68,43 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
             });
             
             // Check if there is a record for the currently selected date
-            const dateStr = format(attendanceDate, "yyyy-MM-dd");
+            const refDate = dateOverride ?? attendanceDate;
+            // Build the date string from LOCAL components of refDate (the user selected this date locally)
+            const y = refDate.getFullYear();
+            const m = String(refDate.getMonth() + 1).padStart(2, '0');
+            const d = String(refDate.getDate()).padStart(2, '0');
+            const dateStr = `${y}-${m}-${d}`;
+
             const todayRecord = stats.records?.find((r: any) => {
                 try {
                     if (!r.date) return false;
-                    const recordDateStr = new Date(r.date).toISOString().split('T')[0];
-                    return recordDateStr === dateStr;
+                    // Records from DB come as UTC midnight — extract UTC components to get the calendar date
+                    const rd = new Date(r.date);
+                    const ry = rd.getUTCFullYear();
+                    const rm = String(rd.getUTCMonth() + 1).padStart(2, '0');
+                    const rday = String(rd.getUTCDate()).padStart(2, '0');
+                    return `${ry}-${rm}-${rday}` === dateStr;
                 } catch (e) {
                     return false;
                 }
             });
             setCurrentStatus(todayRecord ? todayRecord.status : null);
+
             
         } catch (error) {
             console.error("Error loading stats", error);
+        }
+    };
+
+    const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value; // "yyyy-MM-dd"
+        if (!val) return;
+        const [year, month, day] = val.split("-").map(Number);
+        const newDate = new Date(year, month - 1, day);
+        setAttendanceDate(newDate);
+        // Reload stats for the new date
+        if (students.length > 0 && students[currentIndex]) {
+            loadStudentStats(students[currentIndex].id, newDate);
         }
     };
 
@@ -124,7 +145,10 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
         if (!student) return;
 
         try {
-            const dateStr = format(attendanceDate, "yyyy-MM-dd");
+            const y = attendanceDate.getFullYear();
+            const m = String(attendanceDate.getMonth() + 1).padStart(2, '0');
+            const d = String(attendanceDate.getDate()).padStart(2, '0');
+            const dateStr = `${y}-${m}-${d}`;
             await deleteAttendanceAction(courseId, student.id, dateStr);
             toast.success(`Registro eliminado para ${student.profile?.nombres || student.name || "el estudiante"}`);
             
@@ -142,8 +166,11 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
         if (!student) return;
 
         try {
-            // Format date as YYYY-MM-DD using local time
-            const dateStr = format(attendanceDate, "yyyy-MM-dd");
+            // Build date string from local components (user-selected date)
+            const y = attendanceDate.getFullYear();
+            const mo = String(attendanceDate.getMonth() + 1).padStart(2, '0');
+            const d = String(attendanceDate.getDate()).padStart(2, '0');
+            const dateStr = `${y}-${mo}-${d}`;
             
             await recordAttendanceAction(courseId, student.id, dateStr, status);
             toast.success(`Marcado como ${
@@ -210,20 +237,25 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
                     </Button>
                 )}
             </SheetTrigger>
-            <SheetContent side="bottom" className="h-screen p-0 flex flex-col gap-0 border-none">
+            <SheetContent side="bottom" style={{ top: "92px" }} className="p-0 flex flex-col gap-0 border-none overflow-hidden" overlayClassName="top-[92px]" overlayStyle={{ top: "92px" }}>
                 {/* Header */}
                 <div className="p-4 border-b flex justify-between items-center bg-muted/20">
                     <div className="flex items-center gap-4">
                         <SheetTitle className="text-xl font-bold">Llamado de Asistencia</SheetTitle>
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                            <Calendar className="h-4 w-4" />
-                            <span>{formatCalendarDate(attendanceDate)}</span>
-                        </div>
+                        <label className="flex items-center gap-2 text-muted-foreground cursor-pointer group">
+                            <Calendar className="h-4 w-4 group-hover:text-primary transition-colors" />
+                            <input
+                                type="date"
+                                value={`${attendanceDate.getFullYear()}-${String(attendanceDate.getMonth() + 1).padStart(2, '0')}-${String(attendanceDate.getDate()).padStart(2, '0')}`}
+                                onChange={handleDateChange}
+                                className="bg-transparent border border-border/50 rounded-md px-2 py-0.5 text-sm text-foreground cursor-pointer hover:border-primary focus:outline-none focus:border-primary transition-colors"
+                            />
+                        </label>
                     </div>
                 </div>
 
                 {/* Main Content */}
-                <div className="flex-1 flex flex-col items-center justify-center p-2 md:p-4 bg-gradient-to-br from-background via-muted/30 to-background overflow-hidden w-full h-[calc(100vh-64px)]">
+                <div className="flex-1 flex flex-col items-center justify-center p-2 md:p-4 bg-gradient-to-br from-background via-muted/30 to-background overflow-hidden w-full">
                     {loading ? (
                         <div className="flex flex-col items-center gap-4 text-muted-foreground animate-pulse">
                             <Clock className="w-10 h-10 animate-spin text-primary/50" />

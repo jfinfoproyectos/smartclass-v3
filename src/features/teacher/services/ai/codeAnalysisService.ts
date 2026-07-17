@@ -78,6 +78,7 @@ export async function analyzeFile(
                 : gradingMode === "moderate" 
                 ? "Evaluación moderada: considera legibilidad, estructura y mejores prácticas básicas además de la lógica." 
                 : "Evaluación estándar: enfócate principalmente en la funcionalidad y lógica básica solicitada."}
+            4. **REGLA CRÍTICA DE FORMATO DE ENTREGA**: Si en la 'Rúbrica/Enunciado' se especifica algún criterio o requisito sobre el formato de entrega del archivo (como por ejemplo: entregar en formato ZIP, Word, PDF, estructura específica de carpetas del repositorio, nombres de archivo específicos, o cómo empaquetar o cargar la entrega), **IGNÓRALO COMPLETAMENTE**. NO penalices ni restes puntos al estudiante por no cumplir con estas pautas de formato de entrega, empaquetado o carga del archivo.
             
             **Rúbrica/Enunciado**: "${description}"
             ${contextSection}

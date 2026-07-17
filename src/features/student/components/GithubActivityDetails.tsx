@@ -47,7 +47,7 @@ export function GithubActivityDetails({ activity, userId, studentName }: GithubA
     const isRejected = submission && submission.grade === null && submission.feedback && submission.feedback.includes("[ENTREGA RECHAZADA]");
     const { resolvedTheme } = useTheme();
     const [mounted, setMounted] = useState(false);
-    const [activeTab, setActiveTab] = useState(isGraded ? "feedback" : "instructions");
+    const [activeTab, setActiveTab] = useState(isGraded ? "feedback" : "rubric");
     const componentRef = useRef<HTMLDivElement>(null);
 
     const handlePrint = useReactToPrint({
@@ -68,7 +68,7 @@ export function GithubActivityDetails({ activity, userId, studentName }: GithubA
     const mode = mounted ? (resolvedTheme === "dark" ? "dark" : resolvedTheme === "light" ? "light" : "auto") : "light";
 
     // Un nuevo intento solo está disponible si ya se calificó el intento anterior o si fue rechazada
-    const canAttemptAgain = (attemptCount < maxAttempts && isGraded) || isRejected;
+    const canAttemptAgain = isGraded;
 
     return (
         <div className="space-y-6 w-full p-4 sm:p-6">
@@ -114,11 +114,6 @@ export function GithubActivityDetails({ activity, userId, studentName }: GithubA
                                 </div>
 
                                 <div className="flex items-center gap-2">
-                                    <span className="text-sm font-medium">Intentos:</span>
-                                    <span className="text-sm text-muted-foreground">{attemptCount} / {maxAttempts}</span>
-                                </div>
-
-                                <div className="flex items-center gap-2">
                                     <span className="text-sm font-medium">Vence:</span>
                                     <span className="text-sm text-muted-foreground">{format(new Date(activity.deadline), "PP p")}</span>
                                 </div>
@@ -152,14 +147,7 @@ export function GithubActivityDetails({ activity, userId, studentName }: GithubA
                             )}
                         </div>
 
-                        {maxAttempts > 1 && (
-                            <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300 rounded-md flex items-start gap-2">
-                                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                                <p className="text-xs">
-                                    <strong>Intentos disponibles:</strong> Tienes {maxAttempts} intentos en total. El siguiente intento se habilitará únicamente después de que el profesor califique tu entrega actual.
-                                </p>
-                            </div>
-                        )}
+
 
                         <Separator />
 
@@ -207,21 +195,12 @@ export function GithubActivityDetails({ activity, userId, studentName }: GithubA
 
                                 {canAttemptAgain && (
                                     <div className="mt-6 pt-6 border-t">
-                                        <h4 className="text-sm font-medium mb-4">Nueva Entrega (Intento {attemptCount + 1})</h4>
+                                        <h4 className="text-sm font-medium mb-4">Nueva Entrega</h4>
                                         <SubmissionForm
                                             activityId={activity.id}
                                             filePaths={activity.filePaths || ""}
                                             lastSubmittedAt={submission.lastSubmittedAt}
                                         />
-                                    </div>
-                                )}
-
-                                {!canAttemptAgain && attemptCount < maxAttempts && !isGraded && maxAttempts > 1 && (
-                                    <div className="p-3 bg-muted/50 border rounded-md flex items-start gap-2">
-                                        <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-muted-foreground" />
-                                        <p className="text-xs text-muted-foreground">
-                                            El siguiente intento se habilitará una vez que el profesor haya calificado tu entrega actual.
-                                        </p>
                                     </div>
                                 )}
                             </div>
@@ -236,12 +215,7 @@ export function GithubActivityDetails({ activity, userId, studentName }: GithubA
                 </Card>
 
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                    <TabsList className="grid w-full grid-cols-3 h-auto">
-                        <TabsTrigger value="instructions" className="text-xs sm:text-sm py-2 whitespace-normal wrap-break-word">
-                            <div className="flex flex-col items-center">
-                                <span>Instrucciones</span>
-                            </div>
-                        </TabsTrigger>
+                    <TabsList className="grid w-full grid-cols-2 h-auto">
                         <TabsTrigger value="rubric" className="text-xs sm:text-sm py-2 whitespace-normal wrap-break-word">
                             <div className="flex flex-col items-center">
                                 <span>Rúbrica (Trabajo a realizar)</span>
@@ -254,17 +228,17 @@ export function GithubActivityDetails({ activity, userId, studentName }: GithubA
                         </TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value="instructions" className="mt-4">
+                    <TabsContent value="rubric" className="mt-4">
                         <Card>
                             <CardHeader>
-                                <CardTitle>Instrucciones de la Actividad</CardTitle>
+                                <CardTitle>Rúbrica / Trabajo a Realizar</CardTitle>
                                 <p className="text-xs text-muted-foreground mt-1">
-                                    Nota: Las instrucciones detalladas a continuación <strong>no se califican directamente</strong>, pero son una guía necesaria para que puedas configurar tu entorno y realizar la actividad correctamente.
+                                    Este es el <strong>trabajo específico que debes realizar</strong> y los criterios bajo los cuales el profesor evaluará tu entrega.
                                 </p>
                             </CardHeader>
-                            <CardContent>
+                            <CardContent className="space-y-6">
                                 {activity.filePaths && (
-                                    <div className="mb-6 p-4 bg-muted/50 rounded-lg border">
+                                    <div className="p-4 bg-muted/50 rounded-lg border">
                                         <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
                                             <AlertCircle className="h-4 w-4 text-primary" />
                                             Archivos Requeridos para Evaluación
@@ -285,22 +259,6 @@ export function GithubActivityDetails({ activity, userId, studentName }: GithubA
                                     </div>
                                 )}
 
-                                <div data-color-mode={mode} className="w-full max-w-full overflow-hidden [&_pre]:whitespace-pre-wrap! [&_pre]:wrap-break-word! [&_table]:w-full! [&_td]:wrap-break-word! select-none">
-                                    <MDEditor.Markdown source={activity.description || "**No hay instrucciones disponibles.**"} style={{ background: 'transparent' }} />
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-
-                    <TabsContent value="rubric" className="mt-4">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Rúbrica / Trabajo a Realizar</CardTitle>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                    Este es el <strong>trabajo específico que debes realizar</strong> y los criterios bajo los cuales el profesor evaluará tu entrega.
-                                </p>
-                            </CardHeader>
-                            <CardContent>
                                 <div data-color-mode={mode} className="w-full max-w-full overflow-hidden [&_pre]:whitespace-pre-wrap! [&_pre]:wrap-break-word! [&_table]:w-full! [&_td]:wrap-break-word! select-none">
                                     <MDEditor.Markdown source={activity.statement || "**No hay rúbrica disponible.**"} style={{ background: 'transparent' }} />
                                 </div>

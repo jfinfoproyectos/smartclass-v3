@@ -198,7 +198,15 @@ export async function saveFileContent(
   projectSlug: string, 
   pageSlug: string, 
   content: string,
-  metadata?: { title?: string, order?: number, category?: string, categoryOrder?: number }
+  metadata?: { 
+    title?: string; 
+    order?: number; 
+    category?: string; 
+    categoryOrder?: number;
+    draft?: boolean;
+    publishDate?: Date | null;
+    icon?: string;
+  }
 ): Promise<string> {
   const project = await prisma.docProject.findUnique({
     where: { slug: projectSlug }
@@ -222,6 +230,9 @@ export async function saveFileContent(
   const finalOrder = metadata?.order !== undefined ? metadata.order : existingPage?.order !== undefined ? existingPage.order : fallbackMetadata.order;
   const finalCategory = metadata?.category || existingPage?.category || fallbackMetadata.category;
   const finalCategoryOrder = metadata?.categoryOrder !== undefined ? metadata.categoryOrder : existingPage?.categoryOrder !== undefined ? existingPage.categoryOrder : fallbackMetadata.categoryOrder;
+  const finalDraft = metadata?.draft !== undefined ? metadata.draft : existingPage?.draft !== undefined ? existingPage.draft : false;
+  const finalPublishDate = metadata?.publishDate !== undefined ? metadata.publishDate : existingPage?.publishDate !== undefined ? existingPage.publishDate : null;
+  const finalIcon = metadata?.icon !== undefined ? metadata.icon : existingPage?.icon !== undefined ? existingPage.icon : "";
 
   const targetSlug = existingPage?.slug || pageSlug;
 
@@ -238,6 +249,9 @@ export async function saveFileContent(
       category: finalCategory,
       order: finalOrder,
       categoryOrder: finalCategoryOrder,
+      draft: finalDraft,
+      publishDate: finalPublishDate,
+      icon: finalIcon,
       updatedAt: new Date()
     },
     create: {
@@ -248,6 +262,9 @@ export async function saveFileContent(
       category: finalCategory,
       order: finalOrder,
       categoryOrder: finalCategoryOrder,
+      draft: finalDraft,
+      publishDate: finalPublishDate,
+      icon: finalIcon,
     }
   });
 

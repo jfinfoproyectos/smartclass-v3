@@ -13,7 +13,6 @@ export const courseService = {
         teacherId: string;
         startDate?: Date;
         endDate?: Date;
-        externalUrl?: string;
         docProjectId?: string;
     }) {
         const course = await prisma.course.create({
@@ -29,7 +28,6 @@ export const courseService = {
         teacherId: string;
         startDate?: Date;
         endDate?: Date;
-        externalUrl?: string;
         docProjectId?: string;
     }) {
         // 1. Get source course with all data needed for cloning
@@ -81,7 +79,6 @@ export const courseService = {
         description?: string;
         startDate?: Date;
         endDate?: Date;
-        externalUrl?: string;
         docProjectId?: string | null;
     }) {
         // Force HMR update with a comment to use the latest prisma client instance
@@ -173,7 +170,7 @@ export const courseService = {
         });
     },
 
-    async enrollStudent(userId: string, courseId: string, status: 'PENDING' | 'APPROVED' = 'PENDING') {
+    async enrollStudent(userId: string, courseId: string, status: 'PENDING' | 'APPROVED' = 'PENDING', bypassChecks: boolean = false) {
         // Check if course registration is open
         const course = await prisma.course.findUnique({
             where: { id: courseId },
@@ -187,12 +184,14 @@ export const courseService = {
             throw new Error("Course not found");
         }
 
-        if (!course.registrationOpen) {
-            throw new Error("Course registration is closed");
-        }
+        if (!bypassChecks) {
+            if (!course.registrationOpen) {
+                throw new Error("Course registration is closed");
+            }
 
-        if (course.registrationDeadline && new Date() > course.registrationDeadline) {
-            throw new Error("Course registration deadline has passed");
+            if (course.registrationDeadline && new Date() > course.registrationDeadline) {
+                throw new Error("Course registration deadline has passed");
+            }
         }
 
         // Check if already enrolled
@@ -514,12 +513,43 @@ export const courseService = {
     },
 
     async removeStudentFromCourse(userId: string, courseId: string) {
-        return await prisma.enrollment.deleteMany({
-            where: {
-                userId,
-                courseId,
-            },
-        });
+        return await prisma.$transaction([
+            // 1. Delete student submissions for this course's activities
+            prisma.submission.deleteMany({
+                where: {
+                    userId,
+                    activity: { courseId }
+                }
+            }),
+            // 2. Delete student evaluation submissions for this course's evaluation attempts
+            prisma.evaluationSubmission.deleteMany({
+                where: {
+                    userId,
+                    attempt: { courseId }
+                }
+            }),
+            // 3. Delete student attendances for this course
+            prisma.attendance.deleteMany({
+                where: {
+                    userId,
+                    courseId
+                }
+            }),
+            // 4. Delete student remarks for this course
+            prisma.remark.deleteMany({
+                where: {
+                    userId,
+                    courseId
+                }
+            }),
+            // 5. Delete student enrollment
+            prisma.enrollment.deleteMany({
+                where: {
+                    userId,
+                    courseId
+                }
+            })
+        ]);
     },
 
     async toggleCourseRegistration(courseId: string) {

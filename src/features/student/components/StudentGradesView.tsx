@@ -195,8 +195,8 @@ export function StudentGradesView({ enrollment }: StudentGradesViewProps) {
 
             {/* Categories Breakdown */}
             <div className="space-y-6">
-                <h3 className="text-2xl font-black flex items-center gap-3 px-1 text-foreground/80">
-                    <Layers className="h-6 w-6 text-primary" />
+                <h3 className="text-2xl font-bold flex items-center gap-2">
+                    <Layers className="h-4 w-4 text-primary" />
                     Desglose de Categorías
                 </h3>
                 

@@ -88,32 +88,22 @@ export const ActivityReportTemplate = React.forwardRef<HTMLDivElement, ActivityR
                     {/* Content Sections */}
                     <div className="space-y-10">
 
-                        {/* 1. Instructions */}
-                        <section>
-                            <h3 className="text-lg font-bold text-blue-800 border-b border-slate-200 pb-2 mb-4 uppercase tracking-wide">
-                                Instrucciones
-                            </h3>
-                            <div data-color-mode="light" className="prose prose-sm max-w-none prose-blue">
-                                <MDEditor.Markdown source={activity.description || "**No hay instrucciones disponibles.**"} style={{ background: 'transparent', color: 'inherit' }} />
-                            </div>
-
-                            {/* Required Files */}
-                            {filePaths.length > 0 && (
-                                <div className="mt-6 p-4 bg-slate-50 rounded-lg border border-slate-200 break-inside-avoid">
-                                    <h4 className="text-sm font-bold mb-2 flex items-center gap-2 text-slate-700">
-                                        <AlertCircle className="h-4 w-4 text-blue-600" />
-                                        Archivos Requeridos para Evaluación
-                                    </h4>
-                                    <div className="flex flex-wrap gap-2">
-                                        {filePaths.map((path: string, index: number) => (
-                                            <Badge key={index} variant="outline" className="font-mono text-xs bg-white text-slate-700 border-slate-300">
-                                                {path.trim()}
-                                            </Badge>
-                                        ))}
-                                    </div>
+                        {/* Required Files */}
+                        {filePaths.length > 0 && (
+                            <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 break-inside-avoid">
+                                <h4 className="text-sm font-bold mb-2 flex items-center gap-2 text-slate-700">
+                                    <AlertCircle className="h-4 w-4 text-blue-600" />
+                                    Archivos Requeridos para Evaluación
+                                </h4>
+                                <div className="flex flex-wrap gap-2">
+                                    {filePaths.map((path: string, index: number) => (
+                                        <Badge key={index} variant="outline" className="font-mono text-xs bg-white text-slate-700 border-slate-300">
+                                            {path.trim()}
+                                        </Badge>
+                                    ))}
                                 </div>
-                            )}
-                        </section>
+                            </div>
+                        )}
 
                         {/* 2. Statement */}
                         <section>

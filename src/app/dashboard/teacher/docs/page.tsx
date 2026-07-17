@@ -31,6 +31,12 @@ import { CreateProjectDialog } from "@/features/documentation/components/admin/C
 import { CreateAiProjectDialog } from "@/features/documentation/components/admin/CreateAiProjectDialog";
 import { DeleteProjectDialog } from "@/features/documentation/components/admin/DeleteProjectDialog";
 import { Toaster } from "@/components/ui/sonner";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Documentación | SmartClass" };
@@ -89,61 +95,88 @@ export default async function DocsScannerPage() {
            />
         </div>
 
-        <div className="w-full overflow-x-auto rounded-md border">
-        <Table className="min-w-[800px]">
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nombre</TableHead>
-              <TableHead>ID / Slug</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {projects.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={3} className="h-32 text-center text-muted-foreground">
-                  No se encontraron proyectos de documentación.
-                </TableCell>
+      <TooltipProvider delayDuration={150}>
+        <div className="rounded-2xl border border-border/40 overflow-hidden bg-card/25 backdrop-blur-md shadow-xl shadow-black/5">
+          <Table className="w-full min-w-[800px]">
+            <TableHeader>
+              <TableRow className="h-12 bg-muted/40 hover:bg-muted/40 border-b border-border/30">
+                <TableHead className="font-extrabold uppercase tracking-wider text-[10px] pl-5 text-muted-foreground/80">Nombre</TableHead>
+                <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-muted-foreground/80">ID / Slug</TableHead>
+                <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-right pr-5 text-muted-foreground/80">Acciones</TableHead>
               </TableRow>
-            ) : (
-              projects.map((project) => (
-                <TableRow key={project.id}>
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-primary/10 text-primary">
-                         <Files className="w-4 h-4" />
-                      </div>
-                      <span className="font-bold">{project.name}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
-                      {project.slug}
-                    </code>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button asChild size="sm" variant="outline" className="gap-2 h-9 rounded-xl font-bold border-border/50 hover:bg-muted transition-all">
-                        <Link href={`/docs/${project.slug}`} target="_blank" rel="noopener noreferrer">
-                          <ExternalLink className="w-3.5 h-3.5" />
-                          Abrir Documentación
-                        </Link>
-                      </Button>
-                      <Button asChild size="sm" variant="secondary" className="gap-2 h-9 rounded-xl font-bold hover:bg-primary hover:text-primary-foreground transition-all">
-                        <Link href={`/dashboard/teacher/docs/${project.slug}`}>
-                          <Edit3 className="w-3.5 h-3.5" />
-                          Editar
-                        </Link>
-                      </Button>
-                      <DeleteProjectDialog projectId={project.id} projectName={project.name} />
-                    </div>
+            </TableHeader>
+            <TableBody>
+              {projects.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={3} className="h-32 text-center text-muted-foreground pl-5">
+                    No se encontraron proyectos de documentación.
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+              ) : (
+                projects.map((project) => (
+                  <TableRow key={project.id} className="group hover:bg-muted/30 transition-colors border-b border-border/20">
+                    <TableCell className="font-medium py-3.5 pl-5">
+                      <div className="flex items-center gap-3.5">
+                        <div className="p-2.5 rounded-xl bg-primary/10 text-primary group-hover:scale-110 transition-all duration-300 shadow-sm shadow-primary/5">
+                           <Files className="w-4 h-4" />
+                        </div>
+                        <span className="font-bold text-sm text-foreground/90 group-hover:text-primary transition-colors duration-300">{project.name}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-3.5">
+                      <code className="text-[11px] bg-muted/80 text-muted-foreground px-2.5 py-1 rounded-lg font-mono border border-border/30 tracking-tight shadow-inner-sm">
+                        {project.slug}
+                      </code>
+                    </TableCell>
+                    <TableCell className="text-right py-3.5 pr-5">
+                      <div className="flex items-center justify-end gap-2">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button asChild size="icon" variant="outline" className="h-9 w-9 rounded-xl border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300">
+                              <Link href={`/docs/${project.slug}`} target="_blank" rel="noopener noreferrer">
+                                <ExternalLink className="w-4 h-4" />
+                                <span className="sr-only">Abrir Documentación</span>
+                              </Link>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">
+                            <p className="text-[10px] font-bold uppercase tracking-wider">Abrir Documentación</p>
+                          </TooltipContent>
+                        </Tooltip>
+
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button asChild size="icon" variant="outline" className="h-9 w-9 rounded-xl border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300">
+                              <Link href={`/dashboard/teacher/docs/${project.slug}`}>
+                                <Edit3 className="w-4 h-4" />
+                                <span className="sr-only">Editar</span>
+                              </Link>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">
+                            <p className="text-[10px] font-bold uppercase tracking-wider">Editar Contenido</p>
+                          </TooltipContent>
+                        </Tooltip>
+
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div>
+                              <DeleteProjectDialog projectId={project.id} projectName={project.name} iconOnly={true} />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-destructive">Eliminar Proyecto</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </TooltipProvider>
     </div>
     </div>
   );

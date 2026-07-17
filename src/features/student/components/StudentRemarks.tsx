@@ -74,27 +74,27 @@ export function StudentRemarks({ courseId, userId }: StudentRemarksProps) {
                 </div>
             </div>
 
-            <div className="rounded-md border">
-                <Table>
+            <div className="rounded-xl border border-border/50 overflow-x-auto shadow-sm">
+                <Table className="min-w-[600px]">
                     <TableHeader>
-                        <TableRow>
-                            <TableHead>Fecha</TableHead>
-                            <TableHead>Profesor</TableHead>
-                            <TableHead>Tipo</TableHead>
-                            <TableHead>Título</TableHead>
-                            <TableHead className="text-right">Acciones</TableHead>
+                        <TableRow className="bg-muted/30 hover:bg-muted/30">
+                            <TableHead className="font-bold uppercase tracking-wider text-xs pl-4">Fecha</TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs">Profesor</TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Tipo</TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs">Título</TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Acciones</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {remarks.map((remark) => (
-                            <TableRow key={remark.id}>
-                                <TableCell className="text-sm">
+                            <TableRow key={remark.id} className="group hover:bg-muted/20 transition-colors border-border/30">
+                                <TableCell className="text-sm pl-4">
                                     {format(new Date(remark.date), "PPP", { locale: es })}
                                 </TableCell>
                                 <TableCell className="text-sm">
                                     {formatName(remark.teacher.name, remark.teacher.profile)}
                                 </TableCell>
-                                <TableCell>
+                                <TableCell className="text-center">
                                     <Badge
                                         variant={remark.type === "ATTENTION" ? "destructive" : "default"}
                                         className={remark.type === "COMMENDATION" ? "bg-green-100 text-green-800 hover:bg-green-200 border-green-200" : ""}
@@ -107,7 +107,7 @@ export function StudentRemarks({ courseId, userId }: StudentRemarksProps) {
                                     </Badge>
                                 </TableCell>
                                 <TableCell className="font-medium">{remark.title}</TableCell>
-                                <TableCell className="text-right">
+                                <TableCell className="text-center">
                                     <Button
                                         variant="ghost"
                                         size="sm"

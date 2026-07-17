@@ -3,7 +3,7 @@ import { headers } from 'next/headers';
 import { auth } from '@/lib/auth';
 import { getPublicDocProject, getPublicDocPage, getProjectNavigationTree, NavItem } from '@/features/documentation/services/public-docs';
 import prisma from '@/lib/prisma';
-import MarkdownRenderer from '@/features/documentation/components/MarkdownRenderer';
+import BlockRenderer from '@/features/documentation/components/BlockRenderer';
 import { PublicDocsShell } from '@/features/documentation/components/reader/PublicDocsShell';
 import { getCodeTheme } from '@/app/actions/code-themes';
 import { getAvailableThemes } from '@/app/actions/themes';
@@ -57,11 +57,11 @@ export default async function Page({ params }: PageProps) {
   const isAdmin = session?.user.role === "admin" || session?.user.role === "teacher";
 
   // Access control
-  const linkedCourse = await prisma.course.findFirst({
+  const linkedCoursesCount = await prisma.course.count({
     where: { docProjectId: project.id }
   });
 
-  if (linkedCourse) {
+  if (linkedCoursesCount > 0) {
     if (!session) {
       return (
         <div className="flex flex-col items-center justify-center min-h-[50vh] text-center bg-background text-foreground space-y-4">
@@ -76,8 +76,8 @@ export default async function Page({ params }: PageProps) {
         where: {
           userId: session.user.id,
           status: "APPROVED",
-          courseId: linkedCourse.id,
           course: {
+            docProjectId: project.id,
             OR: [
               { endDate: null },
               { endDate: { gt: now } }
@@ -226,9 +226,9 @@ export default async function Page({ params }: PageProps) {
             
             {!isFolder ? (
               <Suspense fallback={<div className="space-y-4 animate-pulse"><div className="h-8 bg-muted w-3/4 rounded" /><div className="h-32 bg-muted w-full rounded" /></div>}>
-                <MarkdownRenderer 
+                <BlockRenderer 
                   content={page.content || ""} 
-                  codeTheme={allowCodeThemeChange === false ? (userCourse?.docCodeTheme || systemSettings?.appCodeTheme || "one-dark-pro") : studentCodeTheme} 
+                  initialCodeTheme={studentCodeTheme}
                 />
               </Suspense>
             ) : (
@@ -257,18 +257,7 @@ export default async function Page({ params }: PageProps) {
               </Suspense>
             )}
 
-            <Suspense fallback={null}>
-              {!isFolder && userCourse?.docTrackingEnabled && <DocTracker pageId={page.id} />}
-              {!isFolder && (
-                <AiTutorChat 
-                  projectId={project.id} 
-                  pageId={page.id} 
-                  projectName={project.name}
-                  isEnabled={userCourse?.docAiTutorEnabled || false}
-                  limit={userCourse?.docAiQuestionsLimit || 5}
-                />
-              )}
-            </Suspense>
+
           </>
         )}
       </div>

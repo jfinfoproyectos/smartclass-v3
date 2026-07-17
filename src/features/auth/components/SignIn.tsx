@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { ArrowRight, Eye, EyeOff, Lock, Mail, Github } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { JSX, SVGProps, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -61,21 +61,10 @@ export default function SignIn() {
     }
   };
 
-  const handleGithubSignIn = async () => {
-    setLoading(true);
-    try {
-      await signInSocial("github");
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Error con autenticación social";
-      setError(message);
-      setLoading(false);
-    }
-  };
 
-  
 
   return (
-    <div className="flex items-center justify-center min-h-screen">
+    <div className="flex items-center justify-center min-h-screen px-4">
       <div className="mx-auto w-full max-w-md space-y-6">
         <div className="space-y-2 text-center">
           <Image src="/logo.svg" alt="Logo" width={64} height={64} className="mx-auto h-16 w-16" />
@@ -91,10 +80,6 @@ export default function SignIn() {
             Iniciar sesión con Google
           </Button>
 
-          <Button variant="outline" className="w-full justify-center gap-2" onClick={handleGithubSignIn} disabled={loading}>
-            <Github className="h-4 w-4" />
-            Iniciar sesión con GitHub
-          </Button>
 
           <div className="flex items-center gap-2">
             <Separator className="flex-1" />

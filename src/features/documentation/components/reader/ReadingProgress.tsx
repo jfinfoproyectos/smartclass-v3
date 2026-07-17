@@ -21,7 +21,7 @@ export function ReadingProgress({ targetId }: { targetId: string }) {
 
   return (
     <motion.div
-      className="fixed bottom-0 left-0 right-0 h-[2px] bg-primary z-[100] origin-left"
+      className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary z-[100] origin-left"
       style={{ scaleX }}
     />
   );

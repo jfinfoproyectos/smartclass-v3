@@ -10,6 +10,8 @@ import { Menu } from "lucide-react";
 import { NavItem } from "../../services/public-docs";
 import { PublicSidebar } from "./PublicSidebar";
 
+import { usePathname } from "next/navigation";
+
 export function PublicHeader({ 
   projectName, 
   projectId, 
@@ -32,18 +34,24 @@ export function PublicHeader({
   }
 }) {
   const [mounted, setMounted] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const pathname = usePathname();
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [pathname]);
+
   return (
-    <header className="flex-none h-14 border-b border-border bg-background/80 backdrop-blur-md z-50 sticky top-0 w-full flex items-center justify-between px-4 sm:px-6">
+    <header className="flex-none h-14 border-b border-border dark:border-white/10 bg-background/80 backdrop-blur-md z-50 sticky top-0 w-full flex items-center justify-between px-4 sm:px-6">
       <div className="flex items-center gap-4">
         {/* Mobile Menu */}
         <div className="md:hidden">
           {mounted && (
-            <Sheet>
+            <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
               <SheetTrigger asChild>
                 <button className="p-2 rounded-xl hover:bg-muted transition-colors">
                   <Menu className="w-5 h-5" />

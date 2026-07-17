@@ -302,20 +302,20 @@ export function EvaluationManager({ evaluations }: { evaluations: any[] }) {
                 </div>
             </div>
 
-            <div className="w-full overflow-x-auto rounded-md border">
+            <div className="rounded-xl border border-border/50 overflow-x-auto shadow-sm">
                 <Table className="min-w-[800px]">
                     <TableHeader>
-                        <TableRow>
-                            <TableHead>Título</TableHead>
-                            <TableHead>Preguntas</TableHead>
-                            <TableHead>Intentos Realizados</TableHead>
-                            <TableHead>Fecha de Creación</TableHead>
-                            <TableHead className="text-right">Acciones</TableHead>
+                        <TableRow className="bg-muted/30 hover:bg-muted/30">
+                            <TableHead className="font-bold uppercase tracking-wider text-xs pl-4">Título</TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Preguntas</TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Intentos Realizados</TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden md:table-cell">Fecha de Creación</TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Acciones</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {filteredEvaluations.map((evaluation) => (
-                            <TableRow key={evaluation.id}>
+                            <TableRow key={evaluation.id} className="group hover:bg-muted/20 transition-colors border-border/30">
                                 <TableCell className="font-medium">
                                     <div className="flex items-center gap-2">
                                         <FileText className="h-4 w-4 text-muted-foreground" />

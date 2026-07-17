@@ -186,14 +186,14 @@ export function StudentAttendanceSummary({ courseId, userId, readonly = false }:
                 </h3>
             </div>
 
-            <div className="w-full overflow-x-auto rounded-md border">
+            <div className="rounded-xl border border-border/50 overflow-x-auto shadow-sm">
                 <Table className="min-w-[600px]">
                     <TableHeader>
-                        <TableRow>
-                            <TableHead>Fecha</TableHead>
-                            <TableHead>Estado</TableHead>
-                            <TableHead>Detalle</TableHead>
-                            <TableHead className="text-right">Acciones</TableHead>
+                        <TableRow className="bg-muted/30 hover:bg-muted/30">
+                            <TableHead className="font-bold uppercase tracking-wider text-xs pl-4">Fecha</TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Estado</TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs">Detalle</TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Acciones</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -201,14 +201,14 @@ export function StudentAttendanceSummary({ courseId, userId, readonly = false }:
                             stats.records
                                 .filter((r: any) => r.status === "ABSENT" || r.status === "LATE" || r.status === "EXCUSED")
                                 .map((record: AttendanceRecord) => (
-                                    <TableRow key={record.id}>
-                                        <TableCell className="text-sm">
+                                    <TableRow key={record.id} className="group hover:bg-muted/20 transition-colors border-border/30">
+                                        <TableCell className="text-sm pl-4">
                                             <div className="flex items-center gap-2">
                                                 <CalendarIcon className="h-4 w-4 text-muted-foreground" />
                                                 <span>{formatCalendarDate(record.date)}</span>
                                             </div>
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className="text-center">
                                             {record.status === "ABSENT" ? (
                                                 <Badge variant="destructive" className="gap-1">
                                                     <AlertCircle className="h-3 w-3" /> Ausente
@@ -232,7 +232,7 @@ export function StudentAttendanceSummary({ courseId, userId, readonly = false }:
                                                 </span>
                                             ) : "-"}
                                         </TableCell>
-                                        <TableCell className="text-right">
+                                        <TableCell className="text-center">
                                             {!readonly && (record.status === "ABSENT" || (record.status === "LATE" && !record.justification)) && (
                                                 <Button
                                                     variant="outline"
@@ -254,7 +254,7 @@ export function StudentAttendanceSummary({ courseId, userId, readonly = false }:
                                             )}
                                             {/* Teacher view: Show view and delete for all records */}
                                             {readonly && (
-                                                <div className="flex justify-end gap-2">
+                                                <div className="flex justify-center gap-2">
                                                     {(record.status === "LATE" || record.status === "EXCUSED") && (
                                                         <Button
                                                             variant="ghost"

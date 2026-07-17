@@ -6,7 +6,7 @@ import { isValidPdfUrl } from "@/lib/utils";
 const activitiesCache = new Map<string, any>();
 
 export const activityService = {
-    async createActivity(data: { title: string; description?: string; statement?: string; filePaths?: string; deadline: Date; openDate?: Date; courseId: string; type?: "GITHUB" | "MANUAL" | "GOOGLE_COLAB" | "PDF_REVIEW" | "CODE_PROJECT"; weight?: number; maxAttempts?: number; allowLinkSubmission?: boolean }) {
+    async createActivity(data: { title: string; description?: string; statement?: string; filePaths?: string; deadline: Date; openDate?: Date; courseId: string; type?: "GITHUB" | "MANUAL" | "PDF_REVIEW" | "CODE_PROJECT"; weight?: number; maxAttempts?: number; allowLinkSubmission?: boolean }) {
         // Get max order for the course
         const maxOrderActivity = await prisma.activity.findFirst({
             where: { courseId: data.courseId },
@@ -25,7 +25,7 @@ export const activityService = {
         });
     },
 
-    async updateActivity(id: string, data: { title?: string; description?: string; statement?: string; filePaths?: string; deadline?: Date; openDate?: Date; type?: "GITHUB" | "MANUAL" | "GOOGLE_COLAB" | "PDF_REVIEW" | "CODE_PROJECT"; weight?: number; maxAttempts?: number; allowLinkSubmission?: boolean }) {
+    async updateActivity(id: string, data: { title?: string; description?: string; statement?: string; filePaths?: string; deadline?: Date; openDate?: Date; type?: "GITHUB" | "MANUAL" | "PDF_REVIEW" | "CODE_PROJECT"; weight?: number; maxAttempts?: number; allowLinkSubmission?: boolean }) {
         return await prisma.activity.update({
             where: { id },
             data,
@@ -143,10 +143,7 @@ export const activityService = {
                 if (!data.url.includes("github.com")) {
                     throw new Error("Invalid GitHub URL");
                 }
-            } else if (activity.type === "GOOGLE_COLAB") {
-                if (!data.url.includes("colab.research.google.com") && !data.url.includes("drive.google.com")) {
-                    throw new Error("Enlace inválido. Debe ser de Google Colab o Google Drive.");
-                }
+
             } else if (activity.type === "PDF_REVIEW") {
                 if (!isValidPdfUrl(data.url)) {
                     throw new Error("Enlace inválido. Debe ser un enlace a un archivo PDF (no carpeta) en Google Drive, OneDrive, Dropbox o una URL directa al archivo PDF.");

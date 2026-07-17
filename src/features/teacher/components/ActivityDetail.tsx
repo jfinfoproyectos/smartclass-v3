@@ -702,14 +702,7 @@ export function ActivityDetail({
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className={`grid w-full ${activity.type !== "MANUAL" && activity.type !== "PDF_REVIEW" && activity.type !== "CODE_PROJECT" ? "grid-cols-3" : "grid-cols-2"} md:inline-flex md:w-auto`}>
-                    {activity.type !== "MANUAL" && activity.type !== "PDF_REVIEW" && activity.type !== "CODE_PROJECT" && (
-                        <TabsTrigger value="instructions" className="flex items-center gap-1 sm:gap-2">
-                            <FileText className="h-4 w-4" />
-                            <span className="hidden sm:inline">Instrucciones</span>
-                            <span className="sm:hidden">Inst.</span>
-                        </TabsTrigger>
-                    )}
+                <TabsList className="grid w-full grid-cols-2 md:inline-flex md:w-auto">
                     <TabsTrigger value="statement" className="flex items-center gap-1 sm:gap-2">
                         <ClipboardList className="h-4 w-4" />
                         <span className="hidden sm:inline">Enunciado</span>
@@ -721,18 +714,6 @@ export function ActivityDetail({
                         <span className="sm:hidden">Result.</span>
                     </TabsTrigger>
                 </TabsList>
-
-                {activity.type !== "MANUAL" && activity.type !== "PDF_REVIEW" && activity.type !== "CODE_PROJECT" && (
-                    <TabsContent value="instructions" className="space-y-4 mt-6">
-                        <div data-color-mode={mode} className="rounded-md border p-6 bg-card w-full max-w-full overflow-x-auto [&_pre]:whitespace-pre-wrap! [&_pre]:wrap-break-word! [&_table]:w-full! [&_td]:wrap-break-word!">
-                            <h3 className="text-lg font-semibold mb-4">Instrucciones de la Actividad</h3>
-                            <MDEditor.Markdown
-                                source={activity.description || "**No hay instrucciones disponibles.**"}
-                                style={{ background: 'transparent' }}
-                            />
-                        </div>
-                    </TabsContent>
-                )}
 
                 <TabsContent value="statement" className="space-y-4 mt-6">
                     <div data-color-mode={mode} className="rounded-md border p-6 bg-card w-full max-w-full overflow-x-auto [&_pre]:whitespace-pre-wrap! [&_pre]:wrap-break-word! [&_table]:w-full! [&_td]:wrap-break-word!">
@@ -1002,7 +983,7 @@ export function ActivityDetail({
                                         <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-md">
                                             {activity.type === "GITHUB" || activity.type === "CODE_PROJECT" ? (
                                                 <Github className="h-5 w-5 text-muted-foreground shrink-0" />
-                                            ) : activity.type === "GOOGLE_COLAB" || activity.type === "PDF_REVIEW" ? (
+                                            ) : activity.type === "PDF_REVIEW" ? (
                                                 <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
                                             ) : (
                                                 <Eye className="h-5 w-5 text-muted-foreground shrink-0" />
@@ -1014,7 +995,6 @@ export function ActivityDetail({
                                                 className="text-blue-600 hover:underline font-medium text-sm break-all"
                                             >
                                                 {activity.type === "GITHUB" || activity.type === "CODE_PROJECT" ? "Ver Repositorio en GitHub" :
-                                                    activity.type === "GOOGLE_COLAB" ? "Ver Notebook en Google Colab" :
                                                     activity.type === "PDF_REVIEW" ? "Ver PDF entregado" :
                                                         submission.url}
                                             </a>

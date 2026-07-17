@@ -16,7 +16,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ReadingProgress } from "./ReadingProgress";
 import { DocFooterNav } from "./DocFooterNav";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { CodeZoomProvider } from "../mdx/CodeZoomContext";
 
 interface PublicDocsShellProps {
   children: React.ReactNode;
@@ -195,6 +194,21 @@ export function PublicDocsShell({
     }
   }, [pathname]);
 
+  // Actualizar el título de la pestaña del navegador (document.title) con el nombre del tema seleccionado
+  useEffect(() => {
+    const updateTitle = () => {
+      const docHeading = document.querySelector("#doc-content h1, #doc-content h2, h1, h2");
+      if (docHeading && docHeading.textContent && docHeading.textContent.trim()) {
+        document.title = docHeading.textContent.trim();
+      } else {
+        document.title = projectName || "Documentación";
+      }
+    };
+
+    const timer = setTimeout(updateTitle, 150);
+    return () => clearTimeout(timer);
+  }, [pathname, projectName, children]);
+
   // Logic to determine active topic and filtered sidebar tree
   const { topics, activeTopic, sidebarNav } = useMemo(() => {
     // 1. Get all top-level topics (folders at level 0)
@@ -221,7 +235,7 @@ export function PublicDocsShell({
   }, [navTree, pathname]);
 
   return (
-    <div className="flex flex-col h-screen w-full overflow-hidden bg-background text-foreground transition-all duration-500">
+    <div className="public-docs-root flex flex-col h-screen w-full overflow-hidden bg-background text-foreground transition-all duration-500">
       {/* Primary Header Area */}
       <div className="relative z-50">
         <PublicHeader 
@@ -235,7 +249,7 @@ export function PublicDocsShell({
       </div>
 
       {/* Secondary Topics Navigation */}
-      <div className="relative z-40">
+      <div className="relative z-40 no-print">
         <TopicsHeader 
           topics={topics} 
           projectId={projectId} 
@@ -244,9 +258,9 @@ export function PublicDocsShell({
       </div>
       
       {/* 3-Column Layout Container */}
-      <div className="flex flex-1 w-full max-w-[1800px] mx-auto relative overflow-hidden">
+      <div className="public-docs-container flex flex-1 w-full max-w-[1800px] mx-auto relative overflow-hidden">
         {/* LEFT SIDEBAR */}
-        <div className="hidden md:block w-72 shrink-0">
+        <div className="no-print hidden md:block w-72 shrink-0">
           <PublicSidebar 
             navTree={sidebarNav} 
             projectId={projectId} 
@@ -255,74 +269,66 @@ export function PublicDocsShell({
         </div>
         
         {/* CENTER COLUMN */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative bg-background">
-          {/* PROGRESS BAR */}
-          <ReadingProgress targetId="main-content" />
-
+        <div className="public-docs-center flex-1 flex flex-col min-w-0 overflow-hidden relative bg-background">
           <div className="flex flex-1 overflow-hidden relative">
             
-            {/* MAIN SCROLL AREA */}
-            <main 
-              id="main-content" 
-              className="flex-1 w-full overflow-y-auto custom-scrollbar relative scroll-smooth bg-background bg-grid-pattern"
-            >
-              <div id="doc-content" className="w-full relative z-10 p-6 md:p-8 mx-auto max-w-6xl">
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={pathname}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.3, ease: "easeOut" }}
-                  >
-                    <CodeZoomProvider>
-                      {mounted && children}
-                    </CodeZoomProvider>
-                    
-                    <DocFooterNav 
-                      navTree={navTree} 
-                      currentSlug={pathname.split('/').filter(Boolean).slice(2).join('/') || "index"} 
-                      projectId={projectId} 
-                    />
-                  </motion.div>
-                </AnimatePresence>
-              </div>
+            {/* MAIN CONTENT AREA WRAPPER (TO CONSTRAIN PROGRESS BAR) */}
+            <div className="flex-1 flex flex-col relative overflow-hidden">
+              {/* PROGRESS BAR */}
+              <ReadingProgress targetId="main-content" />
 
-              {/* Classic MD Footer */}
-              <footer className="mt-20 border-t border-border/10">
-                <div className="w-full max-w-4xl mx-auto px-6 py-12 md:py-16 text-center space-y-6">
-                  <div className="flex items-center justify-center gap-3 opacity-10 grayscale hover:grayscale-0 transition-all duration-500">
-                    <div className="h-px w-8 bg-foreground" />
-                    <span className="text-[10px] font-black uppercase tracking-[0.5em]">FusionDoc Engine</span>
-                    <div className="h-px w-8 bg-foreground" />
-                  </div>
+              {/* MAIN SCROLL AREA */}
+              <main 
+                id="main-content" 
+                className="flex-1 w-full overflow-y-auto custom-scrollbar relative scroll-smooth bg-background bg-grid-pattern"
+              >
+                <div id="doc-content" className="w-full relative z-10 p-6 md:p-8 mx-auto max-w-6xl">
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={pathname}
+                      className="public-docs-content"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.3, ease: "easeOut" }}
+                    >
+                      {mounted && children}
+                      
+                      <DocFooterNav 
+                        navTree={navTree} 
+                        currentSlug={pathname.split('/').filter(Boolean).slice(2).join('/') || "index"} 
+                        projectId={projectId} 
+                      />
+                    </motion.div>
+                  </AnimatePresence>
                 </div>
-              </footer>
-            </main>
+
+                {/* Classic MD Footer */}
+                <footer className="mt-20 border-t border-border/10">
+                  <div className="w-full max-w-4xl mx-auto px-6 py-12 md:py-16 text-center space-y-6">
+                    <div className="flex items-center justify-center gap-3 opacity-30 hover:opacity-80 transition-all duration-500">
+                      <div className="h-px w-8 bg-foreground" />
+                      <span className="text-[10px] font-black uppercase tracking-[0.5em]">FusionDoc Engine</span>
+                      <div className="h-px w-8 bg-foreground" />
+                    </div>
+                  </div>
+                </footer>
+              </main>
+            </div>
 
             {/* RIGHT COLUMN */}
-            <div className="hidden xl:block w-72 shrink-0">
+            <div className="no-print hidden xl:block w-72 shrink-0">
               <RightSidebar />
             </div>
           </div>
 
           {/* Minimalist Fixed Bottom Bar */}
-          <div>
-            <footer className="flex-none border-t border-border bg-card/40 backdrop-blur-md px-6 py-2">
-               <div className="flex items-center justify-between text-[9px] uppercase tracking-[0.2em] text-muted-foreground/40 font-bold">
+          <div className="no-print">
+            <footer className="flex-none border-t border-border bg-card/40 backdrop-blur-md px-6 py-2.5">
+               <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.15em] text-muted-foreground font-bold">
                   <div className="flex items-center gap-4">
-                    <p>SmartClass <span className="opacity-50">© 2026</span></p>
+                    <p>SmartClass <span className="text-muted-foreground/70">© 2026</span></p>
                   </div>
-                   <div className="flex gap-4 items-center">
-                     <div className="flex items-center gap-2 opacity-60">
-                        <Clock size={12} className="text-primary/70" />
-                        <span className="text-primary font-black uppercase">{formattedTime} de lectura</span>
-                     </div>
-                     <div className="flex items-center gap-2 opacity-60">
-                        <Eye size={12} className="text-primary/70" />
-                        <span className="text-primary font-black uppercase">{userTotalViews} Visitas al Sitio</span>
-                     </div>
-                   </div>
                </div>
             </footer>
           </div>

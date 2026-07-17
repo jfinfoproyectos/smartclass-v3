@@ -68,6 +68,7 @@ export async function finalizeSubmission(
                 : gradingMode === "moderate" 
                 ? "Evaluación moderada: el feedback debe considerar legibilidad y estructura además de la lógica." 
                 : "Evaluación estándar: enfócate en la funcionalidad y lógica básica."}
+            4. **REGLA CRÍTICA DE FORMATO DE ENTREGA**: Si en la 'Rúbrica' se menciona algún criterio sobre el formato de entrega del archivo (como entregar en formato ZIP, Word, PDF, estructuración de carpetas, nombres de archivo específicos, o cómo empaquetar o subir el archivo), **IGNÓRALO COMPLETAMENTE** en la retroalimentación. No lo menciones como un error ni penalices por no cumplir con estas pautas de formato de entrega, empaquetado o carga del archivo.
 
             **Rúbrica**: "${description}"
 

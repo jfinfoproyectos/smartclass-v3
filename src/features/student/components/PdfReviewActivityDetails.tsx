@@ -58,7 +58,7 @@ export function PdfReviewActivityDetails({ activity, userId, studentName }: PdfR
         : "light";
 
     // Un nuevo intento solo está disponible si ya se calificó el intento anterior o si fue rechazada
-    const canAttemptAgain = (attemptCount < maxAttempts && isGraded) || isRejected;
+    const canAttemptAgain = isGraded;
 
     return (
         <div className="space-y-6 w-full p-6">
@@ -112,7 +112,6 @@ export function PdfReviewActivityDetails({ activity, userId, studentName }: PdfR
                                 )}
                             </div>
                             <div className="flex items-center gap-4 text-sm font-medium">
-                                <span>Intentos: <span className="text-primary font-bold">{attemptCount} / {maxAttempts}</span></span>
                                 <span>Vencimiento: <span className="text-primary font-bold">{activity.deadline ? format(new Date(activity.deadline), "PP p") : "Sin límite"}</span></span>
                             </div>
 
@@ -212,21 +211,12 @@ export function PdfReviewActivityDetails({ activity, userId, studentName }: PdfR
                                 {canAttemptAgain && (
                                     <div className="mt-6 pt-6 border-t">
                                         <h4 className="text-sm font-medium mb-4">
-                                            Nueva Entrega (Intento {attemptCount + 1})
+                                            Nueva Entrega
                                         </h4>
                                         <PdfSubmissionForm
                                             activityId={activity.id}
                                             lastSubmittedAt={submission.lastSubmittedAt}
                                         />
-                                    </div>
-                                )}
-
-                                {!canAttemptAgain && attemptCount < maxAttempts && !isGraded && maxAttempts > 1 && (
-                                    <div className="p-3 bg-muted/50 border rounded-md flex items-start gap-2">
-                                        <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-muted-foreground" />
-                                        <p className="text-xs text-muted-foreground">
-                                            El siguiente intento se habilitará una vez que el profesor haya calificado tu entrega actual.
-                                        </p>
                                     </div>
                                 )}
                             </div>

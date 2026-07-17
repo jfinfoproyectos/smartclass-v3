@@ -250,17 +250,17 @@ export function CourseManagement({ initialCourses, teachers, totalCount }: Cours
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <div className="w-full overflow-x-auto rounded-md border">
+                    <div className="rounded-xl border border-border/50 overflow-x-auto shadow-sm">
                         <Table className="min-w-[900px]">
                             <TableHeader>
-                                <TableRow>
-                                    <TableHead>Curso</TableHead>
-                                    <TableHead>Profesor</TableHead>
-                                    <TableHead>Estado</TableHead>
-                                    <TableHead>Estudiantes</TableHead>
-                                    <TableHead>Actividades</TableHead>
-                                    <TableHead>Fechas</TableHead>
-                                    <TableHead className="text-right">Acciones</TableHead>
+                                <TableRow className="bg-muted/30 hover:bg-muted/30">
+                                    <TableHead className="font-bold uppercase tracking-wider text-xs pl-4">Curso</TableHead>
+                                    <TableHead className="font-bold uppercase tracking-wider text-xs">Profesor</TableHead>
+                                    <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Estado</TableHead>
+                                    <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Estudiantes</TableHead>
+                                    <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Actividades</TableHead>
+                                    <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden md:table-cell">Fechas</TableHead>
+                                    <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Acciones</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -274,7 +274,7 @@ export function CourseManagement({ initialCourses, teachers, totalCount }: Cours
                                     filteredCourses.map((course) => {
                                         const status = getCourseStatus(course);
                                         return (
-                                            <TableRow key={course.id}>
+                                            <TableRow key={course.id} className="group hover:bg-muted/20 transition-colors border-border/30">
                                                 <TableCell>
                                                     <div>
                                                         <div className="font-medium">{course.title}</div>

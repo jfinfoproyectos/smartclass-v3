@@ -73,7 +73,68 @@ import { useTheme } from "next-themes";
 import { AIGenerateDialog } from './AIGenerateDialog';
 import { ActivityFieldHelpDialog } from './ActivityFieldHelpDialog';
 
+const TEMPLATE_GITHUB = `# Evaluación Automática con IA (GitHub)
 
+## Descripción de la Actividad
+[Describe aquí brevemente qué debe realizar el estudiante]
+
+## Requisitos de Código
+1. [Requisito 1, ej: Crear una función 'sumar(a,b)']
+2. [Requisito 2, ej: Manejar excepciones de división por cero]
+
+## Rúbrica de Evaluación
+* **Funcionalidad (50%)**: El código cumple con todos los requisitos lógicos solicitados.
+* **Buenas Prácticas (30%)**: Código limpio, nombres de variables descriptivos y estructura clara.
+* **Manejo de Errores (20%)**: Control adecuado de excepciones y casos límite.
+
+## Formato de Entrega (Opcional - Ignorado por la IA)
+- Repositorio GitHub con los archivos solicitados en la configuración.`;
+
+const TEMPLATE_CODE_PROJECT = `# Proyecto de Código (Evaluación con Apoyo de IA)
+
+## Descripción del Proyecto
+[Describe el proyecto de desarrollo de software a realizar por el estudiante]
+
+## Entregables Esperados
+- [Estructura o componentes esperados en el repositorio]
+
+## Criterios de Evaluación Manual
+* **Diseño Arquitectónico (40%)**: Modularidad, patrones de diseño y organización del proyecto.
+* **Lógica e Implementación (40%)**: Algoritmos correctos, eficiencia y funcionamiento general.
+* **Documentación (20%)**: Archivo README descriptivo con instrucciones de instalación y uso.
+
+## Formato de Entrega (Opcional - Ignorado por la IA)
+- URL de GitHub del proyecto de desarrollo.`;
+
+const TEMPLATE_PDF_REVIEW = `# Revisión de Documento PDF (Evaluación con IA)
+
+## Descripción del Documento
+[Describe el informe, ensayo, artículo o reporte escrito que el estudiante debe presentar]
+
+## Estructura del Documento
+1. Introducción y Objetivos
+2. Desarrollo del Contenido
+3. Conclusiones y Referencias
+
+## Rúbrica de Calificación
+* **Calidad del Contenido (50%)**: Profundidad, precisión técnica y cobertura de los temas solicitados.
+* **Estructura y Coherencia (30%)**: Organización adecuada del documento y fluidez de ideas.
+* **Normas de Redacción y Presentación (20%)**: Ortografía, redacción formal y citas bibliográficas apropiadas.
+
+## Formato de Entrega (Opcional - Ignorado por la IA)
+- Documento en formato PDF (subido a Google Drive, OneDrive o similar con enlace público).`;
+
+const TEMPLATE_MANUAL = `# Entrega Libre (Evaluación Manual sin IA)
+
+## Descripción de la Tarea / Actividad
+[Describe detalladamente la tarea, taller, cuestionario o actividad libre a realizar]
+
+## Instrucciones de Envío
+* [Indica si deben subir un enlace o qué contenido debe tener el texto de la entrega]
+
+## Criterios de Calificación
+* **Criterio 1 (50%)**: [Descripción]
+* **Criterio 2 (50%)**: [Descripción]`;
 
 // Sortable item wrapper component
 function SortablePathItem({ id, path, index, onRemove }: { id: string, path: string, index: number, onRemove: (index: number) => void }) {
@@ -309,7 +370,23 @@ export function ActivityManager({ courseId, activities }: { courseId: string; ac
     const [isOpen, setIsOpen] = useState(false);
     const [selectedType, setSelectedType] = useState<string>("GITHUB");
     const [description, setDescription] = useState("**Instrucciones de la actividad**\n\n...");
-    const [statement, setStatement] = useState("**Enunciado de la actividad**\n\n...");
+    const [statement, setStatement] = useState(TEMPLATE_GITHUB);
+
+    useEffect(() => {
+        if (!statement || 
+            statement === "**Enunciado de la actividad**\n\n..." || 
+            statement === TEMPLATE_GITHUB || 
+            statement === TEMPLATE_CODE_PROJECT || 
+            statement === TEMPLATE_PDF_REVIEW || 
+            statement === TEMPLATE_MANUAL) {
+            
+            if (selectedType === "GITHUB") setStatement(TEMPLATE_GITHUB);
+            else if (selectedType === "CODE_PROJECT") setStatement(TEMPLATE_CODE_PROJECT);
+            else if (selectedType === "PDF_REVIEW") setStatement(TEMPLATE_PDF_REVIEW);
+            else if (selectedType === "MANUAL") setStatement(TEMPLATE_MANUAL);
+        }
+    }, [selectedType]);
+
     const { resolvedTheme } = useTheme();
     const mode = resolvedTheme === "dark" ? "dark" : resolvedTheme === "light" ? "light" : "auto";
     const [isReordering, setIsReordering] = useState(false);
@@ -362,6 +439,7 @@ export function ActivityManager({ courseId, activities }: { courseId: string; ac
     useEffect(() => {
         if (!isOpen) {
             setImportedData(null);
+            setSelectedType("GITHUB");
             setFormKey(k => k + 1);
         }
     }, [isOpen]);
@@ -401,6 +479,21 @@ export function ActivityManager({ courseId, activities }: { courseId: string; ac
                     </SheetTrigger>
                     <SheetContent side="right" className="w-full max-w-none sm:max-w-none p-0">
                         <form key={formKey} ref={formRef} action={async (formData) => {
+                            const form = formRef.current;
+                            if (form) {
+                                const openDateLocal = (form.querySelector('[name="openDateLocal"]') as HTMLInputElement)?.value;
+                                const deadlineLocal = (form.querySelector('[name="deadlineLocal"]') as HTMLInputElement)?.value;
+                                if (openDateLocal) {
+                                    formData.set("openDate", new Date(openDateLocal).toISOString());
+                                } else {
+                                    formData.delete("openDate");
+                                }
+                                if (deadlineLocal) {
+                                    formData.set("deadline", new Date(deadlineLocal).toISOString());
+                                } else {
+                                    formData.delete("deadline");
+                                }
+                            }
                             await createActivityAction(formData);
                             setIsOpen(false);
                             setDescription("**Instrucciones de la actividad**\n\n..."); // Reset
@@ -409,9 +502,6 @@ export function ActivityManager({ courseId, activities }: { courseId: string; ac
                             <input type="hidden" name="courseId" value={courseId} />
                             <input type="hidden" name="description" value={description} />
                             <input type="hidden" name="statement" value={statement} />
-                            {/* Hidden inputs to send UTC dates */}
-                            <input type="hidden" name="openDate" id="openDate-utc" />
-                            <input type="hidden" name="deadline" id="deadline-utc" />
 
                             <SheetHeader className="px-6 py-4 border-b">
                                 <div className="flex justify-between items-start sm:items-center flex-col sm:flex-row gap-4">
@@ -447,25 +537,34 @@ export function ActivityManager({ courseId, activities }: { courseId: string; ac
                                         <div className="grid grid-cols-12 gap-4">
                                             <div className="col-span-12 space-y-2">
                                                 <Label htmlFor="type">Tipo</Label>
-                                                <Select name="type" defaultValue={importedData?.type || "GITHUB"} onValueChange={setSelectedType}>
+                                                <Select name="type" value={selectedType} onValueChange={setSelectedType}>
                                                     <SelectTrigger>
                                                         <SelectValue placeholder="Selecciona el tipo" />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="GITHUB">GitHub Repositorio</SelectItem>
-                                                        <SelectItem value="CODE_PROJECT">Proyecto de Código (Revisión Manual)</SelectItem>
-                                                        <SelectItem value="MANUAL">Manual</SelectItem>
-                                                        <SelectItem value="GOOGLE_COLAB">Google Colab</SelectItem>
-                                                        <SelectItem value="PDF_REVIEW">Revisión de PDF</SelectItem>
+                                                        <SelectItem value="GITHUB">Evaluación Automática con IA (GitHub)</SelectItem>
+                                                        <SelectItem value="CODE_PROJECT">Proyecto de Código (Evaluación con Apoyo de IA)</SelectItem>
+                                                        <SelectItem value="PDF_REVIEW">Revisión de Documento PDF (Evaluación con IA)</SelectItem>
+                                                        <SelectItem value="MANUAL">Entrega Libre (Evaluación Manual sin IA)</SelectItem>
                                                     </SelectContent>
                                                 </Select>
-                                            </div>
-                                            {selectedType !== "MANUAL" && selectedType !== "PDF_REVIEW" && selectedType !== "CODE_PROJECT" && (
-                                                <div className="col-span-3 space-y-2">
-                                                    <Label htmlFor="maxAttempts">Intentos</Label>
-                                                    <Input id="maxAttempts" name="maxAttempts" type="number" min="1" max="10" defaultValue={importedData?.maxAttempts || "1"} required />
+
+                                                {/* Descriptive Help Card */}
+                                                <div className="mt-2 text-xs rounded-md border bg-muted/20 p-3 text-muted-foreground space-y-1">
+                                                    <p className="font-semibold text-foreground">
+                                                        {selectedType === "GITHUB" && "🤖 Evaluación Automática con IA (GitHub)"}
+                                                        {selectedType === "CODE_PROJECT" && "💻 Proyecto de Código (Evaluación con Apoyo de IA)"}
+                                                        {selectedType === "PDF_REVIEW" && "📄 Revisión de Documento PDF (Evaluación con IA)"}
+                                                        {selectedType === "MANUAL" && "📝 Entrega Libre (Evaluación Manual sin IA)"}
+                                                    </p>
+                                                    <p className="leading-relaxed">
+                                                        {selectedType === "GITHUB" && "Los estudiantes entregan un repositorio de GitHub. El sistema evalúa automáticamente el código de los archivos indicados basándose en tu rúbrica usando IA."}
+                                                        {selectedType === "CODE_PROJECT" && "Los estudiantes entregan un repositorio de GitHub. Te permite explorar y escanear la estructura de archivos y su código fuente directamente desde la plataforma para calificar de manera manual con apoyo de IA."}
+                                                        {selectedType === "PDF_REVIEW" && "Los estudiantes entregan un enlace a un archivo PDF. El asistente de IA te ayudará a leer, analizar y calificar el documento directamente desde el panel del profesor."}
+                                                        {selectedType === "MANUAL" && "Ideal para tareas tradicionales, cuestionarios o talleres. Permite a los estudiantes adjuntar un enlace si lo habilitas. Calificación 100% manual por el profesor, sin intervención de IA."}
+                                                    </p>
                                                 </div>
-                                            )}
+                                            </div>
                                         </div>
 
                                         {selectedType === "GITHUB" && (
@@ -501,14 +600,6 @@ export function ActivityManager({ courseId, activities }: { courseId: string; ac
                                                     name="openDateLocal"
                                                     type="datetime-local"
                                                     defaultValue={importedData?.openDateLocal || ""}
-                                                    onChange={(e) => {
-                                                        const utcInput = document.getElementById('openDate-utc') as HTMLInputElement;
-                                                        if (e.target.value) {
-                                                            utcInput.value = new Date(e.target.value).toISOString();
-                                                        } else {
-                                                            utcInput.value = '';
-                                                        }
-                                                    }}
                                                 />
                                             </div>
                                             <div className="space-y-2">
@@ -519,14 +610,6 @@ export function ActivityManager({ courseId, activities }: { courseId: string; ac
                                                     type="datetime-local"
                                                     required
                                                     defaultValue={importedData?.deadlineLocal || ""}
-                                                    onChange={(e) => {
-                                                        const utcInput = document.getElementById('deadline-utc') as HTMLInputElement;
-                                                        if (e.target.value) {
-                                                            utcInput.value = new Date(e.target.value).toISOString();
-                                                        } else {
-                                                            utcInput.value = '';
-                                                        }
-                                                    }}
                                                 />
                                             </div>
                                         </div>
@@ -534,52 +617,31 @@ export function ActivityManager({ courseId, activities }: { courseId: string; ac
 
                                     {/* Right Column: Editor */}
                                     <div className="lg:col-span-8 flex flex-col h-full min-h-[500px] gap-4">
-                                        {selectedType !== "MANUAL" && selectedType !== "PDF_REVIEW" && selectedType !== "CODE_PROJECT" && (
-                                            <div className="flex-1 flex flex-col min-h-[300px]">
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <div className="flex items-center gap-2">
-                                                        <Label>Instrucciones (Informativas)</Label>
-                                                        <ActivityFieldHelpDialog type="instructions" />
-                                                    </div>
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => setShowDescriptionAI(true)}
-                                                        className="h-8"
-                                                    >
-                                                        <Sparkles className="mr-2 h-4 w-4" />
-                                                        Generar con IA
-                                                    </Button>
-                                                </div>
-                                                <div className="flex-1 border rounded-md overflow-hidden" data-color-mode={mode}>
-                                                    <MDEditor
-                                                        value={description}
-                                                        onChange={(val) => setDescription(val || "")}
-                                                        height="100%"
-                                                        preview="live"
-                                                        className="h-full border-none"
-                                                    />
-                                                </div>
-                                            </div>
-                                        )}
                                         <div className="flex-1 flex flex-col min-h-[300px]">
-                                            <div className="flex items-center justify-between mb-2">
-                                                <div className="flex items-center gap-2">
-                                                    <Label>Enunciado / Rúbrica de Evaluación</Label>
-                                                    <ActivityFieldHelpDialog type="statement" />
+                                            <div className="flex items-start justify-between mb-2">
+                                                <div className="flex flex-col gap-1">
+                                                    <Label className="text-base font-semibold">Enunciado / Rúbrica de Evaluación</Label>
+                                                    <p className="text-[11px] text-muted-foreground leading-relaxed max-w-2xl">
+                                                        Define los criterios de evaluación y porcentajes claros para la calificación.
+                                                        {selectedType !== "MANUAL" && (
+                                                            <span className="text-amber-600 dark:text-amber-400 font-medium block mt-0.5">
+                                                                ⚠️ Puedes definir pautas de formato físico de entrega para los estudiantes (ej: entregar en ZIP, PDF, Word o carpetas) sin que afecte la evaluación, ya que la IA las ignorará automáticamente al calificar.
+                                                            </span>
+                                                        )}
+                                                    </p>
                                                 </div>
                                                 <Button
                                                     type="button"
                                                     variant="outline"
                                                     size="sm"
                                                     onClick={() => setShowStatementAI(true)}
-                                                    className="h-8"
+                                                    className="h-8 shrink-0 ml-4"
                                                 >
                                                     <Sparkles className="mr-2 h-4 w-4" />
                                                     Generar con IA
                                                 </Button>
                                             </div>
+
                                             <div className="flex-1 border rounded-md overflow-hidden" data-color-mode={mode}>
                                                 <MDEditor
                                                     value={statement}
@@ -618,21 +680,21 @@ export function ActivityManager({ courseId, activities }: { courseId: string; ac
                 />
             </div>
 
-            <div className="w-full overflow-x-auto rounded-md border">
+            <div className="rounded-xl border border-border/50 overflow-x-auto shadow-sm">
                 <Table className="min-w-[800px]">
                     <TableHeader>
-                        <TableRow>
-                            <TableHead className="w-[50px]">Orden</TableHead>
-                            <TableHead>Título</TableHead>
-                            <TableHead>Tipo</TableHead>
-                            <TableHead>Fecha Límite</TableHead>
-                            <TableHead>Entregas</TableHead>
-                            <TableHead className="text-right">Acciones</TableHead>
+                        <TableRow className="bg-muted/30 hover:bg-muted/30">
+                            <TableHead className="w-[50px] pl-4 font-bold uppercase tracking-wider text-xs">Orden</TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs">Título</TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Tipo</TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden md:table-cell">Fecha Límite</TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Entregas</TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Acciones</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {activities.map((activity, index) => (
-                            <TableRow key={activity.id}>
+                            <TableRow key={activity.id} className="group hover:bg-muted/20 transition-colors border-border/30">
                                 <TableCell>
                                     <div className="flex flex-col gap-1">
 
@@ -762,6 +824,21 @@ function EditActivityDialog({ activity, courseId, mode }: { activity: any, cours
     const [statement, setStatement] = useState(activity.statement || "");
     const [selectedType, setSelectedType] = useState(activity.type);
 
+    useEffect(() => {
+        if (!statement || 
+            statement === "**Enunciado de la actividad**\n\n..." || 
+            statement === TEMPLATE_GITHUB || 
+            statement === TEMPLATE_CODE_PROJECT || 
+            statement === TEMPLATE_PDF_REVIEW || 
+            statement === TEMPLATE_MANUAL) {
+            
+            if (selectedType === "GITHUB") setStatement(TEMPLATE_GITHUB);
+            else if (selectedType === "CODE_PROJECT") setStatement(TEMPLATE_CODE_PROJECT);
+            else if (selectedType === "PDF_REVIEW") setStatement(TEMPLATE_PDF_REVIEW);
+            else if (selectedType === "MANUAL") setStatement(TEMPLATE_MANUAL);
+        }
+    }, [selectedType]);
+
     const [formKey, setFormKey] = useState(0);
     const formRef = useRef<HTMLFormElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -822,6 +899,21 @@ function EditActivityDialog({ activity, courseId, mode }: { activity: any, cours
             </SheetTrigger>
             <SheetContent side="right" className="w-full max-w-none sm:max-w-none p-0">
                 <form key={formKey} ref={formRef} action={async (formData) => {
+                    const form = formRef.current;
+                    if (form) {
+                        const openDateLocal = (form.querySelector('[name="openDateLocal"]') as HTMLInputElement)?.value;
+                        const deadlineLocal = (form.querySelector('[name="deadlineLocal"]') as HTMLInputElement)?.value;
+                        if (openDateLocal) {
+                            formData.set("openDate", new Date(openDateLocal).toISOString());
+                        } else {
+                            formData.delete("openDate");
+                        }
+                        if (deadlineLocal) {
+                            formData.set("deadline", new Date(deadlineLocal).toISOString());
+                        } else {
+                            formData.delete("deadline");
+                        }
+                    }
                     await updateActivityAction(formData);
                     setIsOpen(false);
                 }} className="flex flex-col h-full">
@@ -829,9 +921,6 @@ function EditActivityDialog({ activity, courseId, mode }: { activity: any, cours
                     <input type="hidden" name="courseId" value={courseId} />
                     <input type="hidden" name="description" value={description} />
                     <input type="hidden" name="statement" value={statement} />
-                    {/* Hidden inputs to send UTC dates */}
-                    <input type="hidden" name="openDate" id={`edit-openDate-utc-${activity.id}`} />
-                    <input type="hidden" name="deadline" id={`edit-deadline-utc-${activity.id}`} />
 
                     <SheetHeader className="px-6 py-4 border-b">
                         <div className="flex justify-between items-start sm:items-center flex-col sm:flex-row gap-4">
@@ -867,25 +956,34 @@ function EditActivityDialog({ activity, courseId, mode }: { activity: any, cours
                                 <div className="grid grid-cols-12 gap-4">
                                     <div className="col-span-12 space-y-2">
                                         <Label htmlFor="type">Tipo</Label>
-                                        <Select name="type" defaultValue={importedData?.type || activity.type} onValueChange={setSelectedType}>
+                                        <Select name="type" value={selectedType} onValueChange={setSelectedType}>
                                             <SelectTrigger>
                                                 <SelectValue placeholder="Selecciona el tipo" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="GITHUB">GitHub Repositorio</SelectItem>
-                                                <SelectItem value="CODE_PROJECT">Proyecto de Código (Revisión Manual)</SelectItem>
-                                                <SelectItem value="MANUAL">Manual</SelectItem>
-                                                <SelectItem value="GOOGLE_COLAB">Google Colab</SelectItem>
-                                                <SelectItem value="PDF_REVIEW">Revisión de PDF</SelectItem>
+                                                <SelectItem value="GITHUB">Evaluación Automática con IA (GitHub)</SelectItem>
+                                                <SelectItem value="CODE_PROJECT">Proyecto de Código (Evaluación con Apoyo de IA)</SelectItem>
+                                                <SelectItem value="PDF_REVIEW">Revisión de Documento PDF (Evaluación con IA)</SelectItem>
+                                                <SelectItem value="MANUAL">Entrega Libre (Evaluación Manual sin IA)</SelectItem>
                                             </SelectContent>
                                         </Select>
-                                    </div>
-                                    {selectedType !== "MANUAL" && selectedType !== "PDF_REVIEW" && selectedType !== "CODE_PROJECT" && (
-                                        <div className="col-span-3 space-y-2">
-                                            <Label htmlFor="maxAttempts">Intentos</Label>
-                                            <Input id="maxAttempts" name="maxAttempts" type="number" min="1" max="10" defaultValue={importedData?.maxAttempts || activity.maxAttempts} required />
+
+                                        {/* Descriptive Help Card */}
+                                        <div className="mt-2 text-xs rounded-md border bg-muted/20 p-3 text-muted-foreground space-y-1">
+                                            <p className="font-semibold text-foreground">
+                                                {selectedType === "GITHUB" && "🤖 Evaluación Automática con IA (GitHub)"}
+                                                {selectedType === "CODE_PROJECT" && "💻 Proyecto de Código (Evaluación con Apoyo de IA)"}
+                                                {selectedType === "PDF_REVIEW" && "📄 Revisión de Documento PDF (Evaluación con IA)"}
+                                                {selectedType === "MANUAL" && "📝 Entrega Libre (Evaluación Manual sin IA)"}
+                                            </p>
+                                            <p className="leading-relaxed">
+                                                {selectedType === "GITHUB" && "Los estudiantes entregan un repositorio de GitHub. El sistema evalúa automáticamente el código de los archivos indicados basándose en tu rúbrica usando IA."}
+                                                {selectedType === "CODE_PROJECT" && "Los estudiantes entregan un repositorio de GitHub. Te permite explorar y escanear la estructura de archivos y su código fuente directamente desde la plataforma para calificar de manera manual con apoyo de IA."}
+                                                {selectedType === "PDF_REVIEW" && "Los estudiantes entregan un enlace a un archivo PDF. El asistente de IA te ayudará a leer, analizar y calificar el documento directamente desde el panel del profesor."}
+                                                {selectedType === "MANUAL" && "Ideal para tareas tradicionales, cuestionarios o talleres. Permite a los estudiantes adjuntar un enlace si lo habilitas. Calificación 100% manual por el profesor, sin intervención de IA."}
+                                            </p>
                                         </div>
-                                    )}
+                                    </div>
                                 </div>
 
                                 {selectedType === "GITHUB" && (
@@ -919,14 +1017,6 @@ function EditActivityDialog({ activity, courseId, mode }: { activity: any, cours
                                             name="openDateLocal"
                                             type="datetime-local"
                                             defaultValue={importedData?.openDateLocal || (activity.openDate ? new Date(new Date(activity.openDate).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "")}
-                                            onChange={(e) => {
-                                                const utcInput = document.getElementById(`edit-openDate-utc-${activity.id}`) as HTMLInputElement;
-                                                if (e.target.value) {
-                                                    utcInput.value = new Date(e.target.value).toISOString();
-                                                } else {
-                                                    utcInput.value = '';
-                                                }
-                                            }}
                                         />
                                     </div>
                                     <div className="space-y-2">
@@ -937,14 +1027,6 @@ function EditActivityDialog({ activity, courseId, mode }: { activity: any, cours
                                             type="datetime-local"
                                             required
                                             defaultValue={importedData?.deadlineLocal || (activity.deadline ? new Date(new Date(activity.deadline).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "")}
-                                            onChange={(e) => {
-                                                const utcInput = document.getElementById(`edit-deadline-utc-${activity.id}`) as HTMLInputElement;
-                                                if (e.target.value) {
-                                                    utcInput.value = new Date(e.target.value).toISOString();
-                                                } else {
-                                                    utcInput.value = '';
-                                                }
-                                            }}
                                         />
                                     </div>
                                 </div>
@@ -952,22 +1034,19 @@ function EditActivityDialog({ activity, courseId, mode }: { activity: any, cours
 
                             {/* Right Column: Editor */}
                             <div className="lg:col-span-8 flex flex-col h-full min-h-[500px] gap-4">
-                                {selectedType !== "MANUAL" && selectedType !== "PDF_REVIEW" && selectedType !== "CODE_PROJECT" && (
-                                    <div className="flex-1 flex flex-col min-h-[300px]">
-                                        <Label className="mb-2">Instrucciones (Informativas)</Label>
-                                        <div className="flex-1 border rounded-md overflow-hidden" data-color-mode={mode}>
-                                            <MDEditor
-                                                value={description}
-                                                onChange={(val) => setDescription(val || "")}
-                                                height="100%"
-                                                preview="live"
-                                                className="h-full border-none"
-                                            />
-                                        </div>
-                                    </div>
-                                )}
                                 <div className="flex-1 flex flex-col min-h-[300px]">
-                                    <Label className="mb-2">Enunciado / Rúbrica de Evaluación</Label>
+                                    <div className="flex flex-col gap-1 mb-2">
+                                        <Label className="text-base font-semibold">Enunciado / Rúbrica de Evaluación</Label>
+                                        <p className="text-[11px] text-muted-foreground leading-relaxed max-w-2xl">
+                                            Define los criterios de evaluación y porcentajes claros para la calificación.
+                                            {selectedType !== "MANUAL" && (
+                                                <span className="text-amber-600 dark:text-amber-400 font-medium block mt-0.5">
+                                                    ⚠️ Puedes definir pautas de formato físico de entrega para los estudiantes (ej: entregar en ZIP, PDF, Word o carpetas) sin que afecte la evaluación, ya que la IA las ignorará automáticamente al calificar.
+                                                </span>
+                                            )}
+                                        </p>
+                                    </div>
+
                                     <div className="flex-1 border rounded-md overflow-hidden" data-color-mode={mode}>
                                         <MDEditor
                                             value={statement}

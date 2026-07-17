@@ -168,14 +168,14 @@ export function GeminiApiLogPanel() {
                         </div>
                     ) : (
                         <>
-                            <div className="w-full overflow-x-auto rounded-md border">
+                            <div className="rounded-xl border border-border/50 overflow-x-auto shadow-sm">
                                 <Table className="min-w-[800px]">
                                     <TableHeader>
-                                        <TableRow>
-                                            <TableHead className="w-[180px]">Fecha/Hora</TableHead>
-                                            <TableHead>Usuario/Alumno</TableHead>
-                                            <TableHead>Descripción</TableHead>
-                                            <TableHead className="text-right">Peticiones Consumidas</TableHead>
+                                        <TableRow className="bg-muted/30 hover:bg-muted/30">
+                                            <TableHead className="font-bold uppercase tracking-wider text-xs pl-4 w-[180px]">Fecha/Hora</TableHead>
+                                            <TableHead className="font-bold uppercase tracking-wider text-xs">Usuario/Alumno</TableHead>
+                                            <TableHead className="font-bold uppercase tracking-wider text-xs">Descripción</TableHead>
+                                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Peticiones Consumidas</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -187,7 +187,7 @@ export function GeminiApiLogPanel() {
                                             } catch (e) { }
 
                                             return (
-                                                <TableRow key={log.id}>
+                                                <TableRow key={log.id} className="group hover:bg-muted/20 transition-colors border-border/30">
                                                     <TableCell className="text-sm">
                                                         <div>{format(new Date(log.createdAt), 'dd/MM/yyyy')}</div>
                                                         <div className="text-xs text-muted-foreground">

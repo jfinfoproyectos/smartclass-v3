@@ -9,7 +9,8 @@ import {
     ExternalLink,
     FileCode,
     Calendar,
-    Clock
+    Clock,
+    BookOpen
 } from "lucide-react";
 import { Editor } from "@monaco-editor/react";
 import { useTheme } from "next-themes";
@@ -68,26 +69,29 @@ export function SharedContentList({ contents }: SharedContentProps) {
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between border-b pb-4">
-                <h3 className="text-2xl font-bold">Recursos Compartidos</h3>
+                <h3 className="text-2xl font-bold flex items-center gap-2">
+                    <BookOpen className="h-4 w-4 text-primary" />
+                    Recursos Compartidos
+                </h3>
                 <Badge variant="secondary" className="px-3 py-1">
                     {contents.length} {contents.length === 1 ? 'elemento' : 'elementos'}
                 </Badge>
             </div>
             
-            <div className="w-full overflow-x-auto rounded-xl border-2">
-                <Table>
-                    <TableHeader className="bg-muted/50">
-                        <TableRow>
-                            <TableHead className="font-bold">Título</TableHead>
-                            <TableHead className="font-bold">Fecha de Envío</TableHead>
-                            <TableHead className="font-bold">Recursos</TableHead>
-                            <TableHead className="text-right font-bold w-[100px]">Acción</TableHead>
+            <div className="rounded-xl border border-border/50 overflow-x-auto shadow-sm">
+                <Table className="min-w-[600px]">
+                    <TableHeader>
+                        <TableRow className="bg-muted/30 hover:bg-muted/30">
+                            <TableHead className="font-bold uppercase tracking-wider text-xs pl-4">Título</TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs">Fecha de Envío</TableHead>
+                            <TableHead className="font-bold uppercase tracking-wider text-xs">Recursos</TableHead>
+                            <TableHead className="text-right font-bold uppercase tracking-wider text-xs pr-4 w-[100px]">Acción</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {contents.map((content) => (
-                            <TableRow key={content.id} className="hover:bg-muted/30">
-                                <TableCell className="font-medium">{content.title}</TableCell>
+                            <TableRow key={content.id} className="group hover:bg-muted/20 transition-colors border-border/30">
+                                <TableCell className="font-medium py-4 pl-4">{content.title}</TableCell>
                                 <TableCell>
                                     <div className="flex flex-col text-sm">
                                         <span>{format(new Date(content.createdAt), "PPP", { locale: es })}</span>
@@ -110,7 +114,7 @@ export function SharedContentList({ contents }: SharedContentProps) {
                                         )}
                                     </div>
                                 </TableCell>
-                                <TableCell className="text-right">
+                                <TableCell className="text-right pr-4">
                                     <Button 
                                         variant="ghost" 
                                         size="sm" 

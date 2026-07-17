@@ -135,8 +135,8 @@ export function ManualActivityDetails({ activity, userId, studentName }: ManualA
                                 </p>
                             </div>
                         )}
-                        {/* Submission form - only show if (not graded AND allowLinkSubmission is enabled AND (not submitted OR isRejected)) AND deadline not passed */}
-                        {!isGraded && activity.allowLinkSubmission && (!submission || isRejected) && (
+                        {/* Submission form - only show if allowLinkSubmission is enabled AND (not submitted OR isGraded) */}
+                        {activity.allowLinkSubmission && (!submission || isGraded) && (
                             activity.deadline && new Date(activity.deadline) < new Date() ? (
                                 <div className="p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 rounded-md flex items-start gap-2">
                                     <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />

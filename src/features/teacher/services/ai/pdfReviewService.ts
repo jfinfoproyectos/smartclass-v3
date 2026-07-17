@@ -92,6 +92,7 @@ ${criteria}
     : gradingMode === "moderate" 
     ? "Evaluación moderada: considera legibilidad, estructura y claridad además del contenido." 
     : "Evaluación estándar: enfócate principalmente en el cumplimiento de los criterios solicitados."}
+6. **REGLA CRÍTICA DE FORMATO DE ENTREGA**: Si en la rúbrica o criterios de evaluación se menciona algún requisito o criterio sobre el formato de entrega física del archivo (como por ejemplo: entregar en formato ZIP, Word, PDF, estructuración de carpetas, nombres de archivo de entrega específicos, o cómo subir o empaquetar el trabajo), **IGNÓRALO COMPLETAMENTE**. NO debes penalizar al estudiante ni restar puntos por no cumplir con estas pautas de formato de entrega, empaquetado o carga del archivo.
 
 **FORMATO DE RESPUESTA** (JSON estricto):
 {

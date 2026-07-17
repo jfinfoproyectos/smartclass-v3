@@ -1,32 +1,44 @@
 "use client";
 
-import { useState, useEffect, useTransition, useRef, useCallback } from "react";
+import { useState, useEffect, useTransition, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { getFileTreeAction, getFileContentAction, saveFileContentAction, getProjectAction, updateProjectNameAction } from "@/features/documentation/actions/adminDocsActions";
+import { 
+  getFileTreeAction, 
+  getFileContentAction, 
+  saveFileContentAction, 
+  getProjectAction, 
+  updateProjectNameAction 
+} from "@/features/documentation/actions/adminDocsActions";
 import { AdminFileExplorer } from "@/features/documentation/components/admin/AdminFileExplorer";
-import { AdminProjectAssistant } from "@/features/documentation/components/admin/AdminProjectAssistant";
-import { EditorToolbar } from "@/features/documentation/components/admin/EditorToolbar";
-import type { MdxEditorHandle } from "@/features/documentation/components/admin/MdxEditor";
+import { BlockEditor } from "@/features/documentation/components/admin/BlockEditor";
 import { getProjectCoursesAction } from "@/features/documentation/actions/adminDocsActions";
 import { Button } from "@/components/ui/button";
-import { Loader2, Layout } from "lucide-react";
+import { 
+  Loader2, 
+  Layout, 
+  ArrowLeft, 
+  Menu, 
+  Maximize2, 
+  Minimize2, 
+  Save, 
+  Trash2,
+  Settings,
+  Edit,
+  FileText,
+  Edit3,
+  Eye,
+  X
+} from "lucide-react";
 import { toast } from "sonner";
 import { FileNode } from "@/features/documentation/services/admin-docs";
 import { ErrorBoundary } from "@/features/documentation/components/ErrorBoundary";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import dynamic from "next/dynamic";
-
-// Lazy load heavy components
-const MdxEditor = dynamic(() => import("@/features/documentation/components/admin/MdxEditor").then(mod => mod.MdxEditor), {
-  ssr: false,
-  loading: () => <div className="flex-1 flex items-center justify-center bg-muted/5 animate-pulse"><Loader2 className="w-6 h-6 animate-spin opacity-20" /></div>
-});
-
-const EditorPreview = dynamic(() => import("@/features/documentation/components/admin/EditorPreview").then(mod => mod.EditorPreview), {
-  ssr: false,
-  loading: () => <div className="flex-1 flex items-center justify-center bg-muted/5 animate-pulse"><Loader2 className="w-6 h-6 animate-spin opacity-20" /></div>
-});
+import { ThemeSelector } from "@/components/theme/ThemeSelector";
+import { CodeThemeSelector } from "@/features/documentation/components/reader/CodeThemeSelector";
+import { ModeToggle } from "@/components/theme/ModeToggle";
+import { getAvailableThemes } from "@/app/actions/themes";
+import { getCodeTheme } from "@/app/actions/code-themes";
 import { 
   AlertDialog, 
   AlertDialogAction, 
@@ -37,7 +49,7 @@ import {
   AlertDialogHeader, 
   AlertDialogTitle 
 } from "@/components/ui/alert-dialog";
-import { Trash2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 
 export default function DocEditorPage() {
   const params = useParams();
@@ -48,46 +60,54 @@ export default function DocEditorPage() {
   const [fileTree, setFileTree] = useState<FileNode[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [content, setContent] = useState("");
-  const [debouncedContent, setDebouncedContent] = useState("");
   const [originalContent, setOriginalContent] = useState("");
   const [pageMetadata, setPageMetadata] = useState<any>(null);
   const [currentSha, setCurrentSha] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [viewMode, setViewMode] = useState<"edit" | "preview" | "split">("split");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isFullScreen, setIsFullScreen] = useState(false);
+  const [isFullScreen, setIsFullScreen] = useState(true);
+  const [activeTab, setActiveTab] = useState<"edit" | "markdown" | "preview">("edit");
   const [courses, setCourses] = useState<{id: string, title: string}[]>([]);
   const [project, setProject] = useState<{id: string, name: string, slug: string} | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [isEditingProjectName, setIsEditingProjectName] = useState(false);
+  const [projectNameInput, setProjectNameInput] = useState("");
 
   const [isUnsavedDialogOpen, setIsUnsavedDialogOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<{ type: 'select' | 'back', path?: string } | null>(null);
 
+  const [themes, setThemes] = useState<any[]>([]);
+  const [currentCodeTheme, setCurrentCodeTheme] = useState("one-dark-pro");
+
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  // Debounce content for preview to improve performance
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedContent(content);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [content]);
 
   useEffect(() => {
     if (mounted && projectId) {
       loadTree();
       loadCourses();
       loadProject();
+      loadThemesAndCodeTheme();
     }
   }, [projectId, mounted]);
+
+  async function loadThemesAndCodeTheme() {
+    try {
+      const availableThemes = await getAvailableThemes();
+      setThemes(availableThemes);
+      const codeTheme = await getCodeTheme();
+      setCurrentCodeTheme(codeTheme);
+    } catch (err) {
+      console.error("Error loading themes:", err);
+    }
+  }
 
   async function loadProject() {
     try {
       const data = await getProjectAction(projectId);
       setProject(data);
+      setProjectNameInput(data.name);
     } catch (error) {
       console.error("Error loading project:", error);
     }
@@ -141,9 +161,8 @@ export default function DocEditorPage() {
     try {
       const data = await getFileContentAction(projectId, path);
       setSelectedFile(path);
-      setContent(data.content);
-      // No necesitamos setDebouncedContent aquí ya que el useEffect se encargará
-      setOriginalContent(data.content);
+      setContent(data.content || "[]");
+      setOriginalContent(data.content || "[]");
       setPageMetadata(data.metadata);
       setCurrentSha(data.sha);
     } catch (error) {
@@ -203,98 +222,174 @@ export default function DocEditorPage() {
       if (result.success) {
         setOriginalContent(content);
         setCurrentSha(result.sha || null);
-        toast.success("Cambios guardados");
+        toast.success("Cambios guardados correctamente");
       }
     } catch (error) {
-      toast.error("Error al guardar");
+      console.error("Error saving content:", error);
+      toast.error("Error al guardar el archivo");
     } finally {
       setSaving(false);
     }
-  }, [selectedFile, content, originalContent, currentSha, projectId, saving]);
+  }, [projectId, selectedFile, content, originalContent, currentSha, saving]);
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl+S: Save
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        e.preventDefault();
-        handleSave();
-      }
-      // Ctrl+F: Fullscreen
-      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-        e.preventDefault();
-        setIsFullScreen(prev => !prev);
-      }
-      // Esc: Exit Fullscreen
-      if (e.key === 'Escape' && isFullScreen) {
-        setIsFullScreen(false);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleSave, isFullScreen]);
+  const handleProjectNameSave = async () => {
+    if (!projectNameInput.trim()) return;
+    try {
+      await updateProjectNameAction(projectId, projectNameInput.trim());
+      await loadProject();
+      setIsEditingProjectName(false);
+      toast.success("Nombre del proyecto actualizado");
+    } catch (err) {
+      toast.error("Error al actualizar el nombre del proyecto");
+    }
+  };
 
-  const editorRef = useRef<MdxEditorHandle>(null);
+  const getDocumentName = () => {
+    if (!selectedFile) return "";
+    const base = selectedFile.split("/").pop() || "";
+    return base
+      .replace(/\.md$/, "")
+      .split("-")
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
+  };
 
   if (!mounted) return null;
-
-  if (loading && !selectedFile) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-10 h-10 animate-spin text-primary opacity-50" />
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground animate-pulse">Cargando Workspace...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className={cn(
       "flex flex-col overflow-hidden bg-background border border-border shadow-2xl transition-all duration-300",
       isFullScreen 
-        ? "fixed inset-0 z-45 m-0 rounded-none border-none" 
+        ? "fixed inset-0 z-50 m-0 rounded-none border-none" 
         : "absolute inset-0 z-40 rounded-xl m-2 sm:m-4"
     )}>
-      <div className="flex-none z-50 bg-background border-b border-border/50 rounded-t-xl">
-        <EditorToolbar 
-        onBack={() => {
-          if (content !== originalContent) {
-            setPendingAction({ type: 'back' });
-            setIsUnsavedDialogOpen(true);
-          } else {
-            router.push("/dashboard/teacher/docs");
-          }
-        }}
-        onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-        isSidebarOpen={isSidebarOpen}
-        isFullScreen={isFullScreen}
-        onToggleFullScreen={() => setIsFullScreen(!isFullScreen)}
-        title={project?.name || "Editor de Docs"}
-        filename={selectedFile ? (selectedFile.split('/').pop() || "") : (project?.name || projectId)}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        onSave={handleSave}
-        saving={saving}
-        canSave={!!selectedFile && content !== originalContent}
-        onFormat={(p, s, pl) => editorRef.current?.handleFormat(p, s, pl)}
-        onLineFormat={(p) => editorRef.current?.handleLineFormat(p)}
-        onInsert={(t) => editorRef.current?.handleInsert(t)}
-        content={content}
-        onContentChange={setContent}
-        projectId={projectId}
-        path={selectedFile}
-        metadata={pageMetadata}
-        onMetadataChange={loadTree}
-        projectName={project?.name}
-        onProjectNameChange={async (name) => {
-          await updateProjectNameAction(projectId, name);
-          loadProject();
-        }}
-      />
+      {/* Visual Top Toolbar */}
+      <div className="flex-none bg-background border-b border-border/50 px-6 py-3 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+
+          {/* Project Name Editing */}
+          {isEditingProjectName ? (
+            <div className="flex items-center gap-2">
+              <Input 
+                value={projectNameInput}
+                onChange={e => setProjectNameInput(e.target.value)}
+                className="h-8 rounded-lg text-xs py-1"
+                autoFocus
+                onKeyDown={e => {
+                  if (e.key === "Enter") handleProjectNameSave();
+                  if (e.key === "Escape") {
+                    setIsEditingProjectName(false);
+                    setProjectNameInput(project?.name || "");
+                  }
+                }}
+              />
+              <Button size="sm" className="h-8 rounded-lg px-3 text-[10px] uppercase font-bold" onClick={handleProjectNameSave}>
+                Listo
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 group">
+              <span className="font-heading font-black uppercase text-sm tracking-tight">{project?.name || "Cargando..."}</span>
+              <button 
+                onClick={() => setIsEditingProjectName(true)}
+                className="p-1 text-muted-foreground/30 group-hover:text-muted-foreground transition-colors hover:bg-muted rounded"
+                title="Editar nombre"
+              >
+                <Edit className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Center Tab Selector */}
+        {selectedFile && (
+          <div className="hidden md:flex items-center gap-1 bg-muted/40 p-1 rounded-xl border border-border/20">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setActiveTab("edit")}
+              className={cn(
+                "font-bold rounded-lg gap-2 h-8 text-[11px] uppercase tracking-wider px-3 transition-all",
+                activeTab === "edit" 
+                  ? "shadow-sm bg-background text-foreground hover:bg-background" 
+                  : "text-muted-foreground hover:text-foreground hover:bg-transparent"
+              )}
+            >
+              <Edit3 className="w-3.5 h-3.5 text-primary" />
+              Diseñador
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setActiveTab("markdown")}
+              className={cn(
+                "font-bold rounded-lg gap-2 h-8 text-[11px] uppercase tracking-wider px-3 transition-all",
+                activeTab === "markdown" 
+                  ? "shadow-sm bg-background text-foreground hover:bg-background" 
+                  : "text-muted-foreground hover:text-foreground hover:bg-transparent"
+              )}
+            >
+              <FileText className="w-3.5 h-3.5 text-primary" />
+              Editor Markdown
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setActiveTab("preview")}
+              className={cn(
+                "font-bold rounded-lg gap-2 h-8 text-[11px] uppercase tracking-wider px-3 transition-all",
+                activeTab === "preview" 
+                  ? "shadow-sm bg-background text-foreground hover:bg-background" 
+                  : "text-muted-foreground hover:text-foreground hover:bg-transparent"
+              )}
+            >
+              <Eye className="w-3.5 h-3.5 text-primary" />
+              Vista Previa
+            </Button>
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div className="flex items-center gap-3">
+          {/* Themes, Styles, and DarkMode controls */}
+          <div className="flex items-center gap-1.5 border-r border-border/40 pr-3 mr-1">
+            <ThemeSelector themes={themes} />
+            <CodeThemeSelector currentTheme={currentCodeTheme} />
+            <ModeToggle />
+          </div>
+
+          {selectedFile && (
+            <Button 
+              disabled={content === originalContent || saving}
+              onClick={handleSave} 
+              className="font-bold rounded-xl gap-2 h-9 px-4 shadow-sm animate-in fade-in duration-300"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              {content === originalContent ? "Guardado" : "Guardar"}
+            </Button>
+          )}
+
+          <Button 
+            variant="outline" 
+            onClick={() => {
+              if (content !== originalContent) {
+                setPendingAction({ type: 'back' });
+                setIsUnsavedDialogOpen(true);
+              } else {
+                router.push("/dashboard/teacher/docs");
+              }
+            }}
+            className="font-bold rounded-xl gap-2 h-9 px-4 text-destructive border-destructive/20 hover:bg-destructive/10 hover:text-destructive transition-all duration-300 shrink-0"
+            title="Cerrar Diseñador"
+          >
+            <X className="w-4 h-4" />
+            <span>Cerrar</span>
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-1 min-h-0 overflow-hidden relative">
+        {/* Left Page Explorer */}
         <AnimatePresence initial={false}>
           {isSidebarOpen && (
             <motion.aside 
@@ -302,7 +397,7 @@ export default function DocEditorPage() {
               animate={{ width: 288, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
               transition={{ type: "spring", bounce: 0, duration: 0.3 }}
-              className="border-r border-border bg-muted/5 flex flex-col overflow-hidden shrink-0 h-full min-h-0"
+              className="border-r border-border bg-muted/30 dark:bg-zinc-950 flex flex-col overflow-hidden shrink-0 h-full min-h-0"
             >
               <div className="w-72 h-full flex flex-col min-h-0">
                 <AdminFileExplorer 
@@ -317,8 +412,13 @@ export default function DocEditorPage() {
           )}
         </AnimatePresence>
 
+        {/* Right Editor Area */}
         <main className="flex-1 min-w-0 min-h-0 overflow-hidden relative bg-background">
-          {selectedFile ? (
+          {loading ? (
+            <div className="flex items-center justify-center h-full w-full">
+              <Loader2 className="w-8 h-8 text-primary animate-spin opacity-50" />
+            </div>
+          ) : selectedFile ? (
             <div className="flex h-full w-full items-stretch overflow-hidden">
               {(() => {
                 const selectedNode = findNodeByPath(fileTree, selectedFile);
@@ -338,14 +438,14 @@ export default function DocEditorPage() {
                          Este elemento es un <span className="text-primary font-bold">Tópico/Categoría</span>. No requiere contenido manual ya que genera automáticamente la navegación para sus archivos hijos.
                        </p>
                        <div className="mt-10 flex flex-wrap justify-center gap-4">
-                          <div className="px-4 py-2 rounded-full bg-secondary/50 border border-border/50 text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                             Navegación Automática Activa
-                          </div>
-                          <div className="px-4 py-2 rounded-full bg-secondary/50 border border-border/50 text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                             <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                             {selectedNode.children?.length || 0} Elementos hijos
-                          </div>
+                           <div className="px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+                              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              Navegación Automática Activa
+                           </div>
+                           <div className="px-4 py-2 rounded-full bg-primary/10 border border-primary/20 text-[10px] font-bold uppercase tracking-widest text-primary flex items-center gap-2">
+                              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                              {selectedNode.children?.length || 0} Elementos hijos
+                           </div>
                        </div>
                     </div>
                   );
@@ -353,109 +453,68 @@ export default function DocEditorPage() {
 
                 return (
                   <ErrorBoundary key={selectedFile}>
-                    <AnimatePresence mode="wait">
-                      {(viewMode === "edit" || viewMode === "split") && (
-                        <motion.div 
-                          key="editor"
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: -20 }}
-                          style={{ height: '100%', width: '100%' }}
-                          className={cn(
-                            "h-full min-h-0 min-w-0 flex flex-col flex-1", 
-                            viewMode === "split" ? "w-1/2 border-r border-border" : "w-full"
-                          )}
-                        >
-                          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-                            <MdxEditor ref={editorRef} content={content} onChange={setContent} onSave={handleSave} />
-                          </div>
-                        </motion.div>
-                      )}
-                      {(viewMode === "preview" || viewMode === "split") && (
-                        <motion.div 
-                          key="preview"
-                          initial={{ opacity: 0, x: 20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: 20 }}
-                          className={cn(
-                            "h-full min-h-0 min-w-0 flex flex-col", 
-                            viewMode === "split" ? "w-1/2" : "w-full"
-                          )}
-                        >
-                          <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
-                            <EditorPreview content={debouncedContent} />
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                    <div className="flex-1 min-h-0 min-w-0 flex flex-col p-2 overflow-hidden">
+                      <BlockEditor 
+                        content={content} 
+                        onChange={setContent} 
+                        onSave={handleSave} 
+                        activeTab={activeTab}
+                        onTabChange={setActiveTab}
+                      />
+                    </div>
                   </ErrorBoundary>
                 );
               })()}
             </div>
           ) : (
-            <div className="h-full w-full overflow-y-auto custom-scrollbar p-4 md:p-8">
-               <div className="max-w-6xl mx-auto space-y-8">
-                  <div className="flex flex-col gap-1">
-                    <h2 className="text-2xl font-black uppercase tracking-tight">Selecciona un archivo</h2>
-                    <p className="text-muted-foreground text-sm font-medium">Usa el explorador de la izquierda para comenzar a editar la documentación.</p>
-                  </div>
-               </div>
+            <div className="h-full w-full overflow-y-auto custom-scrollbar p-4 md:p-8 flex items-center justify-center">
+              <div className="max-w-md text-center space-y-4">
+                <FileText className="w-12 h-12 text-muted-foreground/30 mx-auto" />
+                <h2 className="text-xl font-bold uppercase tracking-tight">Selecciona una página</h2>
+                <p className="text-muted-foreground text-xs leading-relaxed">
+                  Usa el explorador de la izquierda para abrir una página existente o crear una nueva para comenzar a diseñar.
+                </p>
+              </div>
             </div>
           )}
         </main>
       </div>
 
-      <footer className="flex-none border-t border-border/40 bg-card/20 backdrop-blur-md px-6 py-2">
-         <div className="flex items-center justify-between text-[9px] uppercase tracking-[0.2em] text-muted-foreground/40 font-bold">
-            <div className="flex items-center gap-4">
-              <p>FusionDoc Admin <span className="opacity-50">© 2026</span></p>
-              {selectedFile && (
-                <span className="text-primary font-bold opacity-100 flex items-center gap-1.5">
-                  <span className="h-1 w-1 rounded-full bg-primary animate-pulse" />
-                  MODO EDICIÓN: {selectedFile}
-                </span>
-              )}
-            </div>
-            <div className="flex gap-4 opacity-50">
-              <span>v2.1.0</span>
-              <span className="text-primary/60">Markdown Engine v3</span>
-            </div>
-         </div>
-      </footer>
 
+      {/* Unsaved Changes Dialog */}
       <AlertDialog open={isUnsavedDialogOpen} onOpenChange={setIsUnsavedDialogOpen}>
-        <AlertDialogContent className="max-w-xl border-white/10 bg-background/95 backdrop-blur-3xl shadow-2xl p-8">
+        <AlertDialogContent className="max-w-lg border border-border/40 bg-background/95 backdrop-blur-3xl shadow-2xl p-6 rounded-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl font-black uppercase tracking-tight">Cambios sin guardar</AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground font-medium">
-              Hay cambios en el archivo actual que se perderán si continúas sin guardar. ¿Qué deseas hacer?
+            <AlertDialogTitle className="text-lg font-bold tracking-tight text-foreground">
+              Cambios sin guardar en {getDocumentName()}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-muted-foreground mt-1">
+              Hay cambios en el archivo <strong>"{getDocumentName()}"</strong> que se perderán si continúas sin guardar. ¿Qué deseas hacer?
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="mt-6 flex flex-col sm:flex-row gap-2 sm:gap-3">
-            <AlertDialogCancel className="h-11 px-6 rounded-xl font-bold uppercase tracking-widest text-[10px] border-border bg-muted/20 hover:bg-muted/30 transition-all">
+          <AlertDialogFooter className="mt-6 flex flex-col sm:flex-row sm:justify-end gap-2.5">
+            <AlertDialogCancel className="h-10 px-4 rounded-xl font-bold text-xs uppercase tracking-wider border-border/80 hover:bg-muted transition-all">
               Cancelar
             </AlertDialogCancel>
             
-            <div className="flex flex-row items-center justify-end gap-3 flex-1">
-              <Button 
-                variant="ghost" 
-                onClick={handleDiscard}
-                className="h-11 px-4 rounded-xl font-bold uppercase tracking-widest text-[10px] hover:bg-destructive/10 hover:text-destructive gap-2 border border-transparent hover:border-destructive/20 transition-all"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                Descartar
-              </Button>
- 
-              <AlertDialogAction 
-                onClick={(e) => {
-                  e.preventDefault();
-                  handleSaveAndContinue();
-                }}
-                className="h-11 px-6 rounded-xl font-black uppercase tracking-widest text-[10px] bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all whitespace-nowrap"
-              >
-                Guardar cambios
-              </AlertDialogAction>
-            </div>
+            <Button 
+              variant="destructive" 
+              onClick={handleDiscard}
+              className="h-10 px-4 rounded-xl font-bold text-xs uppercase tracking-wider gap-2 shadow-sm shadow-destructive/10 transition-all"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Descartar
+            </Button>
+
+            <AlertDialogAction 
+              onClick={(e) => {
+                e.preventDefault();
+                handleSaveAndContinue();
+              }}
+              className="h-10 px-4 rounded-xl font-extrabold text-xs uppercase tracking-wider bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/25 transition-all whitespace-nowrap"
+            >
+              Guardar cambios
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

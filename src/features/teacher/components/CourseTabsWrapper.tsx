@@ -2,30 +2,37 @@
 
 import { Tabs } from "@/components/ui/tabs";
 import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
-import { Loader2 } from "lucide-react";
+import { Suspense, useState, useEffect } from "react";
 
-export function CourseTabsWrapper({ children }: { children: React.ReactNode }) {
-    return (
-        <Suspense fallback={
-            <div className="flex-1 flex items-center justify-center bg-background/50 backdrop-blur-sm">
-                <div className="flex flex-col items-center gap-2">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary/60" />
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground animate-pulse">Cargando Dashboard...</span>
-                </div>
-            </div>
-        }>
-            <CourseTabsContent>{children}</CourseTabsContent>
-        </Suspense>
-    );
+/**
+ * Inner resolver: reads the URL tab param and syncs it to parent state.
+ * Wrapped in its own Suspense so it doesn't affect the children's component tree.
+ */
+function TabResolver({ onResolved }: { onResolved: (tab: string) => void }) {
+    const searchParams = useSearchParams();
+    const tab = searchParams.get("tab") || "activities";
+
+    useEffect(() => {
+        onResolved(tab);
+    }, [tab]);
+
+    return null;
 }
 
-function CourseTabsContent({ children }: { children: React.ReactNode }) {
-    const searchParams = useSearchParams();
-    const activeTab = searchParams.get("tab") || "activities";
+/**
+ * CourseTabsWrapper avoids SSR/CSR hydration mismatches by:
+ * 1. Rendering children on the server immediately (consistent tree = consistent Radix IDs)
+ * 2. Using a separately suspended <TabResolver> that only updates the active tab value
+ *    without affecting the rest of the component tree structure.
+ */
+export function CourseTabsWrapper({ children }: { children: React.ReactNode }) {
+    const [activeTab, setActiveTab] = useState("activities");
 
     return (
         <Tabs value={activeTab} className="w-full h-full flex flex-col">
+            <Suspense fallback={null}>
+                <TabResolver onResolved={setActiveTab} />
+            </Suspense>
             {children}
         </Tabs>
     );

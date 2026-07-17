@@ -480,15 +480,12 @@ export const ActivityReportPDF = ({ activity, submission, studentName }: Activit
 
                 <View style={styles.content}>
 
-                    {/* 1. Instrucciones */}
-                    <View style={styles.section}>
-                        <View style={styles.sectionHeader}>
-                            <Text style={styles.sectionTitle}>Instrucciones</Text>
-                        </View>
-                        <MarkdownPDF content={instructions} />
-
-                        {/* Archivos Requeridos */}
-                        {filePaths.length > 0 && (
+                    {/* Archivos Requeridos */}
+                    {filePaths.length > 0 && (
+                        <View style={styles.section}>
+                            <View style={styles.sectionHeader}>
+                                <Text style={styles.sectionTitle}>Archivos Requeridos</Text>
+                            </View>
                             <View style={styles.reqFilesContainer}>
                                 <Text style={styles.reqFilesTitle}>Archivos Requeridos para Evaluación:</Text>
                                 <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
@@ -497,8 +494,8 @@ export const ActivityReportPDF = ({ activity, submission, studentName }: Activit
                                     ))}
                                 </View>
                             </View>
-                        )}
-                    </View>
+                        </View>
+                    )}
 
                     {/* 2. Enunciado / Rúbrica */}
                     <View style={styles.section}>

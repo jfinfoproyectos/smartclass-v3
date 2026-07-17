@@ -137,7 +137,6 @@ model Course {
   endDate              DateTime?
   teacherId            String
   teacher              User      @relation("TeacherCourses", fields: [teacherId], references: [id], onDelete: Cascade)
-  externalUrl          String? // Optional external course URL (e.g., Google Classroom, Moodle)
   docProjectId         String?
   docProject           DocProject? @relation(fields: [docProjectId], references: [id], onDelete: SetNull)
   lateCode             String?
@@ -154,6 +153,7 @@ model Course {
   docThemeColor        String?           @default("zinc")
   docAllowThemeColorChange Boolean       @default(true)
 
+  enrollmentCode       String?   @unique // Código único de inscripción (6 caracteres)
   enrollments        Enrollment[]
   activities         Activity[]
   attendances        Attendance[]
@@ -188,7 +188,6 @@ enum EnrollmentStatus {
 enum ActivityType {
   GITHUB
   MANUAL
-  GOOGLE_COLAB
   PDF_REVIEW
   CODE_PROJECT
 }

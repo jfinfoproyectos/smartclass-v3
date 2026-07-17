@@ -88,14 +88,14 @@ export function AiTutorChat({ projectId, pageId, projectName, isEnabled, limit }
   };
 
   return (
-    <div className="fixed bottom-8 right-8 z-[100]">
+    <div className="fixed bottom-4 right-4 sm:bottom-8 sm:right-8 z-[100]">
       <AnimatePresence>
         {isOpen && (
           <motion.div
             initial={{ opacity: 0, y: 20, scale: 0.95, filter: "blur(10px)" }}
             animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
             exit={{ opacity: 0, y: 20, scale: 0.95, filter: "blur(10px)" }}
-            className="mb-4 w-[350px] sm:w-[400px] h-[500px] flex flex-col"
+            className="mb-4 w-[calc(100vw-2rem)] sm:w-[400px] h-[450px] sm:h-[500px] flex flex-col"
           >
             <Card className="flex-1 flex flex-col bg-background/80 backdrop-blur-3xl border-primary/20 shadow-2xl rounded-3xl overflow-hidden">
               {/* Header */}
@@ -112,7 +112,7 @@ export function AiTutorChat({ projectId, pageId, projectName, isEnabled, limit }
                         <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest truncate max-w-[120px]">En: {pageId.substring(0, 8)}...</span>
                       </div>
                       <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded-md bg-primary/10 border border-primary/10">
-                        <span className="text-[9px] font-black text-primary uppercase tracking-widest">{usedCount}/{limit} <span className="opacity-60">Consultas</span></span>
+                        <span className="text-[9px] font-black text-primary uppercase tracking-widest">Activo</span>
                       </div>
                     </div>
                   </div>
@@ -134,7 +134,7 @@ export function AiTutorChat({ projectId, pageId, projectName, isEnabled, limit }
                     </div>
                     <div className="space-y-1">
                       <p className="text-xs font-black uppercase tracking-widest">¿Tienes alguna duda?</p>
-                      <p className="text-[10px] text-muted-foreground font-medium">Pregúntame sobre el contenido de esta página. Tengo un límite de {limit} consultas por hora.</p>
+                      <p className="text-[10px] text-muted-foreground font-medium">Pregúntame sobre el contenido de esta página o solicita explicaciones adicionales.</p>
                     </div>
                   </div>
                 )}

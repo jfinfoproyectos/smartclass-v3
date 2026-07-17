@@ -36,18 +36,17 @@ export default async function CourseLayout({
     ]);
 
     return (
-        <div className="flex flex-col h-screen overflow-hidden">
+        <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
             <CourseTabsWrapper>
                 <TeacherCourseHeader 
                     courseId={courseId} 
                     courseTitle={course.title} 
-                    courseExternalUrl={course.externalUrl}
                     userName={session.user.name || "Instructor"}
                     themes={themes}
                     themeMode={visualSettings.themeMode}
                     allowThemeColorChange={visualSettings.allowThemeColorChange}
                 />
-                <div className="flex-1 overflow-y-auto relative flex flex-col">
+                <div className="flex-1 overflow-y-auto relative flex flex-col min-h-0">
                     {children}
                 </div>
             </CourseTabsWrapper>

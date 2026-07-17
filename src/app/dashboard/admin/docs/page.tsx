@@ -72,27 +72,27 @@ export default async function AdminDocsPage() {
            />
         </div>
 
-        <div className="w-full overflow-x-auto rounded-md border bg-card">
-        <Table className="min-w-[800px]">
+      <div className="rounded-xl border border-border/50 overflow-x-auto shadow-sm">
+        <Table className="w-full min-w-[800px]">
           <TableHeader>
-            <TableRow>
-              <TableHead>Nombre del Proyecto</TableHead>
-              <TableHead>Identificador (Slug)</TableHead>
-              <TableHead>Profesor / Creador</TableHead>
-              <TableHead className="text-right">Acciones Administrativas</TableHead>
+            <TableRow className="bg-muted/30 hover:bg-muted/30 border-border/30">
+              <TableHead className="font-bold uppercase tracking-wider text-xs pl-4">Nombre del Proyecto</TableHead>
+              <TableHead className="font-bold uppercase tracking-wider text-xs">Identificador (Slug)</TableHead>
+              <TableHead className="font-bold uppercase tracking-wider text-xs">Profesor / Creador</TableHead>
+              <TableHead className="font-bold uppercase tracking-wider text-xs text-right pr-4">Acciones Administrativas</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {projects.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="h-32 text-center text-muted-foreground">
+                <TableCell colSpan={4} className="h-32 text-center text-muted-foreground pl-4">
                   No se encontraron proyectos de documentación en el sistema.
                 </TableCell>
               </TableRow>
             ) : (
               projects.map((project) => (
-                <TableRow key={project.id}>
-                  <TableCell className="font-medium">
+                <TableRow key={project.id} className="group hover:bg-muted/20 transition-colors border-border/30">
+                  <TableCell className="font-medium pl-4">
                     <div className="flex items-center gap-3">
                       <div className="p-2 rounded-lg bg-primary/10 text-primary">
                          <Files className="w-4 h-4" />
@@ -110,7 +110,7 @@ export default async function AdminDocsPage() {
                       {project.teacherId || "Sin asignar"}
                     </span>
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right pr-4">
                     <div className="flex items-center justify-end gap-2">
                       <Button asChild size="sm" variant="outline" className="gap-2 h-9 rounded-xl font-bold border-border/50 hover:bg-muted transition-all">
                         <Link href={`/docs/${project.slug}`} target="_blank" rel="noopener noreferrer">

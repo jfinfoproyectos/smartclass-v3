@@ -48,7 +48,7 @@ export default function SignUp() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen">
+    <div className="flex items-center justify-center min-h-screen px-4">
       <div className="mx-auto w-full max-w-md space-y-6">
         <div className="space-y-2 text-center">
           <Image src="/logo.svg" alt="Logo" width={64} height={64} className="mx-auto h-16 w-16" />

@@ -20,7 +20,8 @@ export async function askAiTutorAction(projectId: string, pageId: string, questi
       id: true,
       name: true,
       description: true,
-      teacherId: true
+      teacherId: true,
+      isPublic: true
     }
   });
 
@@ -43,6 +44,21 @@ export async function askAiTutorAction(projectId: string, pageId: string, questi
     }
   });
 
+  const isAdmin = session.user.role === "admin" || session.user.role === "teacher";
+
+  // Check course association
+  const linkedCoursesCount = await prisma.course.count({
+    where: { docProjectId: project.id }
+  });
+
+  if (linkedCoursesCount > 0) {
+    if (!isAdmin && !course) {
+      throw new Error("No tienes acceso a esta documentación.");
+    }
+  } else if (!project.isPublic && !isAdmin) {
+    throw new Error("No tienes acceso a esta documentación.");
+  }
+
   // Fallback al primer curso si no hay inscripción activa
   if (!course) {
     course = await prisma.course.findFirst({
@@ -51,21 +67,7 @@ export async function askAiTutorAction(projectId: string, pageId: string, questi
   }
 
   if (!course) throw new Error("No hay un curso vinculado a este proyecto.");
-  if (!course.docAiTutorEnabled) throw new Error("El Tutor IA está desactivado para este grupo.");
-
-  // 2. Validar límite de preguntas por hora
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-  const questionsLastHour = await prisma.docAiChat.count({
-    where: {
-      userId: session.user.id,
-      docProjectId: project.id,
-      createdAt: { gte: oneHourAgo }
-    }
-  });
-
-  if (questionsLastHour >= course.docAiQuestionsLimit) {
-    throw new Error(`Límite alcanzado (${course.docAiQuestionsLimit} preg/hora).`);
-  }
+  // El Tutor IA está activo de forma permanente sin límites de consultas por hora.
 
   // 3. Preparar contexto mejorado
   const context = `

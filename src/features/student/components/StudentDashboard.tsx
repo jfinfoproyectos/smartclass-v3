@@ -1,24 +1,34 @@
 "use client";
 
+import { useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CourseCatalog } from "./CourseCatalog";
 import { MyEnrollments } from "./MyEnrollments";
 import { formatName } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
+import { Plus } from "lucide-react";
+import { toast } from "sonner";
+import { enrollByCodeAction } from "@/features/student/actions/enrollmentActions";
 
 export function StudentDashboard({
-    availableCourses,
     myEnrollments,
     studentName,
-    pendingEnrollments = [],
     themes = []
 }: {
-    availableCourses: any[],
     myEnrollments: any[],
     studentName: string,
-    pendingEnrollments?: string[],
     themes?: any[]
 }) {
     const searchParams = useSearchParams();
@@ -28,6 +38,10 @@ export function StudentDashboard({
     const selectedCourse = searchParams.get("courseId") || "";
     const activeTab = searchParams.get("tab") || "activities";
     const isInsideCourse = !!selectedCourse;
+
+    const [isEnrollDialogOpen, setIsEnrollDialogOpen] = useState(false);
+    const [enrollCode, setEnrollCode] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
 
     const handleSelectCourse = (courseId: string | null) => {
         const params = new URLSearchParams(searchParams.toString());
@@ -47,6 +61,26 @@ export function StudentDashboard({
         router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     };
 
+    const handleEnroll = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!enrollCode || enrollCode.trim().length !== 6) {
+            toast.error("El código debe tener 6 caracteres");
+            return;
+        }
+        setIsLoading(true);
+        try {
+            const res = await enrollByCodeAction(enrollCode);
+            toast.success(`Inscrito correctamente en: ${res.courseName}`);
+            setIsEnrollDialogOpen(false);
+            setEnrollCode("");
+            router.refresh();
+        } catch (error: any) {
+            toast.error(error.message || "Error al inscribirse");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     return (
         <div className={cn(
             "flex-1 w-full",
@@ -54,19 +88,54 @@ export function StudentDashboard({
         )}>
             {/* Header - Hidden when inside a course */}
             {!isInsideCourse && (
-                <div className="flex flex-col gap-2">
-                    <h1 className="text-3xl font-bold tracking-tight">¡Hola, {formatName(studentName)}!</h1>
-                    <p className="text-muted-foreground">
-                        Aquí tienes un resumen de tu actividad académica en SmartClass.
-                    </p>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div className="flex flex-col gap-2">
+                        <h1 className="text-3xl font-bold tracking-tight">¡Hola, {formatName(studentName)}!</h1>
+                        <p className="text-muted-foreground">
+                            Aquí tienes un resumen de tu actividad académica en SmartClass.
+                        </p>
+                    </div>
+
+                    <Dialog open={isEnrollDialogOpen} onOpenChange={setIsEnrollDialogOpen}>
+                        <DialogTrigger asChild>
+                            <Button className="shadow-md hover:shadow-lg transition-all active:scale-95">
+                                <Plus className="mr-2 h-4 w-4" />
+                                Inscribirse a un curso
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-md">
+                            <DialogHeader>
+                                <DialogTitle>Inscribirse a un curso</DialogTitle>
+                                <DialogDescription>
+                                    Ingresa el código de 6 caracteres proporcionado por tu profesor para inscribirte en el curso.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <form onSubmit={handleEnroll} className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="code" className="text-sm font-semibold uppercase tracking-wider text-muted-foreground/80">Código de Inscripción</Label>
+                                    <Input
+                                        id="code"
+                                        placeholder="Ej: ABC123"
+                                        value={enrollCode}
+                                        onChange={(e) => setEnrollCode(e.target.value.toUpperCase())}
+                                        maxLength={6}
+                                        className="text-center font-mono text-lg tracking-widest bg-muted/30 focus-visible:ring-primary/50"
+                                        required
+                                        disabled={isLoading}
+                                    />
+                                </div>
+                                <DialogFooter>
+                                    <Button type="submit" className="w-full font-bold" disabled={isLoading}>
+                                        {isLoading ? "Inscribiendo..." : "Inscribirse"}
+                                    </Button>
+                                </DialogFooter>
+                            </form>
+                        </DialogContent>
+                    </Dialog>
                 </div>
             )}
 
-            {pendingEnrollments.length > 0 && !isInsideCourse && (
-                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 text-sm text-yellow-800 dark:text-yellow-200 ml-4 sm:ml-6 md:ml-8 mr-4 sm:mr-6 md:mr-8">
-                    Tienes {pendingEnrollments.length} solicitud{pendingEnrollments.length !== 1 ? 'es' : ''} de inscripción pendiente{pendingEnrollments.length !== 1 ? 's' : ''} de aprobación por el profesor.
-                </div>
-            )}
+
 
             {/* Content area */}
             <div className={cn(isInsideCourse ? "h-full" : "")}>
@@ -87,12 +156,22 @@ export function StudentDashboard({
                             flex-direction: column !important;
                         }
 
-                        /* Force the child container to be flush and fill the ENTIRE height since we hid the header */
+                        /* Force the scrollable child container to be flush and fill the ENTIRE height since we hid the header */
                         main[data-slot="sidebar-inset"] > div {
                             padding: 0 !important;
                             margin: 0 !important;
                             height: 100vh !important;
                             max-height: 100vh !important;
+                            flex: 1 !important;
+                            display: flex !important;
+                            flex-direction: column !important;
+                            overflow: hidden !important;
+                        }
+
+                        /* Also force the inner padding wrapper to fill completely */
+                        main[data-slot="sidebar-inset"] > div > div {
+                            padding: 0 !important;
+                            margin: 0 !important;
                             flex: 1 !important;
                             display: flex !important;
                             flex-direction: column !important;
@@ -118,48 +197,25 @@ export function StudentDashboard({
                         themes={themes}
                     />
                 ) : (
-                    <Tabs defaultValue="my-courses" className="space-y-6">
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                            <TabsList className="grid w-full sm:w-auto grid-cols-2">
-                                <TabsTrigger value="my-courses">Mis Cursos</TabsTrigger>
-                                <TabsTrigger value="catalog">Catálogo de Cursos</TabsTrigger>
-                            </TabsList>
+                    <div className="space-y-6">
+                        <div className="flex items-center justify-between border-b pb-2 border-border/50">
+                            <h2 className="text-xl font-bold tracking-tight">Mis Cursos</h2>
                         </div>
-
-                        <TabsContent value="my-courses" className="space-y-6 mt-0">
-                            <motion.div
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.3 }}
-                            >
-                                <MyEnrollments 
-                                    enrollments={myEnrollments} 
-                                    selectedCourse={selectedCourse} 
-                                    onSelectCourse={handleSelectCourse}
-                                    activeTab={activeTab}
-                                    onTabChange={handleTabChange}
-                                    themes={themes}
-                                />
-                            </motion.div>
-                        </TabsContent>
-                        <TabsContent value="catalog" className="space-y-6 mt-0">
-                            <motion.div
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.3 }}
-                            >
-                                <CourseCatalog
-                                    courses={availableCourses.filter(course =>
-                                        !myEnrollments.some(enrollment => enrollment.courseId === course.id) &&
-                                        (!course.endDate || new Date(course.endDate) >= new Date()) &&
-                                        course.registrationOpen &&
-                                        (!course.registrationDeadline || new Date(course.registrationDeadline) >= new Date())
-                                    )}
-                                    pendingEnrollments={pendingEnrollments}
-                                />
-                            </motion.div>
-                        </TabsContent>
-                    </Tabs>
+                        <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.3 }}
+                        >
+                            <MyEnrollments 
+                                enrollments={myEnrollments} 
+                                selectedCourse={selectedCourse} 
+                                onSelectCourse={handleSelectCourse}
+                                activeTab={activeTab}
+                                onTabChange={handleTabChange}
+                                themes={themes}
+                            />
+                        </motion.div>
+                    </div>
                 )}
             </div>
         </div>

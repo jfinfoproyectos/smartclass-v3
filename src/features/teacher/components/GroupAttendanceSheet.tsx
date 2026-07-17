@@ -114,18 +114,38 @@ export function GroupAttendanceSheet({
 
     const handleExportExcel = () => {
         try {
+            const statusMap: Record<string, string> = {
+                'PRESENT': '', 'P': '',
+                'ABSENT': 'FALTA',  'A': 'FALTA',
+                'LATE':   'TARDE',  'L': 'TARDE',
+                'EXCUSED': '', 'E': '',
+            };
+
+            // Only include date columns that have at least one F or T across all students
+            const relevantDateColumns = dateColumns.filter(date =>
+                data.some(row => {
+                    const cell = row[date];
+                    if (!cell || cell === '-' || !cell.status) return false;
+                    const mapped = statusMap[cell.status] ?? cell.status;
+                    return mapped === 'FALTA' || mapped === 'TARDE';
+                })
+            );
+
             const exportData = data.map(row => {
                 const base: any = {
                     'ID': row.ID,
                     'Estudiante': row.Estudiante,
-                    'Correo': row.Correo,
                 };
-                
-                dateColumns.forEach(date => {
+
+                relevantDateColumns.forEach(date => {
                     const cell = row[date];
-                    base[date] = cell === '-' ? '-' : (cell.status || '-');
+                    if (cell === '-' || !cell || !cell.status) {
+                        base[date] = '';
+                    } else {
+                        base[date] = statusMap[cell.status] ?? cell.status;
+                    }
                 });
-                
+
                 return base;
             });
 

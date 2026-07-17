@@ -31,7 +31,6 @@ import { RefreshButton } from "@/components/navigation/RefreshButton";
 interface TeacherCourseHeaderProps {
     courseId: string;
     courseTitle: string;
-    courseExternalUrl?: string | null;
     userName: string;
     themes: ThemeInfo[];
     activeTab?: string;
@@ -42,7 +41,6 @@ interface TeacherCourseHeaderProps {
 export function TeacherCourseHeader({ 
     courseId, 
     courseTitle, 
-    courseExternalUrl, 
     userName, 
     themes, 
     activeTab, 
@@ -51,31 +49,16 @@ export function TeacherCourseHeader({
 }: TeacherCourseHeaderProps) {
     const showModeToggle = themeMode === "STUDENT";
     const showThemeSelector = allowThemeColorChange;
-    return (
-        <div className="flex-none bg-background/95 backdrop-blur-md w-full z-30 border-b border-border/50 shadow-sm transition-all duration-300">
+     return (
+        <div className="flex-none relative bg-background/95 backdrop-blur-md w-full z-30 border-b border-border/50 shadow-sm transition-all duration-300">
             <style jsx global>{`
                 /* Global layout adjustments for the course dashboard */
                 main[data-slot="sidebar-inset"] > header {
                     display: none !important;
                 }
 
-                main[data-slot="sidebar-inset"] {
-                    margin: 0 !important;
-                    border-radius: 0 !important;
-                    height: 100vh !important;
-                    overflow: hidden !important;
-                    display: flex !important;
-                    flex-direction: column !important;
-                }
-
-                main[data-slot="sidebar-inset"] > div {
+                main[data-slot="sidebar-inset"] > div > div {
                     padding: 0 !important;
-                    margin: 0 !important;
-                    height: 100vh !important;
-                    max-height: 100vh !important;
-                    flex: 1 !important;
-                    display: flex !important;
-                    flex-direction: column !important;
                     overflow: hidden !important;
                 }
 
@@ -97,110 +80,56 @@ export function TeacherCourseHeader({
             `}</style>
 
             <TooltipProvider delayDuration={300}>
-                {/* Row 1: Primary Controls & Identity (h-12) */}
-                <div className="flex items-center px-4 h-12 border-b-2 border-foreground/10">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                            <SidebarTrigger className="h-8 w-8 hover:bg-muted/80 rounded-lg transition-colors" />
-                            <div className="h-6 w-[2px] bg-foreground/15" />
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button 
-                                        variant="ghost" 
-                                        size="icon" 
-                                        asChild
-                                        className="h-8 w-8 hover:bg-primary/10 hover:text-primary transition-all rounded-lg"
-                                    >
-                                        <Link href="/dashboard/teacher">
-                                            <ChevronLeft className="h-4 w-4" />
-                                        </Link>
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent side="bottom">Salir del curso</TooltipContent>
-                            </Tooltip>
-                        </div>
-                        
-                        <div className="h-6 w-[1px] bg-foreground/10 mx-1 hidden sm:block" />
+                {/* Row 1: Primary Controls & Identity (h-12 with full-height border dividers) */}
+                <div className="flex items-center h-12 border-b border-foreground/10 bg-background/50">
+                    {/* Left: Sidebar trigger with full-height border */}
+                    <div className="flex items-center h-full px-3 border-r border-foreground/10">
+                        <SidebarTrigger className="h-8 w-8 hover:bg-muted/80 rounded-lg transition-colors" />
+                    </div>
 
-                        <div className="flex flex-col min-w-0">
-                            <h2 className="text-[13px] font-black tracking-tight leading-none uppercase truncate opacity-90 transition-opacity">
-                                {courseTitle}
-                            </h2>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                                <Users className="h-2.5 w-2.5 text-primary/60" />
-                                <span className="text-[9px] font-medium text-muted-foreground uppercase tracking-widest truncate">{userName}</span>
-                            </div>
+                    {/* Middle: Course details */}
+                    <div className="flex-1 flex flex-col justify-center h-full px-4 min-w-0">
+                        <h2 className="text-[13px] font-black tracking-tight leading-none uppercase truncate opacity-90 transition-opacity">
+                            {courseTitle}
+                        </h2>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                            <Users className="h-2.5 w-2.5 text-primary/60" />
+                            <span className="text-[9px] font-medium text-muted-foreground uppercase tracking-widest truncate">{userName}</span>
                         </div>
                     </div>
 
-                    {/* Right utilities */}
-                    <div className="flex items-center gap-2 ml-auto">
-                        <div className="h-6 w-[2px] bg-foreground/15 hidden md:block mx-1" />
-                        <div className="hidden lg:flex items-center bg-muted/60 hover:bg-muted/80 transition-colors rounded-full px-1 py-1 h-8 gap-1 border border-foreground/10">
-                            <AttendanceTaker 
-                                courseId={courseId} 
-                                trigger={
-                                    <Button variant="ghost" size="sm" className="h-6 rounded-full text-[10px] font-bold px-2.5 gap-1.5 hover:bg-background/50 transition-all">
-                                        <CalendarCheck2 className="h-3 w-3 text-primary" />
-                                        <span className="hidden xl:inline uppercase tracking-tighter">Asistencia</span>
-                                    </Button>
-                                }
-                            />
-                            
-                            {courseExternalUrl && (
-                                <>
-                                    <div className="h-4 w-[1px] bg-foreground/20" />
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                asChild
-                                                className="h-6 w-6 rounded-full hover:bg-primary/10 hover:text-primary transition-all"
-                                            >
-                                                <Link href={courseExternalUrl} target="_blank" rel="noopener noreferrer">
-                                                    <ExternalLink className="h-3 w-3" />
-                                                </Link>
-                                            </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="bottom">Documentación externa</TooltipContent>
-                                    </Tooltip>
-                                </>
-                            )}
-                        </div>
+                    {/* Right: Asistencia & utilities separated by full-height borders */}
+                    <div className="hidden lg:flex items-center h-full px-4 border-l border-foreground/10">
+                        <AttendanceTaker 
+                            courseId={courseId} 
+                            trigger={
+                                <Button variant="ghost" size="sm" className="h-8 rounded-lg text-[10px] font-bold px-2.5 gap-1.5 hover:bg-muted transition-all">
+                                    <CalendarCheck2 className="h-3.5 w-3.5 text-primary" />
+                                    <span className="hidden xl:inline uppercase tracking-tighter">Asistencia</span>
+                                </Button>
+                            }
+                        />
+                    </div>
 
-                        <div className="h-6 w-[2px] bg-foreground/15 mx-1 hidden sm:block" />
-                        
-                        <div className="flex items-center gap-1">
-                            <RefreshButton />
-                            {showThemeSelector && <ThemeSelector themes={themes} />}
-                            {showModeToggle && <ModeToggle />}
-                            <CreditsModal />
-                        </div>
+                    <div className="flex items-center h-full px-3 gap-1.5 border-l border-foreground/10">
+                        <RefreshButton />
+                        {showThemeSelector && <ThemeSelector themes={themes} />}
+                        {showModeToggle && <ModeToggle />}
+                        <CreditsModal />
                     </div>
                 </div>
 
-                {/* Row 2: Content Navigation (h-10) */}
-                <div className="px-4 h-10 flex items-center justify-center bg-muted/5 border-b border-foreground/10 shadow-[0_1px_10px_rgba(0,0,0,0.05)] dark:shadow-none">
-                    <TabsList className="flex w-full md:w-auto h-10 p-0 bg-transparent gap-0 overflow-x-auto scrollbar-none justify-center">
+                {/* Row 2: Content Navigation (h-auto on mobile, compact h-11 on desktop) */}
+                <div className="px-4 py-1.5 lg:py-0 lg:h-11 flex items-center justify-center bg-muted/5 border-b border-foreground/10 shadow-sm dark:shadow-none">
+                    <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 h-auto lg:h-9 p-0.5 bg-muted/60 dark:bg-muted/30 rounded-lg gap-0.5 border border-border/30 shadow-none">
                         <NavTab value="activities" icon={<ClipboardCheck className="h-3.5 w-3.5" />} label="Actividades" />
-                        <div className="h-5 w-[1px] bg-foreground/15 self-center hidden sm:block" />
                         <NavTab value="students" icon={<Users className="h-3.5 w-3.5" />} label="Estudiantes" />
-                        <div className="h-5 w-[1px] bg-foreground/15 self-center hidden sm:block" />
                         <NavTab value="evaluations" icon={<GraduationCap className="h-3.5 w-3.5" />} label="Evaluaciones" />
-                        <div className="h-5 w-[1px] bg-foreground/15 self-center hidden sm:block" />
                         <NavTab value="grades" icon={<LayoutDashboard className="h-3.5 w-3.5" />} label="Calificaciones" />
-                        
-                        <div className="h-8 w-[2px] bg-foreground/20 mx-4 self-center hidden sm:block" />
-                        
                         <NavTab value="stats" icon={<BarChart3 className="h-3.5 w-3.5" />} label="Estadísticas" />
-                        <div className="h-5 w-[1px] bg-foreground/15 self-center hidden sm:block" />
                         <NavTab value="roulette" icon={<Dices className="h-3.5 w-3.5" />} label="Ruleta" />
-                        <div className="h-5 w-[1px] bg-foreground/15 self-center hidden sm:block" />
                         <NavTab value="groups" icon={<Settings2 className="h-3.5 w-3.5" />} label="Grupos" />
-                        <div className="h-5 w-[1px] bg-foreground/15 self-center hidden sm:block" />
                         <NavTab value="share" icon={<Share2 className="h-3.5 w-3.5" />} label="Compartir" />
-                        <div className="h-5 w-[1px] bg-foreground/15 self-center hidden sm:block" />
                         <NavTab value="docs" icon={<BookOpenText className="h-3.5 w-3.5" />} label="Documentación" />
                     </TabsList>
                 </div>
@@ -238,10 +167,10 @@ function NavTab({ value, icon, label }: { value: string, icon: React.ReactNode, 
             value={value} 
             onClick={handleClick}
             disabled={isPending}
-            className="group relative flex items-center gap-2 h-10 px-3 text-[10px] uppercase tracking-wider font-bold bg-transparent border-0 data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none transition-all opacity-60 hover:opacity-100 data-[state=active]:opacity-100 data-[state=active]:nav-indicator-active disabled:opacity-40"
+            className="group relative flex items-center justify-center gap-1.5 h-8 px-2.5 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm disabled:opacity-40"
         >
             <span className="group-data-[state=active]:text-primary transition-colors">
-                {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : icon}
+                {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : icon}
             </span>
             <span className="hidden sm:inline group-data-[state=active]:text-primary transition-colors">{label}</span>
             {isPending && <span className="absolute -top-1 -right-1 flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span></span>}

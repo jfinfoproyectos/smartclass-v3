@@ -44,13 +44,10 @@ export default async function DashboardLayout({
       />
       <ProfileCompletionCheck />
       <AppSidebar />
-      <SidebarInset>
-        <header className="sticky top-0 z-40 flex h-16 w-full items-center gap-2 bg-background text-foreground border-b group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 transition-all">
+      <SidebarInset className="h-svh overflow-hidden flex flex-col">
+        <header className="shrink-0 sticky top-0 z-40 flex h-16 w-full items-center gap-2 bg-background text-foreground border-b group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 transition-all">
           <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 w-full">
             <SidebarTrigger className="-ml-1" />
-            <div className="flex items-center gap-2">
-              <BackButton />
-            </div>
             <div className="ml-auto flex items-center gap-1 sm:gap-2">
               <GlobalSearch />
               {showThemeSelector && <ThemeSelector themes={themes} />}
@@ -59,12 +56,14 @@ export default async function DashboardLayout({
             </div>
           </div>
         </header>
-        <div className="flex flex-1 flex-col gap-4 p-2 sm:p-4 pt-0 min-h-[calc(100vh-4rem)] relative overflow-hidden">
+        <div className="flex flex-1 flex-col overflow-hidden relative">
           {/* Subtle Grid Background */}
           <div className="absolute inset-0 bg-grid-pattern [mask-image:radial-gradient(ellipse_at_center,white,transparent)] pointer-events-none -z-10" />
-          {children}
-          <Footer />
+          <div className="flex-1 flex flex-col p-2 sm:p-4 min-h-0">
+            {children}
+          </div>
         </div>
+        <Footer />
       </SidebarInset>
     </SidebarProvider>
 

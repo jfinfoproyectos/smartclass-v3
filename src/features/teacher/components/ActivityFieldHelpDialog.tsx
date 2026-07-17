@@ -145,6 +145,7 @@ export function ActivityFieldHelpDialog({ type }: ActivityFieldHelpDialogProps) 
                                 <ul className="text-sm text-red-800 dark:text-red-200 space-y-1.5 list-disc list-inside">
                                     <li><strong>Sé específico:</strong> Cuanto más detallada la rúbrica, mejor la evaluación</li>
                                     <li><strong>Define criterios medibles:</strong> Usa porcentajes claros</li>
+                                    <li><strong>Formatos de Entrega:</strong> Los requisitos sobre formatos físicos de entrega (ZIP, PDF, nombres de archivo o carpetas específicos) serán omitidos/ignorados automáticamente por la IA para evaluar únicamente el contenido.</li>
                                     <li><strong>Incluye ejemplos:</strong> De qué es correcto e incorrecto</li>
                                 </ul>
                             </div>

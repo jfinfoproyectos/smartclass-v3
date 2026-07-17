@@ -28,7 +28,7 @@ export async function signInEmail(payload: { email: string; password: string }):
   await authClient.signIn.email(payload);
 }
 
-export async function signInSocial(provider: "google" | "github"): Promise<void> {
+export async function signInSocial(provider: "google"): Promise<void> {
   await authClient.signIn.social({ provider, callbackURL: "/signin" });
 }
 

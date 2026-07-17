@@ -115,46 +115,117 @@ export function AdminFileExplorer({
     if (!files || files.length === 0) return;
 
     setIsSubmitting(true);
-    let successCount = 0;
+    let mdSuccessCount = 0;
+    let zipSuccessCount = 0;
     let errorCount = 0;
 
     const targetParent = dialogState.parentPath;
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      if (!file.name.toLowerCase().endsWith('.md')) continue;
+      const fileNameLower = file.name.toLowerCase();
 
-      try {
-        const text = await file.text();
-        const baseName = file.name.replace(/\.md$/i, '');
-        
-        // Use the numeric prefix if it exists to set the order
-        const match = baseName.match(/^(\d+)-(.*)$/);
-        const order = match ? match[1] : undefined;
-        const title = match ? match[2].split(/[ \-_]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : baseName.split(/[ \-_]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-        const finalName = baseName.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, '-');
+      if (fileNameLower.endsWith('.zip')) {
+        try {
+          const zip = await JSZip.loadAsync(file);
+          const mdFiles: { name: string; content: string }[] = [];
+          const promises: Promise<void>[] = [];
 
-        await createItemAction(
-          projectId,
-          targetParent,
-          finalName,
-          'file',
-          { title, order },
-          text
-        );
-        successCount++;
-      } catch (err) {
-        console.error("Error importing file:", file.name, err);
+          zip.forEach((relativePath, zipEntry) => {
+            if (!zipEntry.dir && relativePath.toLowerCase().endsWith('.md')) {
+              promises.push(
+                zipEntry.async("text").then(content => {
+                  mdFiles.push({ name: relativePath, content });
+                })
+              );
+            }
+          });
+
+          await Promise.all(promises);
+
+          for (const mdFile of mdFiles) {
+            const parts = mdFile.name.split('/');
+            const fileName = parts.pop()!;
+            const relativeParentPath = parts.join('/');
+
+            const currentParentPath = targetParent === projectId ? "" : (targetParent || "");
+            const targetParentPath = currentParentPath 
+              ? (relativeParentPath ? `${currentParentPath}/${relativeParentPath}` : currentParentPath) 
+              : relativeParentPath;
+
+            const baseName = fileName.replace(/\.md$/i, '');
+            const match = baseName.match(/^(\d+)-(.*)$/);
+            const order = match ? match[1] : undefined;
+            const title = match 
+              ? match[2].split(/[ \-_]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') 
+              : baseName.split(/[ \-_]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+            
+            const finalName = baseName.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, '-');
+            const isDirIndex = baseName.toLowerCase() === 'index';
+
+            if (isDirIndex && relativeParentPath) {
+              await createItemAction(
+                projectId,
+                targetParentPath,
+                "index",
+                'file',
+                { title, order },
+                mdFile.content
+              );
+            } else {
+              await createItemAction(
+                projectId,
+                targetParentPath || projectId,
+                finalName,
+                'file',
+                { title, order },
+                mdFile.content
+              );
+            }
+          }
+          zipSuccessCount++;
+        } catch (err) {
+          console.error("Error importing ZIP file:", file.name, err);
+          errorCount++;
+        }
+      } else if (fileNameLower.endsWith('.md')) {
+        try {
+          const text = await file.text();
+          const baseName = file.name.replace(/\.md$/i, '');
+          
+          const match = baseName.match(/^(\d+)-(.*)$/);
+          const order = match ? match[1] : undefined;
+          const title = match ? match[2].split(/[ \-_]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : baseName.split(/[ \-_]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+          const finalName = baseName.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, '-');
+
+          await createItemAction(
+            projectId,
+            targetParent,
+            finalName,
+            'file',
+            { title, order },
+            text
+          );
+          mdSuccessCount++;
+        } catch (err) {
+          console.error("Error importing MD file:", file.name, err);
+          errorCount++;
+        }
+      } else {
         errorCount++;
       }
     }
 
-    if (successCount > 0) {
-      toast.success(`¡${successCount} archivos importados con éxito!`);
+    if (zipSuccessCount > 0) {
+      toast.success(`¡Proyecto importado con éxito desde archivo .zip!`);
+      onTreeChange();
+    } else if (mdSuccessCount > 0) {
+      toast.success(`¡${mdSuccessCount} archivos importados con éxito!`);
       onTreeChange();
     }
+
     if (errorCount > 0) {
-      toast.error(`Error al importar ${errorCount} archivos.`);
+      toast.error(`Error al procesar algunos archivos.`);
     }
 
     setIsSubmitting(false);
@@ -171,20 +242,32 @@ export function AdminFileExplorer({
       const zip = new JSZip();
       
       pages.forEach((page: any) => {
-        // Construct file path: add .md extension if not index
-        const isTopic = page.slug === 'index' || page.slug.endsWith('/index');
-        let filePath = page.slug;
-        if (!filePath.endsWith('.md')) {
-          filePath = isTopic ? `${filePath}.md` : `${filePath}.md`; // Simple appending, if you want exact GitHub structure you could make topics folders with index.md
+        // File path: keep the slug exactly as-is in the zip, just add .md extension
+        const filePath = page.slug.endsWith('.md') ? page.slug : `${page.slug}.md`;
+        
+        // Build frontmatter lines — only include non-null/non-empty values
+        const fmLines: string[] = [];
+        fmLines.push(`title: "${String(page.title || '').replace(/"/g, '\\"')}"`);
+        if (page.category && page.category !== 'General') {
+          fmLines.push(`category: "${page.category}"`);
+        }
+        if (typeof page.order === 'number' && page.order !== 0) {
+          fmLines.push(`order: ${page.order}`);
+        }
+        if (typeof page.categoryOrder === 'number' && page.categoryOrder !== 0) {
+          fmLines.push(`categoryOrder: ${page.categoryOrder}`);
+        }
+        if (page.draft === true) {
+          fmLines.push(`draft: true`);
+        }
+        if (page.publishDate) {
+          fmLines.push(`date: "${page.publishDate}"`);
+        }
+        if (page.icon) {
+          fmLines.push(`icon: "${page.icon}"`);
         }
         
-        // Frontmatter synthesis
-        const frontmatter = `---
-title: "${page.title}"
-draft: ${page.draft ? 'true' : 'false'}
-${page.publishDate ? `date: "${page.publishDate}"` : ''}
----
-`;
+        const frontmatter = `---\n${fmLines.join('\n')}\n---\n`;
         const fileContent = frontmatter + '\n' + (page.content || '');
         
         zip.file(filePath, fileContent);
@@ -194,13 +277,13 @@ ${page.publishDate ? `date: "${page.publishDate}"` : ''}
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `project-${projectId}-export.zip`;
+      a.download = `docs-export-${projectId}.zip`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
       
-      toast.success("¡Exportación completada!", { id: toastId });
+      toast.success(`¡Exportación completada! ${pages.length} páginas empaquetadas.`, { id: toastId });
     } catch (error) {
       console.error(error);
       toast.error("Error al exportar el proyecto");
@@ -367,41 +450,35 @@ ${page.publishDate ? `date: "${page.publishDate}"` : ''}
         }
       }}
     >
-      <div className="p-4 flex items-center gap-2">
-        <div className="relative group flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/50 group-focus-within:text-primary transition-colors" />
-          <input 
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar archivos..."
-            className="w-full h-10 pl-10 pr-4 bg-secondary/30 border border-border/50 rounded-2xl text-[11px] font-bold tracking-tight focus:ring-2 focus:ring-primary/20 outline-none transition-all placeholder:text-muted-foreground/50 placeholder:font-medium"
-          />
-        </div>
-        
-        <div className="flex items-center gap-1 p-1 h-10 rounded-2xl bg-secondary/30 border border-border/20 shrink-0">
+      {/* Sidebar Header Title & Actions Row */}
+      <div className="px-4 pt-4 pb-2.5 flex items-center justify-between gap-2">
+        <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/80">
+          Documentos
+        </span>
+        <div className="flex items-center gap-0.5 shrink-0">
           <Button 
             variant="ghost" 
             size="icon" 
-            className="h-7 w-7 rounded-lg hover:bg-primary/20 hover:text-primary transition-colors" 
+            className="h-7 w-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" 
             onClick={() => handleOpenDialog('folder', projectId, 'folder')}
             title="Nuevo Tópico"
           >
-            <FolderPlus className="w-4 h-4" />
+            <FolderPlus className="w-3.5 h-3.5" />
           </Button>
           <Button 
             variant="ghost" 
             size="icon" 
-            className="h-7 w-7 rounded-lg hover:bg-primary/20 hover:text-primary transition-colors" 
+            className="h-7 w-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" 
             onClick={() => handleOpenDialog('file', projectId, 'file')}
             title="Nuevo Archivo"
           >
-            <FilePlus className="w-4 h-4" />
+            <FilePlus className="w-3.5 h-3.5" />
           </Button>
-          <Separator orientation="vertical" className="h-4 bg-border/40 mx-0.5" />
+          <Separator orientation="vertical" className="h-4 bg-border/40 mx-1" />
           <Button 
             variant="ghost" 
             size="icon" 
-            className="h-7 w-7 rounded-lg hover:bg-emerald-500/20 hover:text-emerald-500 transition-colors" 
+            className="h-7 w-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" 
             onClick={() => {
               setDialogState({ type: null, parentPath: projectId });
               fileInputRef.current?.click();
@@ -409,25 +486,38 @@ ${page.publishDate ? `date: "${page.publishDate}"` : ''}
             title="Importar Markdowns"
             disabled={isSubmitting}
           >
-            <Upload className="w-4 h-4" />
+            <Upload className="w-3.5 h-3.5" />
           </Button>
           <Button 
             variant="ghost" 
             size="icon" 
-            className="h-7 w-7 rounded-lg hover:bg-blue-500/20 hover:text-blue-500 transition-colors" 
+            className="h-7 w-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" 
             onClick={handleExportProject}
             title="Exportar Documentación (.zip)"
             disabled={isSubmitting}
           >
-            <Download className="w-4 h-4" />
+            <Download className="w-3.5 h-3.5" />
           </Button>
           <input 
             type="file" 
             multiple 
-            accept=".md" 
+            accept=".md,.zip" 
             className="hidden" 
             ref={fileInputRef}
             onChange={handleImportFiles}
+          />
+        </div>
+      </div>
+
+      {/* Sidebar Search Row (Full Width) */}
+      <div className="px-4 pb-3">
+        <div className="relative group w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/45 group-focus-within:text-primary transition-colors" />
+          <input 
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar archivos..."
+            className="w-full h-9 pl-9 pr-4 bg-muted/20 border border-border/40 focus:border-border/80 focus:bg-background rounded-xl text-[11px] font-bold tracking-tight focus:ring-1 focus:ring-primary/20 outline-none transition-all placeholder:text-muted-foreground/45 placeholder:font-medium text-foreground"
           />
         </div>
       </div>
@@ -681,7 +771,7 @@ function FileTreeNode({
       <div 
         className={cn(
           "group relative flex items-center h-10 px-3 gap-3 cursor-pointer transition-all duration-300 select-none rounded-xl mx-2",
-          isSelected ? "text-primary font-bold bg-transparent" : "text-muted-foreground hover:bg-primary/5 hover:text-primary",
+          isSelected ? "text-primary font-bold bg-primary/10 dark:bg-primary/20" : "text-muted-foreground hover:bg-primary/5 hover:text-primary",
           node.draft && "opacity-60",
           isDragOver && dragOverPos === 'middle' && "bg-primary/30 scale-[1.02]",
           "active:scale-[0.98]"
@@ -754,11 +844,11 @@ function FileTreeNode({
             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
               <button className={cn(
                 "p-1 rounded-md transition-colors animate-in fade-in duration-300",
-                isSelected ? "hover:bg-primary/10" : "hover:bg-black/10"
+                isSelected ? "hover:bg-primary/20" : "hover:bg-muted"
               )}>
                 <MoreVertical className={cn(
                   "w-3.5 h-3.5",
-                  isSelected ? "text-primary-foreground" : "text-muted-foreground"
+                  isSelected ? "text-primary" : "text-muted-foreground"
                 )} />
               </button>
             </DropdownMenuTrigger>

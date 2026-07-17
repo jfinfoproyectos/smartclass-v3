@@ -60,7 +60,7 @@ export function CodeProjectActivityDetails({ activity, userId, studentName }: Co
 
     const { isCooldownActive, remainingTime } = useCooldown(isRejected ? null : submission?.lastSubmittedAt, 5);
 
-    const canAttemptAgain = (attemptCount < maxAttempts && isGraded) || isRejected;
+    const canAttemptAgain = isGraded;
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -130,10 +130,6 @@ export function CodeProjectActivityDetails({ activity, userId, studentName }: Co
                                     )}
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <span className="text-sm font-semibold">Intentos:</span>
-                                    <span className="text-sm text-muted-foreground">{attemptCount} / {maxAttempts}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
                                     <span className="text-sm font-semibold">Vencimiento:</span>
                                     <span className="text-sm text-muted-foreground">{format(new Date(activity.deadline), "PP p")}</span>
                                 </div>
@@ -170,7 +166,7 @@ export function CodeProjectActivityDetails({ activity, userId, studentName }: Co
                                     
                                     {canAttemptAgain && (
                                         <div className="mt-6 pt-6 border-t">
-                                            <h4 className="text-sm font-medium mb-4">Nueva Entrega (Intento {attemptCount + 1})</h4>
+                                            <h4 className="text-sm font-medium mb-4">Nueva Entrega</h4>
                                             <form onSubmit={handleSubmit} className="space-y-4 p-5 rounded-xl border-2 border-primary/20 bg-primary/5 shadow-sm">
                                                 <div className="space-y-2">
                                                     <Label htmlFor="repo-url" className="text-base font-bold text-primary flex items-center gap-2">
