@@ -131,11 +131,11 @@ export default async function AdminDocsPage() {
                       <TableCell className="text-right pr-4">
                         <div className="flex items-center justify-end gap-2">
                           <Button asChild size="sm" variant="outline" className="gap-2 h-9 border-border/50 hover:bg-muted transition-all">
-                            <Link href={`/docs/${project.slug}`} target="_blank" rel="noopener noreferrer">
-                              <ExternalLink className="w-3.5 h-3.5" />
-                              Ver Público
-                            </Link>
-                          </Button>
+                             <Link href={`/docs/${project.slug}`}>
+                               <ExternalLink className="w-3.5 h-3.5" />
+                               Ver Público
+                             </Link>
+                           </Button>
                           <DeleteProjectDialog projectId={project.id} projectName={project.name} />
                         </div>
                       </TableCell>

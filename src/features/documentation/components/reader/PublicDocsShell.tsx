@@ -9,7 +9,7 @@ import { TopicsHeader } from "./TopicsHeader";
 import { NavItem } from "../../services/public-docs";
 import { ThemeInfo } from "@/app/actions/themes";
 import { recordProjectVisitAction } from "../../actions/progressActions";
-import { Eye, Zap, Clock } from "lucide-react";
+import { Eye, Zap, Clock, ChevronLeft, ChevronRight } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -26,6 +26,7 @@ interface PublicDocsShellProps {
   themes: ThemeInfo[];
   userProgress?: { pageId: string, completed: boolean, timeSpent: number }[];
   userTotalViews?: number;
+  backUrl?: string;
   courseSettings?: {
     themeMode: string;
     codeTheme: string;
@@ -44,19 +45,14 @@ export function PublicDocsShell({
   themes, 
   userProgress = [], 
   userTotalViews = 0,
+  backUrl = "/",
   courseSettings = { themeMode: "STUDENT", codeTheme: "one-dark-pro", allowCodeThemeChange: true, themeColor: "zinc", allowThemeColorChange: true }
 }: PublicDocsShellProps) {
   const { theme, setTheme } = useTheme();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [mounted, setMounted] = React.useState(false);
-  const [isTocOpen, setIsTocOpen] = useState(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("smartclass-toc-open");
-      return saved !== "false";
-    }
-    return true;
-  });
+  const [isTocOpen, setIsTocOpen] = useState(true);
 
   const toggleToc = () => {
     setIsTocOpen(prev => {
@@ -66,13 +62,7 @@ export function PublicDocsShell({
     });
   };
 
-  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("smartclass-sidebar-open");
-      return saved !== "false";
-    }
-    return true;
-  });
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const toggleSidebar = () => {
     setIsSidebarOpen(prev => {
@@ -99,6 +89,16 @@ export function PublicDocsShell({
 
   React.useEffect(() => {
     setMounted(true);
+    
+    // Read sidebar/TOC settings from localStorage on client side mount to avoid SSR hydration mismatch
+    const savedToc = localStorage.getItem("smartclass-toc-open");
+    if (savedToc === "false") {
+      setIsTocOpen(false);
+    }
+    const savedSidebar = localStorage.getItem("smartclass-sidebar-open");
+    if (savedSidebar === "false") {
+      setIsSidebarOpen(false);
+    }
     
     // 1. Aplicar forzado de tema (Light/Dark)
     if (courseSettings.themeMode === "LIGHT" && theme !== "light") {
@@ -289,21 +289,44 @@ export function PublicDocsShell({
           toggleSidebar={toggleSidebar}
           topics={topics}
           activeTopicSlug={activeTopic?.slug || null}
+          backUrl={backUrl}
         />
       </div>
       
       {/* 3-Column Layout Container */}
       <div className="public-docs-container flex flex-1 w-full max-w-[1800px] mx-auto relative overflow-hidden">
-        {/* LEFT SIDEBAR */}
-        {isSidebarOpen && (
-          <div className="no-print hidden md:block w-72 shrink-0">
-            <PublicSidebar 
-              navTree={sidebarNav} 
-              projectId={projectId} 
-              className="h-full border-r border-border bg-muted/40 dark:bg-muted/30" 
-            />
-          </div>
-        )}
+        {/* LEFT SIDEBAR with animated collapse */}
+        <div className="no-print hidden md:flex relative shrink-0">
+          <motion.div
+            initial={false}
+            animate={{ width: isSidebarOpen ? 288 : 0, opacity: isSidebarOpen ? 1 : 0 }}
+            transition={{ duration: 0.25, ease: "easeInOut" }}
+            style={{ overflow: "hidden" }}
+            className="relative"
+          >
+            <div style={{ width: 288 }}>
+              <PublicSidebar 
+                navTree={sidebarNav} 
+                projectId={projectId} 
+                className="h-full border-r border-border bg-muted/40 dark:bg-muted/30" 
+              />
+            </div>
+          </motion.div>
+
+          {/* Left Sidebar Toggle Tab */}
+          <button
+            onClick={toggleSidebar}
+            aria-label={isSidebarOpen ? "Ocultar menú" : "Mostrar menú"}
+            className="absolute top-1/2 -translate-y-1/2 -right-[13px] z-40 flex items-center justify-center w-[13px] h-12 rounded-r-md bg-border/60 hover:bg-primary/80 hover:text-primary-foreground dark:bg-muted/60 dark:hover:bg-primary/70 text-muted-foreground transition-all duration-200 shadow-sm cursor-pointer group"
+          >
+            <motion.div
+              animate={{ rotate: isSidebarOpen ? 0 : 180 }}
+              transition={{ duration: 0.25 }}
+            >
+              <ChevronLeft className="h-3 w-3" />
+            </motion.div>
+          </button>
+        </div>
         
         {/* CENTER COLUMN */}
         <div className="public-docs-center flex-1 flex flex-col min-w-0 overflow-hidden relative bg-background">
@@ -353,12 +376,33 @@ export function PublicDocsShell({
               </main>
             </div>
 
-            {/* RIGHT COLUMN */}
-            {isTocOpen && (
-              <div className="no-print hidden xl:block w-72 shrink-0 border-l border-border/40">
-                <RightSidebar />
-              </div>
-            )}
+            {/* RIGHT COLUMN with animated collapse */}
+            <div className="no-print hidden xl:flex relative shrink-0">
+              {/* Right Sidebar Toggle Tab */}
+              <button
+                onClick={toggleToc}
+                aria-label={isTocOpen ? "Ocultar índice" : "Mostrar índice"}
+                className="absolute top-1/2 -translate-y-1/2 -left-[13px] z-40 flex items-center justify-center w-[13px] h-12 rounded-l-md bg-border/60 hover:bg-primary/80 hover:text-primary-foreground dark:bg-muted/60 dark:hover:bg-primary/70 text-muted-foreground transition-all duration-200 shadow-sm cursor-pointer group"
+              >
+                <motion.div
+                  animate={{ rotate: isTocOpen ? 0 : 180 }}
+                  transition={{ duration: 0.25 }}
+                >
+                  <ChevronRight className="h-3 w-3" />
+                </motion.div>
+              </button>
+
+              <motion.div
+                initial={false}
+                animate={{ width: isTocOpen ? 288 : 0, opacity: isTocOpen ? 1 : 0 }}
+                transition={{ duration: 0.25, ease: "easeInOut" }}
+                style={{ overflow: "hidden" }}
+              >
+                <div style={{ width: 288 }} className="border-l border-border/40 h-full">
+                  <RightSidebar onItemClick={() => setIsTocOpen(false)} />
+                </div>
+              </motion.div>
+            </div>
           </div>
 
           {/* Minimalist Fixed Bottom Bar */}

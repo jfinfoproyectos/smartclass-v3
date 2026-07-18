@@ -4,7 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, FileText, GraduationCap, ExternalLink } from "lucide-react";
+import { BookOpen, FileText, GraduationCap, ArrowRight } from "lucide-react";
 
 interface DocInfo {
   id: string;
@@ -70,8 +70,6 @@ export function UserDocsList({ docs }: UserDocsListProps) {
             <Link
               key={`${doc.groupName}-${doc.id}`}
               href={`/docs/${doc.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
               className="relative group h-full block"
             >
               {/* Glow */}
@@ -96,7 +94,7 @@ export function UserDocsList({ docs }: UserDocsListProps) {
                       Documentación
                     </Badge>
                     <div className="h-7 w-7 rounded-full bg-background/60 backdrop-blur-md flex items-center justify-center border border-white/10 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                      <ExternalLink className="w-3 h-3 text-foreground" />
+                      <ArrowRight className="w-3 h-3 text-foreground" />
                     </div>
                   </div>
 

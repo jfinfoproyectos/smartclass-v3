@@ -10,6 +10,7 @@ import { getCodeTheme } from '@/app/actions/code-themes';
 import { getAvailableThemes } from '@/app/actions/themes';
 import dynamic from 'next/dynamic';
 import { Suspense } from 'react';
+import { Folder } from 'lucide-react';
 
 // Lazy loading heavy components
 const DocTracker = dynamic(() => import('@/features/documentation/components/reader/DocTracker').then(mod => mod.DocTracker));
@@ -188,7 +189,25 @@ export default async function Page({ params }: PageProps) {
   const currentNavItem = findCurrentItem(navTree, pagePath);
   const isFolder = currentNavItem?.type === 'folder';
   const DynamicIcon = (await import('@/features/documentation/components/DynamicIcon')).default;
-  const { Folder } = await import('lucide-react');
+  // Calcular url de regreso (backUrl) para volver a la app directamente
+  let backUrl = "/";
+  if (session?.user) {
+    if (session.user.role === "admin") {
+      backUrl = "/dashboard/admin/docs";
+    } else if (session.user.role === "teacher") {
+      if (userCourse) {
+        backUrl = `/dashboard/teacher/courses/${userCourse.id}?tab=docs`;
+      } else {
+        backUrl = "/dashboard/teacher/docs";
+      }
+    } else { // student
+      if (userCourse) {
+        backUrl = `/dashboard/student?courseId=${userCourse.id}&tab=docs`;
+      } else {
+        backUrl = "/dashboard/student";
+      }
+    }
+  }
 
   return (
     <PublicDocsShell 
@@ -199,6 +218,7 @@ export default async function Page({ params }: PageProps) {
       themes={themes}
       userProgress={userProgress.progress}
       userTotalViews={userProgress.totalViews}
+      backUrl={backUrl}
       courseSettings={{
         themeMode: themeMode,
         codeTheme: userCourse?.docCodeTheme || systemSettings?.appCodeTheme || "one-dark-pro",

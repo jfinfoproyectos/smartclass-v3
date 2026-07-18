@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
-export default function RightSidebar() {
+export default function RightSidebar({ className, onItemClick }: { className?: string; onItemClick?: () => void }) {
   const pathname = usePathname();
   const [headings, setHeadings] = useState<{ id: string; text: string; level: number }[]>([]);
   const [activeId, setActiveId] = useState<string>('');
@@ -128,11 +128,17 @@ export default function RightSidebar() {
 
       window.history.pushState(null, '', `#${id}`);
       setActiveId(id);
+      if (onItemClick) {
+        onItemClick();
+      }
     }
   };
 
   return (
-    <aside className="w-72 p-8 hidden xl:block shrink-0 h-full overflow-y-auto border-l border-border dark:border-white/10 custom-scrollbar bg-card/5 backdrop-blur-sm">
+    <aside className={cn(
+      "w-72 p-8 shrink-0 h-full overflow-y-auto border-l border-border dark:border-white/10 custom-scrollbar bg-card/5 backdrop-blur-sm",
+      className ?? "hidden xl:block"
+    )}>
       {headings.length > 0 ? (
         <>
           <div className="flex items-center gap-2 mb-6 opacity-60">

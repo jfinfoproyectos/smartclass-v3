@@ -25,7 +25,8 @@ import {
   Trash2, 
   Layout, 
   Settings, 
-  ExternalLink, 
+  ExternalLink,
+  BookOpen,
   FolderOpen,
   AlertCircle,
   Files,
@@ -133,8 +134,8 @@ export default async function DocsScannerPage() {
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button asChild size="icon" variant="outline" className="h-9 w-9 border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300">
-                              <Link href={`/docs/${project.slug}`} target="_blank" rel="noopener noreferrer">
-                                <ExternalLink className="w-4 h-4" />
+                              <Link href={`/docs/${project.slug}`}>
+                                <BookOpen className="w-4 h-4" />
                                 <span className="sr-only">Abrir Documentación</span>
                               </Link>
                             </Button>

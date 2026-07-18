@@ -7,7 +7,7 @@ import { ThemeSelector } from "@/components/theme/ThemeSelector";
 import { ThemeInfo } from "@/app/actions/themes";
 import { CreditsModal } from "@/components/CreditsModal";
 import { Button } from "@/components/ui/button";
-import { FileDown, PanelRightClose, PanelRightOpen, PanelLeftClose, PanelLeftOpen, Settings } from "lucide-react";
+import { FileDown, Settings } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   DropdownMenu,
@@ -161,58 +161,6 @@ export function ConfigControls({
           </Tooltip>
         </TooltipProvider>
 
-      {/* Toggle Left Sidebar Control */}
-      <TooltipProvider delayDuration={150}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              onClick={toggleSidebar}
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 shrink-0 relative opacity-60 hover:opacity-100 hover:text-primary transition-all focus-visible:ring-0 cursor-pointer hidden md:flex"
-            >
-              {isSidebarOpen ? (
-                <PanelLeftClose className="h-4.5 w-4.5" />
-              ) : (
-                <PanelLeftOpen className="h-4.5 w-4.5" />
-              )}
-              <span className="sr-only">Menú de Navegación</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p className="text-[10px] font-bold uppercase tracking-wider">
-              {isSidebarOpen ? "Ocultar Menú" : "Mostrar Menú"}
-            </p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-
-      {/* Toggle TOC Sidebar Control */}
-      <TooltipProvider delayDuration={150}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              onClick={toggleToc}
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 shrink-0 relative opacity-60 hover:opacity-100 hover:text-primary transition-all focus-visible:ring-0 cursor-pointer hidden xl:flex"
-            >
-              {isTocOpen ? (
-                <PanelRightClose className="h-4.5 w-4.5" />
-              ) : (
-                <PanelRightOpen className="h-4.5 w-4.5" />
-              )}
-              <span className="sr-only">Índice de Temas</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p className="text-[10px] font-bold uppercase tracking-wider">
-              {isTocOpen ? "Ocultar Índice" : "Mostrar Índice"}
-            </p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-
       <CreditsModal />
     </div>
 
@@ -290,7 +238,7 @@ export function ConfigControls({
 
         <DropdownMenuSeparator className="my-1" />
 
-        {/* Action Buttons row: PDF download, credits, sidebar toggles */}
+        {/* Action Buttons row: PDF download + credits */}
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Acciones</span>
           <div className="flex items-center gap-1">
@@ -302,34 +250,6 @@ export function ConfigControls({
               className="h-8 w-8 opacity-70 hover:opacity-100"
             >
               <FileDown className="h-4.5 w-4.5" />
-            </Button>
-
-            {/* Left sidebar toggle */}
-            <Button
-              onClick={toggleSidebar}
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 opacity-70 hover:opacity-100"
-            >
-              {isSidebarOpen ? (
-                <PanelLeftClose className="h-4.5 w-4.5" />
-              ) : (
-                <PanelLeftOpen className="h-4.5 w-4.5" />
-              )}
-            </Button>
-
-            {/* Right sidebar toggle */}
-            <Button
-              onClick={toggleToc}
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 opacity-70 hover:opacity-100"
-            >
-              {isTocOpen ? (
-                <PanelRightClose className="h-4.5 w-4.5" />
-              ) : (
-                <PanelRightOpen className="h-4.5 w-4.5" />
-              )}
             </Button>
 
             {/* Credits Modal */}

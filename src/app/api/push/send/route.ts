@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     const payload = JSON.stringify({
       title: title || "Nueva Notificación",
       body: notificationBody || "",
-      icon: icon || "/logo.png",
+      icon: icon || "/logo.svg",
       url: url || "/dashboard",
     });
 

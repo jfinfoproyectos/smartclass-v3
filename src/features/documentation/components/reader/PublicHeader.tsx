@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { ConfigControls } from "./ConfigControls";
 import { ThemeInfo } from "@/app/actions/themes";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { Menu, ChevronDown } from "lucide-react";
+import { Menu, ChevronDown, AlignRight, ArrowLeft } from "lucide-react";
 import { NavItem } from "../../services/public-docs";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,8 +19,9 @@ import {
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import { PublicSidebar } from "./PublicSidebar";
+import RightSidebar from "./RightSidebar";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 export function PublicHeader({ 
   projectName, 
@@ -34,7 +35,8 @@ export function PublicHeader({
   isSidebarOpen,
   toggleSidebar,
   topics,
-  activeTopicSlug
+  activeTopicSlug,
+  backUrl = "/"
 }: { 
   projectName: string, 
   projectId: string, 
@@ -54,10 +56,13 @@ export function PublicHeader({
   toggleSidebar: () => void;
   topics: NavItem[];
   activeTopicSlug: string | null;
+  backUrl?: string;
 }) {
   const [mounted, setMounted] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMobileTocOpen, setIsMobileTocOpen] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
 
   useEffect(() => {
     setMounted(true);
@@ -65,6 +70,7 @@ export function PublicHeader({
 
   useEffect(() => {
     setIsMobileMenuOpen(false);
+    setIsMobileTocOpen(false);
   }, [pathname]);
 
   const activeTopic = topics.find(t => t.slug === activeTopicSlug);
@@ -72,8 +78,26 @@ export function PublicHeader({
 
   return (
     <header className="flex-none h-11 border-b border-border dark:border-white/10 bg-background/80 backdrop-blur-md z-50 sticky top-0 w-full flex items-center justify-between px-4 sm:px-5">
-      <div className="flex items-center gap-4 flex-1">
-        {/* Mobile Menu */}
+      <div className="flex items-center gap-1 flex-1">
+        {/* Back to app button */}
+        {mounted && (
+          <Button
+            asChild
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-xl hover:bg-muted transition-colors text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
+            title="Volver a la aplicación"
+          >
+            <Link href={backUrl} aria-label="Volver a la aplicación">
+              <ArrowLeft className="w-4 h-4" />
+            </Link>
+          </Button>
+        )}
+
+        {/* Divider */}
+        <div className="h-4 w-px bg-border/50 mx-0.5 hidden md:block" />
+
+        {/* Mobile Menu (Left Nav) */}
         <div className="md:hidden">
           {mounted && (
             <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
@@ -208,6 +232,28 @@ export function PublicHeader({
             toggleSidebar={toggleSidebar}
           />
         )}
+
+        {/* Mobile TOC (Right Sidebar) hamburger button */}
+        <div className="xl:hidden">
+          {mounted && (
+            <Sheet open={isMobileTocOpen} onOpenChange={setIsMobileTocOpen}>
+              <SheetTrigger asChild>
+                <button className="p-2 rounded-xl hover:bg-muted transition-colors" aria-label="Índice de la página">
+                  <AlignRight className="w-5 h-5" />
+                </button>
+              </SheetTrigger>
+              <SheetContent side="right" className="p-0 w-80 border-l-0">
+                <SheetHeader className="sr-only">
+                  <SheetTitle>En esta página</SheetTitle>
+                  <SheetDescription>Índice de secciones de la página actual</SheetDescription>
+                </SheetHeader>
+                <div className="h-full pt-6">
+                  <RightSidebar className="block w-full border-l-0" onItemClick={() => setIsMobileTocOpen(false)} />
+                </div>
+              </SheetContent>
+            </Sheet>
+          )}
+        </div>
       </div>
     </header>
   );

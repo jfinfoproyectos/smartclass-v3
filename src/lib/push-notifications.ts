@@ -28,7 +28,7 @@ export async function sendPushNotification(userId: string, data: PushPayload) {
     const payload = JSON.stringify({
       title: data.title,
       body: data.body,
-      icon: "/logo.png",
+      icon: "/logo.svg",
       url: data.url || "/dashboard",
     });
 

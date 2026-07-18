@@ -5,7 +5,7 @@ const ASSETS_TO_CACHE = [
   "/",
   "/dashboard",
   "/dashboard/help",
-  "/logo.png",
+  "/logo.svg",
   "/manifest.json"
 ];
 
@@ -91,7 +91,7 @@ self.addEventListener("push", (event) => {
   let payload = {
     title: "SmartClass",
     body: "Tienes una nueva notificación.",
-    icon: "/logo.png",
+    icon: "/logo.svg",
     url: "/dashboard",
   };
 
@@ -103,8 +103,8 @@ self.addEventListener("push", (event) => {
 
   const options = {
     body: payload.body,
-    icon: payload.icon || "/logo.png",
-    badge: payload.icon || "/logo.png",
+    icon: payload.icon || "/logo.svg",
+    badge: payload.icon || "/logo.svg",
     data: {
       url: payload.url || "/dashboard",
     },

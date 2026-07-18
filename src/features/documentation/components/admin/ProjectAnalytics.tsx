@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   BookOpenText,
   Unlink,
@@ -163,16 +164,16 @@ export function ProjectAnalytics({ courseId, availableProjects }: CourseDocManag
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
                         <Button variant="ghost" size="sm" asChild className="h-8 px-2">
-                          <a href={`/docs/${project.slug}`} target="_blank" rel="noopener noreferrer">
-                            <ExternalLink className="w-3.5 h-3.5 mr-1" />
+                          <Link href={`/docs/${project.slug}`}>
+                            <BookOpenText className="w-3.5 h-3.5 mr-1" />
                             Abrir
-                          </a>
+                          </Link>
                         </Button>
                         <Button variant="ghost" size="sm" asChild className="h-8 px-2">
-                          <a href={`/dashboard/teacher/docs/${project.id}`} target="_blank" rel="noopener noreferrer">
+                          <Link href={`/dashboard/teacher/docs/${project.id}`}>
                             <Settings2 className="w-3.5 h-3.5 mr-1" />
                             Editar
-                          </a>
+                          </Link>
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
