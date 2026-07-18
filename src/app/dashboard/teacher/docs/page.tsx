@@ -12,6 +12,12 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { getRoleFromUser } from "@/features/auth/services/authService";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { 
   FileText, 
   Search, 
@@ -23,7 +29,8 @@ import {
   FolderOpen,
   AlertCircle,
   Files,
-  Edit3
+  Edit3,
+  MoreVertical
 } from "lucide-react";
 import Link from "next/link";
 // import { DocStatusToggle } from "@/components/DocStatusToggle";
@@ -137,30 +144,32 @@ export default async function DocsScannerPage() {
                           </TooltipContent>
                         </Tooltip>
 
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button asChild size="icon" variant="outline" className="h-9 w-9 border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300">
-                              <Link href={`/dashboard/teacher/docs/${project.slug}`}>
-                                <Edit3 className="w-4 h-4" />
-                                <span className="sr-only">Editar</span>
-                              </Link>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="icon" variant="outline" className="h-9 w-9 border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300">
+                              <MoreVertical className="w-4 h-4" />
+                              <span className="sr-only">Acciones</span>
                             </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="top">
-                            <p className="text-[10px] font-bold uppercase tracking-wider">Editar Contenido</p>
-                          </TooltipContent>
-                        </Tooltip>
-
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div>
-                              <DeleteProjectDialog projectId={project.id} projectName={project.name} iconOnly={true} />
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent side="top">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-destructive">Eliminar Proyecto</p>
-                          </TooltipContent>
-                        </Tooltip>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-40">
+                            <DropdownMenuItem asChild className="cursor-pointer">
+                              <Link href={`/dashboard/teacher/docs/${project.slug}`}>
+                                <Edit3 className="mr-2 h-4 w-4 text-muted-foreground" />
+                                <span>Editar</span>
+                              </Link>
+                            </DropdownMenuItem>
+                            <DeleteProjectDialog 
+                              projectId={project.id} 
+                              projectName={project.name} 
+                              trigger={
+                                <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-red-600 focus:text-red-700 cursor-pointer">
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  <span>Eliminar</span>
+                                </DropdownMenuItem>
+                              }
+                            />
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </TableCell>
                   </TableRow>

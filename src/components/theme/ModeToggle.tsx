@@ -10,8 +10,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
 
-export function ModeToggle() {
+export function ModeToggle({ asMenuItem }: { asMenuItem?: boolean }) {
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = React.useState(false)
 
@@ -23,6 +24,40 @@ export function ModeToggle() {
     setTheme(theme === "dark" ? "light" : "dark")
   }, [theme, setTheme])
 
+  if (!mounted) {
+    if (asMenuItem) {
+      return (
+        <DropdownMenuItem className="cursor-pointer text-xs">
+          <Sun className="mr-2 h-4 w-4" />
+          <span>Tema</span>
+        </DropdownMenuItem>
+      );
+    }
+    return (
+      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 opacity-50">
+        <Sun className="h-4 w-4" />
+      </Button>
+    );
+  }
+
+  if (asMenuItem) {
+    return (
+      <DropdownMenuItem onClick={toggle} className="cursor-pointer text-xs">
+        {theme === "dark" ? (
+          <>
+            <Sun className="mr-2 h-4 w-4 text-muted-foreground" />
+            <span>Modo Claro</span>
+          </>
+        ) : (
+          <>
+            <Moon className="mr-2 h-4 w-4 text-muted-foreground" />
+            <span>Modo Oscuro</span>
+          </>
+        )}
+      </DropdownMenuItem>
+    );
+  }
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -33,7 +68,7 @@ export function ModeToggle() {
         </Button>
       </TooltipTrigger>
       <TooltipContent>
-        <p>{mounted ? (theme === "dark" ? "Modo Claro" : "Modo Oscuro") : "Cambiar tema"}</p>
+        <p>{theme === "dark" ? "Modo Claro" : "Modo Oscuro"}</p>
       </TooltipContent>
     </Tooltip>
   )

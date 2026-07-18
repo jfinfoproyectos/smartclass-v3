@@ -18,9 +18,10 @@ import { toast } from "sonner";
 interface DeleteProjectDialogProps {
   projectId: string;
   projectName: string;
+  trigger?: React.ReactNode;
 }
 
-export function DeleteProjectDialog({ projectId, projectName, iconOnly = false }: DeleteProjectDialogProps & { iconOnly?: boolean }) {
+export function DeleteProjectDialog({ projectId, projectName, iconOnly = false, trigger }: DeleteProjectDialogProps & { iconOnly?: boolean }) {
   const [open, setOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -41,29 +42,33 @@ export function DeleteProjectDialog({ projectId, projectName, iconOnly = false }
     }
   };
 
+  const defaultTrigger = (
+    <DialogTrigger asChild>
+      {iconOnly ? (
+        <Button 
+          size="icon" 
+          variant="outline" 
+          className="h-9 w-9 border-border/50 text-destructive hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-all active:scale-95 shrink-0"
+        >
+          <Trash2 className="w-4 h-4" />
+          <span className="sr-only">Eliminar</span>
+        </Button>
+      ) : (
+        <Button 
+          size="sm" 
+          variant="ghost" 
+          className="gap-2 h-9 font-bold text-destructive hover:bg-destructive/10 hover:text-destructive transition-all active:scale-95 px-3"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Eliminar</span>
+        </Button>
+      )}
+    </DialogTrigger>
+  );
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {iconOnly ? (
-          <Button 
-            size="icon" 
-            variant="outline" 
-            className="h-9 w-9 border-border/50 text-destructive hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-all active:scale-95 shrink-0"
-          >
-            <Trash2 className="w-4 h-4" />
-            <span className="sr-only">Eliminar</span>
-          </Button>
-        ) : (
-          <Button 
-            size="sm" 
-            variant="ghost" 
-            className="gap-2 h-9 font-bold text-destructive hover:bg-destructive/10 hover:text-destructive transition-all active:scale-95 px-3"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Eliminar</span>
-          </Button>
-        )}
-      </DialogTrigger>
+      {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : defaultTrigger}
       
       <DialogContent className="sm:max-w-[425px] bg-background border-border rounded-2xl shadow-2xl p-6 flex flex-col gap-4">
         <DialogHeader>

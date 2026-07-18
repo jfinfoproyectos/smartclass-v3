@@ -33,8 +33,14 @@ import {
 import { createActivityAction, updateActivityAction, deleteActivityAction } from "@/features/teacher/actions/activityActions";
 import { scanRepositoryAction } from "@/features/github/actions/githubActions";
 import { getMissingSubmissionsAction } from "@/features/teacher/actions/studentActions";;
-import { Plus, Calendar, FileText, MessageSquare, Pencil, Trash2, Eye, X, ChevronUp, ChevronDown, AlertCircle, Sparkles, Upload, Download, Loader2, Search, UserX, GripVertical } from "lucide-react";
+import { Plus, Calendar, FileText, MessageSquare, Pencil, Trash2, Eye, X, ChevronUp, ChevronDown, AlertCircle, Sparkles, Upload, Download, Loader2, Search, UserX, GripVertical, MoreVertical } from "lucide-react";
 import { toast } from "sonner";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatName } from "@/lib/utils";
@@ -741,63 +747,77 @@ export function ActivityManager({ courseId, activities }: { courseId: string; ac
                                     {activity.type === "MANUAL" ? "-" : `${activity.submissions.length} entregas`}
                                 </TableCell>
                                 <TableCell className="text-right">
-                                    <div className="flex justify-end pr-2">
-                                        <div className="grid grid-cols-4 gap-1 sm:gap-2">
-                                            {/* Slot 1: View */}
-                                            <div className="flex items-center justify-center">
-                                                <Link href={`/dashboard/teacher/courses/${courseId}/activities/${activity.id}`}>
-                                                    <Button variant="ghost" size="icon" title="Ver Entregas" className="h-8 w-8 sm:h-9 sm:w-9">
-                                                        <Eye className="h-4 w-4" />
+                                    <div className="flex justify-end items-center gap-1.5 pr-2">
+                                        <Link href={`/dashboard/teacher/courses/${courseId}/activities/${activity.id}`}>
+                                            <Button variant="outline" size="icon" title="Ver Entregas" className="h-8 w-8 sm:h-9 sm:w-9">
+                                                <Eye className="h-4 w-4" />
+                                            </Button>
+                                        </Link>
+
+                                        <Dialog>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="outline" size="icon" className="h-8 w-8 sm:h-9 sm:w-9 text-muted-foreground hover:text-foreground">
+                                                        <MoreVertical className="h-4 w-4" />
                                                     </Button>
-                                                </Link>
-                                            </div>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="w-48">
+                                                    <EditActivityDialog 
+                                                        activity={activity} 
+                                                        courseId={courseId} 
+                                                        mode={mode} 
+                                                        trigger={
+                                                            <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="cursor-pointer">
+                                                                <Pencil className="mr-2 h-4 w-4 text-muted-foreground" />
+                                                                <span>Editar</span>
+                                                            </DropdownMenuItem>
+                                                        }
+                                                    />
 
-                                            {/* Slot 2: Missing Submissions (Conditional) */}
-                                            <div className="flex items-center justify-center">
-                                                {activity.type !== "MANUAL" ? (
-                                                    <MissingSubmissionsDialog activityId={activity.id} activityTitle={activity.title} />
-                                                ) : (
-                                                    <div className="h-8 w-8 sm:h-9 sm:w-9" />
-                                                )}
-                                            </div>
+                                                    {activity.type !== "MANUAL" && (
+                                                        <MissingSubmissionsDialog 
+                                                            activityId={activity.id} 
+                                                            activityTitle={activity.title} 
+                                                            trigger={
+                                                                <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="cursor-pointer">
+                                                                    <UserX className="mr-2 h-4 w-4 text-muted-foreground" />
+                                                                    <span>Ver Faltantes</span>
+                                                                </DropdownMenuItem>
+                                                            }
+                                                        />
+                                                    )}
 
-                                            {/* Slot 3: Edit */}
-                                            <div className="flex items-center justify-center">
-                                                <EditActivityDialog activity={activity} courseId={courseId} mode={mode} />
-                                            </div>
-
-                                            {/* Slot 4: Delete */}
-                                            <div className="flex items-center justify-center">
-                                                <Dialog>
                                                     <DialogTrigger asChild>
-                                                        <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-9 sm:w-9 text-destructive hover:text-destructive" title="Eliminar">
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </Button>
+                                                        <DropdownMenuItem className="text-red-600 focus:text-red-700 cursor-pointer">
+                                                            <Trash2 className="mr-2 h-4 w-4 text-red-600 focus:text-red-700" />
+                                                            <span>Eliminar</span>
+                                                        </DropdownMenuItem>
                                                     </DialogTrigger>
-                                                    <DialogContent>
-                                                        <form action={async (formData) => {
-                                                            await deleteActivityAction(formData);
-                                                        }}>
-                                                            <input type="hidden" name="courseId" value={courseId} />
-                                                            <input type="hidden" name="activityId" value={activity.id} />
-                                                            <DialogHeader>
-                                                                <DialogTitle>Confirmar eliminación</DialogTitle>
-                                                                <DialogDescription>
-                                                                    Escribe <strong>ELIMINAR</strong> para confirmar.
-                                                                </DialogDescription>
-                                                            </DialogHeader>
-                                                            <div className="grid grid-cols-4 items-center gap-4 py-4">
-                                                                <Label htmlFor={`confirm-${activity.id}`} className="text-right">Confirmación</Label>
-                                                                <Input id={`confirm-${activity.id}`} name="confirmText" placeholder="ELIMINAR" pattern="^ELIMINAR$" required className="col-span-3" />
-                                                            </div>
-                                                            <DialogFooter>
-                                                                <Button type="submit" variant="destructive">Confirmar eliminación</Button>
-                                                            </DialogFooter>
-                                                        </form>
-                                                    </DialogContent>
-                                                </Dialog>
-                                            </div>
-                                        </div>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+
+                                            <DialogContent>
+                                                <form action={async (formData) => {
+                                                    await deleteActivityAction(formData);
+                                                }}>
+                                                    <input type="hidden" name="courseId" value={courseId} />
+                                                    <input type="hidden" name="activityId" value={activity.id} />
+                                                    <DialogHeader>
+                                                        <DialogTitle>Confirmar eliminación</DialogTitle>
+                                                        <DialogDescription>
+                                                            Escribe <strong>ELIMINAR</strong> para confirmar.
+                                                        </DialogDescription>
+                                                    </DialogHeader>
+                                                    <div className="grid grid-cols-4 items-center gap-4 py-4">
+                                                        <Label htmlFor={`confirm-${activity.id}`} className="text-right">Confirmación</Label>
+                                                        <Input id={`confirm-${activity.id}`} name="confirmText" placeholder="ELIMINAR" pattern="^ELIMINAR$" required className="col-span-3" />
+                                                    </div>
+                                                    <DialogFooter>
+                                                        <Button type="submit" variant="destructive">Confirmar eliminación</Button>
+                                                    </DialogFooter>
+                                                </form>
+                                            </DialogContent>
+                                        </Dialog>
                                     </div>
                                 </TableCell>
                             </TableRow >
@@ -818,7 +838,7 @@ export function ActivityManager({ courseId, activities }: { courseId: string; ac
     );
 }
 
-function EditActivityDialog({ activity, courseId, mode }: { activity: any, courseId: string, mode: any }) {
+function EditActivityDialog({ activity, courseId, mode, trigger }: { activity: any, courseId: string, mode: any, trigger?: React.ReactNode }) {
     const [isOpen, setIsOpen] = useState(false);
     const [description, setDescription] = useState(activity.description || "");
     const [statement, setStatement] = useState(activity.statement || "");
@@ -890,13 +910,17 @@ function EditActivityDialog({ activity, courseId, mode }: { activity: any, cours
         }
     }, [isOpen, activity]);
 
+    const defaultTrigger = (
+        <SheetTrigger asChild>
+            <Button variant="ghost" size="icon" title="Editar" className="h-8 w-8 sm:h-9 sm:w-9">
+                <Pencil className="h-4 w-4" />
+            </Button>
+        </SheetTrigger>
+    );
+
     return (
         <Sheet open={isOpen} onOpenChange={setIsOpen}>
-            <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" title="Editar" className="h-8 w-8 sm:h-9 sm:w-9">
-                    <Pencil className="h-4 w-4" />
-                </Button>
-            </SheetTrigger>
+            {trigger ? <SheetTrigger asChild>{trigger}</SheetTrigger> : defaultTrigger}
             <SheetContent side="right" className="w-full max-w-none sm:max-w-none p-0">
                 <form key={formKey} ref={formRef} action={async (formData) => {
                     const form = formRef.current;
@@ -1070,7 +1094,7 @@ function EditActivityDialog({ activity, courseId, mode }: { activity: any, cours
     );
 }
 
-function MissingSubmissionsDialog({ activityId, activityTitle }: { activityId: string, activityTitle: string }) {
+function MissingSubmissionsDialog({ activityId, activityTitle, trigger }: { activityId: string, activityTitle: string, trigger?: React.ReactNode }) {
     const [isOpen, setIsOpen] = useState(false);
     const [missingStudents, setMissingStudents] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -1094,13 +1118,17 @@ function MissingSubmissionsDialog({ activityId, activityTitle }: { activityId: s
         }
     };
 
+    const defaultTrigger = (
+        <DialogTrigger asChild>
+            <Button variant="ghost" size="icon" title="Ver Faltantes" className="h-8 w-8 sm:h-9 sm:w-9 text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20">
+                <UserX className="h-4 w-4" />
+            </Button>
+        </DialogTrigger>
+    );
+
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogTrigger asChild>
-                <Button variant="ghost" size="icon" title="Ver Faltantes" className="h-8 w-8 sm:h-9 sm:w-9 text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20">
-                    <UserX className="h-4 w-4" />
-                </Button>
-            </DialogTrigger>
+            {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : defaultTrigger}
             <DialogContent className="sm:max-w-[500px]">
                 <DialogHeader>
                     <DialogTitle>Estudiantes sin entrega</DialogTitle>

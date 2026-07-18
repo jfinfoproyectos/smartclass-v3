@@ -16,8 +16,9 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 
-export function CreditsModal() {
+export function CreditsModal({ asMenuItem }: { asMenuItem?: boolean }) {
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
@@ -30,6 +31,39 @@ export function CreditsModal() {
                 <Info className="h-4 w-4" />
                 <span className="sr-only">Créditos</span>
             </Button>
+        );
+    }
+
+    if (asMenuItem) {
+        return (
+            <Dialog>
+                <DialogTrigger asChild>
+                    <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="cursor-pointer text-xs">
+                        <Info className="mr-2 h-4 w-4 text-muted-foreground" />
+                        <span>Créditos / Información</span>
+                    </DropdownMenuItem>
+                </DialogTrigger>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Créditos de la Aplicación</DialogTitle>
+                        <DialogDescription>
+                            Información sobre el autor y desarrollo.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex flex-col items-center justify-center py-6 text-center space-y-4">
+                        <div className="p-4 bg-primary/10 rounded-full">
+                            <Info className="h-12 w-12 text-primary" />
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-bold">Jhon Fredy Valencia Gómez</h3>
+                            <p className="text-muted-foreground">Ingeniero de Software y Datos</p>
+                        </div>
+                        <p className="text-sm text-muted-foreground pt-4">
+                            © {new Date().getFullYear()} SmartClass. Todos los derechos reservados.
+                        </p>
+                    </div>
+                </DialogContent>
+            </Dialog>
         );
     }
 

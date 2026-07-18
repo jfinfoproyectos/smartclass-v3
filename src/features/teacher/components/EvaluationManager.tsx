@@ -2,8 +2,14 @@
 
 import { useState, useRef } from "react";
 import { format } from "date-fns";
-import { Plus, Trash2, Edit, FileQuestion, FileText, Search, Download, Upload } from "lucide-react";
+import { Plus, Trash2, Edit, FileQuestion, FileText, Search, Download, Upload, MoreVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -379,27 +385,7 @@ export function EvaluationManager({ evaluations }: { evaluations: any[] }) {
                                         </code>
                                     </TableCell>
                                     <TableCell className="text-right py-3.5 pr-5">
-                                        <div className="flex justify-end gap-2">
-                                            <Button
-                                                variant="outline"
-                                                size="icon"
-                                                className="h-9 w-9 border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300"
-                                                title="Configurar Detalles"
-                                                onClick={() => handleOpenEdit(evaluation)}
-                                            >
-                                                <Edit className="h-4 w-4" />
-                                            </Button>
-
-                                            <Button
-                                                variant="outline"
-                                                size="icon"
-                                                className="h-9 w-9 border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300"
-                                                title="Exportar como JSON"
-                                                onClick={() => handleExport(evaluation)}
-                                            >
-                                                <Download className="h-4 w-4" />
-                                            </Button>
-
+                                        <div className="flex justify-end items-center gap-1.5">
                                             <Button
                                                 variant="outline"
                                                 size="icon"
@@ -413,15 +399,37 @@ export function EvaluationManager({ evaluations }: { evaluations: any[] }) {
                                             </Button>
 
                                             <Dialog>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="icon"
+                                                            className="h-9 w-9 border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300"
+                                                            title="Acciones"
+                                                        >
+                                                            <MoreVertical className="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end" className="w-40">
+                                                        <DropdownMenuItem onClick={() => handleOpenEdit(evaluation)} className="cursor-pointer">
+                                                            <Edit className="mr-2 h-4 w-4 text-muted-foreground" />
+                                                            <span>Editar</span>
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => handleExport(evaluation)} className="cursor-pointer">
+                                                            <Download className="mr-2 h-4 w-4 text-muted-foreground" />
+                                                            <span>Exportar</span>
+                                                        </DropdownMenuItem>
+                                                        <DialogTrigger asChild>
+                                                            <DropdownMenuItem className="text-red-600 focus:text-red-700 cursor-pointer">
+                                                                <Trash2 className="mr-2 h-4 w-4 text-red-600 focus:text-red-700" />
+                                                                <span>Eliminar</span>
+                                                            </DropdownMenuItem>
+                                                        </DialogTrigger>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+
                                                 <DialogTrigger asChild>
-                                                    <Button 
-                                                        variant="outline" 
-                                                        size="icon"
-                                                        className="h-9 w-9 border-border/50 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-all duration-300"
-                                                        title="Eliminar"
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
+                                                    <div />
                                                 </DialogTrigger>
                                                 <DialogContent>
                                                     <form

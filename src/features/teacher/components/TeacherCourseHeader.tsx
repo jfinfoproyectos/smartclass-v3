@@ -98,13 +98,13 @@ export function TeacherCourseHeader({
                     </div>
 
                     {/* Right: Asistencia & utilities separated by full-height borders */}
-                    <div className="hidden lg:flex items-center h-full px-4 border-l border-foreground/10">
+                    <div className="flex items-center h-full px-2 sm:px-4 border-l border-foreground/10">
                         <AttendanceTaker 
                             courseId={courseId} 
                             trigger={
-                                <Button variant="ghost" size="sm" className="h-8 text-[10px] font-bold px-2.5 gap-1.5 hover:bg-muted transition-all">
+                                <Button variant="ghost" size="sm" className="h-8 text-[10px] font-bold px-2 gap-1.5 hover:bg-muted transition-all">
                                     <CalendarCheck2 className="h-3.5 w-3.5 text-primary" />
-                                    <span className="hidden xl:inline uppercase tracking-tighter">Asistencia</span>
+                                    <span className="hidden sm:inline uppercase tracking-tighter">Asistencia</span>
                                 </Button>
                             }
                         />
@@ -117,19 +117,21 @@ export function TeacherCourseHeader({
                     </div>
                 </div>
 
-                {/* Row 2: Content Navigation (h-auto on mobile, compact h-11 on desktop) */}
-                <div className="px-4 py-1.5 lg:py-0 lg:h-11 flex items-center justify-center bg-muted/5 border-b border-foreground/10 shadow-sm dark:shadow-none">
-                    <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 h-auto lg:h-9 p-0.5 bg-muted/60 dark:bg-muted/30 rounded-lg gap-0.5 border border-border/30 shadow-none">
-                        <NavTab value="activities" icon={<ClipboardCheck className="h-3.5 w-3.5" />} label="Actividades" />
-                        <NavTab value="students" icon={<Users className="h-3.5 w-3.5" />} label="Estudiantes" />
-                        <NavTab value="evaluations" icon={<FileCheck className="h-3.5 w-3.5" />} label="Evaluaciones" />
-                        <NavTab value="grades" icon={<LayoutDashboard className="h-3.5 w-3.5" />} label="Calificaciones" />
-                        <NavTab value="stats" icon={<BarChart3 className="h-3.5 w-3.5" />} label="Estadísticas" />
-                        <NavTab value="roulette" icon={<Dices className="h-3.5 w-3.5" />} label="Ruleta" />
-                        <NavTab value="groups" icon={<Settings2 className="h-3.5 w-3.5" />} label="Grupos" />
-                        <NavTab value="share" icon={<Share2 className="h-3.5 w-3.5" />} label="Compartir" />
-                        <NavTab value="docs" icon={<BookOpenText className="h-3.5 w-3.5" />} label="Documentación" />
-                    </TabsList>
+                {/* Row 2: Content Navigation (scrollable on mobile, grid on desktop) */}
+                <div className="border-b border-foreground/10 bg-muted/5">
+                    <div className="overflow-x-auto scrollbar-none w-full flex items-center justify-start lg:justify-center lg:h-11 px-4 py-1.5 lg:py-0">
+                        <TabsList className="flex w-max lg:w-full lg:grid lg:grid-cols-9 h-9 p-0.5 bg-muted/60 dark:bg-muted/30 rounded-lg gap-0.5 border border-border/30 lg:border-none shadow-none min-w-full">
+                            <NavTab value="activities" icon={<ClipboardCheck className="h-3.5 w-3.5" />} label="Actividades" />
+                            <NavTab value="students" icon={<Users className="h-3.5 w-3.5" />} label="Estudiantes" />
+                            <NavTab value="evaluations" icon={<FileCheck className="h-3.5 w-3.5" />} label="Evaluaciones" />
+                            <NavTab value="grades" icon={<LayoutDashboard className="h-3.5 w-3.5" />} label="Calificaciones" />
+                            <NavTab value="stats" icon={<BarChart3 className="h-3.5 w-3.5" />} label="Estadísticas" />
+                            <NavTab value="roulette" icon={<Dices className="h-3.5 w-3.5" />} label="Ruleta" />
+                            <NavTab value="groups" icon={<Settings2 className="h-3.5 w-3.5" />} label="Grupos" />
+                            <NavTab value="share" icon={<Share2 className="h-3.5 w-3.5" />} label="Compartir" />
+                            <NavTab value="docs" icon={<BookOpenText className="h-3.5 w-3.5" />} label="Documentación" />
+                        </TabsList>
+                    </div>
                 </div>
             </TooltipProvider>
         </div>
@@ -165,7 +167,7 @@ function NavTab({ value, icon, label }: { value: string, icon: React.ReactNode, 
             value={value} 
             onClick={handleClick}
             disabled={isPending}
-            className="group relative flex items-center justify-center gap-1.5 h-8 px-2.5 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm disabled:opacity-40"
+            className="group relative flex items-center justify-center gap-1.5 h-8 px-2.5 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm disabled:opacity-40 whitespace-nowrap shrink-0"
         >
             <span className="group-data-[state=active]:text-primary transition-colors">
                 {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : icon}

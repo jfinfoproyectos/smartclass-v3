@@ -25,13 +25,19 @@ import {
 } from "@/components/ui/table";
 import { createCourseAction, deleteCourseAction, cloneCourseAction, generateEnrollmentCodeAction, toggleCourseRegistrationSimpleAction } from "@/features/teacher/actions/courseActions";
 import { getCourseCompleteDataAction } from "@/features/teacher/actions/reportActions";
-import { Trash2, Settings, Copy, Users, BookOpen, Pencil, RefreshCw, Check, Maximize2, FolderArchive, Loader2 } from "lucide-react";
+import { Trash2, Settings, Copy, Users, BookOpen, Pencil, RefreshCw, Check, Maximize2, FolderArchive, Loader2, MoreVertical, ArrowRight } from "lucide-react";
 import {
     Tooltip,
     TooltipContent,
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 import Link from "next/link";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -112,30 +118,42 @@ interface PendingEnrollment {
 
 
 
-function DeleteCourseDialog({ courseId, courseTitle }: { courseId: string, courseTitle: string }) {
+function DeleteCourseDialog({ 
+    courseId, 
+    courseTitle, 
+    trigger 
+}: { 
+    courseId: string; 
+    courseTitle: string; 
+    trigger?: React.ReactNode; 
+}) {
     const [isOpen, setIsOpen] = useState(false);
     const [confirmText, setConfirmText] = useState("");
 
+    const defaultTrigger = (
+        <Tooltip>
+            <DialogTrigger asChild>
+                <span className="inline-block">
+                    <TooltipTrigger asChild>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20"
+                        >
+                            <Trash2 className="h-4 w-4" />
+                        </Button>
+                    </TooltipTrigger>
+                </span>
+            </DialogTrigger>
+            <TooltipContent>
+                <p>Eliminar</p>
+            </TooltipContent>
+        </Tooltip>
+    );
+
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <Tooltip>
-                <DialogTrigger asChild>
-                    <span className="inline-block">
-                        <TooltipTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20"
-                            >
-                                <Trash2 className="h-4 w-4" />
-                            </Button>
-                        </TooltipTrigger>
-                    </span>
-                </DialogTrigger>
-                <TooltipContent>
-                    <p>Eliminar</p>
-                </TooltipContent>
-            </Tooltip>
+            {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : defaultTrigger}
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Eliminar Curso</DialogTitle>
@@ -468,65 +486,58 @@ export function CourseManager({
                                 <TableCell>
                                     <TooltipProvider>
                                         <div className="flex items-center justify-center gap-0.5">
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
-                                                        className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-colors"
-                                                        onClick={() => onEdit?.(course)}
+                                                        className="h-8 w-8 text-muted-foreground hover:text-foreground rounded-md transition-colors"
                                                     >
-                                                        <Pencil className="h-3.5 w-3.5" />
+                                                        <MoreVertical className="h-4 w-4" />
                                                     </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent className="text-[10px]">Editar</TooltipContent>
-                                            </Tooltip>
-
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-8 w-8 text-muted-foreground hover:text-blue-500 hover:bg-blue-500/10 rounded-md transition-colors"
-                                                        onClick={() => onClone?.(course)}
-                                                    >
-                                                        <Copy className="h-3.5 w-3.5" />
-                                                    </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent className="text-[10px]">Clonar</TooltipContent>
-                                            </Tooltip>
-
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-emerald-500 hover:bg-emerald-500/10 rounded-md transition-colors" asChild>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="w-40">
+                                                    <DropdownMenuItem onClick={() => onEdit?.(course)} className="cursor-pointer">
+                                                        <Pencil className="mr-2 h-4 w-4 text-muted-foreground" />
+                                                        <span>Editar</span>
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => onClone?.(course)} className="cursor-pointer">
+                                                        <Copy className="mr-2 h-4 w-4 text-muted-foreground" />
+                                                        <span>Clonar</span>
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem asChild className="cursor-pointer">
                                                         <Link href={`/dashboard/teacher/courses/${course.id}?tab=students`}>
-                                                            <Users className="h-3.5 w-3.5" />
+                                                            <Users className="mr-2 h-4 w-4 text-muted-foreground" />
+                                                            <span>Alumnos</span>
                                                         </Link>
-                                                    </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent className="text-[10px]">Alumnos</TooltipContent>
-                                            </Tooltip>
-
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-8 w-8 text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10 rounded-md transition-colors"
-                                                        onClick={() => handleExportCourseZip(course.id, course.title)}
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem 
+                                                        onClick={() => handleExportCourseZip(course.id, course.title)} 
                                                         disabled={exportingCourseId === course.id}
+                                                        className="cursor-pointer"
                                                     >
                                                         {exportingCourseId === course.id ? (
-                                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                            <Loader2 className="mr-2 h-4 w-4 animate-spin text-muted-foreground" />
                                                         ) : (
-                                                            <FolderArchive className="h-3.5 w-3.5" />
+                                                            <FolderArchive className="mr-2 h-4 w-4 text-muted-foreground" />
                                                         )}
-                                                    </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent className="text-[10px]">Exportar (ZIP)</TooltipContent>
-                                            </Tooltip>
-
-                                            <DeleteCourseDialog courseId={course.id} courseTitle={course.title} />
+                                                        <span>Exportar (ZIP)</span>
+                                                    </DropdownMenuItem>
+                                                    <DeleteCourseDialog 
+                                                        courseId={course.id} 
+                                                        courseTitle={course.title} 
+                                                        trigger={
+                                                            <DropdownMenuItem 
+                                                                onSelect={(e) => e.preventDefault()} 
+                                                                className="text-red-600 focus:text-red-700 cursor-pointer"
+                                                            >
+                                                                <Trash2 className="mr-2 h-4 w-4 text-red-600 focus:text-red-700" />
+                                                                <span>Eliminar</span>
+                                                            </DropdownMenuItem>
+                                                        }
+                                                    />
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
 
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
@@ -537,7 +548,7 @@ export function CourseManager({
                                                         asChild
                                                     >
                                                         <Link href={`/dashboard/teacher/courses/${course.id}`}>
-                                                            <Settings className="h-3.5 w-3.5 mr-1" />
+                                                            <ArrowRight className="h-3.5 w-3.5 mr-1" />
                                                             <span className="hidden xl:inline">Ingresar</span>
                                                         </Link>
                                                     </Button>

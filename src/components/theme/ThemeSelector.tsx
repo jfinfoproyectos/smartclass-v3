@@ -11,6 +11,10 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
   DropdownMenuLabel,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuPortal,
+  DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 
 import {
@@ -28,9 +32,10 @@ export interface ThemeInfo {
 
 interface ThemeSelectorProps {
   themes: ThemeInfo[];
+  asSubMenu?: boolean;
 }
 
-export function ThemeSelector({ themes }: ThemeSelectorProps) {
+export function ThemeSelector({ themes, asSubMenu }: ThemeSelectorProps) {
   const [mounted, setMounted] = useState(false);
   const [activeTheme, setActiveTheme] = useState<string | null>(null);
   const { theme } = useTheme();
@@ -135,6 +140,50 @@ export function ThemeSelector({ themes }: ThemeSelectorProps) {
       <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 opacity-50">
         <Palette className="h-4 w-4" />
       </Button>
+    );
+  }
+
+  if (asSubMenu) {
+    return (
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger className="cursor-pointer text-xs">
+          <Palette className="mr-2 h-4 w-4 text-muted-foreground" />
+          <span>Apariencia</span>
+        </DropdownMenuSubTrigger>
+        <DropdownMenuPortal>
+          <DropdownMenuSubContent className="w-[180px] bg-background border-border">
+            <DropdownMenuLabel className="text-[10px] uppercase tracking-widest opacity-50">Temas Visuales</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem 
+              onClick={() => setActiveTheme("default")}
+              className="flex items-center justify-between cursor-pointer text-xs"
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-primary" />
+                <span>Predeterminado</span>
+              </div>
+              {activeTheme === "default" && <Check className="w-3 h-3 ml-2" />}
+            </DropdownMenuItem>
+
+            {themes.map((theme) => (
+              <DropdownMenuItem 
+                key={theme.id}
+                onClick={() => setActiveTheme(theme.id)}
+                className="flex items-center justify-between cursor-pointer text-xs"
+              >
+                <div className="flex items-center gap-2">
+                  <div 
+                    className="w-3 h-3 rounded-full border border-black/10 dark:border-white/10" 
+                    style={{ backgroundColor: theme.primaryColor }}
+                  />
+                  <span>{theme.name}</span>
+                </div>
+                {activeTheme === theme.id && <Check className="w-3 h-3 ml-2" />}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuSubContent>
+        </DropdownMenuPortal>
+      </DropdownMenuSub>
     );
   }
 

@@ -14,6 +14,7 @@ import { getVisualSettingsAction } from "@/app/actions/settings";
 import { ThemeEnforcer } from "@/components/theme/ThemeEnforcer";
 import { PWARegister } from "@/components/PWARegister";
 import { PushNotificationToggle } from "@/components/notification/PushNotificationToggle";
+import { MobileSettingsMenu } from "@/components/MobileSettingsMenu";
 
 
 export default async function DashboardLayout({
@@ -53,10 +54,22 @@ export default async function DashboardLayout({
           <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 w-full">
             <SidebarTrigger className="-ml-1" />
             <div className="ml-auto flex items-center gap-1 sm:gap-2">
-              {showThemeSelector && <ThemeSelector themes={themes} />}
-              {showModeToggle && <ModeToggle />}
-              <PushNotificationToggle />
-              <CreditsModal />
+              {/* Desktop Header Buttons */}
+              <div className="hidden md:flex items-center gap-1 sm:gap-2">
+                {showThemeSelector && <ThemeSelector themes={themes} />}
+                {showModeToggle && <ModeToggle />}
+                <PushNotificationToggle />
+                <CreditsModal />
+              </div>
+
+              {/* Mobile Dropdown Settings Menu */}
+              <div className="md:hidden">
+                <MobileSettingsMenu 
+                  themes={themes}
+                  showThemeSelector={showThemeSelector}
+                  showModeToggle={showModeToggle}
+                />
+              </div>
             </div>
           </div>
         </header>

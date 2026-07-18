@@ -11,8 +11,9 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { toast } from "sonner";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 
-export function PushNotificationToggle() {
+export function PushNotificationToggle({ asMenuItem }: { asMenuItem?: boolean }) {
   const {
     isSubscribed,
     permission,
@@ -85,6 +86,30 @@ export function PushNotificationToggle() {
     if (isSubscribed) return "Desactivar Notificaciones Push";
     return "Activar Notificaciones Push";
   };
+
+  if (asMenuItem) {
+    const getMenuIcon = () => {
+      if (loading) {
+        return <Loader2 className="mr-2 h-4 w-4 animate-spin text-muted-foreground" />;
+      }
+      if (permission === "unsupported" || permission === "denied") {
+        return <BellOff className="mr-2 h-4 w-4 text-muted-foreground" />;
+      }
+      if (isSubscribed) {
+        return <BellRing className="mr-2 h-4 w-4 text-primary" />;
+      }
+      return <Bell className="mr-2 h-4 w-4 text-muted-foreground" />;
+    };
+
+    return (
+      <DropdownMenuItem onClick={handleToggle} disabled={loading} className="cursor-pointer text-xs">
+        {getMenuIcon()}
+        <span>
+          {isSubscribed ? "Notificaciones Activas" : "Activar Notificaciones"}
+        </span>
+      </DropdownMenuItem>
+    );
+  }
 
   return (
     <TooltipProvider delayDuration={200}>
