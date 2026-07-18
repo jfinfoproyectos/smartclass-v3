@@ -186,7 +186,7 @@ export function TeacherDashboard({ courses, pendingEnrollments, stats, currentDa
     }
 
     return (
-        <div className="flex-1 space-y-6 p-8">
+        <div className="flex-1 space-y-6 p-4 sm:p-6 md:p-8 pt-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
                     <h2 className="text-3xl font-bold tracking-tight">Panel de Control</h2>
@@ -197,12 +197,12 @@ export function TeacherDashboard({ courses, pendingEnrollments, stats, currentDa
             </div>
 
             <div className="space-y-6">
-                <div className="flex items-center justify-between gap-4 bg-muted/20 p-2 rounded-xl border border-border/50 shadow-sm backdrop-blur-sm">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-muted/20 p-4 rounded-xl border border-border/50 shadow-sm backdrop-blur-sm">
                     <div className="flex items-center gap-4">
                         <h3 className="text-lg font-bold text-foreground/80 pl-2">Gestión de Cursos</h3>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
                         <Tabs value={courseFilter} onValueChange={setCourseFilter} className="w-full sm:w-auto">
                             <TabsList className="grid grid-cols-2 w-full sm:w-[260px]">
                                 <TabsTrigger value="active" className="text-xs sm:text-sm font-bold">Activos ({activeCoursesCount})</TabsTrigger>
@@ -211,55 +211,56 @@ export function TeacherDashboard({ courses, pendingEnrollments, stats, currentDa
                         </Tabs>
                         <div className="h-6 w-[1px] bg-border mx-1 hidden sm:block" />
                         
-                        <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
-                            <DialogTrigger asChild>
-                                <Button variant="outline" size="sm" className="shadow-sm hover:shadow-md transition-all active:scale-95">
-                                    <Upload className="mr-2 h-4 w-4" />
-                                    <span className="hidden sm:inline">Importar Curso (ZIP)</span>
-                                    <span className="sm:hidden">Importar</span>
-                                </Button>
-                            </DialogTrigger>
-                            <DialogContent className="sm:max-w-md w-[95vw] rounded-xl">
-                                <DialogHeader>
-                                    <DialogTitle>Importar Curso desde ZIP</DialogTitle>
-                                    <DialogDescription>
-                                        Selecciona el archivo ZIP exportado de un curso para importarlo con todos sus datos (estudiantes, notas, asistencias, entregas).
-                                    </DialogDescription>
-                                </DialogHeader>
-                                <div className="flex flex-col items-center justify-center border-2 border-dashed border-muted-foreground/20 rounded-xl p-8 bg-muted/5 hover:bg-muted/10 transition-colors relative group">
-                                    {isImporting ? (
-                                        <div className="flex flex-col items-center gap-2 py-4">
-                                            <Loader2 className="h-10 w-10 text-primary animate-spin" />
-                                            <p className="text-sm font-semibold text-muted-foreground">Importando curso...</p>
-                                        </div>
-                                    ) : (
-                                        <label className="flex flex-col items-center gap-3 cursor-pointer w-full py-4 text-center">
-                                            <Upload className="h-10 w-10 text-muted-foreground group-hover:text-primary transition-colors" />
-                                            <div className="space-y-1">
-                                                <p className="text-sm font-bold">Haz clic para seleccionar el archivo ZIP</p>
-                                                <p className="text-xs text-muted-foreground">Soporta archivos .zip con formato de exportación de SmartClass</p>
+                        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                            <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+                                <DialogTrigger asChild>
+                                    <Button variant="outline" size="sm" className="shadow-sm hover:shadow-md transition-all active:scale-95">
+                                        <Upload className="mr-2 h-4 w-4" />
+                                        <span className="hidden sm:inline">Importar Curso (ZIP)</span>
+                                        <span className="sm:hidden">Importar</span>
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent className="sm:max-w-md w-[95vw] rounded-xl">
+                                    <DialogHeader>
+                                        <DialogTitle>Importar Curso desde ZIP</DialogTitle>
+                                        <DialogDescription>
+                                            Selecciona el archivo ZIP exportado de un curso para importarlo con todos sus datos (estudiantes, notas, asistencias, entregas).
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    <div className="flex flex-col items-center justify-center border-2 border-dashed border-muted-foreground/20 rounded-xl p-8 bg-muted/5 hover:bg-muted/10 transition-colors relative group">
+                                        {isImporting ? (
+                                            <div className="flex flex-col items-center gap-2 py-4">
+                                                <Loader2 className="h-10 w-10 text-primary animate-spin" />
+                                                <p className="text-sm font-semibold text-muted-foreground">Importando curso...</p>
                                             </div>
-                                            <input 
-                                                type="file" 
-                                                accept=".zip" 
-                                                onChange={handleImportCourseZip} 
-                                                className="hidden" 
-                                            />
-                                        </label>
-                                    )}
-                                </div>
-                            </DialogContent>
-                        </Dialog>
+                                        ) : (
+                                            <label className="flex flex-col items-center gap-3 cursor-pointer w-full py-4 text-center">
+                                                <Upload className="h-10 w-10 text-muted-foreground group-hover:text-primary transition-colors" />
+                                                <div className="space-y-1">
+                                                    <p className="text-sm font-bold">Haz clic para seleccionar el archivo ZIP</p>
+                                                    <p className="text-xs text-muted-foreground">Soporta archivos .zip con formato de exportación de SmartClass</p>
+                                                </div>
+                                                <input 
+                                                    type="file" 
+                                                    accept=".zip" 
+                                                    onChange={handleImportCourseZip} 
+                                                    className="hidden" 
+                                                />
+                                            </label>
+                                        )}
+                                    </div>
+                                </DialogContent>
+                            </Dialog>
 
-                        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                            <DialogTrigger asChild>
-                                <Button size="sm" onClick={openCreateDialog} className="shadow-md hover:shadow-lg transition-all active:scale-95">
-                                    <Plus className="mr-2 h-4 w-4" /> 
-                                    <span className="hidden sm:inline">Crear Curso</span>
-                                    <span className="sm:hidden">Nuevo</span>
-                                </Button>
-                            </DialogTrigger>
-                            <DialogContent className="w-full max-w-[95vw] sm:max-w-2xl max-h-[85vh] sm:max-h-[90vh] overflow-y-auto rounded-xl">
+                            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                                <DialogTrigger asChild>
+                                    <Button size="sm" onClick={openCreateDialog} className="shadow-md hover:shadow-lg transition-all active:scale-95">
+                                        <Plus className="mr-2 h-4 w-4" /> 
+                                        <span className="hidden sm:inline">Crear Curso</span>
+                                        <span className="sm:hidden">Nuevo</span>
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent className="w-full max-w-[95vw] sm:max-w-2xl max-h-[85vh] sm:max-h-[90vh] overflow-y-auto rounded-xl">
                             <form action={async (formData) => {
                                     const title = formData.get("title") as string;
                                     const startDate = formData.get("startDate") as string;
@@ -391,6 +392,7 @@ export function TeacherDashboard({ courses, pendingEnrollments, stats, currentDa
                                 </form>
                             </DialogContent>
                         </Dialog>
+                        </div>
                     </div>
                 </div>
 

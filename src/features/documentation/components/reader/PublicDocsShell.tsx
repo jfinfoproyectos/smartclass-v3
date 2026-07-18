@@ -66,6 +66,22 @@ export function PublicDocsShell({
     });
   };
 
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("smartclass-sidebar-open");
+      return saved !== "false";
+    }
+    return true;
+  });
+
+  const toggleSidebar = () => {
+    setIsSidebarOpen(prev => {
+      const next = !prev;
+      localStorage.setItem("smartclass-sidebar-open", String(next));
+      return next;
+    });
+  };
+
   const totalTimeSpentSeconds = useMemo(() => {
     return userProgress.reduce((acc, curr) => acc + (curr.timeSpent || 0), 0);
   }, [userProgress]);
@@ -251,6 +267,13 @@ export function PublicDocsShell({
 
   return (
     <div className="public-docs-root flex flex-col h-screen w-full overflow-hidden bg-background text-foreground transition-all duration-500">
+      {/* Thin top bar with project name, centered with small font */}
+      <div className="flex-none h-5 bg-muted/40 dark:bg-black/15 border-b border-border/40 dark:border-white/5 flex items-center justify-center no-print">
+        <span className="text-[8px] font-bold uppercase tracking-[0.3em] text-muted-foreground/80 truncate px-4">
+          {projectName}
+        </span>
+      </div>
+
       {/* Primary Header Area */}
       <div className="relative z-50">
         <PublicHeader 
@@ -262,28 +285,25 @@ export function PublicDocsShell({
           courseSettings={courseSettings}
           isTocOpen={isTocOpen}
           toggleToc={toggleToc}
-        />
-      </div>
-
-      {/* Secondary Topics Navigation */}
-      <div className="relative z-40 no-print">
-        <TopicsHeader 
-          topics={topics} 
-          projectId={projectId} 
-          activeTopicSlug={activeTopic?.slug || null} 
+          isSidebarOpen={isSidebarOpen}
+          toggleSidebar={toggleSidebar}
+          topics={topics}
+          activeTopicSlug={activeTopic?.slug || null}
         />
       </div>
       
       {/* 3-Column Layout Container */}
       <div className="public-docs-container flex flex-1 w-full max-w-[1800px] mx-auto relative overflow-hidden">
         {/* LEFT SIDEBAR */}
-        <div className="no-print hidden md:block w-72 shrink-0">
-          <PublicSidebar 
-            navTree={sidebarNav} 
-            projectId={projectId} 
-            className="h-full border-r border-border bg-muted/40 dark:bg-muted/30" 
-          />
-        </div>
+        {isSidebarOpen && (
+          <div className="no-print hidden md:block w-72 shrink-0">
+            <PublicSidebar 
+              navTree={sidebarNav} 
+              projectId={projectId} 
+              className="h-full border-r border-border bg-muted/40 dark:bg-muted/30" 
+            />
+          </div>
+        )}
         
         {/* CENTER COLUMN */}
         <div className="public-docs-center flex-1 flex flex-col min-w-0 overflow-hidden relative bg-background">

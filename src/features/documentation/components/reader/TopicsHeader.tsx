@@ -17,7 +17,7 @@ export function TopicsHeader({ topics, projectId, activeTopicSlug }: TopicsHeade
 
   return (
     <div className="w-full border-b border-border/30 bg-background/30 backdrop-blur-md z-30">
-      <div className="max-w-[1800px] mx-auto px-4 h-9 flex items-center gap-0.5 overflow-x-auto no-scrollbar">
+      <div className="max-w-[1800px] mx-auto px-4 h-8 flex items-center gap-0.5 overflow-x-auto no-scrollbar">
         {/* Permanent Inicio Tab */}
         <Link
           href={`/docs/${projectId}`}
