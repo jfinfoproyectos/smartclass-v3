@@ -1,6 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { auth } from '@/lib/auth';
+import { getRoleFromUser } from '@/features/auth/services/authService';
 import { getPublicDocProject, getPublicDocPage, getProjectNavigationTree, NavItem } from '@/features/documentation/services/public-docs';
 import prisma from '@/lib/prisma';
 import BlockRenderer from '@/features/documentation/components/BlockRenderer';
@@ -157,17 +158,20 @@ export default async function Page({ params }: PageProps) {
   }
 
   // Determine final settings (System restriction overrides Course, Course overrides Default)
-  const themeMode = systemSettings?.appThemeMode && systemSettings.appThemeMode !== "STUDENT"
+  const role = session ? getRoleFromUser(session.user) : null;
+  const isStaff = role === "teacher" || role === "admin";
+
+  const themeMode = !isStaff && systemSettings?.appThemeMode && systemSettings.appThemeMode !== "STUDENT"
     ? systemSettings.appThemeMode
-    : (userCourse?.docThemeMode && userCourse.docThemeMode !== "STUDENT" ? userCourse.docThemeMode : "STUDENT");
+    : (!isStaff && userCourse?.docThemeMode && userCourse.docThemeMode !== "STUDENT" ? userCourse.docThemeMode : "STUDENT");
 
-  const allowThemeColorChange = systemSettings?.appAllowThemeColorChange === false 
+  const allowThemeColorChange = isStaff || (systemSettings?.appAllowThemeColorChange === false 
     ? false 
-    : (userCourse?.docAllowThemeColorChange ?? true);
+    : (userCourse?.docAllowThemeColorChange ?? true));
 
-  const allowCodeThemeChange = systemSettings?.appAllowCodeThemeChange === false 
+  const allowCodeThemeChange = isStaff || (systemSettings?.appAllowCodeThemeChange === false 
     ? false 
-    : (userCourse?.docAllowCodeThemeChange ?? true);
+    : (userCourse?.docAllowCodeThemeChange ?? true));
 
   // Find current item in navTree to see if it has sub-navigation
   const findCurrentItem = (items: NavItem[], path: string): NavItem | null => {

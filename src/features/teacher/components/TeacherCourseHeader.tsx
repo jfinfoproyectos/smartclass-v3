@@ -46,8 +46,8 @@ export function TeacherCourseHeader({
     themeMode = "STUDENT",
     allowThemeColorChange = true 
 }: TeacherCourseHeaderProps) {
-    const showModeToggle = themeMode === "STUDENT";
-    const showThemeSelector = allowThemeColorChange;
+    const showModeToggle = true;
+    const showThemeSelector = true;
      return (
         <div className="flex-none relative bg-background/95 backdrop-blur-md w-full z-30 border-b border-border/50 shadow-sm transition-all duration-300">
             <style jsx global>{`

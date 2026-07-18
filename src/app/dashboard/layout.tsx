@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
+import { getRoleFromUser } from "@/features/auth/services/authService";
 import { CreditsModal } from "@/components/CreditsModal";
 import { ModeToggle } from "@/components/theme/ModeToggle";
 import { ThemeSelector } from "@/components/theme/ThemeSelector";
@@ -31,8 +32,10 @@ export default async function DashboardLayout({
     getVisualSettingsAction()
   ]);
 
-  const showModeToggle = visualSettings.themeMode === "STUDENT";
-  const showThemeSelector = visualSettings.allowThemeColorChange;
+  const role = session ? getRoleFromUser(session.user) : null;
+  const isStaff = role === "teacher" || role === "admin";
+  const showModeToggle = visualSettings.themeMode === "STUDENT" || isStaff;
+  const showThemeSelector = visualSettings.allowThemeColorChange || isStaff;
 
   return (
 
