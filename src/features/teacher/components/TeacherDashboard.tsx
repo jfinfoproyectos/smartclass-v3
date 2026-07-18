@@ -197,12 +197,12 @@ export function TeacherDashboard({ courses, pendingEnrollments, stats, currentDa
             </div>
 
             <div className="space-y-6">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-muted/20 p-4 rounded-xl border border-border/50 shadow-sm backdrop-blur-sm">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-muted/20 p-4 rounded-xl border border-border/50 shadow-sm backdrop-blur-sm">
                     <div className="flex items-center gap-4">
                         <h3 className="text-lg font-bold text-foreground/80 pl-2">Gestión de Cursos</h3>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
                         <Tabs value={courseFilter} onValueChange={setCourseFilter} className="w-full sm:w-auto">
                             <TabsList className="grid grid-cols-2 w-full sm:w-[260px]">
                                 <TabsTrigger value="active" className="text-xs sm:text-sm font-bold">Activos ({activeCoursesCount})</TabsTrigger>
