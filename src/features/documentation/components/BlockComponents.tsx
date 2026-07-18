@@ -1060,7 +1060,7 @@ export function InteractiveQuiz({ question, options, correctIndex, explanation }
                   {explanation}
                 </p>
               )}
-              <Button onClick={handleReset} variant="outline" size="sm" className="mt-4 text-[10px] uppercase font-bold tracking-widest h-8 rounded-xl">
+              <Button onClick={handleReset} variant="outline" size="sm" className="mt-4 shadow-sm active:scale-95">
                 Reintentar
               </Button>
             </div>
@@ -1779,7 +1779,7 @@ export function AiPromptBlock({ promptText, buttonText, helperText }: { promptTe
             <h4 className="text-sm font-bold text-foreground mt-0.5 leading-snug">{promptText}</h4>
             {helperText && <p className="text-xs text-muted-foreground/80 mt-1 leading-relaxed font-medium">{helperText}</p>}
           </div>
-          <Button onClick={triggerAi} className="font-bold rounded-xl gap-2 text-xs h-9 px-4 shadow-sm hover:scale-[1.02] transition-transform duration-300">
+          <Button onClick={triggerAi} className="font-bold gap-2 text-xs h-9 px-4 shadow-sm active:scale-95 transition-all">
             {buttonText || "Preguntar al Asistente IA"}
             <ArrowRight className="w-4 h-4" />
           </Button>

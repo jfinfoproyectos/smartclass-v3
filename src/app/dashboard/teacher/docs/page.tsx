@@ -66,10 +66,10 @@ export default async function DocsScannerPage() {
   });
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 p-8">
+    <div className="space-y-6 animate-in fade-in duration-500 p-4 sm:p-6 md:p-8 pt-6">
       <Toaster />
       
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex flex-col gap-1">
           <h2 className="text-3xl font-bold tracking-tight">Gestión de Docs</h2>
           <p className="text-muted-foreground">
@@ -77,7 +77,7 @@ export default async function DocsScannerPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center justify-end gap-3 w-full sm:w-auto">
           <CreateAiProjectDialog />
           <CreateProjectDialog />
         </div>
@@ -125,7 +125,7 @@ export default async function DocsScannerPage() {
                       <div className="flex items-center justify-end gap-2">
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button asChild size="icon" variant="outline" className="h-9 w-9 rounded-xl border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300">
+                            <Button asChild size="icon" variant="outline" className="h-9 w-9 border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300">
                               <Link href={`/docs/${project.slug}`} target="_blank" rel="noopener noreferrer">
                                 <ExternalLink className="w-4 h-4" />
                                 <span className="sr-only">Abrir Documentación</span>
@@ -139,7 +139,7 @@ export default async function DocsScannerPage() {
 
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button asChild size="icon" variant="outline" className="h-9 w-9 rounded-xl border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300">
+                            <Button asChild size="icon" variant="outline" className="h-9 w-9 border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300">
                               <Link href={`/dashboard/teacher/docs/${project.slug}`}>
                                 <Edit3 className="w-4 h-4" />
                                 <span className="sr-only">Editar</span>

@@ -283,7 +283,7 @@ export default function DocEditorPage() {
                   }
                 }}
               />
-              <Button size="sm" className="h-8 rounded-lg px-3 text-[10px] uppercase font-bold" onClick={handleProjectNameSave}>
+              <Button size="sm" className="h-8 px-3 text-xs font-bold" onClick={handleProjectNameSave}>
                 Listo
               </Button>
             </div>

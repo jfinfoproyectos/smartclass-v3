@@ -65,6 +65,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { useTheme } from "next-themes";
 import Link from "next/link";
 import { createQuestionAction, deleteQuestionAction, updateQuestionAction, testQuestionWithAIAction, generateQuestionAction, generateAnswerAction, updateQuestionsOrderAction } from "@/features/teacher/actions/evaluationActions";
@@ -376,9 +377,9 @@ export function QuestionManager({ evaluation }: { evaluation: any }) {
                                                     <div className="flex-1 min-h-0 p-5 overflow-y-auto flex flex-col gap-5">
                                                         <div className="space-y-2">
                                                             <Label className="text-xs font-bold text-foreground">1. ¿Qué deseas evaluar en esta pregunta?</Label>
-                                                            <textarea
+                                                            <Textarea
                                                                 required
-                                                                className="w-full h-24 rounded-xl border p-3.5 text-xs bg-muted/20 focus:bg-background focus:ring-2 focus:ring-primary/20 resize-none transition-all outline-none leading-relaxed border-muted-foreground/20"
+                                                                className="w-full h-24 border p-3.5 text-xs bg-muted/20 focus:bg-background focus:ring-2 focus:ring-primary/20 resize-none transition-all outline-none leading-relaxed border-muted-foreground/20"
                                                                 placeholder="Ej. 'Un problema de bucles anidados en Python para calcular números primos' o 'Teoría sobre los principios SOLID'..."
                                                                 value={assistantPrompt}
                                                                 onChange={(e) => setAssistantPrompt(e.target.value)}
@@ -553,8 +554,8 @@ export function QuestionManager({ evaluation }: { evaluation: any }) {
                                                             }}
                                                         />
                                                     ) : (
-                                                        <textarea
-                                                            className="w-full h-full p-4 text-sm bg-transparent focus:outline-none resize-none font-sans"
+                                                        <Textarea
+                                                            className="w-full h-full p-4 text-sm bg-transparent focus:outline-none resize-none font-sans border-0 shadow-none"
                                                             placeholder="Escribe aquí la respuesta ideal esperada..."
                                                             value={referenceAnswer}
                                                             onChange={(e) => setReferenceAnswer(e.target.value)}
@@ -607,8 +608,8 @@ export function QuestionManager({ evaluation }: { evaluation: any }) {
                                     <TabsContent value="test" className="flex-1 flex flex-col overflow-hidden m-0 pt-2 pb-0">
                                         <div className="flex flex-col gap-2 flex-1 overflow-hidden">
                                             {type === "Text" ? (
-                                                <textarea
-                                                    className="flex-1 w-full rounded-md border bg-muted/10 p-4 text-sm focus:outline-none resize-none"
+                                                <Textarea
+                                                    className="flex-1 w-full bg-muted/10 p-4 text-sm focus:outline-none resize-none"
                                                     placeholder="Escribe una respuesta para validar..."
                                                     value={testAnswer}
                                                     onChange={(e) => setTestAnswer(e.target.value)}

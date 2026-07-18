@@ -48,7 +48,7 @@ export function DeleteProjectDialog({ projectId, projectName, iconOnly = false }
           <Button 
             size="icon" 
             variant="outline" 
-            className="h-9 w-9 rounded-xl border-border/50 text-destructive hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-all active:scale-95 shrink-0"
+            className="h-9 w-9 border-border/50 text-destructive hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-all active:scale-95 shrink-0"
           >
             <Trash2 className="w-4 h-4" />
             <span className="sr-only">Eliminar</span>
@@ -57,7 +57,7 @@ export function DeleteProjectDialog({ projectId, projectName, iconOnly = false }
           <Button 
             size="sm" 
             variant="ghost" 
-            className="gap-2 h-9 rounded-xl font-bold text-destructive hover:bg-destructive/10 hover:text-destructive transition-all active:scale-95 px-3"
+            className="gap-2 h-9 font-bold text-destructive hover:bg-destructive/10 hover:text-destructive transition-all active:scale-95 px-3"
           >
             <Trash2 className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Eliminar</span>
@@ -74,13 +74,13 @@ export function DeleteProjectDialog({ projectId, projectName, iconOnly = false }
             ¿Estás seguro de que deseas eliminar el proyecto <strong className="text-foreground">"{projectName}"</strong>? Esta acción borrará permanentemente el proyecto y todas sus páginas asociadas, y no se puede deshacer.
           </DialogDescription>
         </DialogHeader>
-
+ 
         <DialogFooter className="mt-2 flex flex-col sm:flex-row gap-2">
           <Button 
             variant="outline" 
             onClick={() => setOpen(false)} 
             disabled={isDeleting}
-            className="rounded-xl font-bold uppercase tracking-widest text-[10px] border-border bg-muted/20 hover:bg-muted/30 transition-all flex-1 sm:flex-initial"
+            className="flex-1 sm:flex-initial"
           >
             Cancelar
           </Button>
@@ -88,7 +88,7 @@ export function DeleteProjectDialog({ projectId, projectName, iconOnly = false }
             onClick={handleDelete} 
             disabled={isDeleting}
             variant="destructive"
-            className="rounded-xl font-black uppercase tracking-widest text-[10px] bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-lg shadow-destructive/20 transition-all flex-1 sm:flex-initial gap-2"
+            className="flex-1 sm:flex-initial gap-2"
           >
             {isDeleting ? (
               <>

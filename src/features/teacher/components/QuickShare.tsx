@@ -89,7 +89,7 @@ export function QuickShare() {
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="flex-1 flex flex-col gap-4 p-4 min-h-0">
-                        <textarea
+                        <Textarea
                             placeholder="Escribe aquí... Ej: 'Lean el capítulo 4 para el lunes' o pega un enlace de YouTube."
                             className="flex h-full w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-lg font-mono shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 custom-scrollbar overflow-auto whitespace-pre"
                             value={content}

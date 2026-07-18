@@ -47,7 +47,7 @@ export function CreateProjectDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="h-9 rounded-full px-5 font-black uppercase tracking-widest bg-primary text-primary-foreground hover:bg-primary/90 shadow-xl shadow-primary/20 transition-all group text-[9px] gap-2 active:scale-95">
+        <Button size="sm" className="shadow-md hover:shadow-lg transition-all active:scale-95">
           <Plus className="h-4 w-4 group-hover:rotate-90 transition-transform" />
           Nueva Doc
         </Button>
@@ -75,7 +75,7 @@ export function CreateProjectDialog() {
           <Button 
             onClick={handleCreate} 
             disabled={!name.trim() || isPending}
-            className="w-full h-12 rounded-xl font-black uppercase tracking-widest"
+            className="w-full h-11 shadow-md hover:shadow-lg transition-all active:scale-95"
           >
             {isPending ? (
               <Loader2 className="w-4 h-4 animate-spin mr-2" />

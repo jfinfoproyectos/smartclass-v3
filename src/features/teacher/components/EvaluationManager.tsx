@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import { format } from "date-fns";
-import { Plus, Trash2, Edit, AlertCircle, FileText, Search, Download, Upload } from "lucide-react";
+import { Plus, Trash2, Edit, FileQuestion, FileText, Search, Download, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -383,7 +383,7 @@ export function EvaluationManager({ evaluations }: { evaluations: any[] }) {
                                             <Button
                                                 variant="outline"
                                                 size="icon"
-                                                className="h-9 w-9 rounded-xl border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300"
+                                                className="h-9 w-9 border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300"
                                                 title="Configurar Detalles"
                                                 onClick={() => handleOpenEdit(evaluation)}
                                             >
@@ -393,7 +393,7 @@ export function EvaluationManager({ evaluations }: { evaluations: any[] }) {
                                             <Button
                                                 variant="outline"
                                                 size="icon"
-                                                className="h-9 w-9 rounded-xl border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300"
+                                                className="h-9 w-9 border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300"
                                                 title="Exportar como JSON"
                                                 onClick={() => handleExport(evaluation)}
                                             >
@@ -403,12 +403,12 @@ export function EvaluationManager({ evaluations }: { evaluations: any[] }) {
                                             <Button
                                                 variant="outline"
                                                 size="icon"
-                                                className="h-9 w-9 rounded-xl border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300"
+                                                className="h-9 w-9 border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300"
                                                 title="Ver/Editar Preguntas"
                                                 asChild
                                             >
                                                 <Link href={`/dashboard/teacher/evaluations/${evaluation.id}`}>
-                                                    <AlertCircle className="h-4 w-4" />
+                                                    <FileQuestion className="h-4 w-4" />
                                                 </Link>
                                             </Button>
 
@@ -417,7 +417,7 @@ export function EvaluationManager({ evaluations }: { evaluations: any[] }) {
                                                     <Button 
                                                         variant="outline" 
                                                         size="icon"
-                                                        className="h-9 w-9 rounded-xl border-border/50 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-all duration-300"
+                                                        className="h-9 w-9 border-border/50 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-all duration-300"
                                                         title="Eliminar"
                                                     >
                                                         <Trash2 className="h-4 w-4" />

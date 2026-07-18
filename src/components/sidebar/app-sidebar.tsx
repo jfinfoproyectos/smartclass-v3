@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { BookOpen, Settings2, Calendar, CalendarClock, BarChart, Users, FileText, Activity, ScrollText, Home, Wrench, ClipboardList } from "lucide-react"
+import { BookOpen, Settings2, Calendar, CalendarClock, BarChart, Users, FileText, Activity, ScrollText, Home, Wrench, ClipboardList, FileCheck } from "lucide-react"
 
 import { NavMain } from "@/components/sidebar/nav-main"
 import { NavUser } from "@/components/sidebar/nav-user"
@@ -115,7 +115,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           {
             title: "Evaluaciones",
             url: "/dashboard/teacher/evaluations",
-            icon: ClipboardList,
+            icon: FileCheck,
             isActive: false,
           },
           {

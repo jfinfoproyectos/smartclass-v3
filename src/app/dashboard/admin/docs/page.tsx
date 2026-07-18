@@ -130,7 +130,7 @@ export default async function AdminDocsPage() {
                       </TableCell>
                       <TableCell className="text-right pr-4">
                         <div className="flex items-center justify-end gap-2">
-                          <Button asChild size="sm" variant="outline" className="gap-2 h-9 rounded-xl font-bold border-border/50 hover:bg-muted transition-all">
+                          <Button asChild size="sm" variant="outline" className="gap-2 h-9 border-border/50 hover:bg-muted transition-all">
                             <Link href={`/docs/${project.slug}`} target="_blank" rel="noopener noreferrer">
                               <ExternalLink className="w-3.5 h-3.5" />
                               Ver Público

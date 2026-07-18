@@ -11,7 +11,7 @@ import {
     Users, 
     ExternalLink, 
     ClipboardCheck, 
-    GraduationCap, 
+    FileCheck, 
     BarChart3, 
     Dices,
     Settings2,
@@ -102,7 +102,7 @@ export function TeacherCourseHeader({
                         <AttendanceTaker 
                             courseId={courseId} 
                             trigger={
-                                <Button variant="ghost" size="sm" className="h-8 rounded-lg text-[10px] font-bold px-2.5 gap-1.5 hover:bg-muted transition-all">
+                                <Button variant="ghost" size="sm" className="h-8 text-[10px] font-bold px-2.5 gap-1.5 hover:bg-muted transition-all">
                                     <CalendarCheck2 className="h-3.5 w-3.5 text-primary" />
                                     <span className="hidden xl:inline uppercase tracking-tighter">Asistencia</span>
                                 </Button>
@@ -122,7 +122,7 @@ export function TeacherCourseHeader({
                     <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 h-auto lg:h-9 p-0.5 bg-muted/60 dark:bg-muted/30 rounded-lg gap-0.5 border border-border/30 shadow-none">
                         <NavTab value="activities" icon={<ClipboardCheck className="h-3.5 w-3.5" />} label="Actividades" />
                         <NavTab value="students" icon={<Users className="h-3.5 w-3.5" />} label="Estudiantes" />
-                        <NavTab value="evaluations" icon={<GraduationCap className="h-3.5 w-3.5" />} label="Evaluaciones" />
+                        <NavTab value="evaluations" icon={<FileCheck className="h-3.5 w-3.5" />} label="Evaluaciones" />
                         <NavTab value="grades" icon={<LayoutDashboard className="h-3.5 w-3.5" />} label="Calificaciones" />
                         <NavTab value="stats" icon={<BarChart3 className="h-3.5 w-3.5" />} label="Estadísticas" />
                         <NavTab value="roulette" icon={<Dices className="h-3.5 w-3.5" />} label="Ruleta" />

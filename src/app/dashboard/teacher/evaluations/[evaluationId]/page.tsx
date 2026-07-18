@@ -41,7 +41,7 @@ export default async function EvaluationDetailsPage({
     (evaluation as any).userAIModel = user?.aiModel || "IA";
 
     return (
-        <div className="flex flex-col gap-6 p-6 max-w-7xl mx-auto w-full">
+        <div className="flex flex-col gap-6 p-4 sm:p-6 md:p-8 pt-6 w-full">
             <QuestionManager evaluation={evaluation} />
         </div>
     );

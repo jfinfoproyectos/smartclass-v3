@@ -385,7 +385,7 @@ export function TeacherDashboard({ courses, pendingEnrollments, stats, currentDa
                                     </div>
 
                                     <DialogFooter className="pt-6 border-t mt-4">
-                                        <Button type="submit" className="px-8 font-bold text-lg h-12 rounded-xl shadow-lg shadow-primary/20">
+                                         <Button type="submit" className="px-8 font-bold text-lg h-12 shadow-lg shadow-primary/20">
                                             {isCloning ? "Clonar Curso" : (editCourse ? "Actualizar" : "Guardar Curso")}
                                         </Button>
                                     </DialogFooter>

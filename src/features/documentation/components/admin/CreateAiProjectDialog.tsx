@@ -65,8 +65,8 @@ export function CreateAiProjectDialog() {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button className="h-9 rounded-full px-5 font-black uppercase tracking-widest bg-primary text-primary-foreground hover:bg-primary/90 shadow-xl shadow-primary/20 transition-all group text-[9px] gap-2 active:scale-95">
-          <Sparkles className="w-4 h-4 group-hover:scale-110 transition-transform animate-pulse" />
+        <Button variant="outline" size="sm" className="shadow-sm hover:shadow-md transition-all active:scale-95">
+          <Sparkles className="w-4 h-4 group-hover:scale-110 transition-transform animate-pulse text-primary" />
           Nueva Doc con IA
         </Button>
       </DialogTrigger>
@@ -80,7 +80,7 @@ export function CreateAiProjectDialog() {
             Suministra la temática completa de tu curso o manual y la IA creará toda la estructura y los documentos por ti.
           </DialogDescription>
         </DialogHeader>
-
+ 
         <form onSubmit={handleGenerate} className="space-y-4 py-2">
           <div className="space-y-2">
             <Label htmlFor="ai-project-name" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -96,7 +96,7 @@ export function CreateAiProjectDialog() {
               required
             />
           </div>
-
+ 
           <div className="space-y-2">
             <Label htmlFor="ai-project-prompt" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
               Temática y Estructura a Generar
@@ -111,21 +111,21 @@ export function CreateAiProjectDialog() {
               required
             />
           </div>
-
+ 
           <DialogFooter className="mt-2 flex flex-col sm:flex-row gap-2">
             <Button 
               type="button"
               variant="outline" 
               onClick={() => setIsOpen(false)} 
               disabled={isGenerating}
-              className="rounded-xl font-bold uppercase tracking-widest text-[10px] border-border bg-muted/20 hover:bg-muted/30 transition-all flex-1 sm:flex-initial"
+              className="flex-1 sm:flex-initial"
             >
               Cancelar
             </Button>
             <Button 
               type="submit"
               disabled={isGenerating || !name.trim() || !prompt.trim()}
-              className="rounded-xl font-black uppercase tracking-widest text-[10px] bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all flex-1 gap-2"
+              className="shadow-md hover:shadow-lg transition-all active:scale-95 flex-1 gap-2"
             >
               {isGenerating ? (
                 <>

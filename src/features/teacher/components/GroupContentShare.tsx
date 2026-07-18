@@ -66,6 +66,13 @@ import {
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 interface FileSnippet {
     name: string;
@@ -527,15 +534,21 @@ export function GroupContentShare({ courseId, initialContent = [] }: { courseId:
                                                     </div>
                                                     <div className="w-40">
                                                         <Label className="text-[10px] uppercase font-bold text-muted-foreground">Lenguaje</Label>
-                                                        <select 
-                                                            className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors"
+                                                        <Select 
                                                             value={files[activeFileIndex].language}
-                                                            onChange={(e) => updateFile(activeFileIndex, "language", e.target.value)}
+                                                            onValueChange={(val) => updateFile(activeFileIndex, "language", val)}
                                                         >
-                                                            {LANGUAGES.map(lang => (
-                                                                <option key={lang} value={lang}>{lang.charAt(0).toUpperCase() + lang.slice(1)}</option>
-                                                            ))}
-                                                        </select>
+                                                            <SelectTrigger className="h-8 bg-background border-input text-xs font-semibold">
+                                                                <SelectValue placeholder="Lenguaje" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {LANGUAGES.map(lang => (
+                                                                    <SelectItem key={lang} value={lang} className="text-xs font-semibold">
+                                                                        {lang.charAt(0).toUpperCase() + lang.slice(1)}
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
                                                     </div>
                                                 </div>
                                                 <div 
