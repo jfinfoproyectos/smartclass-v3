@@ -77,8 +77,9 @@ export async function getProjectAnalyticsAction(docProjectId: string, courseId?:
       _avg: { timeSpent: true }
     }),
     prisma.course.findFirst({
-      where: courseId ? { id: courseId } : { docProjectId },
+      where: courseId ? { id: courseId } : { docLinks: { some: { docProjectId } } },
       select: {
+        id: true,
         docTrackingEnabled: true,
         docAiTutorEnabled: true,
         docAiQuestionsLimit: true,
@@ -252,7 +253,7 @@ export async function updateCourseDocSettingsAction(courseId: string, settings: 
 
   const course = await prisma.course.findUnique({
     where: { id: courseId },
-    select: { teacherId: true, docProjectId: true }
+    select: { teacherId: true }
   });
 
   if (!course) throw new Error("Curso no encontrado");
@@ -275,10 +276,7 @@ export async function updateCourseDocSettingsAction(courseId: string, settings: 
     }
   });
 
-  if (course.docProjectId) {
-     revalidatePath(`/docs/${course.docProjectId}`, "layout");
-  }
-  
+  revalidatePath(`/docs`, "layout");
   return { success: true };
 }
 

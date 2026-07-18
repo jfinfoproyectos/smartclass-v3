@@ -573,34 +573,82 @@ export async function getProjectCoursesAction(projectId: string) {
   const projectWithCourses = await prisma.docProject.findFirst({
     where: { id: project.id },
     include: {
-      courses: {
+      courseLinks: {
         select: {
-          id: true,
-          title: true
+          course: { select: { id: true, title: true } }
         }
       }
     }
   });
   
-  return projectWithCourses?.courses || [];
+  return projectWithCourses?.courseLinks.map(l => l.course) || [];
 }
 
-export async function linkProjectToCourseAction(courseId: string, projectId: string | null) {
+export async function getCourseLinkedProjectsAction(courseId: string) {
   const session = await verifyAdmin();
   
   const course = await prisma.course.findUnique({
     where: { id: courseId },
     select: { teacherId: true }
   });
-
   if (!course) throw new Error("Curso no encontrado");
   if (course.teacherId !== session.user.id && session.user.role !== "admin") {
     throw new Error("No tienes permiso sobre este curso");
   }
 
-  await prisma.course.update({
+  const links = await prisma.courseDocProject.findMany({
+    where: { courseId },
+    include: { docProject: { select: { id: true, name: true, slug: true, icon: true, imageUrl: true } } },
+    orderBy: { order: 'asc' }
+  });
+
+  return links.map(l => ({ ...l.docProject, linkId: l.id, order: l.order }));
+}
+
+export async function linkProjectToCourseAction(courseId: string, projectId: string) {
+  const session = await verifyAdmin();
+  
+  const course = await prisma.course.findUnique({
     where: { id: courseId },
-    data: { docProjectId: projectId }
+    select: { teacherId: true }
+  });
+  if (!course) throw new Error("Curso no encontrado");
+  if (course.teacherId !== session.user.id && session.user.role !== "admin") {
+    throw new Error("No tienes permiso sobre este curso");
+  }
+
+  // Get current max order
+  const existing = await prisma.courseDocProject.findMany({
+    where: { courseId },
+    orderBy: { order: 'desc' },
+    take: 1
+  });
+  const nextOrder = existing.length > 0 ? existing[0].order + 1 : 0;
+
+  await prisma.courseDocProject.upsert({
+    where: { courseId_docProjectId: { courseId, docProjectId: projectId } },
+    update: {},
+    create: { courseId, docProjectId: projectId, order: nextOrder }
+  });
+
+  revalidatePath(`/dashboard/teacher/courses/${courseId}`);
+  return { success: true };
+}
+
+export async function unlinkProjectFromCourseAction(courseId: string, projectId: string) {
+  const session = await verifyAdmin();
+  
+  const course = await prisma.course.findUnique({
+    where: { id: courseId },
+    select: { teacherId: true }
+  });
+  if (!course) throw new Error("Curso no encontrado");
+  if (course.teacherId !== session.user.id && session.user.role !== "admin") {
+    throw new Error("No tienes permiso sobre este curso");
+  }
+
+  await prisma.courseDocProject.deleteMany({
+    where: { courseId, docProjectId: projectId }
   });
 
   revalidatePath(`/dashboard/teacher/courses/${courseId}`);

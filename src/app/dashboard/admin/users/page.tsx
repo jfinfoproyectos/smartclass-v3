@@ -11,7 +11,7 @@ export default async function AdminUsersPage() {
         redirect("/dashboard/student");
     }
 
-    const { users, total } = await getAllUsersAction({ limit: 20 });
+    const { users, total } = await getAllUsersAction({ limit: 20, role: "student" });
 
     return (
         <div className="p-8">

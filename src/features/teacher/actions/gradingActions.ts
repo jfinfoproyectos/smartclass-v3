@@ -193,6 +193,18 @@ export async function finalizeGitHubGradingAction(
 
     await auditLogger.logGrade(activityId, activity?.title || "Actividad", student?.name || "Estudiante", result.grade, session.user.id, session.user.name || "Profesor");
 
+    // 🔔 PUSH NOTIFICATION
+    try {
+        const { sendPushNotification } = await import("@/lib/push-notifications");
+        await sendPushNotification(studentUserId, {
+            title: "Actividad Calificada 📝",
+            body: `Tu entrega para "${activity?.title || 'Actividad'}" ha sido calificada con ${result.grade}.`,
+            url: `/dashboard/student/activities`
+        });
+    } catch (pushError) {
+        console.error("Failed to send grading push notification:", pushError);
+    }
+
     revalidatePath(`/dashboard/teacher/courses/${courseId}/activities/${activityId}`);
     revalidatePath(`/dashboard/teacher`);
     revalidatePath("/dashboard/student");
@@ -247,6 +259,19 @@ export async function gradeManualActivityAction(formData: FormData) {
         description: `Nota manual asignada a estudiante (${userId}) en actividad ${activityId}: ${grade}`,
         success: true,
     });
+
+    // 🔔 PUSH NOTIFICATION
+    try {
+        const activity = await prisma.activity.findUnique({ where: { id: activityId }, select: { title: true } });
+        const { sendPushNotification } = await import("@/lib/push-notifications");
+        await sendPushNotification(userId, {
+            title: "Actividad Calificada 📝",
+            body: `Tu entrega para "${activity?.title || 'Actividad'}" ha sido calificada con ${grade}.`,
+            url: `/dashboard/student/activities`
+        });
+    } catch (pushError) {
+        console.error("Failed to send manual grading push notification:", pushError);
+    }
 
     revalidatePath(`/dashboard/teacher/courses/${courseId}/activities/${activityId}`);
 }
@@ -303,6 +328,18 @@ export async function rejectManualActivityAction(formData: FormData) {
         description: `Entrega rechazada: ${activity?.title || "Actividad"} de ${student?.name || "Estudiante"}`,
         success: true,
     });
+
+    // 🔔 PUSH NOTIFICATION
+    try {
+        const { sendPushNotification } = await import("@/lib/push-notifications");
+        await sendPushNotification(userId, {
+            title: "Entrega Rechazada ⚠️",
+            body: `Tu entrega para "${activity?.title || 'Actividad'}" ha sido rechazada por el profesor. Revisa los comentarios.`,
+            url: `/dashboard/student/activities`
+        });
+    } catch (pushError) {
+        console.error("Failed to send rejection push notification:", pushError);
+    }
 
     revalidatePath(`/dashboard/teacher/courses/${courseId}/activities/${activityId}`);
 }

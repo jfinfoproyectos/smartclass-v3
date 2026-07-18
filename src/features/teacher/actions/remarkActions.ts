@@ -52,6 +52,18 @@ export async function createRemarkAction(formData: FormData) {
         session.user.name || "Profesor"
     );
 
+    // 🔔 PUSH NOTIFICATION
+    try {
+        const { sendPushNotification } = await import("@/lib/push-notifications");
+        await sendPushNotification(userId, {
+            title: type === "COMMENDATION" ? "Nueva Felicitación 🌟" : "Nueva Observación de Atención ⚠️",
+            body: `El profesor ha registrado una observación: "${title}".`,
+            url: `/dashboard/student`
+        });
+    } catch (pushError) {
+        console.error("Failed to send remark push notification:", pushError);
+    }
+
     revalidatePath(`/dashboard/teacher/courses/${courseId}`);
 }
 

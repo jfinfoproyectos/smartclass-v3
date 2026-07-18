@@ -11,7 +11,9 @@ import {
     ExternalLink,
     Trash2,
     Eye,
-    Calendar as CalendarIcon
+    Calendar as CalendarIcon,
+    X,
+    LogOut
 } from "lucide-react";
 import {
     Table,
@@ -51,10 +53,11 @@ interface StudentAttendanceSummaryProps {
 interface AttendanceRecord {
     id: string;
     date: string | Date;
-    status: "PRESENT" | "ABSENT" | "LATE" | "EXCUSED";
+    status: "PRESENT" | "ABSENT" | "LATE" | "LEAVE_EARLY" | "EXCUSED";
     justification?: string | null;
     justificationUrl?: string | null;
     arrivalTime?: string | Date | null;
+    departureTime?: string | Date | null;
 }
 
 export function StudentAttendanceSummary({ courseId, userId, readonly = false }: StudentAttendanceSummaryProps) {
@@ -197,9 +200,9 @@ export function StudentAttendanceSummary({ courseId, userId, readonly = false }:
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {stats.records.filter((r: any) => r.status === "ABSENT" || r.status === "LATE" || r.status === "EXCUSED").length > 0 ? (
+                        {stats.records.filter((r: any) => r.status === "ABSENT" || r.status === "LATE" || r.status === "LEAVE_EARLY" || r.status === "EXCUSED").length > 0 ? (
                             stats.records
-                                .filter((r: any) => r.status === "ABSENT" || r.status === "LATE" || r.status === "EXCUSED")
+                                .filter((r: any) => r.status === "ABSENT" || r.status === "LATE" || r.status === "LEAVE_EARLY" || r.status === "EXCUSED")
                                 .map((record: AttendanceRecord) => (
                                     <TableRow key={record.id} className="group hover:bg-muted/20 transition-colors border-border/30">
                                         <TableCell className="text-sm pl-4">
@@ -217,6 +220,10 @@ export function StudentAttendanceSummary({ courseId, userId, readonly = false }:
                                                 <Badge variant="warning" className="gap-1 bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border-yellow-200">
                                                     <Clock className="h-3 w-3" /> Tarde
                                                 </Badge>
+                                            ) : record.status === "LEAVE_EARLY" ? (
+                                                <Badge className="gap-1 bg-indigo-100 text-indigo-800 hover:bg-indigo-200 border-indigo-200">
+                                                    <LogOut className="h-3 w-3" /> Retiro
+                                                </Badge>
                                             ) : (
                                                 <Badge variant="secondary" className="gap-1 bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-200">
                                                     <CheckCircle className="h-3 w-3" /> Excusado
@@ -225,7 +232,9 @@ export function StudentAttendanceSummary({ courseId, userId, readonly = false }:
                                         </TableCell>
                                         <TableCell className="text-sm text-muted-foreground">
                                             {record.status === "LATE" && record.arrivalTime ? (
-                                                <span>Llegada: {format(new Date(record.arrivalTime), "p", { locale: es })}</span>
+                                                <span>Llegada: {format(new Date(record.arrivalTime), "p", { locale: es })}{record.justification ? " (Justificado)" : ""}</span>
+                                            ) : record.status === "LEAVE_EARLY" && record.departureTime ? (
+                                                <span>Salida: {format(new Date(record.departureTime), "p", { locale: es })}{record.justification ? " (Justificado)" : ""}</span>
                                             ) : record.status === "EXCUSED" ? (
                                                 <span className="font-medium">
                                                     {record.justificationUrl ? "Justificado con soporte" : "Justificado sin soporte"}
@@ -233,7 +242,7 @@ export function StudentAttendanceSummary({ courseId, userId, readonly = false }:
                                             ) : "-"}
                                         </TableCell>
                                         <TableCell className="text-center">
-                                            {!readonly && (record.status === "ABSENT" || (record.status === "LATE" && !record.justification)) && (
+                                            {!readonly && (record.status === "ABSENT" || ((record.status === "LATE" || record.status === "LEAVE_EARLY") && !record.justification)) && (
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
@@ -243,7 +252,7 @@ export function StudentAttendanceSummary({ courseId, userId, readonly = false }:
                                                 </Button>
                                             )}
                                             {/* Show View button for students if justified */}
-                                            {!readonly && (record.status === "EXCUSED" || (record.status === "LATE" && record.justification)) && (
+                                            {!readonly && (record.status === "EXCUSED" || ((record.status === "LATE" || record.status === "LEAVE_EARLY") && record.justification)) && (
                                                 <Button
                                                     variant="ghost"
                                                     size="sm"
@@ -255,7 +264,7 @@ export function StudentAttendanceSummary({ courseId, userId, readonly = false }:
                                             {/* Teacher view: Show view and delete for all records */}
                                             {readonly && (
                                                 <div className="flex justify-center gap-2">
-                                                    {(record.status === "LATE" || record.status === "EXCUSED") && (
+                                                    {(record.status === "EXCUSED" || ((record.status === "LATE" || record.status === "LEAVE_EARLY") && record.justification)) && (
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"

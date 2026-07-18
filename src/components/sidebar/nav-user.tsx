@@ -35,7 +35,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { getProfileAction, updateProfileAction } from "@/features/profile/actions/profileActions";
-import { getGeminiApiKeyModeAction } from "@/features/admin/actions/settingsActions";;
 import { formatName, getInitials } from "@/lib/utils"
 
 function resolveAvatarUrl(image?: string | null) {
@@ -73,10 +72,6 @@ export function NavUser({
     setMenuOpen(false)
     setAccountOpen(true)
     loadProfile()
-    // En móvil NO cerramos el sidebar aquí:
-    // el Sheet del sidebar usa su propio backdrop y al cerrarse programáticamente
-    // dispara onPointerDownOutside en el Dialog, cierrándolo inmediatamente.
-    // El sidebar se cerrará solo cuando el usuario toque fuera de él.
   }
 
   const su = session?.user as { name?: string; email?: string; image?: string } | null | undefined
@@ -97,9 +92,6 @@ export function NavUser({
   const [identificacion, setIdentificacion] = useState("")
   const [telefono, setTelefono] = useState("")
   const [dataProcessingConsent, setDataProcessingConsent] = useState(false)
-  const [apiKey, setApiKey] = useState("")
-  const [apiKeyMode, setApiKeyMode] = useState<"GLOBAL" | "USER">("GLOBAL")
-  const [hasUserKey, setHasUserKey] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState("")
   const [loadingProfile, setLoadingProfile] = useState(false)
@@ -109,10 +101,7 @@ export function NavUser({
   const loadProfile = async () => {
     setLoadingProfile(true)
     try {
-      const [profile, modeData] = await Promise.all([
-        getProfileAction(),
-        getGeminiApiKeyModeAction()
-      ]);
+      const profile = await getProfileAction();
 
       if (profile?.identificacion) {
         setIdentificacion(profile.identificacion)
@@ -120,11 +109,6 @@ export function NavUser({
         setLastName(profile.apellido || "")
         setTelefono(profile.telefono || "")
         setDataProcessingConsent(profile.dataProcessingConsent || false)
-      }
-
-      if (modeData) {
-        setApiKeyMode(modeData.mode)
-        setHasUserKey(modeData.hasUserKey)
       }
     } catch (error) {
       console.error("Error loading profile:", error)
@@ -158,17 +142,11 @@ export function NavUser({
       formData.append("nombres", capitalizedFirstName)
       formData.append("apellido", capitalizedLastName)
       formData.append("telefono", telefono)
-      if (apiKey) {
-        formData.append("geminiApiKey", apiKey)
-      }
 
       await updateProfileAction(formData)
-      if (apiKey) {
-        setApiKey("") // Clear after save
-        setHasUserKey(true)
-      }
+
     } catch (err) {
-      setSaveError("Error al guardar los datos del perfil")
+      setSaveError("Error al guardar los datos de cuenta")
       setSaving(false)
       return
     }
@@ -238,14 +216,14 @@ export function NavUser({
                   onSelect={handleOpenAccount}
                 >
                   <BadgeCheck />
-                  Cuenta
+                  Mi Cuenta
                 </DropdownMenuItem>
 
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={handleLogout} disabled={loading}>
                 <LogOut />
-                Log out
+                Cerrar Sesión
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -253,9 +231,8 @@ export function NavUser({
       </SidebarMenu>
       <Dialog open={accountOpen} onOpenChange={setAccountOpen}>
         <DialogContent
+          className="max-h-[90vh] overflow-y-auto"
           onPointerDownOutside={(e) => {
-            // Evita que el backdrop del Sheet del sidebar (modo móvil)
-            // cierre este dialog cuando el Sheet se cierra
             if (isMobile) e.preventDefault()
           }}
           onInteractOutside={(e) => {
@@ -263,36 +240,39 @@ export function NavUser({
           }}
         >
           <DialogHeader>
-            <DialogTitle>Actualización de datos</DialogTitle>
-            <DialogDescription>Actualiza tu información personal</DialogDescription>
+            <DialogTitle>Actualización de Perfil</DialogTitle>
+            <DialogDescription>Gestiona tus datos personales y de cuenta.</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4 mt-4">
             <div>
-              <Label htmlFor="identificacion">Identificación</Label>
-              <Input className="mt-2.5" id="identificacion" value={identificacion} onChange={(e) => setIdentificacion(e.target.value)} placeholder="Cédula" />
+              <Label htmlFor="identificacion" className="text-xs font-bold uppercase opacity-70">Identificación</Label>
+              <Input className="mt-1" id="identificacion" value={identificacion} onChange={(e) => setIdentificacion(e.target.value)} placeholder="Cédula" />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="first-name" className="text-xs font-bold uppercase opacity-70">Nombres</Label>
+                <Input className="mt-1" id="first-name" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Tus nombres" />
+              </div>
+              <div>
+                <Label htmlFor="last-name" className="text-xs font-bold uppercase opacity-70">Apellido</Label>
+                <Input className="mt-1" id="last-name" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Tu apellido" />
+              </div>
             </div>
             <div>
-              <Label htmlFor="first-name">Nombres</Label>
-              <Input className="mt-2.5" id="first-name" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Tus nombres" />
-            </div>
-            <div>
-              <Label htmlFor="last-name">Apellido</Label>
-              <Input className="mt-2.5" id="last-name" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Tu apellido" />
-            </div>
-            <div>
-              <Label htmlFor="telefono">Teléfono</Label>
-              <Input className="mt-2.5" id="telefono" value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="Número de teléfono" />
+              <Label htmlFor="telefono" className="text-xs font-bold uppercase opacity-70">Teléfono</Label>
+              <Input className="mt-1" id="telefono" value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="Número de teléfono" />
             </div>
 
-            <div className="flex items-center space-x-2 border p-3 rounded-md bg-muted/50">
+
+            <div className="flex items-center space-x-2 border p-3 rounded-md bg-muted/50 mt-2">
               <div className={`h-4 w-4 rounded-full border flex items-center justify-center ${dataProcessingConsent ? 'bg-green-500 border-green-500' : 'bg-transparent border-gray-400'}`}>
                 {dataProcessingConsent && <div className="h-2 w-2 bg-white rounded-full" />}
               </div>
               <div className="space-y-1">
-                <Label htmlFor="habeas-data" className="text-sm font-medium leading-none cursor-default">
-                  Aceptación de tratamiento de datos (Habeas Data)
+                <Label htmlFor="habeas-data" className="text-xs font-bold leading-none cursor-default uppercase">
+                  Tratamiento de datos (Habeas Data)
                 </Label>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-[10px] text-muted-foreground leading-normal">
                   {dataProcessingConsent
                     ? "Has aceptado el tratamiento de tus datos personales."
                     : "No has aceptado el tratamiento de tus datos personales."
@@ -301,28 +281,8 @@ export function NavUser({
               </div>
             </div>
 
-            {/* Campo API Key: solo para profesores/admin */}
-            {apiKeyMode === "USER" && session?.user?.role !== "student" && (
-              <div>
-                <Label htmlFor="apiKey">IA / LLM API Key</Label>
-                <Input
-                  className="mt-2.5"
-                  id="apiKey"
-                  type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder={hasUserKey ? "•••••••• (Clave configurada)" : "Ingresa tu API Key de Gemini, OpenAI o MiniMax"}
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  {hasUserKey
-                    ? "Tu clave está configurada. Ingresa una nueva para actualizarla."
-                    : "El sistema requiere que proporciones tu propia API Key de Google Gemini, OpenAI o MiniMax."}
-                </p>
-              </div>
-            )}
-
             {saveError && <div className="text-sm text-destructive">{saveError}</div>}
-            <DialogFooter>
+            <DialogFooter className="mt-4">
               <Button variant="outline" onClick={() => setAccountOpen(false)}>Cancelar</Button>
               <Button onClick={handleSaveAccount} disabled={saving || !fullName.trim() || !identificacion.trim()}>{saving ? "Guardando..." : "Guardar"}</Button>
             </DialogFooter>

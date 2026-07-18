@@ -23,6 +23,7 @@ model User {
   updatedAt     DateTime  @default(now()) @updatedAt
   sessions      Session[]
   accounts      Account[]
+  pushSubscriptions PushSubscription[]
 
   role String? // "admin", "teacher", "student"
 
@@ -135,10 +136,12 @@ model Course {
   registrationDeadline DateTime?
   startDate            DateTime?
   endDate              DateTime?
+  startTime            String?
+  endTime              String?
+  classDays            String?
   teacherId            String
   teacher              User      @relation("TeacherCourses", fields: [teacherId], references: [id], onDelete: Cascade)
-  docProjectId         String?
-  docProject           DocProject? @relation(fields: [docProjectId], references: [id], onDelete: SetNull)
+  docLinks             CourseDocProject[]
   lateCode             String?
   lateCodeExpiresAt    DateTime?
   createdAt            DateTime  @default(now())
@@ -240,6 +243,7 @@ enum AttendanceStatus {
   ABSENT
   EXCUSED
   LATE
+  LEAVE_EARLY
 }
 
 model Attendance {
@@ -247,6 +251,7 @@ model Attendance {
   date             DateTime
   status           AttendanceStatus @default(ABSENT)
   arrivalTime      DateTime?
+  departureTime    DateTime?
   justification    String?
   justificationUrl String?
   courseId         String
@@ -538,7 +543,7 @@ model DocProject {
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   pages            DocPage[]
-  courses          Course[]
+  courseLinks      CourseDocProject[]
   aiChats          DocAiChat[]
   viewLogs         DocViewLog[]
   
@@ -546,6 +551,19 @@ model DocProject {
   teacher          User?             @relation("TeacherDocProjects", fields: [teacherId], references: [id], onDelete: Cascade)
 
   @@map("doc_project")
+}
+
+model CourseDocProject {
+  id             String     @id @default(cuid())
+  courseId       String
+  course         Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  docProjectId   String
+  docProject     DocProject @relation(fields: [docProjectId], references: [id], onDelete: Cascade)
+  order          Int        @default(0)
+  createdAt      DateTime   @default(now())
+
+  @@unique([courseId, docProjectId])
+  @@map("course_doc_project")
 }
 
 model DocPage {
@@ -631,3 +649,17 @@ model DocAiChat {
   @@index([userId, docProjectId, createdAt])
   @@map("doc_ai_chat")
 }
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("push_subscription")
+}
+

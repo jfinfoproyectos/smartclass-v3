@@ -77,18 +77,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           icon: BookOpen,
           isActive: false,
         },
-        {
-          title: "Sistema",
-          url: "/dashboard/admin/system",
-          icon: Activity,
-          isActive: false,
-        },
-        {
-          title: "Auditoría",
-          url: "/dashboard/admin/audit",
-          icon: ScrollText,
-          isActive: false,
-        },
+
+
         {
           title: "Documentación",
           url: "/dashboard/admin/docs",

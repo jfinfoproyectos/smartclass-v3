@@ -28,7 +28,8 @@ import {
     Award,
     AlertTriangle,
     Info,
-    Calendar as CalendarIcon
+    Calendar as CalendarIcon,
+    BrainCircuit
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
@@ -43,6 +44,7 @@ import { AttendanceStatistics } from "./AttendanceStatistics";
 import { StudentAttendanceDashboard } from "./StudentAttendanceDashboard";
 import { BarChart3, Download, TrendingDown } from "lucide-react";
 import * as XLSX from 'xlsx';
+import { GroupAttendanceAnalytics } from "./GroupAttendanceAnalytics";
 
 interface GroupAttendanceSheetProps {
     isOpen: boolean;
@@ -118,6 +120,7 @@ export function GroupAttendanceSheet({
                 'PRESENT': '', 'P': '',
                 'ABSENT': 'FALTA',  'A': 'FALTA',
                 'LATE':   'TARDE',  'L': 'TARDE',
+                'LEAVE_EARLY': 'RETIRO', 'R': 'RETIRO',
                 'EXCUSED': '', 'E': '',
             };
 
@@ -127,7 +130,7 @@ export function GroupAttendanceSheet({
                     const cell = row[date];
                     if (!cell || cell === '-' || !cell.status) return false;
                     const mapped = statusMap[cell.status] ?? cell.status;
-                    return mapped === 'FALTA' || mapped === 'TARDE';
+                    return mapped === 'FALTA' || mapped === 'TARDE' || mapped === 'RETIRO';
                 })
             );
 
@@ -176,7 +179,7 @@ export function GroupAttendanceSheet({
     const renderCellContent = (cellData: any) => {
         if (cellData === '-') return <span className="text-muted-foreground">-</span>;
         
-        const { status, justification, arrivalTime, remarks } = cellData;
+        const { status, justification, arrivalTime, departureTime, remarks } = cellData;
 
         const markers = [];
 
@@ -228,6 +231,28 @@ export function GroupAttendanceSheet({
                     tooltipContent = (
                         <div className="flex flex-col gap-1 max-w-[200px]">
                             <span className="font-bold text-blue-500">Excusado</span>
+                            {justification && (
+                                <span className="text-xs italic whitespace-normal">
+                                    "{justification}"
+                                </span>
+                            )}
+                        </div>
+                    );
+                    break;
+                case 'R':
+                    badge = (
+                        <div className="w-7 h-7 rounded-full bg-indigo-500 text-white flex items-center justify-center font-black text-[10px] shadow-sm shadow-indigo-200 dark:shadow-none ring-2 ring-white dark:ring-slate-900">
+                            R
+                        </div>
+                    );
+                    tooltipContent = (
+                        <div className="flex flex-col gap-1 max-w-[200px]">
+                            <span className="font-bold text-indigo-500">Retiro Temprano</span>
+                            {departureTime && (
+                                <span className="text-xs">
+                                    Hora: {format(new Date(departureTime), "h:mm a", { locale: es })}
+                                </span>
+                            )}
                             {justification && (
                                 <span className="text-xs italic whitespace-normal">
                                     "{justification}"
@@ -323,6 +348,13 @@ export function GroupAttendanceSheet({
                                     >
                                         <BarChart3 className="h-4 w-4 mr-2" />
                                         Estadísticas
+                                    </TabsTrigger>
+                                    <TabsTrigger 
+                                        value="analytics"
+                                        className="px-4 h-8"
+                                    >
+                                        <BrainCircuit className="h-4 w-4 mr-2" />
+                                        Análisis Grupal
                                     </TabsTrigger>
                                 </TabsList>
 
@@ -494,10 +526,11 @@ export function GroupAttendanceSheet({
                                             data={data} 
                                             dateColumns={dateColumns} 
                                             onFilter={(val) => {
-                                                if (['P', 'A', 'L', 'E'].includes(val)) {
+                                                if (['P', 'A', 'L', 'E', 'R'].includes(val)) {
                                                     setActiveFilter(val);
                                                     setSearchTerm("");
-                                                    toast.info(`Filtrando por estado: ${val === 'P' ? 'Presente' : val === 'A' ? 'Inasistencia' : val === 'L' ? 'Tarde' : 'Excusado'}`);
+                                                    const label = val === 'P' ? 'Presente' : val === 'A' ? 'Inasistencia' : val === 'L' ? 'Tarde' : val === 'E' ? 'Excusado' : 'Retiro';
+                                                    toast.info(`Filtrando por estado: ${label}`);
                                                 } else {
                                                     setSearchTerm(val);
                                                     setActiveFilter(null);
@@ -505,6 +538,9 @@ export function GroupAttendanceSheet({
                                                 }
                                             }}
                                         />
+                                    </TabsContent>
+                                    <TabsContent value="analytics" className="h-full mt-0 p-6 overflow-y-auto">
+                                        <GroupAttendanceAnalytics data={data} dateColumns={dateColumns} />
                                     </TabsContent>
                                 </TooltipProvider>
                             )}

@@ -19,19 +19,21 @@ export async function createCourseAction(formData: FormData) {
 
     const title = formData.get("title") as string;
     const description = formData.get("description") as string;
-    const docProjectIdRaw = formData.get("docProjectId") as string;
     const startDateStr = formData.get("startDate") as string;
     const endDateStr = formData.get("endDate") as string;
-
-    const docProjectId = docProjectIdRaw === "none" ? undefined : (docProjectIdRaw || undefined);
+    const startTime = formData.get("startTime") as string || undefined;
+    const endTime = formData.get("endTime") as string || undefined;
+    const classDays = formData.get("classDays") as string || undefined;
 
     const course = await courseService.createCourse({
         title,
         description,
-        docProjectId,
         teacherId: session.user.id,
         startDate: startDateStr ? parseISOAsUTC(startDateStr) : undefined,
         endDate: endDateStr ? parseISOAsUTC(endDateStr) : undefined,
+        startTime,
+        endTime,
+        classDays,
     });
 
     // 🎯 AUDIT LOG
@@ -55,19 +57,21 @@ export async function cloneCourseAction(formData: FormData) {
     const sourceCourseId = formData.get("sourceCourseId") as string;
     const title = formData.get("title") as string;
     const description = formData.get("description") as string;
-    const docProjectIdRaw = formData.get("docProjectId") as string;
     const startDateStr = formData.get("startDate") as string;
     const endDateStr = formData.get("endDate") as string;
-
-    const docProjectId = docProjectIdRaw === "none" ? undefined : (docProjectIdRaw || undefined);
+    const startTime = formData.get("startTime") as string || undefined;
+    const endTime = formData.get("endTime") as string || undefined;
+    const classDays = formData.get("classDays") as string || undefined;
 
     const course = await courseService.cloneCourse(sourceCourseId, {
         title,
         description,
-        docProjectId,
         teacherId: session.user.id,
         startDate: startDateStr ? parseISOAsUTC(startDateStr) : undefined,
         endDate: endDateStr ? parseISOAsUTC(endDateStr) : undefined,
+        startTime,
+        endTime,
+        classDays,
     });
 
     // 🎯 AUDIT LOG
@@ -91,18 +95,20 @@ export async function updateCourseAction(formData: FormData) {
     const courseId = formData.get("courseId") as string;
     const title = formData.get("title") as string;
     const description = formData.get("description") as string;
-    const docProjectIdRaw = formData.get("docProjectId") as string;
     const startDateStr = formData.get("startDate") as string;
     const endDateStr = formData.get("endDate") as string;
-
-    const docProjectId = docProjectIdRaw === "none" ? null : (docProjectIdRaw || undefined);
+    const startTime = formData.get("startTime") as string;
+    const endTime = formData.get("endTime") as string;
+    const classDays = formData.get("classDays") as string;
 
     await courseService.updateCourse(courseId, {
         title,
         description,
-        docProjectId,
         startDate: startDateStr ? parseISOAsUTC(startDateStr) : undefined,
         endDate: endDateStr ? parseISOAsUTC(endDateStr) : undefined,
+        startTime: startTime === "" ? null : startTime,
+        endTime: endTime === "" ? null : endTime,
+        classDays: classDays === "" ? null : classDays,
     });
 
     // 🎯 AUDIT LOG

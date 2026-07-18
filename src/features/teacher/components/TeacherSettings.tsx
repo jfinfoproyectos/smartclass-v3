@@ -12,7 +12,6 @@ import {
     Save, 
     Github, 
     RefreshCw, 
-    BarChart2, 
     CheckCircle2, 
     XCircle,
     Palette,
@@ -55,7 +54,6 @@ export function TeacherSettings({ initialCredentials, themes }: TeacherSettingsP
 
     const [isTesting, setIsTesting] = useState(false);
     const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
-    const [analytics, setAnalytics] = useState<any>(null);
 
     // Auto-save function
     const autoSave = useCallback(async (updates: any) => {
@@ -81,19 +79,7 @@ export function TeacherSettings({ initialCredentials, themes }: TeacherSettingsP
         }
     }, [aiProvider, aiModel]);
 
-    const refreshAnalytics = async () => {
-        try {
-            const { getAIUsageAnalyticsAction } = await import("@/app/teacher-actions");
-            const data = await getAIUsageAnalyticsAction();
-            setAnalytics(data);
-        } catch (err) {
-            console.error("Failed to fetch analytics:", err);
-        }
-    };
 
-    useEffect(() => {
-        refreshAnalytics();
-    }, []);
 
     const handleTestConnection = async () => {
         setIsTesting(true);
@@ -110,7 +96,6 @@ export function TeacherSettings({ initialCredentials, themes }: TeacherSettingsP
             if (result.success) {
                 setTestResult({ success: true, message: result.message || "Conexión exitosa" });
                 toast.success("¡Conexión exitosa!", { description: result.message });
-                await refreshAnalytics();
             } else {
                 setTestResult({ success: false, message: result.error || "No se pudo probar la conexión" });
                 toast.error("Error de conexión", { description: result.error });
@@ -136,8 +121,8 @@ export function TeacherSettings({ initialCredentials, themes }: TeacherSettingsP
                 </div>
             </div>
 
-            <div className="flex items-center justify-between">
-                <div>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex flex-col gap-1">
                     <h2 className="text-3xl font-bold tracking-tight">Configuración Personal</h2>
                     <p className="text-muted-foreground">
                         Los cambios se guardan y aplican automáticamente
@@ -152,7 +137,7 @@ export function TeacherSettings({ initialCredentials, themes }: TeacherSettingsP
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="space-y-6">
-                    <Card className="border-border/40">
+                    <Card className="rounded-2xl border border-border/40 overflow-hidden bg-card/25 backdrop-blur-md shadow-xl shadow-black/5">
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2 text-lg">
                                 <Key className="h-5 w-5 text-blue-500" />
@@ -235,8 +220,10 @@ export function TeacherSettings({ initialCredentials, themes }: TeacherSettingsP
                             </div>
                         </CardContent>
                     </Card>
+                </div>
 
-                    <Card className="border-border/40">
+                <div className="space-y-6">
+                    <Card className="rounded-2xl border border-border/40 overflow-hidden bg-card/25 backdrop-blur-md shadow-xl shadow-black/5">
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2 text-lg">
                                 <Github className="h-5 w-5 text-foreground" />
@@ -264,37 +251,8 @@ export function TeacherSettings({ initialCredentials, themes }: TeacherSettingsP
                         </CardContent>
                     </Card>
                 </div>
-
-                <div className="space-y-6">
-                    {analytics && (
-                        <Card className="border-border/40">
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2 text-lg">
-                                    <BarChart2 className="h-5 w-5 text-purple-500" />
-                                    Uso de IA (Analytics)
-                                </CardTitle>
-                                <CardDescription>Consumo de tokens por proveedor.</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-4">
-                                    {analytics.usageByProvider.map((u: any) => (
-                                        <div key={u.provider} className="flex items-center justify-between p-2 rounded-lg bg-accent/30">
-                                            <span className="text-xs font-bold uppercase">{u.provider}</span>
-                                            <div className="flex gap-4 text-[10px]">
-                                                <span>{u.totalTokens.toLocaleString()} tokens</span>
-                                                <span className="text-muted-foreground">{u.requestCount} peticiones</span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                    {analytics.usageByProvider.length === 0 && (
-                                        <p className="text-xs text-muted-foreground text-center py-4 italic">No hay datos de uso disponibles todavía.</p>
-                                    )}
-                                </div>
-                            </CardContent>
-                        </Card>
-                    )}
-                </div>
             </div>
+
         </div>
     );
 }

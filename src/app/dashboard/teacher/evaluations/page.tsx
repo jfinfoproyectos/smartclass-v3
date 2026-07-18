@@ -16,14 +16,7 @@ export default async function EvaluationsPage() {
     const evaluations = await evaluationService.getTeacherEvaluations(session.user.id);
 
     return (
-        <div className="flex flex-col gap-6 p-6 max-w-7xl mx-auto w-full">
-            <div className="flex flex-col gap-2">
-                <h1 className="text-3xl font-bold tracking-tight">Evaluaciones</h1>
-                <p className="text-muted-foreground">
-                    Crea, gestiona y visualiza los resultados de tus evaluaciones estructuradas.
-                </p>
-            </div>
-
+        <div className="space-y-8 animate-in fade-in duration-500 p-6">
             <EvaluationManager evaluations={evaluations} />
         </div>
     );

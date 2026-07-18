@@ -9,6 +9,9 @@ const nextConfig: NextConfig = {
     "shiki",
     "rehype-pretty-code",
     "@shikijs/rehype",
+    // fstream uses rimraf which has a malformed package.json — keep both external
+    "fstream",
+    "rimraf",
   ],
   outputFileTracingIncludes: {
     "/**/*": ["./node_modules/shiki/**/*", "./node_modules/@shikijs/**/*"],

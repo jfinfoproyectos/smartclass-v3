@@ -57,7 +57,7 @@ export default async function Page({ params }: PageProps) {
   const isAdmin = session?.user.role === "admin" || session?.user.role === "teacher";
 
   // Access control
-  const linkedCoursesCount = await prisma.course.count({
+  const linkedCoursesCount = await prisma.courseDocProject.count({
     where: { docProjectId: project.id }
   });
 
@@ -77,7 +77,7 @@ export default async function Page({ params }: PageProps) {
           userId: session.user.id,
           status: "APPROVED",
           course: {
-            docProjectId: project.id,
+            docLinks: { some: { docProjectId: project.id } },
             OR: [
               { endDate: null },
               { endDate: { gt: now } }
@@ -119,7 +119,7 @@ export default async function Page({ params }: PageProps) {
   if (session) {
     userCourse = await prisma.course.findFirst({
       where: {
-        docProjectId: project.id,
+        docLinks: { some: { docProjectId: project.id } },
         enrollments: {
           some: { userId: session.user.id, status: "APPROVED" }
         }
@@ -141,7 +141,7 @@ export default async function Page({ params }: PageProps) {
   // Fallback al primer curso si no está inscrito o no hay sesión
   if (!userCourse) {
     userCourse = await prisma.course.findFirst({
-      where: { docProjectId: project.id },
+      where: { docLinks: { some: { docProjectId: project.id } } },
       select: {
         id: true,
         docTrackingEnabled: true,

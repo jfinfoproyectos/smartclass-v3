@@ -13,7 +13,9 @@ export const courseService = {
         teacherId: string;
         startDate?: Date;
         endDate?: Date;
-        docProjectId?: string;
+        startTime?: string;
+        endTime?: string;
+        classDays?: string;
     }) {
         const course = await prisma.course.create({
             data,
@@ -28,7 +30,9 @@ export const courseService = {
         teacherId: string;
         startDate?: Date;
         endDate?: Date;
-        docProjectId?: string;
+        startTime?: string;
+        endTime?: string;
+        classDays?: string;
     }) {
         // 1. Get source course with all data needed for cloning
         const sourceCourse = await prisma.course.findUnique({
@@ -44,7 +48,12 @@ export const courseService = {
 
         // 2. Create new course
         const newCourse = await prisma.course.create({
-            data,
+            data: {
+                ...data,
+                startTime: data.startTime !== undefined ? data.startTime : sourceCourse.startTime,
+                endTime: data.endTime !== undefined ? data.endTime : sourceCourse.endTime,
+                classDays: data.classDays !== undefined ? data.classDays : sourceCourse.classDays,
+            },
         });
 
         // 4. Clone Activities
@@ -79,7 +88,9 @@ export const courseService = {
         description?: string;
         startDate?: Date;
         endDate?: Date;
-        docProjectId?: string | null;
+        startTime?: string | null;
+        endTime?: string | null;
+        classDays?: string | null;
     }) {
         // Force HMR update with a comment to use the latest prisma client instance
         const course = await prisma.course.update({
@@ -230,7 +241,10 @@ export const courseService = {
             include: {
                 course: {
                     include: {
-                        docProject: true,
+                        docLinks: {
+                            include: { docProject: { select: { id: true, name: true, slug: true, icon: true, imageUrl: true } } },
+                            orderBy: { order: 'asc' }
+                        },
                         teacher: {
                             include: {
                                 profile: true
@@ -903,6 +917,7 @@ export const courseService = {
                             case 'ABSENT': status = 'A'; break;
                             case 'EXCUSED': status = 'E'; break;
                             case 'LATE': status = 'L'; break;
+                            case 'LEAVE_EARLY': status = 'R'; break;
                         }
                     }
                     
@@ -910,6 +925,7 @@ export const courseService = {
                         status: status,
                         justification: attendance?.justification,
                         arrivalTime: attendance?.arrivalTime,
+                        departureTime: (attendance as any)?.departureTime,
                         remarks: studentRemarks.map(r => ({
                             type: r.type,
                             title: r.title,

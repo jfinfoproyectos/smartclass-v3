@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquare, Users, ClipboardCheck, Clock, BookOpen, GraduationCap, FileText, ExternalLink, ArrowRight, AlertCircle, ArrowLeft, Calendar } from "lucide-react";
+import { MessageSquare, Users, ClipboardCheck, Clock, BookOpen, GraduationCap, FileText, AlertCircle, ArrowLeft, Calendar, ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -20,8 +20,7 @@ import { ModeToggle } from "@/components/theme/ModeToggle";
 import { CreditsModal } from "@/components/CreditsModal";
 import { ThemeSelector } from "@/components/theme/ThemeSelector";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { RefreshButton } from "@/components/navigation/RefreshButton";
-import { recordProjectVisitAction } from "../../documentation/actions/progressActions";
+import { UserDocsList } from "@/features/documentation/components/student/UserDocsList";
 
 export function MyEnrollments({
     enrollments,
@@ -52,69 +51,74 @@ export function MyEnrollments({
 
     if (!selectedCourse) {
         return (
-            <div className="rounded-xl border border-border/50 overflow-x-auto shadow-sm">
-                <Table>
+            <div className="rounded-2xl border border-border/40 overflow-hidden bg-card/25 backdrop-blur-md shadow-xl shadow-black/5 overflow-x-auto">
+                <Table className="w-full min-w-[800px]">
                     <TableHeader>
-                        <TableRow className="bg-muted/30 hover:bg-muted/30">
-                            <TableHead className="font-bold uppercase tracking-wider text-xs pl-4">Curso</TableHead>
-                            <TableHead className="font-bold uppercase tracking-wider text-xs hidden sm:table-cell">Docente</TableHead>
-                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden md:table-cell">Inicio</TableHead>
-                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden md:table-cell">Finaliza</TableHead>
-                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden lg:table-cell">Estado</TableHead>
-                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Acción</TableHead>
+                        <TableRow className="h-12 bg-muted/40 hover:bg-muted/40 border-b border-border/30">
+                            <TableHead className="font-extrabold uppercase tracking-wider text-[10px] pl-5 text-muted-foreground/80">Curso</TableHead>
+                            <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-muted-foreground/80 hidden sm:table-cell">Docente</TableHead>
+                            <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-center hidden md:table-cell text-muted-foreground/80">Inicio</TableHead>
+                            <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-center hidden md:table-cell text-muted-foreground/80">Finaliza</TableHead>
+                            <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-center hidden lg:table-cell text-muted-foreground/80">Estado</TableHead>
+                            <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-right pr-5 text-muted-foreground/80">Acción</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {enrollments.map((enrollment) => (
                             <TableRow
                                 key={enrollment.id}
-                                className="group hover:bg-muted/20 transition-colors border-border/30"
+                                className="group hover:bg-muted/30 transition-colors border-b border-border/20"
                             >
-                                <TableCell className="pl-4">
-                                    <div className="flex flex-col gap-0.5">
-                                        <span className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors leading-tight">
-                                            {enrollment.course.title}
-                                        </span>
-                                        <Badge variant="outline" className="text-[9px] w-fit px-2 h-4 uppercase font-black tracking-widest bg-primary/5 text-primary border-primary/20 rounded-full mt-0.5">
-                                            Matriculado
-                                        </Badge>
+                                <TableCell className="font-medium py-3.5 pl-5">
+                                    <div className="flex items-center gap-3.5">
+                                        <div className="p-2.5 rounded-xl bg-primary/10 text-primary group-hover:scale-110 transition-all duration-300 shadow-sm shadow-primary/5 shrink-0">
+                                            <BookOpen className="w-4 h-4" />
+                                        </div>
+                                        <div className="flex flex-col gap-0.5">
+                                            <span className="font-bold text-sm text-foreground/90 group-hover:text-primary transition-colors duration-300 leading-tight">
+                                                {enrollment.course.title}
+                                            </span>
+                                            <Badge variant="outline" className="text-[9px] w-fit px-2 h-4 uppercase font-black tracking-widest bg-primary/5 text-primary border-primary/20 rounded-full mt-0.5">
+                                                Matriculado
+                                            </Badge>
+                                        </div>
                                     </div>
                                 </TableCell>
 
-                                <TableCell className="hidden sm:table-cell">
+                                <TableCell className="py-3.5 hidden sm:table-cell">
                                     <div className="flex items-center gap-2">
                                         <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-[10px] shadow-inner shrink-0">
                                             {formatName(enrollment.course.teacher.name, enrollment.course.teacher.profile).charAt(0)}
                                         </div>
-                                        <span className="text-xs font-medium text-muted-foreground truncate max-w-[140px]">
+                                        <span className="text-xs font-semibold text-muted-foreground truncate max-w-[140px]">
                                             {formatName(enrollment.course.teacher.name, enrollment.course.teacher.profile)}
                                         </span>
                                     </div>
                                 </TableCell>
 
-                                <TableCell className="text-center hidden md:table-cell">
-                                    <span className="text-xs text-muted-foreground font-medium">
+                                <TableCell className="text-center py-3.5 hidden md:table-cell">
+                                    <code className="text-[11px] bg-muted/80 text-muted-foreground px-2.5 py-1 rounded-lg font-mono border border-border/30 tracking-tight shadow-inner-sm">
                                         {enrollment.course.startDate ? formatCalendarDate(enrollment.course.startDate, "dd/MM/yy") : "---"}
-                                    </span>
+                                    </code>
                                 </TableCell>
 
-                                <TableCell className="text-center hidden md:table-cell">
-                                    <span className="text-xs text-muted-foreground font-medium">
-                                        {enrollment.course.endDate ? formatCalendarDate(enrollment.course.endDate, "dd MMM yy") : "Indeterminado"}
-                                    </span>
+                                <TableCell className="text-center py-3.5 hidden md:table-cell">
+                                    <code className="text-[11px] bg-muted/80 text-muted-foreground px-2.5 py-1 rounded-lg font-mono border border-border/30 tracking-tight shadow-inner-sm">
+                                        {enrollment.course.endDate ? formatCalendarDate(enrollment.course.endDate, "dd/MM/yy") : "Indeterminado"}
+                                    </code>
                                 </TableCell>
 
-                                <TableCell className="text-center hidden lg:table-cell">
-                                    <Badge className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 border font-bold gap-1">
+                                <TableCell className="text-center py-3.5 hidden lg:table-cell">
+                                    <Badge className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 border font-bold gap-1 rounded-lg">
                                         <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                         Activo
                                     </Badge>
                                 </TableCell>
 
-                                <TableCell className="text-center">
+                                <TableCell className="text-right py-3.5 pr-5">
                                     <Button
                                         size="sm"
-                                        className="h-8 px-3 font-black text-[10px] uppercase tracking-wider shadow-sm hover:shadow-primary/20 transition-all gap-1.5"
+                                        className="h-8 px-4 font-black text-[10px] uppercase tracking-wider shadow-sm hover:shadow-primary/20 transition-all rounded-xl gap-1.5"
                                         onClick={() => onSelectCourse(enrollment.course.id)}
                                     >
                                         Ingresar <ArrowRight className="h-3.5 w-3.5" />
@@ -187,83 +191,66 @@ export function MyEnrollments({
                                             </div>
                                         </div>
 
-                                        {enrollment.course.docProjectId && (
-                                            <div className="flex items-center h-full px-4 border-l border-foreground/10">
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            asChild
-                                                            className="h-8 w-8 hover:bg-primary/10 hover:text-primary transition-all rounded-lg"
-                                                        >
-                                                            <Link 
-                                                              href={`/docs/${enrollment.course.docProject?.slug || enrollment.course.docProjectId}`} 
-                                                              target="_blank" 
-                                                              rel="noopener noreferrer"
-                                                              onClick={() => recordProjectVisitAction(enrollment.course.docProjectId)}
-                                                            >
-                                                                <BookOpen className="h-4 w-4 text-primary" />
-                                                            </Link>
-                                                        </Button>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent side="bottom">Ver Documentación del Aula</TooltipContent>
-                                                </Tooltip>
-                                            </div>
-                                        )}
+
 
                                         <div className="flex items-center h-full px-3 gap-1.5 border-l border-foreground/10">
-                                            <RefreshButton />
                                             <ThemeSelector themes={themes} />
                                             <ModeToggle />
                                             <CreditsModal />
                                         </div>
                                     </div>
 
-                                    {/* Row 2: Content Navigation (h-auto on mobile, compact h-11 on desktop) */}
-                                    <div className="px-4 py-1.5 lg:py-0 lg:h-11 flex items-center justify-center bg-muted/5 border-b border-foreground/10 shadow-sm dark:shadow-none">
-                                        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 h-auto lg:h-9 p-0.5 bg-muted/60 dark:bg-muted/30 rounded-lg gap-0.5 border border-border/30 shadow-none">
-                                            <TabsTrigger value="activities" className="group relative flex items-center justify-center gap-1.5 h-8 px-2.5 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm">
-                                                <ClipboardCheck className="h-3.5 w-3.5 group-data-[state=active]:text-primary" />
-                                                <span className="hidden sm:inline group-data-[state=active]:text-primary">Actividades</span>
-                                            </TabsTrigger>
-                                            
-                                            <TabsTrigger value="evaluations" className="group relative flex items-center justify-center gap-1.5 h-8 px-2.5 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm">
-                                                <FileText className="h-3.5 w-3.5 group-data-[state=active]:text-primary" />
-                                                <span className="hidden sm:inline group-data-[state=active]:text-primary">Evaluaciones</span>
-                                            </TabsTrigger>
-                                            
-                                            <TabsTrigger value="attendance" className="group relative flex items-center justify-center gap-1.5 h-8 px-2.5 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm">
-                                                <Clock className="h-3.5 w-3.5 group-data-[state=active]:text-primary" />
-                                                <span className="hidden sm:inline group-data-[state=active]:text-primary">Asistencia</span>
-                                            </TabsTrigger>
+                                    {/* Row 2: Content Navigation — scrollable on mobile, grid on desktop */}
+                                    <div className="border-b border-foreground/10 bg-muted/5">
+                                        <div className="overflow-x-auto scrollbar-none">
+                                            <TabsList className="flex w-max lg:w-full lg:grid lg:grid-cols-7 h-auto p-1 bg-muted/60 dark:bg-muted/30 rounded-none lg:rounded-none gap-0.5 border-0 shadow-none min-w-full">
+                                                <TabsTrigger value="activities" className="group relative flex items-center justify-center gap-1.5 h-9 px-3 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm whitespace-nowrap shrink-0">
+                                                    <ClipboardCheck className="h-3.5 w-3.5 group-data-[state=active]:text-primary shrink-0" />
+                                                    <span className="group-data-[state=active]:text-primary">Actividades</span>
+                                                </TabsTrigger>
 
-                                            <TabsTrigger value="grades" className="group relative flex items-center justify-center gap-1.5 h-8 px-2.5 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm">
-                                                <GraduationCap className="h-3.5 w-3.5 group-data-[state=active]:text-primary" />
-                                                <span className="hidden sm:inline group-data-[state=active]:text-primary">Calificaciones</span>
-                                            </TabsTrigger>
+                                                <TabsTrigger value="evaluations" className="group relative flex items-center justify-center gap-1.5 h-9 px-3 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm whitespace-nowrap shrink-0">
+                                                    <FileText className="h-3.5 w-3.5 group-data-[state=active]:text-primary shrink-0" />
+                                                    <span className="group-data-[state=active]:text-primary">Evaluaciones</span>
+                                                </TabsTrigger>
 
-                                            <TabsTrigger value="remarks" className="group relative flex items-center justify-center gap-1.5 h-8 px-2.5 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm">
-                                                <MessageSquare className="h-3.5 w-3.5 group-data-[state=active]:text-primary" />
-                                                <span className="hidden sm:inline group-data-[state=active]:text-primary">Observaciones</span>
-                                            </TabsTrigger>
+                                                <TabsTrigger value="attendance" className="group relative flex items-center justify-center gap-1.5 h-9 px-3 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm whitespace-nowrap shrink-0">
+                                                    <Clock className="h-3.5 w-3.5 group-data-[state=active]:text-primary shrink-0" />
+                                                    <span className="group-data-[state=active]:text-primary">Asistencia</span>
+                                                </TabsTrigger>
 
-                                            <TabsTrigger value="resources" className="group relative flex items-center justify-center gap-1.5 h-8 px-2.5 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm">
-                                                <BookOpen className="h-3.5 w-3.5 group-data-[state=active]:text-primary" />
-                                                <span className="hidden sm:inline group-data-[state=active]:text-primary">Recursos</span>
-                                            </TabsTrigger>
-                                        </TabsList>
+                                                <TabsTrigger value="grades" className="group relative flex items-center justify-center gap-1.5 h-9 px-3 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm whitespace-nowrap shrink-0">
+                                                    <GraduationCap className="h-3.5 w-3.5 group-data-[state=active]:text-primary shrink-0" />
+                                                    <span className="group-data-[state=active]:text-primary">Calificaciones</span>
+                                                </TabsTrigger>
+
+                                                <TabsTrigger value="remarks" className="group relative flex items-center justify-center gap-1.5 h-9 px-3 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm whitespace-nowrap shrink-0">
+                                                    <MessageSquare className="h-3.5 w-3.5 group-data-[state=active]:text-primary shrink-0" />
+                                                    <span className="group-data-[state=active]:text-primary">Observaciones</span>
+                                                </TabsTrigger>
+
+                                                <TabsTrigger value="resources" className="group relative flex items-center justify-center gap-1.5 h-9 px-3 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm whitespace-nowrap shrink-0">
+                                                    <BookOpen className="h-3.5 w-3.5 group-data-[state=active]:text-primary shrink-0" />
+                                                    <span className="group-data-[state=active]:text-primary">Recursos</span>
+                                                </TabsTrigger>
+
+                                                <TabsTrigger value="docs" className="group relative flex items-center justify-center gap-1.5 h-9 px-3 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm whitespace-nowrap shrink-0">
+                                                    <FileText className="h-3.5 w-3.5 group-data-[state=active]:text-primary shrink-0" />
+                                                    <span className="group-data-[state=active]:text-primary">Documentación</span>
+                                                </TabsTrigger>
+                                            </TabsList>
+                                        </div>
                                     </div>
                                 </TooltipProvider>
                             </div>
 
                             {/* Independently Scrollable Content Area - Subdivided by Tabs */}
                             <div className="flex-1 min-h-0 w-full overflow-hidden">
-                                <TabsContent value="activities" className="h-full overflow-y-auto p-4 sm:p-6 md:p-8 pt-0 mt-0 scrollbar-thin">
-                                    <div className="space-y-4 pt-6">
-                                        <h3 className="text-2xl font-bold flex items-center gap-2">
-                                            <ClipboardCheck className="h-4 w-4 text-primary" />
-                                            Actividades Pendientes y Entregas
+                                <TabsContent value="activities" className="h-full overflow-y-auto p-3 sm:p-5 md:p-8 pt-0 mt-0 scrollbar-thin">
+                                    <div className="space-y-4 pt-4 sm:pt-6">
+                                        <h3 className="text-lg sm:text-2xl font-bold flex items-center gap-2">
+                                            <ClipboardCheck className="h-4 w-4 text-primary shrink-0" />
+                                            <span>Actividades Pendientes y Entregas</span>
                                         </h3>
                                         {enrollment.course.activities.length > 0 ? (
                                             <div className="rounded-xl border border-border/50 overflow-x-auto shadow-sm text-foreground">
@@ -301,7 +288,7 @@ export function MyEnrollments({
                                                                                     {activity.type === "MANUAL" && <span>• Manual</span>}
                                                                                 </div>
                                                                                 {!isOpen && (
-                                                                                    <div className="text-[10px] text-amber-600 font-medium mt-1 flex items-center">
+                                                                                    <div className="text-[10px] text-warning font-medium mt-1 flex items-center text-yellow-600 dark:text-yellow-400">
                                                                                         <Clock className="mr-1 h-3 w-3" />
                                                                                         Disponible el: {format(new Date(activity.openDate), "PP p")}
                                                                                     </div>
@@ -311,19 +298,19 @@ export function MyEnrollments({
                                                                     </TableCell>
                                                                     <TableCell suppressHydrationWarning>
                                                                         {!isOpen ? (
-                                                                            <Badge variant="secondary" className="bg-slate-100 text-slate-600 border-none">Bloqueado</Badge>
+                                                                            <Badge variant="secondary">Bloqueado</Badge>
                                                                         ) : isGraded ? (
-                                                                            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-none">Completado</Badge>
+                                                                            <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/15">Completado</Badge>
                                                                         ) : isRejected ? (
-                                                                            <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100 border-none gap-1">
+                                                                            <Badge variant="destructive" className="gap-1">
                                                                                 <AlertCircle className="h-3 w-3" /> Corregir
                                                                             </Badge>
                                                                         ) : isSubmitted ? (
-                                                                            <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-none gap-1">
+                                                                            <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/15 gap-1">
                                                                                 <Clock className="h-3 w-3" /> En Revisión
                                                                             </Badge>
                                                                         ) : (
-                                                                            <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-none gap-1">
+                                                                            <Badge className="bg-primary/10 text-primary border border-primary/20 hover:bg-primary/10 gap-1">
                                                                                 <AlertCircle className="h-3 w-3" /> Pendiente
                                                                             </Badge>
                                                                         )}
@@ -336,7 +323,7 @@ export function MyEnrollments({
                                                                                 </span>
                                                                             </div>
                                                                         ) : !isSubmitted && activity.deadline && new Date(activity.deadline) < new Date() && activity.type !== 'MANUAL' ? (
-                                                                            <span className="font-bold text-rose-500">0.0</span>
+                                                                            <span className="font-bold text-destructive">0.0</span>
                                                                         ) : (
                                                                             <span className="text-muted-foreground">-</span>
                                                                         )}
@@ -346,7 +333,7 @@ export function MyEnrollments({
                                                                             {activity.type === "MANUAL" ? (
                                                                                 <span className="italic">Sin fecha límite</span>
                                                                             ) : (
-                                                                                <span className={new Date(activity.deadline) < new Date() ? "text-rose-500" : ""}>
+                                                                                <span className={new Date(activity.deadline) < new Date() ? "text-destructive" : ""}>
                                                                                     {format(new Date(activity.deadline), "PP", { locale: es })}
                                                                                 </span>
                                                                             )}
@@ -384,14 +371,14 @@ export function MyEnrollments({
                                     </div>
                                 </TabsContent>
 
-                                <TabsContent value="evaluations" className="h-full overflow-y-auto p-4 sm:p-6 md:p-8 pt-0 mt-0 scrollbar-thin">
+                                <TabsContent value="evaluations" className="h-full overflow-y-auto p-3 sm:p-5 md:p-8 pt-0 mt-0 scrollbar-thin">
     <div className="space-y-4 pt-6">
-                                        <h3 className="text-2xl font-bold flex items-center gap-2">
-                                            <FileText className="h-4 w-4 text-primary" />
-                                            Evaluaciones del Curso
+                                        <h3 className="text-lg sm:text-2xl font-bold flex items-center gap-2">
+                                            <FileText className="h-4 w-4 text-primary shrink-0" />
+                                            <span>Evaluaciones del Curso</span>
                                         </h3>
                                         {enrollment.course.evaluationAttempts?.length > 0 ? (
-                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-20">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 pb-20">
                                                 {enrollment.course.evaluationAttempts.map((attempt: any) => {
                                                     const submission = attempt.submissions[0];
                                                     const isSubmitted = !!submission?.submittedAt;
@@ -418,13 +405,13 @@ export function MyEnrollments({
                                                                     <div className="flex flex-col gap-1">
                                                                         <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Estado</span>
                                                                         {isSubmitted ? (
-                                                                            <Badge className="bg-emerald-100 text-emerald-700 border-none">Completado</Badge>
+                                                                            <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">Completado</Badge>
                                                                         ) : isExpired ? (
                                                                             <Badge variant="destructive">Expirado</Badge>
                                                                         ) : isUpcoming ? (
-                                                                            <Badge variant="outline" className="border-amber-200 text-amber-700 bg-amber-50">Próximamente</Badge>
+                                                                            <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">Próximamente</Badge>
                                                                         ) : isOpen ? (
-                                                                            <Badge className="bg-blue-100 text-blue-700 border-none animate-pulse">Abierto</Badge>
+                                                                            <Badge className="bg-primary/15 text-primary border border-primary/30 animate-pulse">Abierto</Badge>
                                                                         ) : null}
                                                                     </div>
                                                                     {isSubmitted && submission.score !== null && (
@@ -479,6 +466,30 @@ export function MyEnrollments({
                                 <TabsContent value="grades" className="h-full overflow-y-auto p-4 sm:p-6 md:p-8 pt-0 mt-0 scrollbar-thin">
                                     <div className="pt-6">
                                         <StudentGradesView enrollment={enrollment} />
+                                    </div>
+                                </TabsContent>
+
+                                <TabsContent value="docs" className="h-full overflow-y-auto p-4 sm:p-6 md:p-8 pt-0 mt-0 scrollbar-thin">
+                                    <div className="pt-6">
+                                        {enrollment.course.docLinks && enrollment.course.docLinks.length > 0 ? (
+                                            <UserDocsList
+                                                docs={enrollment.course.docLinks.map((link: any) => ({
+                                                    id: link.docProject?.slug || link.docProject?.id,
+                                                    title: link.docProject?.name || "Documento",
+                                                    icon: link.docProject?.icon,
+                                                    groupName: "Documentación del Curso",
+                                                    imageUrl: link.docProject?.imageUrl,
+                                                }))}
+                                            />
+                                        ) : (
+                                            <div className="flex flex-col items-center justify-center py-24 border-2 border-dashed border-border rounded-3xl text-center">
+                                                <div className="p-4 bg-muted/20 rounded-full mb-4">
+                                                    <BookOpen className="h-10 w-10 text-muted-foreground/40" />
+                                                </div>
+                                                <h3 className="text-xl font-semibold text-muted-foreground">Sin documentación asignada</h3>
+                                                <p className="text-sm text-muted-foreground/60 mt-1">El profesor aún no ha vinculado documentación a este curso.</p>
+                                            </div>
+                                        )}
                                     </div>
                                 </TabsContent>
                             </div>

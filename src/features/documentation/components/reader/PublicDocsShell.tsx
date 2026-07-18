@@ -50,6 +50,21 @@ export function PublicDocsShell({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [mounted, setMounted] = React.useState(false);
+  const [isTocOpen, setIsTocOpen] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("smartclass-toc-open");
+      return saved !== "false";
+    }
+    return true;
+  });
+
+  const toggleToc = () => {
+    setIsTocOpen(prev => {
+      const next = !prev;
+      localStorage.setItem("smartclass-toc-open", String(next));
+      return next;
+    });
+  };
 
   const totalTimeSpentSeconds = useMemo(() => {
     return userProgress.reduce((acc, curr) => acc + (curr.timeSpent || 0), 0);
@@ -245,6 +260,8 @@ export function PublicDocsShell({
           themes={themes}
           navTree={sidebarNav}
           courseSettings={courseSettings}
+          isTocOpen={isTocOpen}
+          toggleToc={toggleToc}
         />
       </div>
 
@@ -317,9 +334,11 @@ export function PublicDocsShell({
             </div>
 
             {/* RIGHT COLUMN */}
-            <div className="no-print hidden xl:block w-72 shrink-0">
-              <RightSidebar />
-            </div>
+            {isTocOpen && (
+              <div className="no-print hidden xl:block w-72 shrink-0 border-l border-border/40">
+                <RightSidebar />
+              </div>
+            )}
           </div>
 
           {/* Minimalist Fixed Bottom Bar */}

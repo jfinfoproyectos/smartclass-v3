@@ -12,6 +12,29 @@ async function getSession() {
 
 export async function getVisualSettingsAction() {
     try {
+        const session = await getSession();
+        if (session?.user?.id) {
+            const user = await prisma.user.findUnique({
+                where: { id: session.user.id },
+                select: {
+                    appThemeMode: true,
+                    appThemeColor: true,
+                    appCodeTheme: true,
+                    appAllowThemeColorChange: true,
+                    appAllowCodeThemeChange: true
+                }
+            });
+            if (user) {
+                return {
+                    themeMode: user.appThemeMode || "STUDENT",
+                    themeColor: user.appThemeColor || "zinc",
+                    allowThemeColorChange: user.appAllowThemeColorChange ?? true,
+                    codeTheme: user.appCodeTheme || "one-dark-pro",
+                    allowCodeThemeChange: user.appAllowCodeThemeChange ?? true
+                };
+            }
+        }
+
         const settings = await prisma.systemSettings.findUnique({
             where: { id: "settings" }
         });
@@ -19,16 +42,46 @@ export async function getVisualSettingsAction() {
         return { 
             themeMode: settings?.appThemeMode || "STUDENT",
             themeColor: settings?.appThemeColor || "zinc",
-            allowThemeColorChange: true
+            allowThemeColorChange: settings?.appAllowThemeColorChange ?? true,
+            codeTheme: settings?.appCodeTheme || "one-dark-pro",
+            allowCodeThemeChange: settings?.appAllowCodeThemeChange ?? true
         };
     } catch (error) {
         console.error("Error fetching settings, using defaults:", error);
         return {
             themeMode: "STUDENT",
             themeColor: "zinc",
-            allowThemeColorChange: true
+            allowThemeColorChange: true,
+            codeTheme: "one-dark-pro",
+            allowCodeThemeChange: true
         };
     }
+}
+
+export async function updateUserVisualSettingsAction(data: {
+    appThemeMode?: string;
+    appThemeColor?: string;
+    appCodeTheme?: string;
+}) {
+    const session = await getSession();
+    if (!session || !session.user?.id) {
+        throw new Error("No autorizado");
+    }
+
+    const updatedUser = await prisma.user.update({
+        where: { id: session.user.id },
+        data: {
+            appThemeMode: data.appThemeMode,
+            appThemeColor: data.appThemeColor,
+            appCodeTheme: data.appCodeTheme,
+        }
+    });
+
+    revalidatePath("/", "layout");
+    revalidatePath("/dashboard/admin/settings");
+    revalidatePath("/dashboard/teacher/settings");
+    
+    return { success: true, user: updatedUser };
 }
 
 export async function updateSettingsAction(data: any) {

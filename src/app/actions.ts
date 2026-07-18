@@ -59,7 +59,9 @@ export {
     deleteLateCodeAction,
     deleteJustificationAction,
     deleteAttendanceRecordAction,
-    getAbsentStudentsForTodayAction
+    getAbsentStudentsForTodayAction,
+    recordAttendanceBatchAction,
+    getCourseAttendanceForDateAction
 } from "../features/teacher/actions/attendanceActions";
 
 // From ../features/teacher/actions/remarkActions

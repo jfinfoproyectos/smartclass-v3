@@ -93,7 +93,7 @@ interface UserManagementProps {
 export function UserManagement({ initialUsers, totalCount }: UserManagementProps) {
     const [users, setUsers] = useState<User[]>(initialUsers);
     const [searchQuery, setSearchQuery] = useState("");
-    const [roleFilter, setRoleFilter] = useState<string>("all");
+    const [roleFilter, setRoleFilter] = useState<string>("student");
     const [courseFilter, setCourseFilter] = useState<string>("all");
     const [coursesList, setCoursesList] = useState<{ id: string, title: string }[]>([]);
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -164,15 +164,30 @@ export function UserManagement({ initialUsers, totalCount }: UserManagementProps
     };
 
     const onFilterChange = (type: 'role' | 'course' | 'search', value: string) => {
-        if (type === 'role') setRoleFilter(value);
-        if (type === 'course') setCourseFilter(value);
-        if (type === 'search') setSearchQuery(value);
+        let currentRole = roleFilter;
+        let currentCourse = courseFilter;
+        let currentSearch = searchQuery;
+
+        if (type === 'role') {
+            setRoleFilter(value);
+            currentRole = value;
+            setCourseFilter("all");
+            currentCourse = "all";
+        }
+        if (type === 'course') {
+            setCourseFilter(value);
+            currentCourse = value;
+        }
+        if (type === 'search') {
+            setSearchQuery(value);
+            currentSearch = value;
+        }
 
         startTransition(() => {
             refreshUsers(1, {
-                role: type === 'role' ? value : undefined,
-                course: type === 'course' ? value : undefined,
-                search: type === 'search' ? value : undefined
+                role: currentRole,
+                course: currentCourse,
+                search: currentSearch
             });
         });
     };
@@ -426,58 +441,51 @@ export function UserManagement({ initialUsers, totalCount }: UserManagementProps
                 </div>
             </div>
 
-            {/* Filters */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Filtros</CardTitle>
-                    <CardDescription>Busca y filtra usuarios</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="flex flex-col md:flex-row gap-4">
-                        <div className="flex-1 relative">
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Buscar por nombre o email..."
-                                value={searchQuery}
-                                onChange={(e) => onFilterChange('search', e.target.value)}
-                                className="pl-10"
-                            />
-                        </div>
-                        <Select value={roleFilter} onValueChange={(val) => onFilterChange('role', val)}>
-                            <SelectTrigger className="w-full md:w-[200px]">
-                                <SelectValue placeholder="Filtrar por rol" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">Todos los roles</SelectItem>
-                                <SelectItem value="admin">Administradores</SelectItem>
-                                <SelectItem value="teacher">Profesores</SelectItem>
-                                <SelectItem value="student">Estudiantes</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <Select value={courseFilter} onValueChange={(val) => onFilterChange('course', val)}>
-                            <SelectTrigger className="w-full md:w-[250px]">
-                                <SelectValue placeholder="Filtrar por curso" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">Todos los cursos</SelectItem>
-                                {coursesList.map((course) => (
-                                    <SelectItem key={course.id} value={course.id}>
-                                        {course.title}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </CardContent>
-            </Card>
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+                <div className="relative w-full sm:max-w-md">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        placeholder="Buscar por nombre o email..."
+                        value={searchQuery}
+                        onChange={(e) => onFilterChange('search', e.target.value)}
+                        className="pl-10 bg-card border-border/50"
+                    />
+                </div>
+            </div>
 
-            {/* Users Table */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Usuarios ({users.length})</CardTitle>
-                    <CardDescription>
-                        Lista de todos los usuarios registrados
-                    </CardDescription>
+            {/* Role Tabs & Users Table */}
+            <Tabs value={roleFilter} onValueChange={(val) => onFilterChange('role', val)} className="w-full">
+                <TabsList className="grid w-full grid-cols-3 max-w-xl">
+                    <TabsTrigger value="student">Estudiantes</TabsTrigger>
+                    <TabsTrigger value="teacher">Profesores</TabsTrigger>
+                    <TabsTrigger value="admin">Administradores</TabsTrigger>
+                </TabsList>
+
+                <Card>
+                <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div>
+                        <CardTitle>Usuarios ({users.length})</CardTitle>
+                        <CardDescription>
+                            Lista de todos los usuarios registrados
+                        </CardDescription>
+                    </div>
+                    {roleFilter === "student" && (
+                        <div className="w-full sm:w-auto">
+                            <Select value={courseFilter} onValueChange={(val) => onFilterChange('course', val)}>
+                                <SelectTrigger className="w-full sm:w-[250px] bg-background">
+                                    <SelectValue placeholder="Filtrar por curso" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Todos los cursos</SelectItem>
+                                    {coursesList.map((course) => (
+                                        <SelectItem key={course.id} value={course.id}>
+                                            {course.title}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
                 </CardHeader>
                 <CardContent>
                     <div className="rounded-xl border border-border/50 overflow-x-auto shadow-sm">
@@ -647,6 +655,7 @@ export function UserManagement({ initialUsers, totalCount }: UserManagementProps
                     )}
                 </CardContent>
             </Card>
+            </Tabs>
 
             {/* Delete Confirmation Dialog */}
             <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

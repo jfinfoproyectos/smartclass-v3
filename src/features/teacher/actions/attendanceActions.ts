@@ -13,8 +13,10 @@ export async function recordAttendanceAction(
     courseId: string,
     userId: string,
     date: Date | string,
-    status: "PRESENT" | "ABSENT" | "EXCUSED" | "LATE",
-    arrivalTime?: Date | string | null
+    status: "PRESENT" | "ABSENT" | "EXCUSED" | "LATE" | "LEAVE_EARLY",
+    arrivalTime?: Date | string | null,
+    justification?: string | null,
+    departureTime?: Date | string | null
 ) {
     const session = await getSession();
     if (!session || session.user.role !== "teacher") {
@@ -25,8 +27,17 @@ export async function recordAttendanceAction(
     
     // Convert arrivalTime to Date if it's a string
     const finalArrivalTime = typeof arrivalTime === 'string' ? new Date(arrivalTime) : arrivalTime;
+    const finalDepartureTime = typeof departureTime === 'string' ? new Date(departureTime) : departureTime;
 
-    const attendance = await attendanceService.recordAttendance(courseId, userId, date, status, finalArrivalTime) as any;
+    const attendance = await attendanceService.recordAttendance(
+        courseId, 
+        userId, 
+        date, 
+        status, 
+        finalArrivalTime, 
+        justification,
+        finalDepartureTime
+    ) as any;
     
     // 🎯 AUDIT LOG
     const { auditLogger } = await import("../../admin/services/auditLogger");
@@ -39,6 +50,98 @@ export async function recordAttendanceAction(
         session.user.id,
         session.user.name || "Profesor"
     );
+
+    // 🔔 PUSH NOTIFICATION
+    try {
+        const statusMap: Record<string, string> = {
+            PRESENT: "Presente (Asistió)",
+            ABSENT: "Falta (Inasistencia)",
+            EXCUSED: "Justificado",
+            LATE: "Tarde (Llegada Tarde)",
+            LEAVE_EARLY: "Retiro (Salida Temprana)"
+        };
+        const course = await prisma.course.findUnique({ where: { id: courseId }, select: { title: true } });
+        const formattedDate = typeof date === 'string' ? date : new Date(date).toLocaleDateString('es-ES', { timeZone: 'UTC' });
+        
+        const { sendPushNotification } = await import("@/lib/push-notifications");
+        await sendPushNotification(userId, {
+            title: "Registro de Asistencia 📋",
+            body: `Se ha registrado tu asistencia en "${course?.title || 'Curso'}" para el ${formattedDate} como: ${statusMap[status] || status}.`,
+            url: `/dashboard/student/attendance`
+        });
+    } catch (pushError) {
+        console.error("Failed to send attendance push notification:", pushError);
+    }
+
+    revalidatePath(`/dashboard/teacher/courses/${courseId}`);
+}
+
+export async function recordAttendanceBatchAction(
+    courseId: string,
+    date: Date | string,
+    records: { 
+        userId: string; 
+        status: "PRESENT" | "ABSENT" | "EXCUSED" | "LATE" | "LEAVE_EARLY"; 
+        arrivalTime?: Date | string | null; 
+        departureTime?: Date | string | null;
+        justification?: string | null 
+    }[]
+) {
+    const session = await getSession();
+    if (!session || session.user.role !== "teacher") {
+        throw new Error("Unauthorized");
+    }
+
+    const { attendanceService } = await import("../../attendance/services/attendanceService");
+    
+    const formattedRecords = records.map(r => ({
+        userId: r.userId,
+        status: r.status,
+        arrivalTime: typeof r.arrivalTime === 'string' ? new Date(r.arrivalTime) : r.arrivalTime,
+        departureTime: typeof r.departureTime === 'string' ? new Date(r.departureTime) : r.departureTime,
+        justification: r.justification
+    }));
+
+    await attendanceService.recordAttendanceBatch(courseId, date, formattedRecords);
+
+    // 🎯 AUDIT LOG
+    const { auditLogger } = await import("../../admin/services/auditLogger");
+    const course = await prisma.course.findUnique({ where: { id: courseId }, select: { title: true } });
+    
+    await auditLogger.log({
+        action: "UPDATE",
+        entity: "ATTENDANCE",
+        userId: session.user.id,
+        userName: session.user.name || "Profesor",
+        userRole: session.user.role,
+        description: `Registro de asistencia masivo realizado en el curso ${course?.title || "Curso"} para la fecha ${typeof date === 'string' ? date : new Date(date).toISOString().split('T')[0]}. Total registros: ${records.length}`,
+        success: true,
+    });
+
+    // 🔔 PUSH NOTIFICATIONS (BATCH)
+    try {
+        const statusMap: Record<string, string> = {
+            PRESENT: "Presente (Asistió)",
+            ABSENT: "Falta (Inasistencia)",
+            EXCUSED: "Justificado",
+            LATE: "Tarde (Llegada Tarde)",
+            LEAVE_EARLY: "Retiro (Salida Temprana)"
+        };
+        const formattedDate = typeof date === 'string' ? date : new Date(date).toLocaleDateString('es-ES', { timeZone: 'UTC' });
+        
+        const { sendPushNotification } = await import("@/lib/push-notifications");
+        await Promise.all(
+            records.map(r => 
+                sendPushNotification(r.userId, {
+                    title: "Registro de Asistencia 📋",
+                    body: `Se ha registrado tu asistencia en "${course?.title || 'Curso'}" para el ${formattedDate} como: ${statusMap[r.status] || r.status}.`,
+                    url: `/dashboard/student/attendance`
+                }).catch(err => console.error(`Error sending batch push for user ${r.userId}:`, err))
+            )
+        );
+    } catch (pushError) {
+        console.error("Failed to send batch attendance push notifications:", pushError);
+    }
 
     revalidatePath(`/dashboard/teacher/courses/${courseId}`);
 }
@@ -170,4 +273,58 @@ export async function getCourseSessionsCountAction(courseId: string) {
     );
     
     return uniqueDates.size;
+}
+
+export async function getCourseAttendanceForDateAction(courseId: string, date: Date | string) {
+    const session = await getSession();
+    if (!session || session.user.role !== "teacher") {
+        throw new Error("Unauthorized");
+    }
+
+    const { attendanceService } = await import("../../attendance/services/attendanceService");
+    return await attendanceService.getCourseAttendanceForDate(courseId, date);
+}
+
+export async function getCourseScheduleAction(courseId: string) {
+    const session = await getSession();
+    if (!session || (session.user.role !== "teacher" && session.user.role !== "admin")) {
+        throw new Error("Unauthorized");
+    }
+    return await prisma.course.findUnique({
+        where: { id: courseId },
+        select: {
+            id: true,
+            title: true,
+            startDate: true,
+            endDate: true,
+            startTime: true,
+            endTime: true,
+            classDays: true
+        }
+    });
+}
+
+/**
+ * Batch version: fetches absence/late/leaveEarly counts for ALL students
+ * in a single GROUP BY query. Use this instead of calling
+ * getStudentAttendanceStatsAction per student.
+ */
+export async function getCourseAllStudentsAttendanceStatsAction(
+    courseId: string
+): Promise<Record<string, { absences: number; late: number; leaveEarly: number }>> {
+    const session = await getSession();
+    if (!session || (session.user.role !== "teacher" && session.user.role !== "admin")) {
+        throw new Error("Unauthorized");
+    }
+    const { attendanceService } = await import("../../attendance/services/attendanceService");
+    return await attendanceService.getAllStudentsAttendanceStats(courseId);
+}
+
+export async function getCourseAllAttendanceRecordsAction(courseId: string) {
+    const session = await getSession();
+    if (!session || (session.user.role !== "teacher" && session.user.role !== "admin")) {
+        throw new Error("Unauthorized");
+    }
+    const { attendanceService } = await import("../../attendance/services/attendanceService");
+    return await attendanceService.getCourseAttendance(courseId);
 }

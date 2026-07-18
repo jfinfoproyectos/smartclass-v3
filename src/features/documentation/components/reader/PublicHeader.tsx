@@ -18,7 +18,9 @@ export function PublicHeader({
   currentCodeTheme,
   themes,
   navTree,
-  courseSettings
+  courseSettings,
+  isTocOpen,
+  toggleToc
 }: { 
   projectName: string, 
   projectId: string, 
@@ -31,7 +33,9 @@ export function PublicHeader({
     allowCodeThemeChange: boolean;
     themeColor: string;
     allowThemeColorChange: boolean;
-  }
+  },
+  isTocOpen: boolean;
+  toggleToc: () => void;
 }) {
   const [mounted, setMounted] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -88,7 +92,15 @@ export function PublicHeader({
       </div>
 
       <div className="flex items-center gap-2 sm:gap-4">
-        {mounted && <ConfigControls currentCodeTheme={currentCodeTheme} themes={themes} courseSettings={courseSettings} />}
+        {mounted && (
+          <ConfigControls 
+            currentCodeTheme={currentCodeTheme} 
+            themes={themes} 
+            courseSettings={courseSettings} 
+            isTocOpen={isTocOpen}
+            toggleToc={toggleToc}
+          />
+        )}
       </div>
     </header>
   );

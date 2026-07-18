@@ -128,7 +128,6 @@ export default async function Page({
             <TabsContent value="docs" className="mt-0 outline-none h-full">
                 <ProjectAnalytics 
                     courseId={course.id}
-                    docProjectId={course.docProjectId} 
                     availableProjects={availableProjects as any || []} 
                 />
             </TabsContent>

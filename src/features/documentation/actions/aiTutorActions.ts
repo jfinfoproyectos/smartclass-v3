@@ -39,7 +39,7 @@ export async function askAiTutorAction(projectId: string, pageId: string, questi
   // 1.5 Obtener curso activo del estudiante para este proyecto
   let course = await prisma.course.findFirst({
     where: {
-      docProjectId: project.id,
+      docLinks: { some: { docProjectId: project.id } },
       enrollments: { some: { userId: session.user.id, status: "APPROVED" } }
     }
   });
@@ -47,7 +47,7 @@ export async function askAiTutorAction(projectId: string, pageId: string, questi
   const isAdmin = session.user.role === "admin" || session.user.role === "teacher";
 
   // Check course association
-  const linkedCoursesCount = await prisma.course.count({
+  const linkedCoursesCount = await prisma.courseDocProject.count({
     where: { docProjectId: project.id }
   });
 
@@ -62,7 +62,7 @@ export async function askAiTutorAction(projectId: string, pageId: string, questi
   // Fallback al primer curso si no hay inscripción activa
   if (!course) {
     course = await prisma.course.findFirst({
-      where: { docProjectId: project.id }
+      where: { docLinks: { some: { docProjectId: project.id } } }
     });
   }
 

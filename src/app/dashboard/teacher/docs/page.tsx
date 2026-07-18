@@ -66,15 +66,13 @@ export default async function DocsScannerPage() {
   });
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 p-6">
+    <div className="space-y-6 animate-in fade-in duration-500 p-8">
       <Toaster />
       
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <h1 className="text-3xl font-black tracking-tight font-heading uppercase">
-            Gestión de <span className="text-primary">Docs</span>
-          </h1>
-          <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest opacity-60">
+          <h2 className="text-3xl font-bold tracking-tight">Gestión de Docs</h2>
+          <p className="text-muted-foreground">
             {projects.length} Proyectos de Documentación
           </p>
         </div>
@@ -101,14 +99,13 @@ export default async function DocsScannerPage() {
             <TableHeader>
               <TableRow className="h-12 bg-muted/40 hover:bg-muted/40 border-b border-border/30">
                 <TableHead className="font-extrabold uppercase tracking-wider text-[10px] pl-5 text-muted-foreground/80">Nombre</TableHead>
-                <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-muted-foreground/80">ID / Slug</TableHead>
                 <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-right pr-5 text-muted-foreground/80">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {projects.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="h-32 text-center text-muted-foreground pl-5">
+                  <TableCell colSpan={2} className="h-32 text-center text-muted-foreground pl-5">
                     No se encontraron proyectos de documentación.
                   </TableCell>
                 </TableRow>
@@ -123,11 +120,7 @@ export default async function DocsScannerPage() {
                         <span className="font-bold text-sm text-foreground/90 group-hover:text-primary transition-colors duration-300">{project.name}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="py-3.5">
-                      <code className="text-[11px] bg-muted/80 text-muted-foreground px-2.5 py-1 rounded-lg font-mono border border-border/30 tracking-tight shadow-inner-sm">
-                        {project.slug}
-                      </code>
-                    </TableCell>
+
                     <TableCell className="text-right py-3.5 pr-5">
                       <div className="flex items-center justify-end gap-2">
                         <Tooltip>

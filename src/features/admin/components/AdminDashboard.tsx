@@ -73,7 +73,7 @@ export function AdminDashboard({ stats, recentActivity }: AdminDashboardProps) {
             icon: Activity,
             color: "text-emerald-500",
             bg: "bg-emerald-500/10",
-            link: "/dashboard/admin/audit"
+            link: "/dashboard/admin"
         },
         {
             title: "Documentación",
@@ -83,15 +83,6 @@ export function AdminDashboard({ stats, recentActivity }: AdminDashboardProps) {
             color: "text-orange-500",
             bg: "bg-orange-500/10",
             link: "/dashboard/admin/docs"
-        },
-        {
-            title: "Estado del Sistema",
-            value: stats.health.connected ? "Saludable" : "Error",
-            description: "Salud de la base de datos",
-            icon: Server,
-            color: stats.health.connected ? "text-emerald-500" : "text-rose-500",
-            bg: stats.health.connected ? "bg-emerald-500/10" : "bg-rose-500/10",
-            link: "/dashboard/admin/system"
         }
     ];
 
@@ -102,27 +93,25 @@ export function AdminDashboard({ stats, recentActivity }: AdminDashboardProps) {
     ];
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500">
+        <div className="space-y-6 animate-in fade-in duration-500">
             {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h1 className="text-4xl font-black tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-                        Panel de Control
-                    </h1>
-                    <p className="text-muted-foreground text-lg">
-                        Métricas globales y gestión del sistema SmartClass.
+                    <h2 className="text-3xl font-bold tracking-tight">Panel de Control</h2>
+                    <p className="text-muted-foreground">
+                        Métricas globales y gestión del sistema SmartClass
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <Button variant="outline" asChild className="rounded-xl h-12 border-muted-foreground/20 hover:bg-muted/50">
+                    <Button variant="outline" asChild>
                         <Link href="/dashboard/admin/settings">
-                            <Settings className="h-5 w-5 mr-2" />
+                            <Settings className="h-4 w-4 mr-2" />
                             Configuración
                         </Link>
                     </Button>
-                    <Button asChild className="rounded-xl h-12 shadow-lg shadow-primary/20">
+                    <Button asChild>
                         <Link href="/dashboard/admin/users">
-                            <UserPlus className="h-5 w-5 mr-2" />
+                            <UserPlus className="h-4 w-4 mr-2" />
                             Nuevo Usuario
                         </Link>
                     </Button>
@@ -186,12 +175,6 @@ export function AdminDashboard({ stats, recentActivity }: AdminDashboardProps) {
                                 </div>
                             ))}
                         </div>
-                        <div className="pt-4 border-t">
-                            <div className="flex items-center justify-between text-lg font-bold">
-                                <span>Capacidad del Servidor</span>
-                                <Badge className="bg-emerald-500 shadow-none">92% Libre</Badge>
-                            </div>
-                        </div>
                     </CardContent>
                 </Card>
 
@@ -205,9 +188,7 @@ export function AdminDashboard({ stats, recentActivity }: AdminDashboardProps) {
                             </CardTitle>
                             <CardDescription>Últimas interacciones registradas en el sistema</CardDescription>
                         </div>
-                        <Button variant="ghost" size="sm" asChild className="text-primary hover:text-primary hover:bg-primary/5">
-                            <Link href="/dashboard/admin/audit">Ver historial completo</Link>
-                        </Button>
+
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-4">

@@ -28,6 +28,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Search, BookOpen, Users, FileText, Calendar, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { reassignCourseTeacherAction, deleteCourseAction } from "@/app/admin-actions";
@@ -68,7 +69,7 @@ interface CourseManagementProps {
 export function CourseManagement({ initialCourses, teachers, totalCount }: CourseManagementProps) {
     const [courses, setCourses] = useState<Course[]>(initialCourses);
     const [searchQuery, setSearchQuery] = useState("");
-    const [statusFilter, setStatusFilter] = useState<string>("all");
+    const [statusFilter, setStatusFilter] = useState<string>("active");
     const [reassignDialogOpen, setReassignDialogOpen] = useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
@@ -210,39 +211,26 @@ export function CourseManagement({ initialCourses, teachers, totalCount }: Cours
                 </Card>
             </div>
 
-            {/* Filters */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Filtros</CardTitle>
-                    <CardDescription>Busca y filtra cursos</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="flex flex-col sm:flex-row gap-4">
-                        <div className="flex-1 relative">
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Buscar por título, descripción o profesor..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="pl-10"
-                            />
-                        </div>
-                        <Select value={statusFilter} onValueChange={setStatusFilter}>
-                            <SelectTrigger className="w-full sm:w-[200px]">
-                                <SelectValue placeholder="Filtrar por estado" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">Todos los estados</SelectItem>
-                                <SelectItem value="active">Activos</SelectItem>
-                                <SelectItem value="archived">Archivados</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </CardContent>
-            </Card>
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+                <div className="relative w-full sm:max-w-md">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        placeholder="Buscar por título, descripción o profesor..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-10 bg-card border-border/50"
+                    />
+                </div>
+            </div>
 
-            {/* Courses Table */}
-            <Card>
+            {/* Status Tabs & Courses Table */}
+            <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-full">
+                <TabsList className="grid w-full grid-cols-2 max-w-md">
+                    <TabsTrigger value="active">Activos</TabsTrigger>
+                    <TabsTrigger value="archived">Archivados</TabsTrigger>
+                </TabsList>
+
+                <Card>
                 <CardHeader>
                     <CardTitle>Cursos ({filteredCourses.length})</CardTitle>
                     <CardDescription>
@@ -354,6 +342,7 @@ export function CourseManagement({ initialCourses, teachers, totalCount }: Cours
                     </div>
                 </CardContent>
             </Card>
+            </Tabs>
 
             {/* Reassign Teacher Dialog */}
             <Dialog open={reassignDialogOpen} onOpenChange={setReassignDialogOpen}>

@@ -14,6 +14,7 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -43,12 +44,53 @@ interface TeacherDashboardProps {
         recentPendingGrading: any[];
     };
     currentDate?: string;
-    docProjects?: { id: string; name: string }[];
 }
 
-export function TeacherDashboard({ courses, pendingEnrollments, stats, currentDate, docProjects = [] }: TeacherDashboardProps) {
+export function TeacherDashboard({ courses, pendingEnrollments, stats, currentDate }: TeacherDashboardProps) {
     const [activeTab, setActiveTab] = useState("courses");
     const [courseFilter, setCourseFilter] = useState("active");
+    const [startTime, setStartTime] = useState("08:00");
+    const [endTime, setEndTime] = useState("10:00");
+    const [classDays, setClassDays] = useState<string[]>([]);
+
+    const timeOptions = useMemo(() => {
+        const options = [];
+        for (let h = 0; h < 24; h++) {
+            for (let m = 0; m < 60; m += 15) {
+                const hourStr = String(h).padStart(2, '0');
+                const minStr = String(m).padStart(2, '0');
+                options.push(`${hourStr}:${minStr}`);
+            }
+        }
+        return options;
+    }, []);
+
+    const daysOfWeek = [
+        { label: "Lu", value: "1" },
+        { label: "Ma", value: "2" },
+        { label: "Mi", value: "3" },
+        { label: "Ju", value: "4" },
+        { label: "Vi", value: "5" },
+        { label: "Sá", value: "6" },
+        { label: "Do", value: "0" }
+    ];
+
+    const toggleDay = (val: string) => {
+        setClassDays(prev => 
+            prev.includes(val) 
+                ? prev.filter(d => d !== val) 
+                : [...prev, val]
+        );
+    };
+
+    const formatTo12Hour = (time24: string): string => {
+        if (!time24) return "";
+        const [hourStr, minStr] = time24.split(":");
+        const hour = parseInt(hourStr, 10);
+        const period = hour >= 12 ? "PM" : "AM";
+        const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+        return `${String(hour12).padStart(2, '0')}:${minStr} ${period}`;
+    };
 
     const [mounted, setMounted] = useState(false);
     const router = useRouter();
@@ -97,6 +139,14 @@ export function TeacherDashboard({ courses, pendingEnrollments, stats, currentDa
     const [editCourse, setEditCourse] = useState<any>(null);
     const [isCloning, setIsCloning] = useState(false);
 
+    useEffect(() => {
+        if (isDialogOpen) {
+            setStartTime(editCourse?.startTime || "08:00");
+            setEndTime(editCourse?.endTime || "10:00");
+            setClassDays(editCourse?.classDays ? editCourse.classDays.split(",") : ["1", "2", "3", "4", "5"]);
+        }
+    }, [editCourse, isDialogOpen]);
+
     const now = currentDate ? new Date(currentDate) : new Date();
     const activeCoursesCount = courses.filter(course => !course.endDate || new Date(course.endDate) >= now).length;
     const archivedCoursesCount = courses.filter(course => course.endDate && new Date(course.endDate) < now).length;
@@ -136,14 +186,14 @@ export function TeacherDashboard({ courses, pendingEnrollments, stats, currentDa
     }
 
     return (
-        <div className="flex-1 space-y-8 p-4 sm:p-6 md:p-8 pt-6">
-            <div className="flex flex-col gap-2">
-                <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-                    Panel de Control
-                </h2>
-                <p className="text-muted-foreground">
-                    Bienvenido, gestiona tus cursos y revisa el progreso de tus estudiantes.
-                </p>
+        <div className="flex-1 space-y-6 p-8">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                    <h2 className="text-3xl font-bold tracking-tight">Panel de Control</h2>
+                    <p className="text-muted-foreground">
+                        Bienvenido, gestiona tus cursos y revisa el progreso de tus estudiantes
+                    </p>
+                </div>
             </div>
 
             <div className="space-y-6">
@@ -153,28 +203,12 @@ export function TeacherDashboard({ courses, pendingEnrollments, stats, currentDa
                     </div>
 
                     <div className="flex items-center gap-3">
-                        <div className="flex items-center bg-muted/50 p-1 rounded-lg">
-                            <button
-                                onClick={() => setCourseFilter("active")}
-                                className={`px-4 py-1.5 text-xs sm:text-sm font-medium transition-all rounded-md ${
-                                    courseFilter === "active" 
-                                        ? "bg-background shadow-sm text-foreground" 
-                                        : "text-muted-foreground hover:text-foreground"
-                                }`}
-                            >
-                                Activos ({activeCoursesCount})
-                            </button>
-                            <button
-                                onClick={() => setCourseFilter("archived")}
-                                className={`px-4 py-1.5 text-xs sm:text-sm font-medium transition-all rounded-md ${
-                                    courseFilter === "archived" 
-                                        ? "bg-background shadow-sm text-foreground" 
-                                        : "text-muted-foreground hover:text-foreground"
-                                }`}
-                            >
-                                Archivados ({archivedCoursesCount})
-                            </button>
-                        </div>
+                        <Tabs value={courseFilter} onValueChange={setCourseFilter} className="w-full sm:w-auto">
+                            <TabsList className="grid grid-cols-2 w-full sm:w-[260px]">
+                                <TabsTrigger value="active" className="text-xs sm:text-sm font-bold">Activos ({activeCoursesCount})</TabsTrigger>
+                                <TabsTrigger value="archived" className="text-xs sm:text-sm font-bold">Archivados ({archivedCoursesCount})</TabsTrigger>
+                            </TabsList>
+                        </Tabs>
                         <div className="h-6 w-[1px] bg-border mx-1 hidden sm:block" />
                         
                         <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
@@ -283,22 +317,6 @@ export function TeacherDashboard({ courses, pendingEnrollments, stats, currentDa
                                             <Textarea id="description" name="description" placeholder="Describe brevemente los objetivos y temas del curso..." defaultValue={editCourse?.description || ''} className="min-h-[100px] bg-muted/30 focus-visible:ring-primary/50 resize-none" />
                                         </div>
 
-                                        <div className="space-y-2">
-                                            <Label htmlFor="docProjectId" className="text-sm font-semibold uppercase tracking-wider text-muted-foreground/80">Proyecto de Documentación</Label>
-                                            <Select name="docProjectId" defaultValue={editCourse?.docProjectId || 'none'}>
-                                                <SelectTrigger className="bg-muted/30">
-                                                    <SelectValue placeholder="Selecciona un proyecto de documentación" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="none">No asignar ninguna</SelectItem>
-                                                    {docProjects.map((dp) => (
-                                                        <SelectItem key={dp.id} value={dp.id}>
-                                                            {dp.name}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
 
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                             <div className="space-y-2">
@@ -309,6 +327,59 @@ export function TeacherDashboard({ courses, pendingEnrollments, stats, currentDa
                                                 <Label htmlFor="endDate" className="text-sm font-semibold uppercase tracking-wider text-muted-foreground/80">Fecha Fin</Label>
                                                 <Input id="endDate" name="endDate" type="date" defaultValue={editCourse?.endDate ? format(new Date(editCourse.endDate), "yyyy-MM-dd") : ''} className="bg-muted/30" />
                                             </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                            <div className="space-y-2">
+                                                <Label htmlFor="startTime" className="text-sm font-semibold uppercase tracking-wider text-muted-foreground/80">Hora Inicio</Label>
+                                                <Select name="startTime" value={startTime} onValueChange={setStartTime}>
+                                                    <SelectTrigger className="bg-muted/30">
+                                                        <SelectValue placeholder="Selecciona hora inicio" />
+                                                    </SelectTrigger>
+                                                    <SelectContent className="max-h-[200px]">
+                                                        {timeOptions.map((t) => (
+                                                            <SelectItem key={t} value={t}>{formatTo12Hour(t)}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label htmlFor="endTime" className="text-sm font-semibold uppercase tracking-wider text-muted-foreground/80">Hora Fin</Label>
+                                                <Select name="endTime" value={endTime} onValueChange={setEndTime}>
+                                                    <SelectTrigger className="bg-muted/30">
+                                                        <SelectValue placeholder="Selecciona hora fin" />
+                                                    </SelectTrigger>
+                                                    <SelectContent className="max-h-[200px]">
+                                                        {timeOptions.map((t) => (
+                                                            <SelectItem key={t} value={t}>{formatTo12Hour(t)}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-3">
+                                            <Label className="text-sm font-semibold uppercase tracking-wider text-muted-foreground/80">Días de Clase</Label>
+                                            <div className="flex flex-wrap gap-2">
+                                                {daysOfWeek.map((day) => {
+                                                    const active = classDays.includes(day.value);
+                                                    return (
+                                                        <button
+                                                            key={day.value}
+                                                            type="button"
+                                                            onClick={() => toggleDay(day.value)}
+                                                            className={`h-10 w-10 text-xs font-bold rounded-xl border transition-all duration-200 select-none flex items-center justify-center ${
+                                                                active
+                                                                    ? "bg-primary text-primary-foreground border-primary shadow-md shadow-primary/10"
+                                                                    : "bg-muted/30 hover:bg-muted/50 text-muted-foreground border-border"
+                                                            }`}
+                                                        >
+                                                            {day.label}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                            <input type="hidden" name="classDays" value={classDays.join(",")} />
                                         </div>
                                     </div>
 

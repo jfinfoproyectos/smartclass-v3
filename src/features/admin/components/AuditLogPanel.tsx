@@ -21,7 +21,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { getAuditLogsAction, getAuditStatsAction, clearAuditLogsAction } from "@/app/admin-actions";
+import { getAuditLogsAction, getAuditStatsAction } from "@/app/admin-actions";
 import { format } from "date-fns";
 import {
     Activity,
@@ -112,12 +112,6 @@ export function AuditLogPanel() {
     const [page, setPage] = useState(0);
     const limit = 50;
 
-    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-    const [deleteConfirmation, setDeleteConfirmation] = useState("");
-    const [isPending, startTransition] = useTransition();
-
-    const canDelete = deleteConfirmation === "ELIMINAR LOGS";
-
     const fetchLogs = async () => {
         setLoading(true);
         try {
@@ -175,30 +169,6 @@ export function AuditLogPanel() {
         setEndDate("");
         setPage(0);
         setPage(0);
-    };
-
-    const handleClearLogs = async () => {
-        startTransition(async () => {
-            try {
-                await clearAuditLogsAction();
-
-                // Refresh data
-                setPage(0);
-                fetchLogs();
-                fetchStats();
-
-                toast.success("Historial eliminado", {
-                    description: "Se han eliminado todos los registros de auditoría"
-                });
-
-                setDeleteDialogOpen(false);
-                setDeleteConfirmation("");
-            } catch (error) {
-                toast.error("Error", {
-                    description: "No se pudo eliminar el historial"
-                });
-            }
-        });
     };
 
     // Prepare export data
@@ -389,59 +359,9 @@ export function AuditLogPanel() {
                             filename={`Audit_Logs_${format(new Date(), 'yyyy-MM-dd')}`}
                             sheetName="Registros de Auditoría"
                         />
-                        <Button
-                            variant="destructive"
-                            className="flex items-center gap-2"
-                            onClick={() => {
-                                setDeleteConfirmation("");
-                                setDeleteDialogOpen(true);
-                            }}
-                        >
-                            <Trash2 className="h-4 w-4" />
-                            Eliminar Historial
-                        </Button>
                     </div>
                 </CardContent>
             </Card>
-
-            {/* Clear Logs Dialog */}
-            <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Eliminar Historial de Auditoría</DialogTitle>
-                        <DialogDescription>
-                            Esta acción no se puede deshacer. Esto eliminará permanentemente <span className="font-bold">TODOS</span> los registros de auditoría del sistema.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="py-4">
-                        <label className="text-sm font-medium mb-2 block">
-                            Para confirmar, escribe <span className="font-mono font-bold select-all">ELIMINAR LOGS</span> abajo:
-                        </label>
-                        <Input
-                            value={deleteConfirmation}
-                            onChange={(e) => setDeleteConfirmation(e.target.value)}
-                            placeholder="Escribe ELIMINAR LOGS para confirmar"
-                            className="w-full"
-                        />
-                    </div>
-                    <DialogFooter>
-                        <Button
-                            variant="outline"
-                            onClick={() => setDeleteDialogOpen(false)}
-                            disabled={isPending}
-                        >
-                            Cancelar
-                        </Button>
-                        <Button
-                            variant="destructive"
-                            onClick={handleClearLogs}
-                            disabled={!canDelete || isPending}
-                        >
-                            {isPending ? "Eliminando..." : "Eliminar Todo"}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
 
             {/* Logs Table */}
             <Card>

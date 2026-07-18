@@ -54,6 +54,29 @@ export async function createActivityAction(formData: FormData) {
         session.user.name || "Profesor"
     );
 
+    // 🔔 PUSH NOTIFICATION
+    try {
+        const enrollments = await prisma.enrollment.findMany({
+            where: { courseId, status: "APPROVED" },
+            select: { userId: true }
+        });
+        
+        if (enrollments.length > 0) {
+            const { sendPushNotification } = await import("@/lib/push-notifications");
+            await Promise.all(
+                enrollments.map(enrollment => 
+                    sendPushNotification(enrollment.userId, {
+                        title: "Nueva Actividad 📅",
+                        body: `Se ha publicado la actividad "${title}" en tu curso.`,
+                        url: `/dashboard/student/activities`
+                    })
+                )
+            );
+        }
+    } catch (pushError) {
+        console.error("Failed to dispatch push notifications for new activity:", pushError);
+    }
+
     revalidatePath(`/dashboard/teacher/courses/${courseId}`);
 }
 

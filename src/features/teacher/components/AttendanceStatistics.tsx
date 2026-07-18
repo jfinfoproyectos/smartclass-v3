@@ -195,6 +195,40 @@ export function AttendanceStatistics({ data, dateColumns, onFilter }: Attendance
         }],
     };
 
+    // 👥 ALL STUDENTS ATTENDANCE (Horizontal Bar Chart)
+    const studentPercentages = useMemo(() => {
+        return data.map(row => {
+            let presents = 0;
+            let total = 0;
+            dateColumns.forEach(date => {
+                const cell = row[date];
+                if (cell && typeof cell === 'object' && cell.status !== '-') {
+                    total++;
+                    if (cell.status === 'P' || cell.status === 'L' || cell.status === 'E') {
+                        presents++;
+                    }
+                }
+            });
+            const pct = total > 0 ? (presents / total) * 100 : 100;
+            return {
+                name: row.Estudiante,
+                percentage: Math.round(pct)
+            };
+        }).sort((a, b) => b.percentage - a.percentage);
+    }, [data, dateColumns]);
+
+    const allStudentsBarData = {
+        labels: studentPercentages.map(s => s.name),
+        datasets: [{
+            label: '% Asistencia',
+            data: studentPercentages.map(s => s.percentage),
+            backgroundColor: chartColors.trend,
+            borderColor: chartColors.trend,
+            borderWidth: 0,
+            borderRadius: 4,
+        }],
+    };
+
     const commonOptions = {
         responsive: true,
         maintainAspectRatio: false,
@@ -234,6 +268,23 @@ export function AttendanceStatistics({ data, dateColumns, onFilter }: Attendance
                     font: { size: 10 }
                 },
                 beginAtZero: true
+            }
+        }
+    };
+
+    const horizontalBarOptions = {
+        ...commonOptions,
+        indexAxis: 'y' as const,
+        scales: {
+            ...commonOptions.scales,
+            x: {
+                ...commonOptions.scales?.x,
+                min: 0,
+                max: 100,
+                ticks: {
+                    ...commonOptions.scales?.x?.ticks,
+                    callback: (value: any) => `${value}%`
+                }
             }
         }
     };
@@ -358,6 +409,16 @@ export function AttendanceStatistics({ data, dateColumns, onFilter }: Attendance
                     </CardContent>
                 </Card>
             </div>
+
+            <Card className="w-full mb-8">
+                <CardHeader>
+                    <CardTitle className="text-sm">Asistencia de Todos los Estudiantes</CardTitle>
+                    <CardDescription className="text-[10px]">Porcentaje acumulado de asistencia por estudiante (orden descendente)</CardDescription>
+                </CardHeader>
+                <CardContent style={{ height: `${Math.max(300, studentPercentages.length * 35 + 80)}px` }}>
+                    <Bar data={allStudentsBarData} options={horizontalBarOptions} />
+                </CardContent>
+            </Card>
         </div>
     );
 }

@@ -26,7 +26,6 @@ import Link from "next/link";
 import { AttendanceTaker } from "@/features/attendance/components/AttendanceTaker";
 import { ThemeSelector, ThemeInfo } from "@/components/theme/ThemeSelector";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { RefreshButton } from "@/components/navigation/RefreshButton";
 
 interface TeacherCourseHeaderProps {
     courseId: string;
@@ -112,7 +111,6 @@ export function TeacherCourseHeader({
                     </div>
 
                     <div className="flex items-center h-full px-3 gap-1.5 border-l border-foreground/10">
-                        <RefreshButton />
                         {showThemeSelector && <ThemeSelector themes={themes} />}
                         {showModeToggle && <ModeToggle />}
                         <CreditsModal />

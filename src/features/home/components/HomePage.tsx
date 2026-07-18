@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Calendar, Info, AlertTriangle, Wrench, Trophy, AlertCircle, Newspaper, PartyPopper, BookOpen, Settings2, CalendarClock, BarChart, Users, Activity, ScrollText, Home } from "lucide-react";
+import { Bell, Calendar, Info, AlertTriangle, Wrench, Trophy, AlertCircle, Newspaper, PartyPopper, BookOpen, Settings2, CalendarClock, BarChart, Users, Activity, ScrollText, Home, Files, FileText } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getSettingsAction } from "@/features/admin/actions/settingsActions";
 import MDEditor from "@uiw/react-md-editor";
@@ -42,19 +42,23 @@ export default function HomePage() {
             return [
                 { title: "Usuarios", url: "/dashboard/admin/users", icon: Users, color: "text-blue-500" },
                 { title: "Cursos", url: "/dashboard/admin/courses", icon: BookOpen, color: "text-green-500" },
-                { title: "Sistema", url: "/dashboard/admin/system", icon: Activity, color: "text-purple-500" },
-                { title: "Auditoría", url: "/dashboard/admin/audit", icon: ScrollText, color: "text-orange-500" },
+                { title: "Documentación", url: "/dashboard/admin/docs", icon: Files, color: "text-amber-500" },
                 { title: "Configuración", url: "/dashboard/admin/settings", icon: Settings2, color: "text-gray-500" },
             ];
         } else if (role === "teacher") {
             return [
                 { title: "Mis Cursos", url: "/dashboard/teacher", icon: BookOpen, color: "text-blue-500" },
-                { title: "Estadísticas", url: "/dashboard/teacher/statistics", icon: BarChart, color: "text-orange-500" },
+                { title: "Asistencia", url: "/dashboard/teacher/attendance", icon: CalendarClock, color: "text-green-500" },
+                { title: "Documentación", url: "/dashboard/teacher/docs", icon: Files, color: "text-amber-500" },
+                { title: "Evaluaciones", url: "/dashboard/teacher/evaluations", icon: FileText, color: "text-purple-500" },
+                { title: "Configuración", url: "/dashboard/teacher/settings", icon: Settings2, color: "text-gray-500" },
             ];
         } else {
             // Student
             return [
                 { title: "Mis Cursos", url: "/dashboard/student", icon: BookOpen, color: "text-blue-500" },
+                { title: "Mi Asistencia", url: "/dashboard/student/attendance", icon: CalendarClock, color: "text-green-500" },
+                { title: "Actividades", url: "/dashboard/student/activities", icon: Activity, color: "text-purple-500" },
             ];
         }
     };
@@ -63,7 +67,7 @@ export default function HomePage() {
 
 
     return (
-        <div className="min-h-[calc(100vh-4rem)] h-auto -mx-2 sm:-mx-4 -mb-4 w-[calc(100%+1rem)] sm:w-[calc(100%+2rem)] rounded-none overflow-hidden pb-12">
+        <div className="min-h-[calc(100vh-4rem)] h-auto -mx-2 sm:-mx-4 -mb-4 w-[calc(100%+1rem)] sm:w-[calc(100%+2rem)] rounded-none pb-12">
             <div className="relative flex flex-col w-full">
                 <section className="w-full relative overflow-hidden">
                     <LampContainer className="min-h-[400px]">

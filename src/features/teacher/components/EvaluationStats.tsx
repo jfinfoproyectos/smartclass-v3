@@ -37,6 +37,7 @@ import { pdf } from "@react-pdf/renderer";
 import { AIInsightsPDF } from "./AIInsightsPDF";
 import { motion, animate, useMotionValue, useTransform } from "framer-motion";
 import { useEffect } from "react";
+import { toast } from "sonner";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, PointElement, LineElement, Title, Tooltip, Legend);
 
@@ -120,7 +121,7 @@ export function EvaluationStats({
         } catch (error: any) {
             console.error("Plagiarism analysis error:", error);
             setPlagiarismData({ matches: [], loading: false });
-            alert(`Error en análisis de plagio: ${error.message}`);
+            toast.error(`Error en análisis de plagio: ${error.message}`);
         }
     };
 
@@ -159,7 +160,7 @@ export function EvaluationStats({
         } catch (error: any) {
             console.error("Error generating insights:", error);
             setAiInsights({ loading: false });
-            alert(`Error al generar el reporte: ${error.message}`);
+            toast.error(`Error al generar el reporte: ${error.message}`);
         }
     };
 

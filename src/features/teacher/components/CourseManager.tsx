@@ -291,11 +291,11 @@ export function CourseManager({
         const allSelected = currentInViewIds.length > 0 && currentInViewIds.every(id => selectedCourses.includes(id));
 
         return (
-            <div className="rounded-xl border border-border/50 overflow-x-auto shadow-sm">
+            <div className="rounded-2xl border border-border/40 overflow-hidden bg-card/25 backdrop-blur-md shadow-xl shadow-black/5 overflow-x-auto">
                 <Table className="w-full min-w-[800px]">
                     <TableHeader>
-                        <TableRow className="bg-muted/30 hover:bg-muted/30">
-                            <TableHead className="w-10 pl-4">
+                        <TableRow className="h-12 bg-muted/40 hover:bg-muted/40 border-b border-border/30">
+                            <TableHead className="w-10 pl-5">
                                 <Checkbox
                                     id="select-all"
                                     checked={allSelected}
@@ -303,22 +303,22 @@ export function CourseManager({
                                     className="h-4 w-4 rounded border-muted-foreground/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                                 />
                             </TableHead>
-                            <TableHead className="font-bold uppercase tracking-wider text-xs">Curso</TableHead>
-                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Inscritos</TableHead>
-                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden md:table-cell">Inicio</TableHead>
-                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden md:table-cell">Fin</TableHead>
-                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Código</TableHead>
-                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden lg:table-cell">Inscripción</TableHead>
-                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Acciones</TableHead>
+                            <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-muted-foreground/80 pl-2">Curso</TableHead>
+                            <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-center text-muted-foreground/80">Inscritos</TableHead>
+                            <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-center hidden md:table-cell text-muted-foreground/80">Inicio</TableHead>
+                            <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-center hidden md:table-cell text-muted-foreground/80">Fin</TableHead>
+                            <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-center text-muted-foreground/80">Código</TableHead>
+                            <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-center hidden lg:table-cell text-muted-foreground/80">Inscripción</TableHead>
+                            <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-right pr-5 text-muted-foreground/80">Acciones</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {courses.map((course, idx) => (
                             <TableRow
                                 key={course.id}
-                                className="group hover:bg-muted/20 transition-colors border-border/30"
+                                className="group hover:bg-muted/30 transition-colors border-b border-border/20"
                             >
-                                <TableCell className="pl-4">
+                                <TableCell className="pl-5">
                                     <Checkbox
                                         id={`select-${course.id}`}
                                         checked={selectedCourses.includes(course.id)}
@@ -327,39 +327,43 @@ export function CourseManager({
                                     />
                                 </TableCell>
 
-                                <TableCell>
-                                    <div className="flex flex-col gap-0.5">
-                                        <span className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors leading-tight">
-                                            {course.title}
-                                        </span>
-                                        {course.description && (
-                                            <span className="text-xs text-muted-foreground line-clamp-1 hidden sm:block">
-                                                {course.description}
+                                <TableCell className="font-medium py-3.5 pl-2">
+                                    <div className="flex items-center gap-3.5">
+                                        <div className="p-2.5 rounded-xl bg-primary/10 text-primary group-hover:scale-110 transition-all duration-300 shadow-sm shadow-primary/5 shrink-0">
+                                            <BookOpen className="w-4 h-4" />
+                                        </div>
+                                        <div className="flex flex-col gap-0.5">
+                                            <span className="font-bold text-sm text-foreground/90 group-hover:text-primary transition-colors duration-300 leading-tight">
+                                                {course.title}
                                             </span>
-                                        )}
+                                            {course.description && (
+                                                <span className="text-xs text-muted-foreground line-clamp-1 hidden sm:block">
+                                                    {course.description}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                 </TableCell>
 
-                                <TableCell className="text-center">
-                                    <Badge variant="outline" className="text-xs font-bold bg-primary/5 text-primary border-primary/20 gap-1">
-                                        <Users className="h-3 w-3" />
+                                <TableCell className="text-center py-3.5">
+                                    <span className="text-xs font-semibold bg-muted/65 px-2.5 py-1 rounded-lg border border-border/30 text-foreground">
                                         {course._count.enrollments}
-                                    </Badge>
+                                    </span>
                                 </TableCell>
 
-                                <TableCell className="text-center hidden md:table-cell">
-                                    <span className="text-xs text-muted-foreground font-medium">
+                                <TableCell className="text-center py-3.5 hidden md:table-cell">
+                                    <code className="text-[11px] bg-muted/80 text-muted-foreground px-2.5 py-1 rounded-lg font-mono border border-border/30 tracking-tight shadow-inner-sm">
                                         {course.startDate ? formatCalendarDate(course.startDate, "dd/MM/yy") : "---"}
-                                    </span>
+                                    </code>
                                 </TableCell>
 
-                                <TableCell className="text-center hidden md:table-cell">
-                                    <span className="text-xs text-muted-foreground font-medium">
+                                <TableCell className="text-center py-3.5 hidden md:table-cell">
+                                    <code className="text-[11px] bg-muted/80 text-muted-foreground px-2.5 py-1 rounded-lg font-mono border border-border/30 tracking-tight shadow-inner-sm">
                                         {course.endDate ? formatCalendarDate(course.endDate, "dd/MM/yy") : "---"}
-                                    </span>
+                                    </code>
                                 </TableCell>
 
-                                <TableCell className="text-center">
+                                <TableCell className="text-center py-3.5">
                                     {course.enrollmentCode ? (
                                         <div className="flex items-center justify-center gap-1">
                                             <code className="bg-primary/5 text-primary border border-primary/10 px-2 py-0.5 rounded font-mono text-xs font-bold tracking-wider">
@@ -555,34 +559,30 @@ export function CourseManager({
 
     return (
         <div className="space-y-4">
-            {currentCourses.length > 0 && (
+            {selectedCourses.length > 0 && currentCourses.length > 0 && (
                 <div className="flex items-center justify-between gap-4 px-4 py-2.5 bg-muted/20 border border-border/50 rounded-xl backdrop-blur-sm">
                     <div className="flex items-center gap-3">
-                        {selectedCourses.length > 0 && (
-                            <Badge variant="secondary" className="bg-primary/10 text-primary border-none font-bold px-3">
-                                {selectedCourses.length} seleccionados
-                            </Badge>
-                        )}
+                        <Badge variant="secondary" className="bg-primary/10 text-primary border-none font-bold px-3">
+                            {selectedCourses.length} seleccionados
+                        </Badge>
                     </div>
                     
-                    {selectedCourses.length > 0 && (
-                        <Button
-                            variant="default"
-                            size="sm"
-                            onClick={handleExportMulti}
-                            disabled={isExporting}
-                            className="bg-green-600 hover:bg-green-700 text-white font-black text-[10px] uppercase tracking-widest shadow-lg shadow-green-500/20"
-                        >
-                            {isExporting ? (
-                                "Generando..."
-                            ) : (
-                                <>
-                                    <FileSpreadsheet className="mr-2 h-3.5 w-3.5" />
-                                    Exportar Planillas
-                                </>
-                            )}
-                        </Button>
-                    )}
+                    <Button
+                        variant="default"
+                        size="sm"
+                        onClick={handleExportMulti}
+                        disabled={isExporting}
+                        className="bg-green-600 hover:bg-green-700 text-white font-black text-[10px] uppercase tracking-widest shadow-lg shadow-green-500/20"
+                    >
+                        {isExporting ? (
+                            "Generando..."
+                        ) : (
+                            <>
+                                <FileSpreadsheet className="mr-2 h-3.5 w-3.5" />
+                                Exportar Planillas
+                            </>
+                        )}
+                    </Button>
                 </div>
             )}
 

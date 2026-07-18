@@ -9,17 +9,29 @@ export const attendanceService = {
         userId: string,
         date: Date | string,
         status: AttendanceStatus,
-        arrivalTime?: Date | null
+        arrivalTime?: Date | null,
+        justification?: string | null,
+        departureTime?: Date | null
     ) {
         // Normalize date to start of day in UTC to avoid timezone shifts
         const normalizedDate = typeof date === 'string'
-            ? new Date(date)
+            ? new Date(`${date.split('T')[0]}T00:00:00.000Z`)
             : toUTCStartOfDayFromLocal(date);
 
         // If status is LATE and no arrivalTime is provided, use current time
         // If status is NOT LATE, arrivalTime should be null
         const finalArrivalTime = status === "LATE" 
             ? (arrivalTime || new Date()) 
+            : null;
+
+        // If status is LEAVE_EARLY and no departureTime is provided, use current time
+        // If status is NOT LEAVE_EARLY, departureTime should be null
+        const finalDepartureTime = status === "LEAVE_EARLY"
+            ? (departureTime || new Date())
+            : null;
+
+        const finalJustification = (status === "EXCUSED" || status === "LATE" || status === "LEAVE_EARLY")
+            ? justification
             : null;
 
         return await prisma.attendance.upsert({
@@ -33,6 +45,8 @@ export const attendanceService = {
             update: {
                 status,
                 arrivalTime: finalArrivalTime,
+                departureTime: finalDepartureTime,
+                justification: finalJustification,
             },
             create: {
                 courseId,
@@ -40,10 +54,88 @@ export const attendanceService = {
                 date: normalizedDate,
                 status,
                 arrivalTime: finalArrivalTime,
+                departureTime: finalDepartureTime,
+                justification: finalJustification,
             },
             include: {
                 user: { select: { name: true } },
                 course: { select: { title: true } }
+            }
+        });
+    },
+
+    async recordAttendanceBatch(
+        courseId: string,
+        date: Date | string,
+        records: { 
+            userId: string; 
+            status: AttendanceStatus; 
+            arrivalTime?: Date | null; 
+            departureTime?: Date | null;
+            justification?: string | null 
+        }[]
+    ) {
+        const normalizedDate = typeof date === 'string'
+            ? new Date(`${date.split('T')[0]}T00:00:00.000Z`)
+            : toUTCStartOfDayFromLocal(date);
+
+        return await prisma.$transaction(
+            records.map(r => {
+                const finalArrivalTime = r.status === "LATE" 
+                    ? (r.arrivalTime || new Date()) 
+                    : null;
+                const finalDepartureTime = r.status === "LEAVE_EARLY"
+                    ? (r.departureTime || new Date())
+                    : null;
+                const finalJustification = (r.status === "EXCUSED" || r.status === "LATE" || r.status === "LEAVE_EARLY")
+                    ? r.justification
+                    : null;
+
+                return prisma.attendance.upsert({
+                    where: {
+                        courseId_userId_date: {
+                            courseId,
+                            userId: r.userId,
+                            date: normalizedDate,
+                        },
+                    },
+                    update: {
+                        status: r.status,
+                        arrivalTime: finalArrivalTime,
+                        departureTime: finalDepartureTime,
+                        justification: finalJustification,
+                    },
+                    create: {
+                        courseId,
+                        userId: r.userId,
+                        date: normalizedDate,
+                        status: r.status,
+                        arrivalTime: finalArrivalTime,
+                        departureTime: finalDepartureTime,
+                        justification: finalJustification,
+                    }
+                });
+            })
+        );
+    },
+
+    async getCourseAttendanceForDate(courseId: string, date: Date | string) {
+        const normalizedDate = typeof date === 'string'
+            ? new Date(`${date.split('T')[0]}T00:00:00.000Z`)
+            : toUTCStartOfDayFromLocal(date);
+
+        return await prisma.attendance.findMany({
+            where: {
+                courseId,
+                date: normalizedDate
+            },
+            select: {
+                id: true,
+                userId: true,
+                status: true,
+                arrivalTime: true,
+                departureTime: true,
+                justification: true
             }
         });
     },
@@ -165,7 +257,7 @@ export const attendanceService = {
             },
         });
 
-        const newStatus = currentRecord?.status === "LATE" ? "LATE" : "EXCUSED";
+        const newStatus = (currentRecord?.status === "LATE" || currentRecord?.status === "LEAVE_EARLY") ? currentRecord.status : "EXCUSED";
 
         return await prisma.attendance.upsert({
             where: {
@@ -210,8 +302,8 @@ export const attendanceService = {
                     justificationUrl: null,
                 },
             });
-        } else if (record.status === "LATE") {
-            // If late, keep LATE but clear justification
+        } else if (record.status === "LATE" || record.status === "LEAVE_EARLY") {
+            // If late or leave early, keep current status but clear justification
             return await prisma.attendance.update({
                 where: { id: attendanceId },
                 data: {
@@ -286,7 +378,8 @@ export const attendanceService = {
             ABSENT: 0,
             PRESENT: 0,
             EXCUSED: 0,
-            LATE: 0
+            LATE: 0,
+            LEAVE_EARLY: 0
         };
 
         studentRecords.forEach(r => {
@@ -295,8 +388,8 @@ export const attendanceService = {
             }
         });
 
-        // Calculate percentage: (Present + Excused + Late) / Total Sessions
-        const attendedSessions = counts.PRESENT + counts.EXCUSED + counts.LATE;
+        // Calculate percentage: (Present + Excused + Late + Leave Early) / Total Sessions
+        const attendedSessions = counts.PRESENT + counts.EXCUSED + counts.LATE + counts.LEAVE_EARLY;
         const attendancePercentage = sessionCount > 0 ? (attendedSessions / sessionCount) * 100 : 100;
 
         return {
@@ -305,6 +398,7 @@ export const attendanceService = {
             presents: counts.PRESENT,
             excused: counts.EXCUSED,
             late: counts.LATE,
+            leaveEarly: counts.LEAVE_EARLY,
             attendancePercentage,
             records: studentRecords,
         };
@@ -336,5 +430,29 @@ export const attendanceService = {
                 }
             }
         });
-    }
+    },
+
+    /**
+     * Batch: returns a map of userId → { absences, late, leaveEarly }
+     * for all students in a course using a single GROUP BY query.
+     * Replaces the N individual getStudentAttendanceStats calls in the list view.
+     */
+    async getAllStudentsAttendanceStats(courseId: string): Promise<Record<string, { absences: number; late: number; leaveEarly: number }>> {
+        const rows = await prisma.attendance.groupBy({
+            by: ["userId", "status"],
+            where: { courseId },
+            _count: { _all: true },
+        });
+
+        const result: Record<string, { absences: number; late: number; leaveEarly: number }> = {};
+        for (const row of rows) {
+            if (!result[row.userId]) {
+                result[row.userId] = { absences: 0, late: 0, leaveEarly: 0 };
+            }
+            if (row.status === "ABSENT")      result[row.userId].absences   += row._count._all;
+            if (row.status === "LATE")         result[row.userId].late        += row._count._all;
+            if (row.status === "LEAVE_EARLY")  result[row.userId].leaveEarly  += row._count._all;
+        }
+        return result;
+    },
 };

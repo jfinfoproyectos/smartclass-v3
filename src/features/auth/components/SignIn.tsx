@@ -87,7 +87,13 @@ export default function SignIn() {
             <Separator className="flex-1" />
           </div>
 
-          <div className="space-y-6">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleEmailSignIn();
+            }}
+            className="space-y-6"
+          >
             <div>
               <Label htmlFor="email">Correo</Label>
               <div className="relative mt-2.5">
@@ -137,12 +143,12 @@ export default function SignIn() {
             {error && (
               <div className="text-sm text-red-600">{error}</div>
             )}
-          </div>
 
-          <Button className="w-full" onClick={handleEmailSignIn} disabled={loading}>
-            Iniciar sesión
-            <ArrowRight className="h-4 w-4" />
-          </Button>
+            <Button type="submit" className="w-full" disabled={loading}>
+              Iniciar sesión
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </form>
 
           <div className="text-center text-sm">
             ¿No tienes cuenta? {""}

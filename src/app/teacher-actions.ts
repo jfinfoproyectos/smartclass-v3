@@ -174,46 +174,4 @@ export async function testAICredentialsAction({ provider, model, apiKey }: { pro
     }
 }
 
-export async function getAIUsageAnalyticsAction() {
-    const session = await getSession();
-    if (!session?.user || session.user.role !== "teacher") {
-        throw new Error("Unauthorized");
-    }
 
-    const usageModel = (prisma as any).aiUsage || (prisma as any).aIUsage;
-    if (!usageModel) {
-        return { usageByProvider: [], recentLogs: [] };
-    }
-
-    // Aggregations per provider
-    const usageByProvider = await usageModel.groupBy({
-        by: ['provider'],
-        where: { userId: session.user.id },
-        _sum: {
-            promptTokens: true,
-            completionTokens: true,
-            totalTokens: true
-        },
-        _count: {
-            _all: true
-        }
-    });
-
-    // Recent logs
-    const recentLogs = await usageModel.findMany({
-        where: { userId: session.user.id },
-        orderBy: { createdAt: 'desc' },
-        take: 10
-    });
-
-    return {
-        usageByProvider: usageByProvider.map((u: any) => ({
-            provider: u.provider,
-            promptTokens: u._sum.promptTokens || 0,
-            completionTokens: u._sum.completionTokens || 0,
-            totalTokens: u._sum.totalTokens || 0,
-            requestCount: u._count._all || 0
-        })),
-        recentLogs
-    };
-}

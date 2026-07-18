@@ -7,7 +7,7 @@ import { ThemeSelector } from "@/components/theme/ThemeSelector";
 import { ThemeInfo } from "@/app/actions/themes";
 import { CreditsModal } from "@/components/CreditsModal";
 import { Button } from "@/components/ui/button";
-import { FileDown } from "lucide-react";
+import { FileDown, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ConfigControlsProps {
@@ -20,9 +20,11 @@ interface ConfigControlsProps {
     themeColor: string;
     allowThemeColorChange: boolean;
   };
+  isTocOpen: boolean;
+  toggleToc: () => void;
 }
 
-export function ConfigControls({ currentCodeTheme, themes, courseSettings }: ConfigControlsProps) {
+export function ConfigControls({ currentCodeTheme, themes, courseSettings, isTocOpen, toggleToc }: ConfigControlsProps) {
   const showModeToggle = courseSettings.themeMode === "STUDENT";
   const showCodeThemeSelector = courseSettings.allowCodeThemeChange;
   const showThemeSelector = courseSettings.allowThemeColorChange;
@@ -136,6 +138,32 @@ export function ConfigControls({ currentCodeTheme, themes, courseSettings }: Con
           </TooltipTrigger>
           <TooltipContent>
             <p className="text-[10px] font-bold uppercase tracking-wider">Descargar PDF</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+
+      {/* Toggle TOC Sidebar Control */}
+      <TooltipProvider delayDuration={150}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              onClick={toggleToc}
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0 relative opacity-60 hover:opacity-100 hover:text-primary transition-all focus-visible:ring-0 cursor-pointer hidden xl:flex"
+            >
+              {isTocOpen ? (
+                <PanelRightClose className="h-4.5 w-4.5" />
+              ) : (
+                <PanelRightOpen className="h-4.5 w-4.5" />
+              )}
+              <span className="sr-only">Índice de Temas</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p className="text-[10px] font-bold uppercase tracking-wider">
+              {isTocOpen ? "Ocultar Índice" : "Mostrar Índice"}
+            </p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>

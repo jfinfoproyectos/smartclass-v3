@@ -11,6 +11,33 @@ async function getSession() {
     return await auth.api.getSession({ headers: await headers() });
 }
 
+async function notifyTeacherOfSubmission(activityId: string, studentName: string) {
+    try {
+        const activity = await prisma.activity.findUnique({
+            where: { id: activityId },
+            include: {
+                course: {
+                    select: {
+                        title: true,
+                        teacherId: true
+                    }
+                }
+            }
+        });
+        
+        if (activity?.course?.teacherId) {
+            const { sendPushNotification } = await import("@/lib/push-notifications");
+            await sendPushNotification(activity.course.teacherId, {
+                title: "Nueva entrega de estudiante 📥",
+                body: `${studentName} entregó la actividad "${activity.title}".`,
+                url: `/dashboard/teacher/courses/${activity.courseId}/activities/${activityId}`
+            });
+        }
+    } catch (err) {
+        console.error("Failed to notify teacher of submission:", err);
+    }
+}
+
 export async function submitActivityAction(prevState: any, formData: FormData) {
     const session = await getSession();
     if (!session || session.user.role !== "student") {
@@ -43,6 +70,9 @@ export async function submitActivityAction(prevState: any, formData: FormData) {
             session.user.name || "Estudiante",
             submission.attemptCount
         );
+
+        // 🔔 PUSH NOTIFICATION
+        await notifyTeacherOfSubmission(activityId, session.user.name || "Estudiante");
 
         revalidatePath("/dashboard/student");
         return { message: "Entrega exitosa", error: false };
@@ -92,6 +122,9 @@ export async function submitGithubActivityAction(activityId: string, repoUrl: st
         submission.attemptCount
     );
 
+    // 🔔 PUSH NOTIFICATION
+    await notifyTeacherOfSubmission(activityId, session.user.name || "Estudiante");
+
     revalidatePath("/dashboard/student");
 }
 
@@ -126,6 +159,9 @@ export async function submitPdfActivityAction(activityId: string, url: string) {
         session.user.name || "Estudiante",
         submission.attemptCount
     );
+
+    // 🔔 PUSH NOTIFICATION
+    await notifyTeacherOfSubmission(activityId, session.user.name || "Estudiante");
 
     revalidatePath("/dashboard/student");
 }

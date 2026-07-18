@@ -1,67 +1,23 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { 
-  Users, 
-  Clock, 
-  Eye, 
-  TrendingUp, 
-  ShieldCheck,
-  BrainCircuit,
-  Activity,
+import {
   BookOpenText,
   Unlink,
-  Search,
-  ChevronRight,
-  Settings2,
-  ArrowRight,
+  Plus,
   ExternalLink,
-  History,
+  Settings2,
   RefreshCcw,
-  Trash2,
-  Palette,
-  Code,
-  Sun,
-  Moon,
-  Monitor
+  Search,
+  BookOpen,
+  Link2,
 } from "lucide-react";
-import { 
-  getProjectAnalyticsAction, 
-  getStudentProgressAction,
-  updateCourseDocSettingsAction,
-  getStudentViewLogsAction,
-  clearStudentHistoryAction,
-  getProjectChartDataAction
-} from "../../actions/progressActions";
 import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  Title,
-  Tooltip as ChartTooltip,
-  Legend,
-  Filler,
-} from 'chart.js';
-import { Line, Bar, Chart } from 'react-chartjs-2';
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  Title,
-  ChartTooltip,
-  Legend,
-  Filler
-);
-import { 
-  linkProjectToCourseAction 
+  getCourseLinkedProjectsAction,
+  linkProjectToCourseAction,
+  unlinkProjectFromCourseAction,
 } from "../../actions/adminDocsActions";
-import { 
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -72,296 +28,296 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogDescription 
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { cn } from "@/lib/utils";
-import { toast } from "sonner";
-import { useTheme } from "next-themes";
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { toast } from "sonner";
 
 interface CourseDocManagerProps {
   courseId: string;
-  docProjectId: string | null;
-  availableProjects: { id: string, name: string }[];
+  availableProjects: { id: string; name: string; slug?: string }[];
 }
 
-export function ProjectAnalytics({ courseId, docProjectId, availableProjects }: CourseDocManagerProps) {
-  const [projectId, setProjectId] = useState<string | null>(docProjectId);
+interface LinkedProject {
+  id: string;
+  name: string;
+  slug: string;
+  icon?: string | null;
+  imageUrl?: string | null;
+  linkId: string;
+  order: number;
+}
+
+export function ProjectAnalytics({ courseId, availableProjects }: CourseDocManagerProps) {
+  const [linkedProjects, setLinkedProjects] = useState<LinkedProject[]>([]);
   const [loading, setLoading] = useState(true);
-  const [analytics, setAnalytics] = useState<any>(null);
-  const [studentProgress, setStudentProgress] = useState<any[]>([]);
   const [search, setSearch] = useState("");
-  const [updatingSettings, setUpdatingSettings] = useState(false);
-  const [chartData, setChartData] = useState<any>(null);
-  const { resolvedTheme } = useTheme();
-  const isDark = resolvedTheme === "dark";
-
-  const colors = {
-    primary: "rgb(59, 130, 246)",
-    secondary: isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.05)",
-    text: isDark ? "rgba(255, 255, 255, 0.6)" : "rgba(0, 0, 0, 0.6)",
-    grid: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.05)",
-    tooltipBg: isDark ? "#1f2937" : "#fff",
-    tooltipText: isDark ? "#fff" : "#000",
-    areaGradient: "rgba(59, 130, 246, 0.1)"
-  };
-
-  const [settings, setSettings] = useState({
-    trackingEnabled: true,
-    aiTutorEnabled: false,
-    aiQuestionsLimit: 5,
-    themeMode: "STUDENT",
-    codeTheme: "one-dark-pro",
-    allowCodeThemeChange: true,
-    themeColor: "zinc",
-    allowThemeColorChange: true
-  });
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   useEffect(() => {
-    if (projectId) {
-      loadData();
-    } else {
-      setLoading(false);
-    }
-  }, [projectId]);
+    loadLinkedProjects();
+  }, [courseId]);
 
-  async function loadData() {
-    if (!projectId) return;
+  async function loadLinkedProjects() {
     setLoading(true);
     try {
-      const [stats, progress, charts] = await Promise.all([
-        getProjectAnalyticsAction(projectId, courseId),
-        getStudentProgressAction(projectId, courseId),
-        getProjectChartDataAction(projectId, courseId)
-      ]);
-      setAnalytics(stats);
-      setStudentProgress(progress);
-      setChartData(charts);
-      if (stats.settings) {
-        setSettings({
-          ...stats.settings,
-          themeColor: stats.settings.themeColor || "zinc"
-        });
-      }
+      const data = await getCourseLinkedProjectsAction(courseId);
+      setLinkedProjects(data as LinkedProject[]);
     } catch (error) {
-      console.error("Error loading analytics:", error);
-      toast.error("Error al cargar datos");
+      console.error("Error loading linked projects:", error);
+      toast.error("Error al cargar las documentaciones vinculadas");
     } finally {
       setLoading(false);
     }
   }
 
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const [loadingDetails, setLoadingDetails] = useState(false);
-  const [selectedStudent, setSelectedStudent] = useState<any>(null);
-  const [viewLogs, setViewLogs] = useState<any[]>([]);
+  const linkedIds = new Set(linkedProjects.map((p) => p.id));
+  const unlinkedProjects = availableProjects.filter((p) => !linkedIds.has(p.id));
+  const filteredUnlinked = search
+    ? unlinkedProjects.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
+    : unlinkedProjects;
 
-  const handleShowDetails = async (student: any) => {
-    setSelectedStudent(student);
-    setDetailsOpen(true);
-    setLoadingDetails(true);
+  const handleLink = async (projectId: string) => {
+    setActionLoading(`link-${projectId}`);
     try {
-      const logs = await getStudentViewLogsAction(student.userId, projectId!);
-      setViewLogs(logs);
+      await linkProjectToCourseAction(courseId, projectId);
+      toast.success("Documentación vinculada exitosamente");
+      await loadLinkedProjects();
     } catch (error) {
-      toast.error("Error al cargar historial");
+      toast.error("Error al vincular la documentación");
     } finally {
-      setLoadingDetails(false);
+      setActionLoading(null);
     }
   };
 
-  const handleClearHistory = async () => {
-    if (!selectedStudent || !projectId) return;
-    if (!confirm(`¿Estás seguro de borrar el historial de ${selectedStudent.name}?`)) return;
-    
-    setLoadingDetails(true);
+  const handleUnlink = async (projectId: string) => {
+    setActionLoading(`unlink-${projectId}`);
     try {
-      await clearStudentHistoryAction(selectedStudent.userId, projectId);
-      toast.success("Historial borrado");
-      setViewLogs([]);
-      loadData();
-    } catch (error) {
-      toast.error("Error al borrar historial");
-    } finally {
-      setLoadingDetails(false);
-    }
-  };
-
-  const updateSettings = async (newSettings: Partial<typeof settings>) => {
-    setUpdatingSettings(true);
-    const updated = { ...settings, ...newSettings };
-    setSettings(updated);
-    try {
-      await updateCourseDocSettingsAction(courseId, updated);
-      toast.success("Configuración actualizada");
-    } catch (error) {
-      toast.error("Error al actualizar");
-      setSettings(settings);
-    } finally {
-      setUpdatingSettings(false);
-    }
-  };
-
-  const handleLink = async (id: string) => {
-    setLoading(true);
-    try {
-      await linkProjectToCourseAction(courseId, id);
-      setProjectId(id);
-      toast.success("Documentación vinculada");
-    } catch (error) {
-      toast.error("Error al vincular");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleUnlink = async () => {
-    setLoading(true);
-    try {
-      await linkProjectToCourseAction(courseId, null);
-      setProjectId(null);
-      setAnalytics(null);
-      setStudentProgress([]);
+      await unlinkProjectFromCourseAction(courseId, projectId);
       toast.success("Documentación desvinculada");
+      await loadLinkedProjects();
     } catch (error) {
       toast.error("Error al desvincular");
     } finally {
-      setLoading(false);
+      setActionLoading(null);
     }
   };
 
-  if (!projectId) {
+  if (loading) {
     return (
-      <div className="max-w-2xl mx-auto py-12 px-4 space-y-6">
-        <div className="text-center space-y-2">
-          <h2 className="text-xl font-bold tracking-tight">Vincular Documentación</h2>
-          <p className="text-sm text-muted-foreground">Selecciona un proyecto de documentación para este curso</p>
-        </div>
-        <div className="grid grid-cols-1 gap-4">
-          {availableProjects.map((p) => (
-            <Card key={p.id} className="hover:border-primary transition-all cursor-pointer group" onClick={() => handleLink(p.id)}>
-              <CardContent className="p-4 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="p-2 rounded-lg bg-primary/10 text-primary">
-                    <BookOpenText className="w-5 h-5" />
-                  </div>
-                  <span className="font-semibold">{p.name}</span>
-                </div>
-                <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-all" />
-              </CardContent>
-            </Card>
-          ))}
-          {availableProjects.length === 0 && (
-            <div className="py-12 text-center border-2 border-dashed rounded-xl opacity-40">
-               <p className="text-sm font-medium">No hay proyectos disponibles</p>
-            </div>
-          )}
-        </div>
+      <div className="py-20 flex flex-col items-center justify-center gap-4">
+        <RefreshCcw className="w-8 h-8 animate-spin text-primary opacity-40" />
+        <p className="text-sm font-bold animate-pulse text-muted-foreground">Cargando...</p>
       </div>
     );
   }
 
-  if (loading && !analytics) return (
-    <div className="py-20 flex flex-col items-center justify-center gap-4">
-      <RefreshCcw className="w-8 h-8 animate-spin text-primary opacity-40" />
-      <p className="text-sm font-bold animate-pulse text-muted-foreground">Cargando...</p>
-    </div>
-  );
-
-  const filteredStudents = studentProgress.filter(s => 
-    s.name.toLowerCase().includes(search.toLowerCase()) || 
-    s.email.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const formatTime = (seconds: number) => {
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    return hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
-  };
-
   return (
-    <div className="w-full space-y-6">
-      {/* Course Header Consistency */}
-      <Card className="border-none shadow-none bg-accent/30">
-        <CardContent className="p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-4">
-                <div className="p-3 rounded-xl bg-primary text-primary-foreground">
-                    <BookOpenText className="w-6 h-6" />
-                </div>
-                <div>
-                    <h2 className="text-xl font-bold tracking-tight">{analytics?.projectName}</h2>
-                    <p className="text-sm text-muted-foreground font-medium">Gestión y Configuración de Documentación</p>
-                </div>
-            </div>
-            <div className="flex items-center gap-2">
-                {analytics?.projectSlug && (
-                    <Button variant="outline" size="sm" asChild>
-                        <a href={`/docs/${analytics.projectSlug}`} target="_blank" rel="noopener noreferrer">
-                            <ExternalLink className="w-4 h-4 mr-2" /> Abrir Sitio
-                        </a>
-                    </Button>
-                )}
-                <Button variant="outline" size="sm" asChild>
-                    <a href={`/dashboard/teacher/docs/${projectId}`} target="_blank">
-                        <Settings2 className="w-4 h-4 mr-2" /> Editar
-                    </a>
-                </Button>
-                <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10">
-                            <Unlink className="w-4 h-4 mr-2" /> Desvincular
-                        </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle>¿Desvincular Documentación?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                Los estudiantes ya no podrán ver el contenido de este proyecto en este curso.
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleUnlink} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Confirmar</AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-            </div>
-        </CardContent>
-      </Card>
+    <div className="w-full space-y-8 p-4 sm:p-6">
 
-      <div className="max-w-2xl mx-auto pt-6">
-          <div className="text-center py-12 border border-dashed border-border/50 rounded-xl bg-muted/10">
-              <BookOpenText className="w-8 h-8 text-primary mx-auto mb-3 opacity-60" />
-              <p className="text-sm font-semibold">El proyecto de documentación está vinculado y listo para los estudiantes.</p>
-              <p className="text-xs text-muted-foreground mt-1">El asistente IA y el visor público se encuentran activos de manera permanente.</p>
+      {/* ─── Linked Projects Table ─── */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-bold tracking-tight flex items-center gap-2">
+              <BookOpen className="w-4 h-4 text-primary" />
+              Documentaciones Vinculadas
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Visibles para los estudiantes en la pestaña Documentación del curso.
+            </p>
           </div>
-      </div>
+          <Badge variant="secondary" className="text-xs font-bold">
+            {linkedProjects.length}
+          </Badge>
+        </div>
+
+        <div className="rounded-xl border border-border/50 overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/30 hover:bg-muted/30">
+                <TableHead className="font-bold uppercase tracking-wider text-xs w-full">Proyecto</TableHead>
+                <TableHead className="font-bold uppercase tracking-wider text-xs text-right whitespace-nowrap">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {linkedProjects.length > 0 ? (
+                linkedProjects.map((project) => (
+                  <TableRow key={project.id} className="group hover:bg-muted/20 transition-colors border-border/30">
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <div className="p-1.5 rounded-lg bg-primary/10 text-primary shrink-0">
+                          <BookOpenText className="w-4 h-4" />
+                        </div>
+                        <span className="font-semibold text-sm">{project.name}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="sm" asChild className="h-8 px-2">
+                          <a href={`/docs/${project.slug}`} target="_blank" rel="noopener noreferrer">
+                            <ExternalLink className="w-3.5 h-3.5 mr-1" />
+                            Abrir
+                          </a>
+                        </Button>
+                        <Button variant="ghost" size="sm" asChild className="h-8 px-2">
+                          <a href={`/dashboard/teacher/docs/${project.id}`} target="_blank" rel="noopener noreferrer">
+                            <Settings2 className="w-3.5 h-3.5 mr-1" />
+                            Editar
+                          </a>
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              disabled={actionLoading === `unlink-${project.id}`}
+                            >
+                              {actionLoading === `unlink-${project.id}` ? (
+                                <RefreshCcw className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Unlink className="w-3.5 h-3.5 mr-1" />
+                              )}
+                              Desvincular
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>¿Desvincular Documentación?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Los estudiantes ya no podrán ver{" "}
+                                <strong>{project.name}</strong> desde este curso.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleUnlink(project.id)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                Confirmar
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={2} className="text-center py-10 text-muted-foreground">
+                    <BookOpenText className="w-7 h-7 mx-auto mb-2 opacity-30" />
+                    <p className="text-sm font-medium">Ninguna documentación vinculada aún</p>
+                    <p className="text-xs mt-0.5 opacity-70">Vincula un proyecto desde la sección de abajo</p>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </section>
+
+      {/* ─── Available to Link Table ─── */}
+      {availableProjects.length === 0 ? (
+        <div className="py-12 text-center border-2 border-dashed rounded-xl opacity-40">
+          <BookOpenText className="w-8 h-8 mx-auto mb-3" />
+          <p className="text-sm font-medium">No tienes proyectos de documentación creados</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Crea proyectos desde{" "}
+            <a href="/dashboard/teacher/docs" className="underline text-primary">
+              Documentación
+            </a>
+          </p>
+        </div>
+      ) : unlinkedProjects.length > 0 && (
+        <section className="space-y-3">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h3 className="text-base font-bold tracking-tight flex items-center gap-2">
+                <Plus className="w-4 h-4 text-primary" />
+                Vincular Documentación
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Selecciona un proyecto para vincularlo al curso.
+              </p>
+            </div>
+            {unlinkedProjects.length > 4 && (
+              <div className="relative w-64 shrink-0">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-8 h-8 text-sm bg-muted/30"
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-border/50 overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/30 hover:bg-muted/30">
+                  <TableHead className="font-bold uppercase tracking-wider text-xs w-full">Proyecto</TableHead>
+                  <TableHead className="font-bold uppercase tracking-wider text-xs text-right whitespace-nowrap">Acción</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredUnlinked.length > 0 ? (
+                  filteredUnlinked.map((project) => (
+                    <TableRow
+                      key={project.id}
+                      className="group hover:bg-muted/20 transition-colors border-border/30 cursor-pointer"
+                      onClick={() => !actionLoading && handleLink(project.id)}
+                    >
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className="p-1.5 rounded-lg bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-all">
+                            <BookOpenText className="w-4 h-4" />
+                          </div>
+                          <span className="font-semibold text-sm">{project.name}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 text-primary hover:text-primary hover:bg-primary/10 group-hover:opacity-100"
+                          disabled={!!actionLoading}
+                          onClick={(e) => { e.stopPropagation(); handleLink(project.id); }}
+                        >
+                          {actionLoading === `link-${project.id}` ? (
+                            <RefreshCcw className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Link2 className="w-3.5 h-3.5 mr-1" />
+                          )}
+                          Vincular
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={2} className="text-center py-6 text-sm text-muted-foreground">
+                      No se encontraron proyectos con &quot;{search}&quot;
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

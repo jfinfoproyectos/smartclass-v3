@@ -75,3 +75,34 @@ export function formatDateTime(date: Date | string, formatStr: string = "dd/MM/y
     if (isNaN(d.getTime())) return "Fecha inválida";
     return format(d, formatStr, { locale: es });
 }
+
+export function getCourseClassDates(
+    startDate: Date | string | null | undefined,
+    endDate: Date | string | null | undefined,
+    classDaysStr: string | null | undefined
+): string[] {
+    if (!startDate || !endDate || !classDaysStr) return [];
+    
+    // Parse to local date objects for comparison using UTC to prevent timezone shifts
+    const start = typeof startDate === "string" ? new Date(startDate) : startDate;
+    const end = typeof endDate === "string" ? new Date(endDate) : endDate;
+    
+    const classDays = classDaysStr.split(",").map(Number); // e.g. [1, 5]
+    
+    const dates: string[] = [];
+    // Ensure we start at midnight UTC
+    const current = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
+    const limit = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate()));
+    
+    while (current <= limit) {
+        // getUTCDay: 0 = Domingo, 1 = Lunes, etc.
+        if (classDays.includes(current.getUTCDay())) {
+            const y = current.getUTCFullYear();
+            const m = String(current.getUTCMonth() + 1).padStart(2, '0');
+            const d = String(current.getUTCDate()).padStart(2, '0');
+            dates.push(`${y}-${m}-${d}`);
+        }
+        current.setUTCDate(current.getUTCDate() + 1);
+    }
+    return dates;
+}

@@ -138,6 +138,18 @@ export async function updateUserRoleAction(userId: string, newRole: "teacher" | 
         success: true,
     });
 
+    // 🔔 PUSH NOTIFICATION
+    try {
+        const { sendPushNotification } = await import("@/lib/push-notifications");
+        await sendPushNotification(userId, {
+            title: "Actualización de Cuenta 🔐",
+            body: `Tu rol en SmartClass ha sido actualizado a "${newRole}".`,
+            url: `/dashboard`
+        });
+    } catch (pushError) {
+        console.error("Failed to send role update push notification:", pushError);
+    }
+
     revalidatePath("/dashboard/admin/users");
     return result;
 }
@@ -167,6 +179,20 @@ export async function toggleUserBanAction(userId: string, banned: boolean) {
         metadata: { banned, email: user?.email },
         success: true,
     });
+
+    // 🔔 PUSH NOTIFICATION
+    try {
+        const { sendPushNotification } = await import("@/lib/push-notifications");
+        await sendPushNotification(userId, {
+            title: banned ? "Cuenta Suspendida 🚫" : "Cuenta Reactivada ✔️",
+            body: banned 
+                ? "Tu cuenta de SmartClass ha sido suspendida por el administrador."
+                : "Tu cuenta de SmartClass ha sido reactivada. Ya puedes iniciar sesión.",
+            url: banned ? "/" : "/dashboard"
+        });
+    } catch (pushError) {
+        console.error("Failed to send ban toggle push notification:", pushError);
+    }
 
     revalidatePath("/dashboard/admin/users");
     return result;
@@ -450,27 +476,7 @@ export async function getAuditStatsAction(startDate?: string, endDate?: string) 
     );
 }
 
-export async function clearAuditLogsAction() {
-    const session = await requireAdmin();
-    const { auditLogger } = await import("@/features/admin/services/auditLogger");
 
-    const result = await auditLogger.clearAllLogs();
-
-    // Log the action itself (this will be the first new log!)
-    await auditLogger.log({
-        action: "DELETE",
-        entity: "SYSTEM",
-        userId: session.user.id,
-        userName: session.user.name || "Admin",
-        userRole: "admin",
-        description: `Historial de auditoría eliminado por ${session.user.name || "Admin"}`,
-        metadata: { deletedCount: result.count },
-        success: true,
-    });
-
-    revalidatePath("/dashboard/admin/settings");
-    return result;
-}
 
 export async function deleteCourseAction(courseId: string) {
     const session = await requireAdmin();
@@ -495,56 +501,4 @@ export async function deleteCourseAction(courseId: string) {
     return { success: true };
 }
 
-// ============ GEMINI API USAGE ============
 
-export async function getGeminiApiLogsAction(filters?: {
-    startDate?: string;
-    endDate?: string;
-    limit?: number;
-    offset?: number;
-}) {
-    await requireAdmin();
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const where: any = {
-        action: "OTHER",
-        entity: "SYSTEM",
-        metadata: {
-            contains: '"GEMINI_API_USAGE"'
-        }
-    };
-
-    if (filters?.startDate || filters?.endDate) {
-        where.createdAt = {};
-        if (filters.startDate) where.createdAt.gte = new Date(filters.startDate);
-        if (filters.endDate) where.createdAt.lte = new Date(filters.endDate);
-    }
-
-    const [logs, total] = await Promise.all([
-        prisma.auditLog.findMany({
-            where,
-            orderBy: { createdAt: "desc" },
-            take: filters?.limit || 50,
-            skip: filters?.offset || 0,
-        }),
-        prisma.auditLog.count({ where }),
-    ]);
-
-    // Calculate total requests directly from logs without DB aggregation to keep schema simple
-    const allMatchingLogs = await prisma.auditLog.findMany({
-        where,
-        select: { metadata: true }
-    });
-
-    let totalRequests = 0;
-    allMatchingLogs.forEach(log => {
-        if (log.metadata) {
-            try {
-                const meta = JSON.parse(log.metadata);
-                if (meta.requestsCount) totalRequests += meta.requestsCount;
-            } catch { }
-        }
-    });
-
-    return { logs, total, totalRequests };
-}

@@ -116,42 +116,37 @@ async function main() {
 
   console.log("\n⏳ Conectando a la base de datos...");
 
-  // Importar Prisma y bcrypt dinámicamente para que .env ya esté cargado
-  const { PrismaClient } = await import("../src/generated/prisma/client.js");
-  const { PrismaPg }     = await import("@prisma/adapter-pg");
-  const { Pool }         = await import("pg");
-  const bcrypt           = await import("bcryptjs");
+  // Importar Prisma y Auth dinámicamente para que .env ya esté cargado
+  const { pathToFileURL } = await import("url");
+  const authPath = pathToFileURL(resolve(rootDir, "src/lib/auth.ts")).href;
+  const prismaPath = pathToFileURL(resolve(rootDir, "src/lib/prisma.ts")).href;
 
-  const pool    = new Pool({ connectionString: process.env.DATABASE_URL! });
-  const adapter = new PrismaPg(pool);
-  const prisma  = new PrismaClient({ adapter });
+  const { auth } = await import(authPath);
+  const { default: prisma } = await import(prismaPath);
 
   try {
-    const existing = await (prisma as any).user.findUnique({ where: { email } });
+    const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
       console.error(`\n❌ Ya existe un usuario con el correo "${email}" (rol: ${existing.role || "sin rol"}).\n`);
       process.exit(1);
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const userId = randomUUID();
-
-    await (prisma as any).user.create({
-      data: {
-        id: userId,
+    // Usar la API de Better Auth para crear el usuario con el hashing correcto (scrypt)
+    await auth.api.signUpEmail({
+      body: {
         email,
+        password,
         name,
+      }
+    });
+
+    // Actualizar el rol a admin y marcar el correo como verificado
+    await prisma.user.update({
+      where: { email },
+      data: {
         role: "admin",
         emailVerified: true,
-        accounts: {
-          create: {
-            id: randomUUID(),
-            accountId: randomUUID(),
-            providerId: "credential",
-            password: hashedPassword,
-          },
-        },
-      },
+      }
     });
 
     console.log("\n✅ Administrador creado exitosamente:");
@@ -162,9 +157,6 @@ async function main() {
   } catch (err: any) {
     console.error("\n❌ Error al crear el administrador:", err.message || err);
     process.exit(1);
-  } finally {
-    await (prisma as any).$disconnect();
-    await pool.end();
   }
 }
 
