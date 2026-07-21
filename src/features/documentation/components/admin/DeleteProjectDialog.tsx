@@ -19,10 +19,27 @@ interface DeleteProjectDialogProps {
   projectId: string;
   projectName: string;
   trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function DeleteProjectDialog({ projectId, projectName, iconOnly = false, trigger }: DeleteProjectDialogProps & { iconOnly?: boolean }) {
-  const [open, setOpen] = useState(false);
+export function DeleteProjectDialog({ 
+  projectId, 
+  projectName, 
+  iconOnly = false, 
+  trigger,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange
+}: DeleteProjectDialogProps & { iconOnly?: boolean }) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  const setOpen = (value: boolean) => {
+    if (controlledOnOpenChange) {
+      controlledOnOpenChange(value);
+    } else {
+      setInternalOpen(value);
+    }
+  };
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDelete = async () => {
@@ -68,7 +85,11 @@ export function DeleteProjectDialog({ projectId, projectName, iconOnly = false, 
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : defaultTrigger}
+      {trigger ? (
+        <DialogTrigger asChild>{trigger}</DialogTrigger>
+      ) : (
+        controlledOpen === undefined ? defaultTrigger : null
+      )}
       
       <DialogContent className="sm:max-w-[425px] bg-background border-border rounded-2xl shadow-2xl p-6 flex flex-col gap-4">
         <DialogHeader>

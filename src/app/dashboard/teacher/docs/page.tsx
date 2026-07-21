@@ -12,38 +12,18 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { getRoleFromUser } from "@/features/auth/services/authService";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { 
-  FileText, 
   Search, 
-  Plus, 
-  Trash2, 
-  Layout, 
-  Settings, 
-  ExternalLink,
-  BookOpen,
-  FolderOpen,
-  AlertCircle,
-  Files,
-  Edit3,
-  MoreVertical
+  Files
 } from "lucide-react";
 import Link from "next/link";
 // import { DocStatusToggle } from "@/components/DocStatusToggle";
 import { CreateProjectDialog } from "@/features/documentation/components/admin/CreateProjectDialog";
 import { CreateAiProjectDialog } from "@/features/documentation/components/admin/CreateAiProjectDialog";
-import { DeleteProjectDialog } from "@/features/documentation/components/admin/DeleteProjectDialog";
+import { ProjectRowActions } from "@/features/documentation/components/admin/ProjectRowActions";
 import { Toaster } from "@/components/ui/sonner";
 import {
-  Tooltip,
-  TooltipContent,
   TooltipProvider,
-  TooltipTrigger,
 } from "@/components/ui/tooltip";
 
 export const dynamic = "force-dynamic";
@@ -130,48 +110,11 @@ export default async function DocsScannerPage() {
                     </TableCell>
 
                     <TableCell className="text-right py-3.5 pr-5">
-                      <div className="flex items-center justify-end gap-2">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button asChild size="icon" variant="outline" className="h-9 w-9 border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300">
-                              <Link href={`/docs/${project.slug}`}>
-                                <BookOpen className="w-4 h-4" />
-                                <span className="sr-only">Abrir Documentación</span>
-                              </Link>
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="top">
-                            <p className="text-[10px] font-bold uppercase tracking-wider">Abrir Documentación</p>
-                          </TooltipContent>
-                        </Tooltip>
-
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button size="icon" variant="outline" className="h-9 w-9 border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300">
-                              <MoreVertical className="w-4 h-4" />
-                              <span className="sr-only">Acciones</span>
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-40">
-                            <DropdownMenuItem asChild className="cursor-pointer">
-                              <Link href={`/dashboard/teacher/docs/${project.slug}`}>
-                                <Edit3 className="mr-2 h-4 w-4 text-muted-foreground" />
-                                <span>Editar</span>
-                              </Link>
-                            </DropdownMenuItem>
-                            <DeleteProjectDialog 
-                              projectId={project.id} 
-                              projectName={project.name} 
-                              trigger={
-                                <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-red-600 focus:text-red-700 cursor-pointer">
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  <span>Eliminar</span>
-                                </DropdownMenuItem>
-                              }
-                            />
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
+                      <ProjectRowActions 
+                        projectId={project.id} 
+                        projectName={project.name} 
+                        projectSlug={project.slug} 
+                      />
                     </TableCell>
                   </TableRow>
                 ))

@@ -296,15 +296,15 @@ export function PublicDocsShell({
       {/* 3-Column Layout Container */}
       <div className="public-docs-container flex flex-1 w-full max-w-[1800px] mx-auto relative overflow-hidden">
         {/* LEFT SIDEBAR with animated collapse */}
-        <div className="no-print hidden md:flex relative shrink-0">
+        <div className="no-print hidden md:flex relative shrink-0 h-full">
           <motion.div
             initial={false}
             animate={{ width: isSidebarOpen ? 288 : 0, opacity: isSidebarOpen ? 1 : 0 }}
             transition={{ duration: 0.25, ease: "easeInOut" }}
             style={{ overflow: "hidden" }}
-            className="relative"
+            className="relative h-full"
           >
-            <div style={{ width: 288 }}>
+            <div style={{ width: 288 }} className="h-full">
               <PublicSidebar 
                 navTree={sidebarNav} 
                 projectId={projectId} 
@@ -377,7 +377,7 @@ export function PublicDocsShell({
             </div>
 
             {/* RIGHT COLUMN with animated collapse */}
-            <div className="no-print hidden xl:flex relative shrink-0">
+            <div className="no-print hidden xl:flex relative shrink-0 h-full">
               {/* Right Sidebar Toggle Tab */}
               <button
                 onClick={toggleToc}
@@ -397,6 +397,7 @@ export function PublicDocsShell({
                 animate={{ width: isTocOpen ? 288 : 0, opacity: isTocOpen ? 1 : 0 }}
                 transition={{ duration: 0.25, ease: "easeInOut" }}
                 style={{ overflow: "hidden" }}
+                className="h-full"
               >
                 <div style={{ width: 288 }} className="border-l border-border/40 h-full">
                   <RightSidebar onItemClick={() => setIsTocOpen(false)} />
