@@ -107,10 +107,10 @@ export default async function Page({ params }: PageProps) {
     }
   }
 
-  // Parallel Level 2: Dependent data
+  // Parallel Level 2: Dependent data (Strictly exclude drafts and future scheduled pages from reader view)
   const [page, navTree, userProgressData] = await Promise.all([
-    getPublicDocPage(projectId, pagePath, isAdmin),
-    getProjectNavigationTree(projectId, isAdmin),
+    getPublicDocPage(projectId, pagePath, false),
+    getProjectNavigationTree(projectId, false),
     import('@/features/documentation/actions/progressActions').then(mod => mod.getUserProjectProgressAction(project.id))
   ]);
 

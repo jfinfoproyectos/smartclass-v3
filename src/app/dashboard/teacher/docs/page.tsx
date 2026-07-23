@@ -72,7 +72,7 @@ export default async function DocsScannerPage() {
       </div>
 
       <div className="space-y-4">
-        <div className="flex items-center gap-4 bg-muted/10 p-4 rounded-2xl border border-border/50">
+        <div className="flex items-center gap-4 bg-muted/10 p-4 rounded-2xl border border-border/15">
            <Search className="w-4 h-4 text-muted-foreground" />
            <input 
               type="text" 
@@ -82,10 +82,10 @@ export default async function DocsScannerPage() {
         </div>
 
       <TooltipProvider delayDuration={150}>
-        <div className="rounded-2xl border border-border/40 overflow-hidden bg-card/25 backdrop-blur-md shadow-xl shadow-black/5">
+        <div className="rounded-2xl border border-border/15 overflow-hidden bg-card/25 backdrop-blur-md shadow-xl shadow-black/5">
           <Table className="w-full min-w-[800px]">
             <TableHeader>
-              <TableRow className="h-12 bg-muted/40 hover:bg-muted/40 border-b border-border/30">
+              <TableRow className="h-12 bg-muted/40 hover:bg-muted/40 border-b border-border/15">
                 <TableHead className="font-extrabold uppercase tracking-wider text-[10px] pl-5 text-muted-foreground/80">Nombre</TableHead>
                 <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-right pr-5 text-muted-foreground/80">Acciones</TableHead>
               </TableRow>
@@ -99,7 +99,7 @@ export default async function DocsScannerPage() {
                 </TableRow>
               ) : (
                 projects.map((project) => (
-                  <TableRow key={project.id} className="group hover:bg-muted/30 transition-colors border-b border-border/20">
+                  <TableRow key={project.id} className="group hover:bg-muted/30 transition-colors border-b border-border/10">
                     <TableCell className="font-medium py-3.5 pl-5">
                       <div className="flex items-center gap-3.5">
                         <div className="p-2.5 rounded-xl bg-primary/10 text-primary group-hover:scale-110 transition-all duration-300 shadow-sm shadow-primary/5">

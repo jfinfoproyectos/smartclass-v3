@@ -76,10 +76,22 @@ export async function getPublicDocPage(projectId: string, pageSlug: string, incl
 
     let targetSlug = pageSlug ? pageSlug : "index";
     
+    const visibilityFilter: any = {
+      OR: [
+        { publishDate: null },
+        { publishDate: { lte: new Date() } }
+      ]
+    };
+
+    if (!includeDrafts) {
+      visibilityFilter.draft = false;
+    }
+
     let check = await prisma.docPage.findFirst({
       where: {
         docProjectId: project.id,
         slug: targetSlug,
+        ...visibilityFilter
       },
       select: { id: true, updatedAt: true }
     });
@@ -91,16 +103,12 @@ export async function getPublicDocPage(projectId: string, pageSlug: string, incl
         where: {
           docProjectId: project.id,
           slug: fallbackSlug,
+          ...visibilityFilter
         },
         select: { id: true, updatedAt: true }
       });
       if (check) {
         targetSlug = fallbackSlug;
-        const cacheKey = `${project.id}:${targetSlug}`;
-        const cached = pageCache.get(cacheKey);
-        if (cached && cached.updatedAt === check.updatedAt.getTime()) {
-          return { ...cached.data, _source: "cache" };
-        }
       }
     }
 
@@ -108,21 +116,14 @@ export async function getPublicDocPage(projectId: string, pageSlug: string, incl
       return null;
     }
 
-    const cacheKey = `${project.id}:${targetSlug}`;
+    const cacheKey = `${project.id}:${targetSlug}:${includeDrafts}`;
     const cached = pageCache.get(cacheKey);
     if (cached && cached.updatedAt === check.updatedAt.getTime()) {
+      if (!includeDrafts) {
+        if (cached.data.draft) return null;
+        if (cached.data.publishDate && new Date(cached.data.publishDate) > new Date()) return null;
+      }
       return { ...cached.data, _source: "cache" };
-    }
-
-    const visibilityFilter: any = {
-      OR: [
-        { publishDate: null },
-        { publishDate: { lte: new Date() } }
-      ]
-    };
-
-    if (!includeDrafts) {
-      visibilityFilter.draft = false;
     }
 
     let page = await prisma.docPage.findFirst({
@@ -155,6 +156,10 @@ export async function getPublicDocPage(projectId: string, pageSlug: string, incl
     // Search in cache by slug if DB fails
     for (const [key, value] of pageCache.entries()) {
       if (key.includes(targetSlug) || (pageSlug && key.includes(`${pageSlug}/index`))) {
+        if (!includeDrafts) {
+          if (value.data.draft) return null;
+          if (value.data.publishDate && new Date(value.data.publishDate) > new Date()) return null;
+        }
         return { ...value.data, _source: "cache" };
       }
     }
@@ -189,8 +194,15 @@ export async function getProjectNavigationTree(projectId: string, includeDrafts 
 
     if (!project) return [];
 
+    const now = new Date();
     const pages = project.pages
-      .filter(page => includeDrafts || !page.draft)
+      .filter(page => {
+        if (!includeDrafts) {
+          if (page.draft) return false;
+          if (page.publishDate && new Date(page.publishDate) > now) return false;
+        }
+        return true;
+      })
       .sort((a, b) => {
         if (a.categoryOrder !== b.categoryOrder) return (a.categoryOrder || 0) - (b.categoryOrder || 0);
         if (a.order !== b.order) return (a.order || 0) - (b.order || 0);

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useTheme } from "next-themes";
 import { 
   ChevronUp, 
   ChevronDown, 
@@ -130,6 +131,29 @@ export function BlockEditor({
   const [markdownText, setMarkdownText] = useState<string>(() => blocksToMarkdown(blocks));
   const [activeInserterIndex, setActiveInserterIndex] = useState<number | null>(null);
   const [isTocOpen, setIsTocOpen] = useState(true);
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+
+  const insertMarkdownSnippet = (before: string, after: string = "", defaultText: string = "") => {
+    if (!textareaRef.current) {
+      handleMarkdownChange(markdownText + `\n${before}${defaultText}${after}`);
+      return;
+    }
+    const textarea = textareaRef.current;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = markdownText.substring(start, end) || defaultText;
+    const replacement = `${before}${selectedText}${after}`;
+    const newText = markdownText.substring(0, start) + replacement + markdownText.substring(end);
+    
+    handleMarkdownChange(newText);
+
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        textareaRef.current.setSelectionRange(start + before.length, start + before.length + selectedText.length);
+      }
+    }, 0);
+  };
 
   const lastTabRef = React.useRef(activeTab);
   useEffect(() => {
@@ -179,7 +203,8 @@ export function BlockEditor({
   }, [blocks]);
 
   const getHeaderSlug = (title: string, id: string) => {
-    return title ? title.toLowerCase()
+    const cleanTitle = title ? title.replace(/[\*_~`#\[\]\(\)]/g, "").trim() : "";
+    return cleanTitle ? cleanTitle.toLowerCase()
       .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
       .replace(/[^\w\s-]/g, '')
       .replace(/\s+/g, '-') : id;
@@ -391,6 +416,8 @@ export function BlockEditor({
       case "video": return Play;
       case "carousel": return Images;
       case "codeExplain": return HelpCircle;
+      case "divider": return Activity;
+      default: return FileText;
     }
   };
 
@@ -441,15 +468,44 @@ export function BlockEditor({
     <div className="flex flex-col h-full bg-muted/20 dark:bg-zinc-950 border border-border/60 rounded-2xl overflow-hidden shadow-inner-sm font-sans relative">
 
       <div className="flex-1 flex overflow-hidden min-h-0">
-        {/* Main Canvas Scrollable Area */}
-        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-grid-pattern/30">
+        {/* Main Canvas Area */}
+        <div className={cn("flex-1 custom-scrollbar bg-grid-pattern/30", activeTab === "markdown" ? "flex flex-col h-full min-h-0 overflow-hidden p-4" : "overflow-y-auto p-6")}>
           {activeTab === "markdown" ? (
-            <div className="space-y-4 w-full max-w-7xl mx-auto px-4 h-[calc(100vh-225px)] flex flex-col">
-              <span className="block text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none">Edición Rápida (Sintaxis GFM)</span>
+            <div className="space-y-4 w-full max-w-7xl mx-auto px-2 sm:px-4 flex-1 h-full min-h-0 flex flex-col">
+              {/* Header & GFM Formatting Toolbar */}
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-card border border-border/60 p-2.5 rounded-2xl shadow-xs shrink-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/10">
+                    <FileText className="w-3.5 h-3.5" />
+                    Edición Rápida (Sintaxis GFM)
+                  </span>
+                </div>
+
+                {/* Quick Insert Snippet Toolbar */}
+                <div className="flex flex-wrap items-center gap-1">
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs font-bold font-mono" onClick={() => insertMarkdownSnippet("# ", "", "Título H1")} title="Título 1 (#)">H1</Button>
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs font-bold font-mono" onClick={() => insertMarkdownSnippet("## ", "", "Subtítulo H2")} title="Título 2 (##)">H2</Button>
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs font-bold font-mono" onClick={() => insertMarkdownSnippet("### ", "", "Tema H3")} title="Título 3 (###)">H3</Button>
+                  <div className="h-4 w-px bg-border/60 mx-1" />
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs font-bold font-mono" onClick={() => insertMarkdownSnippet("**", "**", "negrita")} title="Negrita (**texto**)"><b>B</b></Button>
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs font-mono" onClick={() => insertMarkdownSnippet("*", "*", "cursiva")} title="Cursiva (*texto*)"><i>I</i></Button>
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs font-mono" onClick={() => insertMarkdownSnippet("~~", "~~", "tachado")} title="Tachado (~~texto~~)"><span className="line-through">S</span></Button>
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs font-mono" onClick={() => insertMarkdownSnippet("`", "`", "código")} title="Código Inline (`código`)">`code`</Button>
+                  <div className="h-4 w-px bg-border/60 mx-1" />
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs font-bold" onClick={() => insertMarkdownSnippet("> [!NOTE]\n> ", "", "Nota informativa...")} title="Alerta Nota (> [!NOTE])">Nota</Button>
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs font-bold" onClick={() => insertMarkdownSnippet("> [!WARNING]\n> ", "", "Advertencia importante...")} title="Alerta Advertencia (> [!WARNING])">Alerta</Button>
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs font-bold" onClick={() => insertMarkdownSnippet("| Cabecera 1 | Cabecera 2 |\n| --- | --- |\n| Celda A1 | Celda A2 |\n", "")} title="Tabla GFM">Tabla</Button>
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs font-bold" onClick={() => insertMarkdownSnippet("```kotlin\n", "\n```", "// Código aquí")} title="Bloque Código (```)">```</Button>
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs font-bold" onClick={() => insertMarkdownSnippet("\n---\n", "")} title="Línea Divisoria (---)">---</Button>
+                </div>
+              </div>
+
+              {/* Full Width Editor Textarea */}
               <Textarea
+                ref={textareaRef}
                 value={markdownText}
                 onChange={e => handleMarkdownChange(e.target.value)}
-                className="flex-1 w-full rounded-2xl border border-border bg-background font-mono text-xs leading-relaxed p-6 text-foreground focus-visible:ring-primary/20 custom-scrollbar select-text resize-none"
+                className="flex-1 min-h-0 w-full rounded-2xl border border-border/80 bg-background font-mono text-xs leading-relaxed p-6 text-foreground focus-visible:ring-primary/30 custom-scrollbar select-text resize-none shadow-sm cursor-text"
                 placeholder="# Escribe tu documentación aquí en formato GFM..."
               />
             </div>
@@ -475,11 +531,11 @@ export function BlockEditor({
                         <motion.div 
                           layoutId={block.id}
                           className={cn(
-                            "relative border border-border/60 hover:border-primary/20 bg-card rounded-2xl transition-all duration-300 shadow-sm overflow-hidden group/card"
+                            "relative border border-border/25 hover:border-primary/30 bg-card rounded-2xl transition-all duration-300 shadow-sm overflow-hidden group/card"
                           )}
                         >
                           {/* Floating Control Bar */}
-                          <div className="absolute top-1.5 right-3 z-30 flex items-center gap-1 bg-background border border-border shadow-sm rounded-xl px-2 py-0.5 opacity-0 group-hover/card:opacity-100 transition-opacity duration-300">
+                          <div className="absolute top-1.5 right-3 z-30 flex items-center gap-1 bg-background border border-border/40 shadow-sm rounded-xl px-2 py-0.5 opacity-0 group-hover/card:opacity-100 transition-opacity duration-300">
                             <button 
                               onClick={() => setEditingBlockId(block.id)}
                               className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-primary transition-colors"
@@ -520,7 +576,7 @@ export function BlockEditor({
                           </div>
 
                           {/* Visual Badge Header */}
-                          <div className="px-5 py-2 flex items-center gap-2.5 bg-muted/10 border-b border-border/20">
+                          <div className="px-5 py-2 flex items-center gap-2.5 bg-muted/10 border-b border-border/10">
                             <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-primary/10 text-primary select-none">
                               #{index + 1}
                             </span>
@@ -578,7 +634,7 @@ export function BlockEditor({
                     "hover:text-primary transition-all hover:translate-x-0.5 transform duration-200"
                   )}
                 >
-                  {h.title}
+                  {h.title.replace(/[\*_~`]/g, "")}
                 </button>
               ))}
             </div>

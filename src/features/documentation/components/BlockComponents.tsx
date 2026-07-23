@@ -57,7 +57,7 @@ import "prismjs/components/prism-kotlin";
 // Model structure of blocks
 export interface Block {
   id: string;
-  type: "header" | "paragraph" | "callout" | "code" | "quiz" | "card" | "accordion" | "featureGrid" | "stepList" | "aiPrompt" | "table" | "list" | "image" | "video" | "carousel" | "codeExplain" | "flashcard" | "timeline" | "matching" | "embed" | "pdf" | "mermaid";
+  type: "header" | "paragraph" | "callout" | "code" | "quiz" | "card" | "accordion" | "featureGrid" | "stepList" | "aiPrompt" | "table" | "list" | "image" | "video" | "carousel" | "codeExplain" | "flashcard" | "timeline" | "matching" | "embed" | "pdf" | "mermaid" | "divider";
   data: any;
 }
 
@@ -110,35 +110,93 @@ export const GLOSSARY_DICT: Record<string, string> = {
   "firebase": "Plataforma de Google para desarrollo móvil y web que ofrece base de datos en tiempo real, autenticación y hosting."
 };
 
-// Simple parser for basic inline markdown (**bold**, *italic*, `code`, [link](url)) & Glossary Tooltips
+// GFM-compliant parser for inline markdown (**bold**, *italic*, ~~strikethrough~~, `code`, [link](url), ![img](url), HTML tags) & Glossary Tooltips
 export function renderFormattedText(text: string) {
   if (!text) return "";
   
-  // Safe HTML escaping
-  let escaped = text
+  let result = text;
+  
+  // 1. Preserve inline code blocks using temporary placeholders (no underscores/asterisks)
+  const codeBlocks: string[] = [];
+  result = result.replace(/`([^`]+)`/g, (_, code) => {
+    const placeholder = `@@CODEPLACEHOLDER${codeBlocks.length}@@`;
+    const escapedCode = code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    codeBlocks.push(`<code class="bg-primary/10 text-primary px-1.5 py-0.5 rounded font-mono text-[0.88em] border border-primary/15">${escapedCode}</code>`);
+    return placeholder;
+  });
+
+  // 2. Preserve inline images
+  const imagePlaceholders: string[] = [];
+  result = result.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
+    const placeholder = `@@IMGPLACEHOLDER${imagePlaceholders.length}@@`;
+    imagePlaceholders.push(`<img src="${url}" alt="${alt || ''}" class="my-2 rounded-xl border border-border/50 max-h-96 object-contain inline-block shadow-sm" />`);
+    return placeholder;
+  });
+
+  // 3. Preserve inline links
+  const linkPlaceholders: string[] = [];
+  result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, linkText, url) => {
+    const placeholder = `@@LINKPLACEHOLDER${linkPlaceholders.length}@@`;
+    linkPlaceholders.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-primary font-bold hover:underline inline-flex items-center gap-1 transition-all">${linkText}</a>`);
+    return placeholder;
+  });
+
+  // 4. Protect safe HTML tags
+  result = result
+    .replace(/<kbd>/gi, "@@KBDOPEN@@").replace(/<\/kbd>/gi, "@@KBDCLOSE@@")
+    .replace(/<mark>/gi, "@@MARKOPEN@@").replace(/<\/mark>/gi, "@@MARKCLOSE@@")
+    .replace(/<sub>/gi, "@@SUBOPEN@@").replace(/<\/sub>/gi, "@@SUBCLOSE@@")
+    .replace(/<sup>/gi, "@@SUPOPEN@@").replace(/<\/sup>/gi, "@@SUPCLOSE@@")
+    .replace(/<br\s*\/?>/gi, "@@BRTAG@@");
+
+  // Escape HTML
+  result = result
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
-  
-  // **bold**
-  escaped = escaped.replace(/\*\*(.*?)\*\*/g, "<strong class='font-black text-foreground'>$1</strong>");
-  // *italic*
-  escaped = escaped.replace(/\*(.*?)\*/g, "<em class='italic text-foreground/80'>$1</em>");
-  // inline code `code`
-  escaped = escaped.replace(/`(.*?)`/g, "<code class='bg-primary/10 text-primary px-1.5 py-0.5 rounded font-mono text-[0.88em] border border-primary/15'>$1</code>");
-  // link [text](url)
-  escaped = escaped.replace(/\[(.*?)\]\((.*?)\)/g, "<a href='$2' target='_blank' rel='noopener noreferrer' class='text-primary font-black hover:underline inline-flex items-center gap-1 transition-all'>$1</a>");
-  
-  // Scan for glossary terms
+
+  // Restore safe tags
+  result = result
+    .replace(/@@KBDOPEN@@/g, "<kbd class='px-1.5 py-0.5 text-xs font-mono font-semibold bg-muted text-muted-foreground border border-border rounded-md shadow-xs'>")
+    .replace(/@@KBDCLOSE@@/g, "</kbd>")
+    .replace(/@@MARKOPEN@@/g, "<mark class='bg-yellow-200/80 dark:bg-yellow-800/40 text-foreground px-1 rounded'>")
+    .replace(/@@MARKCLOSE@@/g, "</mark>")
+    .replace(/@@SUBOPEN@@/g, "<sub>").replace(/@@SUBCLOSE@@/g, "</sub>")
+    .replace(/@@SUPOPEN@@/g, "<sup>").replace(/@@SUPCLOSE@@/g, "</sup>")
+    .replace(/@@BRTAG@@/g, "<br/>");
+
+  // 5. GFM Inline Formatting
+  // Bold & Italic
+  result = result.replace(/(\*\*\*|___)(.*?)\1/g, "<strong class='font-black text-foreground'><em class='italic'>$2</em></strong>");
+  result = result.replace(/(\*\*|__)(.*?)\1/g, "<strong class='font-black text-foreground'>$2</strong>");
+  result = result.replace(/(\*|_)(.*?)\1/g, "<em class='italic text-foreground/90'>$2</em>");
+  result = result.replace(/~~(.*?)~~/g, "<del class='line-through opacity-70'>$1</del>");
+
+  // 6. Restore link placeholders
+  linkPlaceholders.forEach((html, i) => {
+    result = result.replaceAll(`@@LINKPLACEHOLDER${i}@@`, html);
+  });
+
+  // 7. Restore image placeholders
+  imagePlaceholders.forEach((html, i) => {
+    result = result.replaceAll(`@@IMGPLACEHOLDER${i}@@`, html);
+  });
+
+  // 8. Restore code placeholders
+  codeBlocks.forEach((html, i) => {
+    result = result.replaceAll(`@@CODEPLACEHOLDER${i}@@`, html);
+  });
+
+  // 9. Scan for glossary terms
   Object.keys(GLOSSARY_DICT).forEach((term) => {
     const regex = new RegExp(`\\b(${term})\\b(?![^<]*>)`, "gi");
-    escaped = escaped.replace(regex, (match) => {
+    result = result.replace(regex, (match) => {
       const definition = GLOSSARY_DICT[term.toLowerCase()];
       return `<span class="glossary-term relative cursor-help border-b border-dotted border-primary/60 hover:text-primary transition-colors font-semibold" data-tooltip="${definition}">${match}</span>`;
     });
   });
 
-  return <span dangerouslySetInnerHTML={{ __html: escaped }} />;
+  return <span dangerouslySetInnerHTML={{ __html: result }} />;
 }
 
 // Style configurations for each code style theme supported

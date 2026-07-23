@@ -50,7 +50,7 @@ export default async function DashboardLayout({
       <ProfileCompletionCheck />
       <AppSidebar />
       <SidebarInset className="h-svh overflow-hidden flex flex-col">
-        <header className="shrink-0 sticky top-0 z-40 flex h-16 w-full items-center gap-2 bg-background text-foreground border-b group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 transition-all">
+        <header className="shrink-0 sticky top-0 z-40 flex h-16 w-full items-center gap-2 bg-background/95 backdrop-blur-md text-foreground border-b border-border/30 group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 transition-all">
           <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 w-full">
             <SidebarTrigger className="-ml-1" />
             <div className="ml-auto flex items-center gap-1 sm:gap-2">

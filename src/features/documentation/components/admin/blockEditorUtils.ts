@@ -5,13 +5,18 @@ export type { Block };
 // Compile GFM Markdown to structured Block array
 export const markdownToBlocks = (md: string): Block[] => {
   const blocks: Block[] = [];
+  if (!md) return blocks;
   const lines = md.split("\n");
   let i = 0;
   const listPattern = /^(\s*)([-*+]|\d+\.)\s+(.*)/;
 
   while (i < lines.length) {
     const line = lines[i];
-    if (line.trim() === "") { i++; continue; }
+
+    if (line.trim() === "") {
+      i++;
+      continue;
+    }
 
     // 0. Custom comment JSON blocks
     if (line.trim().startsWith("<!--")) {
@@ -33,29 +38,91 @@ export const markdownToBlocks = (md: string): Block[] => {
           const blockData = JSON.parse(commentLines.join("\n"));
           blocks.push({ id: Math.random().toString(36).substring(2, 9), type: blockType as Block["type"], data: blockData });
           continue;
-        } catch (e) { console.warn("Failed to parse custom comment block JSON:", e); }
+        } catch (e) {
+          console.warn("Failed to parse custom comment block JSON:", e);
+        }
       }
     }
 
     // 1. Fenced Code Block
-    if (line.trim().startsWith("```")) {
-      const match = line.trim().match(/^```(\w*)/);
-      const language = match ? match[1] || "javascript" : "javascript";
+    if (line.trim().startsWith("```") || line.trim().startsWith("~~~")) {
+      const fence = line.trim().substring(0, 3);
+      const match = line.trim().match(/^(?:```|~~~)\s*([\w\-+:]*)/);
+      let language = "javascript";
+      let title = "";
+      if (match && match[1]) {
+        const parts = match[1].split(":");
+        language = parts[0] || "javascript";
+        title = parts[1] || "";
+      }
       const codeLines: string[] = [];
       i++;
-      while (i < lines.length && !lines[i].trim().startsWith("```")) { codeLines.push(lines[i]); i++; }
-      i++;
-      blocks.push({ id: Math.random().toString(36).substring(2, 9), type: "code", data: { code: codeLines.join("\n"), language, title: "" } });
+      while (i < lines.length && !lines[i].trim().startsWith(fence)) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      i++; // Skip closing fence
+      blocks.push({
+        id: Math.random().toString(36).substring(2, 9),
+        type: "code",
+        data: { code: codeLines.join("\n"), language, title }
+      });
       continue;
     }
 
-    // 2. Blockquote / GitHub Alerts
+    // 2. Horizontal Rule / Divider (---, ***, ___)
+    if (/^\s*([-*_]\s*){3,}$/.test(line)) {
+      blocks.push({
+        id: Math.random().toString(36).substring(2, 9),
+        type: "divider",
+        data: {}
+      });
+      i++;
+      continue;
+    }
+
+    // 3. Setext Headings (Line followed by === or ---)
+    if (i + 1 < lines.length && /^\s*={3,}\s*$/.test(lines[i + 1])) {
+      blocks.push({
+        id: Math.random().toString(36).substring(2, 9),
+        type: "header",
+        data: { title: line.trim(), level: "h1", align: "left" }
+      });
+      i += 2;
+      continue;
+    }
+    if (i + 1 < lines.length && /^\s*-{3,}\s*$/.test(lines[i + 1]) && !line.trim().startsWith("-")) {
+      blocks.push({
+        id: Math.random().toString(36).substring(2, 9),
+        type: "header",
+        data: { title: line.trim(), level: "h2", align: "left" }
+      });
+      i += 2;
+      continue;
+    }
+
+    // 4. ATX Headings (# h1, ## h2, ### h3, #### h4, ##### h5, ###### h6)
+    const headerMatch = line.match(/^(#{1,6})\s+(.*)/);
+    if (headerMatch) {
+      const levelNum = headerMatch[1].length;
+      const level = levelNum === 1 ? "h1" : levelNum === 2 ? "h2" : "h3";
+      blocks.push({
+        id: Math.random().toString(36).substring(2, 9),
+        type: "header",
+        data: { title: headerMatch[2].trim(), level, align: "left" }
+      });
+      i++;
+      continue;
+    }
+
+    // 5. Blockquote / GitHub Alerts (> quote, > [!NOTE], etc.)
     if (line.trim().startsWith(">")) {
       const quoteLines: string[] = [];
       let alertStyle = "info";
       let alertTitle = "";
+
       while (i < lines.length && lines[i].trim().startsWith(">")) {
-        const qLine = lines[i].trim().substring(1).trim();
+        const qLine = lines[i].trim().replace(/^>\s?/, "");
         if (qLine.startsWith("[!")) {
           const matchAlert = qLine.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i);
           if (matchAlert) {
@@ -63,99 +130,148 @@ export const markdownToBlocks = (md: string): Block[] => {
             alertTitle = type;
             if (type === "WARNING") alertStyle = "warning";
             else if (type === "CAUTION") alertStyle = "danger";
+            else if (type === "TIP") alertStyle = "success";
             else alertStyle = "info";
-            i++; continue;
+            i++;
+            continue;
           }
         }
         quoteLines.push(qLine);
         i++;
       }
-      blocks.push({ id: Math.random().toString(36).substring(2, 9), type: "callout", data: { style: alertStyle, title: alertTitle, text: quoteLines.join("\n") } });
+
+      blocks.push({
+        id: Math.random().toString(36).substring(2, 9),
+        type: "callout",
+        data: { style: alertStyle, title: alertTitle, text: quoteLines.join("\n") }
+      });
       continue;
     }
 
-    // 3. Table
+    // 6. GFM Tables
     if (line.trim().startsWith("|")) {
       const tableLines: string[] = [];
-      while (i < lines.length && lines[i].trim().startsWith("|")) { tableLines.push(lines[i].trim()); i++; }
+      while (i < lines.length && lines[i].trim().startsWith("|")) {
+        tableLines.push(lines[i].trim());
+        i++;
+      }
       if (tableLines.length >= 2) {
-        const isSeparator = /^\|[\s-:-|]+$/.test(tableLines[1]);
+        const isSeparator = /^\|[\s-:-|]+\|?$/.test(tableLines[1]);
         if (isSeparator) {
-          const parseRow = (rowStr: string) => rowStr.split("|").map(cell => cell.trim()).filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
+          const parseRow = (rowStr: string) => {
+            const cells = rowStr.split("|");
+            if (cells.length > 1 && cells[0].trim() === "") cells.shift();
+            if (cells.length > 0 && cells[cells.length - 1].trim() === "") cells.pop();
+            return cells.map(c => c.trim());
+          };
+
           const headers = parseRow(tableLines[0]);
           const rows: string[][] = [];
-          for (let k = 2; k < tableLines.length; k++) rows.push(parseRow(tableLines[k]));
-          blocks.push({ id: Math.random().toString(36).substring(2, 9), type: "table", data: { headers, rows } });
+          for (let k = 2; k < tableLines.length; k++) {
+            rows.push(parseRow(tableLines[k]));
+          }
+
+          blocks.push({
+            id: Math.random().toString(36).substring(2, 9),
+            type: "table",
+            data: { headers, rows }
+          });
           continue;
         }
       }
     }
 
-    // 4. List Block
+    // 7. GFM Lists (Ordered, Unordered, Task lists, Indented items)
     if (listPattern.test(line)) {
-      const listItems: { text: string; checked?: boolean }[] = [];
+      const listItems: { text: string; checked?: boolean; indent?: number }[] = [];
       let isOrdered = false;
+
       while (i < lines.length && listPattern.test(lines[i])) {
-        const match = lines[i].match(listPattern);
+        const itemLine = lines[i];
+        const match = itemLine.match(listPattern);
         if (match) {
+          const indentStr = match[1] || "";
           const bullet = match[2];
           let text = match[3].trim();
+          const indent = Math.floor(indentStr.length / 2);
+
           if (/^\d+\./.test(bullet)) isOrdered = true;
           let checked: boolean | undefined = undefined;
-          if (text.startsWith("[ ]")) { checked = false; text = text.substring(3).trim(); }
-          else if (text.startsWith("[x]") || text.startsWith("[X]")) { checked = true; text = text.substring(3).trim(); }
-          listItems.push({ text, checked });
+          if (text.startsWith("[ ]")) {
+            checked = false;
+            text = text.substring(3).trim();
+          } else if (text.startsWith("[x]") || text.startsWith("[X]")) {
+            checked = true;
+            text = text.substring(3).trim();
+          }
+
+          listItems.push({ text, checked, indent });
         }
         i++;
       }
-      blocks.push({ id: Math.random().toString(36).substring(2, 9), type: "list", data: { items: listItems, ordered: isOrdered } });
+
+      blocks.push({
+        id: Math.random().toString(36).substring(2, 9),
+        type: "list",
+        data: { items: listItems, ordered: isOrdered }
+      });
       continue;
     }
 
-    // 5. Header
-    if (line.startsWith("# ") || line.startsWith("## ") || line.startsWith("### ") || line.startsWith("#### ")) {
-      let level = "h1", title = "";
-      if (line.startsWith("#### ")) { level = "h3"; title = line.substring(5).trim(); }
-      else if (line.startsWith("### ")) { level = "h3"; title = line.substring(4).trim(); }
-      else if (line.startsWith("## ")) { level = "h2"; title = line.substring(3).trim(); }
-      else { level = "h1"; title = line.substring(2).trim(); }
-      blocks.push({ id: Math.random().toString(36).substring(2, 9), type: "header", data: { title, level, align: "left" } });
-      i++; continue;
-    }
-
-    // 6. Image
+    // 8. Standalone Image
     const imgPattern = /^!\[(.*?)\]\((.*?)\)$/;
     if (imgPattern.test(line.trim())) {
       const match = line.trim().match(imgPattern);
       if (match) {
-        blocks.push({ id: Math.random().toString(36).substring(2, 9), type: "image", data: { alt: match[1], url: match[2] } });
-        i++; continue;
+        blocks.push({
+          id: Math.random().toString(36).substring(2, 9),
+          type: "image",
+          data: { alt: match[1], url: match[2] }
+        });
+        i++;
+        continue;
       }
     }
 
-    // 7. Paragraph
+    // 9. Paragraph
     const pLines: string[] = [];
     while (
-      i < lines.length && lines[i].trim() !== "" &&
-      !lines[i].trim().startsWith("```") && !lines[i].trim().startsWith(">") &&
-      !lines[i].trim().startsWith("|") && !listPattern.test(lines[i]) &&
-      !lines[i].startsWith("# ") && !lines[i].startsWith("## ") &&
-      !lines[i].startsWith("### ") && !lines[i].startsWith("#### ") &&
-      !imgPattern.test(lines[i].trim()) && !lines[i].trim().startsWith("<!--")
-    ) { pLines.push(lines[i]); i++; }
+      i < lines.length &&
+      lines[i].trim() !== "" &&
+      !lines[i].trim().startsWith("```") &&
+      !lines[i].trim().startsWith("~~~") &&
+      !lines[i].trim().startsWith(">") &&
+      !lines[i].trim().startsWith("|") &&
+      !/^(\s*[-*_]){3,}\s*$/.test(lines[i]) &&
+      !listPattern.test(lines[i]) &&
+      !lines[i].match(/^#{1,6}\s+/) &&
+      !imgPattern.test(lines[i].trim()) &&
+      !lines[i].trim().startsWith("<!--")
+    ) {
+      pLines.push(lines[i]);
+      i++;
+    }
 
     if (pLines.length > 0) {
-      blocks.push({ id: Math.random().toString(36).substring(2, 9), type: "paragraph", data: { text: pLines.join("\n") } });
-    } else { i++; }
+      blocks.push({
+        id: Math.random().toString(36).substring(2, 9),
+        type: "paragraph",
+        data: { text: pLines.join("\n") }
+      });
+    } else {
+      i++;
+    }
   }
+
   return blocks;
 };
 
-// Compile blocks back to a Markdown document string
+// Compile blocks back to a clean Markdown document string
 export const blocksToMarkdown = (blocksArray: Block[]): string => {
   return blocksArray.map(block => {
     const { type, data } = block;
     switch (type) {
+      case "divider": return "---";
       case "header": {
         const prefix = data.level === "h2" ? "##" : data.level === "h3" ? "###" : "#";
         let out = `${prefix} ${data.title}`;
@@ -164,7 +280,7 @@ export const blocksToMarkdown = (blocksArray: Block[]): string => {
       }
       case "paragraph": return data.text;
       case "callout": {
-        const stylePrefix = data.style === "warning" ? "WARNING" : data.style === "danger" ? "CAUTION" : "NOTE";
+        const stylePrefix = data.style === "warning" ? "WARNING" : data.style === "danger" ? "CAUTION" : data.style === "success" ? "TIP" : "NOTE";
         const titleLine = data.title ? ` [!${stylePrefix}]\n> **${data.title}**` : ` [!${stylePrefix}]`;
         const bodyLines = (data.text || "").split("\n").map((l: string) => `> ${l}`).join("\n");
         return `>${titleLine}\n${bodyLines}`;
@@ -191,10 +307,11 @@ export const blocksToMarkdown = (blocksArray: Block[]): string => {
       }
       case "list": {
         const items = data.items || [];
-        return items.map((item: { text: string; checked?: boolean }, idx: number) => {
+        return items.map((item: { text: string; checked?: boolean; indent?: number }, idx: number) => {
+          const indentStr = "  ".repeat(item.indent || 0);
           const prefix = data.ordered ? `${idx + 1}.` : "-";
-          if (item.checked !== undefined) return `${prefix} [${item.checked ? "x" : " "}] ${item.text}`;
-          return `${prefix} ${item.text}`;
+          if (item.checked !== undefined) return `${indentStr}${prefix} [${item.checked ? "x" : " "}] ${item.text}`;
+          return `${indentStr}${prefix} ${item.text}`;
         }).join("\n");
       }
       case "image": {
@@ -245,5 +362,7 @@ export const getInitialBlockData = (type: Block["type"]): Record<string, unknown
     case "carousel": return { items: [{ url: "", caption: "Foto 1" }, { url: "", caption: "Foto 2" }], autoplay: false, interval: 5, width: "large", align: "center", transitionEffect: "fade" };
     case "list": return { ordered: false, items: [{ text: "Elemento 1" }, { text: "Elemento 2" }] };
     case "table": return { headers: ["Cabecera 1", "Cabecera 2"], rows: [["Celda A1", "Celda A2"], ["Celda B1", "Celda B2"]] };
+    case "divider": return {};
+    default: return {};
   }
 };

@@ -21,8 +21,8 @@
   --accent: oklch(0.94 0.025 190.0);
   --accent-foreground: oklch(0.60 0.18 190.0);
   --destructive: oklch(0.60 0.22 25.0);
-  --border: oklch(0.85 0.005 190.0);
-  --input: oklch(0.85 0.005 190.0);
+  --border: oklch(0.91 0.003 190.0);
+  --input: oklch(0.91 0.003 190.0);
   --ring: oklch(0.60 0.18 190.0);
   --chart-1: oklch(0.60 0.18 190.0);
   --chart-2: oklch(0.65 0.15 160.0);
@@ -35,7 +35,7 @@
   --sidebar-primary-foreground: oklch(1.00 0 0);
   --sidebar-accent: oklch(0.94 0.025 190.0);
   --sidebar-accent-foreground: oklch(0.60 0.18 190.0);
-  --sidebar-border: oklch(0.92 0.005 190.0);
+  --sidebar-border: oklch(0.92 0.003 190.0);
   --sidebar-ring: oklch(0.60 0.18 190.0);
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
   --font-heading: 'Outfit', var(--font-sans);
@@ -60,8 +60,8 @@
   --accent: oklch(0.20 0.030 190.0);
   --accent-foreground: oklch(0.68 0.18 190.0);
   --destructive: oklch(0.60 0.22 25.0);
-  --border: oklch(0.48 0.018 190.0);
-  --input: oklch(0.48 0.018 190.0);
+  --border: oklch(0.20 0.008 190.0);
+  --input: oklch(0.20 0.008 190.0);
   --ring: oklch(0.68 0.18 190.0);
   --chart-1: oklch(0.68 0.18 190.0);
   --chart-2: oklch(0.65 0.15 160.0);
@@ -74,7 +74,7 @@
   --sidebar-primary-foreground: oklch(1.00 0 0);
   --sidebar-accent: oklch(0.18 0.025 190.0);
   --sidebar-accent-foreground: oklch(0.68 0.18 190.0);
-  --sidebar-border: oklch(0.30 0.015 190.0);
+  --sidebar-border: oklch(0.18 0.008 190.0);
   --sidebar-ring: oklch(0.68 0.18 190.0);
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
   --font-heading: 'Outfit', var(--font-sans);
@@ -510,8 +510,9 @@
     background-color: var(--accent) !important;
   }
 
-  /* --- Markdown inline code - using primary color from theme --- */
-  .wmde-markdown code {
+  /* --- Markdown inline code - using primary color from theme (scoped to preview) --- */
+  .w-md-editor-preview .wmde-markdown code,
+  .wmde-markdown-var code {
     background-color: oklch(from var(--primary) l c h / 0.12) !important;
     color: var(--primary) !important;
     border: 1px solid oklch(from var(--primary) l c h / 0.3) !important;
@@ -522,15 +523,17 @@
     font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace !important;
   }
 
-  /* --- Markdown code blocks --- */
-  .wmde-markdown pre {
+  /* --- Markdown code blocks (scoped to preview) --- */
+  .w-md-editor-preview .wmde-markdown pre,
+  .wmde-markdown-var pre {
     background-color: var(--muted) !important;
     border: 1px solid var(--border) !important;
     border-radius: 0.5rem !important;
     padding: 1rem !important;
   }
 
-  .wmde-markdown pre code {
+  .w-md-editor-preview .wmde-markdown pre code,
+  .wmde-markdown-var pre code {
     background-color: transparent !important;
     color: var(--foreground) !important;
     border: none !important;
@@ -538,11 +541,93 @@
     font-weight: 400 !important;
   }
 
-  /* --- Editor text area color (input textarea) --- */
-  .w-md-editor-text-input,
+  /* --- Strict @uiw/react-md-editor Text Selection Alignment Fix --- */
   .w-md-editor-text {
-    color: var(--foreground) !important;
-    caret-color: var(--foreground) !important;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace !important;
+    font-size: 13px !important;
+    line-height: 1.6 !important;
+  }
+
+  .w-md-editor-text-input,
+  .w-md-editor-text-html,
+  .w-md-editor-text-pre,
+  .w-md-editor-text-pre code,
+  .w-md-editor-text-pre * {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace !important;
+    font-size: 13px !important;
+    line-height: 1.6 !important;
+    letter-spacing: 0px !important;
+    word-spacing: 0px !important;
+    tab-size: 2 !important;
+    -moz-tab-size: 2 !important;
+    box-sizing: border-box !important;
+  }
+
+  .w-md-editor-text-pre h1,
+  .w-md-editor-text-pre h2,
+  .w-md-editor-text-pre h3,
+  .w-md-editor-text-pre h4,
+  .w-md-editor-text-pre h5,
+  .w-md-editor-text-pre h6,
+  .w-md-editor-text-html h1,
+  .w-md-editor-text-html h2,
+  .w-md-editor-text-html h3,
+  .w-md-editor-text-html h4,
+  .w-md-editor-text-html h5,
+  .w-md-editor-text-html h6,
+  .w-md-editor-text h1,
+  .w-md-editor-text h2,
+  .w-md-editor-text h3,
+  .w-md-editor-text h4,
+  .w-md-editor-text h5,
+  .w-md-editor-text h6 {
+    font-size: 13px !important;
+    font-weight: 700 !important;
+    line-height: 1.6 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+  }
+
+  .w-md-editor-text-pre p,
+  .w-md-editor-text-html p,
+  .w-md-editor-text p {
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 1.6 !important;
+    font-size: 13px !important;
+  }
+
+  .w-md-editor-text-pre pre,
+  .w-md-editor-text pre {
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    background: transparent !important;
+  }
+
+  /* --- High contrast editor text area caret, cursor & color-scheme rules --- */
+  textarea,
+  input[type="text"] {
+    color-scheme: light !important;
+    color: #0f172a !important;
+    caret-color: #000000 !important;
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="16" viewBox="0 0 10 16"><path d="M2 1h6v1.5H6v11h2V15H2v-1.5h2v-11H2V1z" fill="%23000000" stroke="%23ffffff" stroke-width="0.5"/></svg>') 5 8, text !important;
+  }
+
+  html.dark textarea,
+  html.dark input[type="text"],
+  body.dark textarea,
+  body.dark input[type="text"] {
+    color-scheme: dark !important;
+    color: #f8fafc !important;
+    caret-color: #ffffff !important;
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="16" viewBox="0 0 10 16"><path d="M2 1h6v1.5H6v11h2V15H2v-1.5h2v-11H2V1z" fill="%23ffffff" stroke="%23000000" stroke-width="0.5"/></svg>') 5 8, text !important;
+  }
+
+  textarea::selection {
+    background-color: #3b82f640 !important;
+    color: inherit !important;
   }
 
   /* Markdown tables - responsive */
