@@ -10,7 +10,11 @@ interface TopicNavigationProps {
 }
 
 export function TopicNavigation({ items, projectId }: TopicNavigationProps) {
-  if (!items || items.length === 0) return null;
+  const filteredItems = (items || []).filter(
+    item => item.slug.toLowerCase() !== "inicio" && item.title.toLowerCase() !== "inicio"
+  );
+
+  if (!filteredItems || filteredItems.length === 0) return null;
 
   return (
     <div className="mt-16 animate-in fade-in slide-in-from-bottom-4 duration-700 w-full">
@@ -23,7 +27,7 @@ export function TopicNavigation({ items, projectId }: TopicNavigationProps) {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {items.map((item) => (
+        {filteredItems.map((item) => (
           <Link
             key={item.id}
             href={`/docs/${projectId}/${item.slug === "index" ? "" : item.slug}`}

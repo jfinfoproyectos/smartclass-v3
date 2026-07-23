@@ -73,6 +73,9 @@ export function PublicHeader({
     setIsMobileTocOpen(false);
   }, [pathname]);
 
+  const filteredTopics = topics.filter(
+    t => t.slug.toLowerCase() !== "inicio" && t.slug !== "" && t.title.toLowerCase() !== "inicio"
+  );
   const activeTopic = topics.find(t => t.slug === activeTopicSlug);
   const activeTitle = activeTopic ? activeTopic.title : "Inicio";
 
@@ -124,7 +127,7 @@ export function PublicHeader({
         </div>
 
         {/* Mobile/Tablet Topics Dropdown (Visible only below lg) */}
-        {mounted && topics.length > 0 && (
+        {mounted && (
           <div className="lg:hidden flex items-center shrink-0">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -157,7 +160,7 @@ export function PublicHeader({
                   </Link>
                 </DropdownMenuItem>
 
-                {topics.map((topic) => {
+                {filteredTopics.map((topic) => {
                   const isActive = activeTopicSlug === topic.slug;
                   return (
                     <DropdownMenuItem key={topic.id} asChild>
@@ -181,7 +184,7 @@ export function PublicHeader({
         )}
 
         {/* Desktop Topics Tabs (Visible only on lg and up) */}
-        {mounted && topics.length > 0 && (
+        {mounted && (
           <div className="hidden lg:flex items-center h-8 gap-0.5 bg-muted/40 dark:bg-white/[0.02] p-0.5 rounded-lg border border-border/40 dark:border-white/5 overflow-x-auto no-scrollbar shrink-0">
             <Link
               href={`/docs/${projectId}`}
@@ -194,7 +197,7 @@ export function PublicHeader({
             >
               Inicio
             </Link>
-            {topics.map((topic) => {
+            {filteredTopics.map((topic) => {
               const isActive = activeTopicSlug === topic.slug;
               return (
                 <Link

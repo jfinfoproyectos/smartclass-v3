@@ -400,7 +400,7 @@ export function PublicDocsShell({
                 className="h-full"
               >
                 <div style={{ width: 288 }} className="border-l border-border/40 h-full">
-                  <RightSidebar onItemClick={() => setIsTocOpen(false)} />
+                  <RightSidebar />
                 </div>
               </motion.div>
             </div>
