@@ -30,12 +30,15 @@ import {
   Maximize2,
   Minimize2,
   ZoomIn,
-  ZoomOut
+  ZoomOut,
+  RotateCcw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import confetti from "canvas-confetti";
 import mermaid from "mermaid";
+import { useTheme } from "next-themes";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import Prism from "prismjs";
@@ -1732,13 +1735,20 @@ export function PdfBlock({ url, height = 650, title }: { url: string; height?: n
 }
 
 // Subcomponent: Diagrama Mermaid
+// Subcomponent: Diagrama Mermaid
 export function MermaidBlock({ chart }: { chart: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const modalContainerRef = useRef<HTMLDivElement>(null);
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const [scale, setScale] = useState<number>(1);
+  const [fitMode, setFitMode] = useState<"fit" | "scroll">("fit");
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [copied, setCopied] = useState<boolean>(false);
+  const { resolvedTheme } = useTheme();
 
   useEffect(() => {
-    if (!chart || !containerRef.current) return;
+    if (!chart) return;
 
     let isMounted = true;
     const elementId = `mermaid-chart-${Math.random().toString(36).substring(2, 9)}`;
@@ -1746,9 +1756,36 @@ export function MermaidBlock({ chart }: { chart: string }) {
     const renderChart = async () => {
       try {
         setError(null);
+        mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: "loose",
+          theme: resolvedTheme === "dark" ? "dark" : "default",
+          fontFamily: "var(--font-sans), system-ui, sans-serif",
+          flowchart: { useMaxWidth: false, htmlLabels: true },
+          gantt: { useMaxWidth: false },
+          sequence: { useMaxWidth: false },
+        });
+
         const { svg: renderedSvg } = await mermaid.render(elementId, chart);
         if (isMounted) {
-          setSvg(renderedSvg);
+          const viewBoxMatch = renderedSvg.match(/viewBox=["']([^"']+)["']/);
+          let vbWidth = 0;
+          if (viewBoxMatch && viewBoxMatch[1]) {
+            const parts = viewBoxMatch[1].trim().split(/[\s,]+/).map(Number);
+            if (parts.length === 4 && !isNaN(parts[2]) && parts[2] > 0) {
+              vbWidth = parts[2];
+            }
+          }
+
+          let cleanedSvg = renderedSvg.replace(/style="max-width:\s*[^"]*;"/g, "");
+          if (vbWidth > 0) {
+            cleanedSvg = cleanedSvg.replace(
+              /<svg\s/,
+              `<svg data-natural-width="${vbWidth}" style="min-width: ${vbWidth}px; width: 100%;" `
+            );
+          }
+
+          setSvg(cleanedSvg);
         }
       } catch (err: any) {
         console.error("Mermaid render error:", err);
@@ -1769,7 +1806,18 @@ export function MermaidBlock({ chart }: { chart: string }) {
     return () => {
       isMounted = false;
     };
-  }, [chart]);
+  }, [chart, resolvedTheme]);
+
+  const handleZoomIn = () => setScale((prev) => Math.min(Number((prev + 0.25).toFixed(2)), 2.5));
+  const handleZoomOut = () => setScale((prev) => Math.max(Number((prev - 0.25).toFixed(2)), 0.5));
+  const handleResetZoom = () => setScale(1);
+
+  const copyChartCode = () => {
+    navigator.clipboard.writeText(chart);
+    setCopied(true);
+    toast.success("Código del diagrama copiado al portapapeles");
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   if (!chart) {
     return (
@@ -1782,33 +1830,193 @@ export function MermaidBlock({ chart }: { chart: string }) {
   }
 
   return (
-    <div className="my-8 p-6 rounded-3xl border border-border/50 bg-card/30 flex flex-col gap-4 shadow-sm relative overflow-hidden">
-      <div className="flex items-center gap-2 border-b pb-3 justify-between">
+    <div className="my-8 rounded-3xl border border-border/60 bg-card/40 flex flex-col shadow-sm relative overflow-hidden backdrop-blur-xs transition-all">
+      {/* Header with Title and Interactive Controls */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 border-b border-border/40 bg-muted/20 select-none">
         <div className="flex items-center gap-2">
-          <Activity className="w-4 h-4 text-primary" />
-          <span className="text-[10px] font-black uppercase tracking-widest text-primary font-sans">
+          <div className="p-1.5 rounded-xl bg-primary/10 text-primary">
+            <Activity className="w-4 h-4" />
+          </div>
+          <span className="text-xs font-bold uppercase tracking-wider text-foreground/90 font-sans">
             Diagrama / Flujo
           </span>
         </div>
+
+        {/* Toolbar Controls */}
+        <div className="flex items-center gap-1.5 bg-background/80 border border-border/40 rounded-xl p-1 shadow-2xs backdrop-blur-xs">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setFitMode(fitMode === "fit" ? "scroll" : "fit")}
+            className="h-7 px-2.5 text-[11px] font-medium text-muted-foreground hover:text-foreground rounded-lg"
+            title={fitMode === "fit" ? "Cambiar a Tamaño Real (Desplazable)" : "Cambiar a Ajustar a Pantalla"}
+          >
+            {fitMode === "fit" ? "Ajustado" : "Tamaño Real"}
+          </Button>
+
+          <div className="h-3.5 w-px bg-border/60" />
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleZoomOut}
+            disabled={scale <= 0.5}
+            className="h-7 w-7 text-muted-foreground hover:text-foreground rounded-lg"
+            title="Reducir zoom"
+          >
+            <ZoomOut className="w-3.5 h-3.5" />
+          </Button>
+
+          <span 
+            onClick={handleResetZoom} 
+            className="text-[10px] font-mono font-bold px-1 text-muted-foreground hover:text-primary cursor-pointer select-none"
+            title="Restablecer zoom (100%)"
+          >
+            {Math.round(scale * 100)}%
+          </span>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleZoomIn}
+            disabled={scale >= 2.5}
+            className="h-7 w-7 text-muted-foreground hover:text-foreground rounded-lg"
+            title="Aumentar zoom"
+          >
+            <ZoomIn className="w-3.5 h-3.5" />
+          </Button>
+
+          {scale !== 1 && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleResetZoom}
+              className="h-7 w-7 text-muted-foreground hover:text-foreground rounded-lg"
+              title="Restablecer zoom"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </Button>
+          )}
+
+          <div className="h-3.5 w-px bg-border/60" />
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={copyChartCode}
+            className="h-7 w-7 text-muted-foreground hover:text-foreground rounded-lg"
+            title="Copiar código Mermaid"
+          >
+            {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsFullscreen(true)}
+            className="h-7 w-7 text-primary hover:bg-primary/10 rounded-lg"
+            title="Ver en Pantalla Completa"
+          >
+            <Maximize2 className="w-3.5 h-3.5" />
+          </Button>
+        </div>
       </div>
 
-      <div ref={containerRef} className="w-full flex justify-center overflow-x-auto py-2 custom-scrollbar">
+      {/* Main Container */}
+      <div 
+        ref={containerRef} 
+        className={cn(
+          "w-full p-6 flex items-center overflow-x-auto custom-scrollbar min-h-[220px] transition-all bg-card/10",
+          fitMode === "fit" ? "justify-center" : "justify-start"
+        )}
+      >
         {error ? (
           <div className="w-full p-4 rounded-2xl bg-destructive/5 border border-destructive/20 text-xs font-semibold text-destructive leading-relaxed font-mono flex flex-col gap-1 select-text">
             <span className="font-sans font-bold text-[10px] uppercase tracking-wider text-destructive/80">Error de Sintaxis Mermaid:</span>
             <span>{error}</span>
           </div>
         ) : svg ? (
-          <div 
-            className="mermaid-svg-container max-w-full text-foreground [&>svg]:mx-auto [&>svg]:h-auto [&>svg]:max-w-full [&>svg]:bg-transparent"
-            dangerouslySetInnerHTML={{ __html: svg }} 
+          <div
+            className={cn(
+              "mermaid-svg-container transition-transform duration-200 ease-out origin-center text-foreground flex items-center justify-center min-w-0 py-2",
+              "[&>svg]:mx-auto [&>svg]:h-auto [&>svg]:bg-transparent [&>svg]:drop-shadow-xs",
+              fitMode === "fit" 
+                ? "[&>svg]:!w-full [&>svg]:!min-w-0 [&>svg]:!max-w-full" 
+                : "[&>svg]:w-auto [&>svg]:max-w-none"
+            )}
+            style={{ transform: `scale(${scale})` }}
+            dangerouslySetInnerHTML={{ __html: svg }}
           />
         ) : (
-          <div className="py-6 flex items-center justify-center">
-            <span className="h-5 w-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          <div className="w-full py-8 flex items-center justify-center">
+            <span className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
           </div>
         )}
       </div>
+
+      {/* Modal View for Fullscreen (100% Screen Width & Height) */}
+      <Dialog open={isFullscreen} onOpenChange={setIsFullscreen}>
+        <DialogContent className="!fixed !top-0 !left-0 !translate-x-0 !translate-y-0 !w-screen !h-screen !max-w-none !max-h-none !rounded-none !border-none p-0 flex flex-col gap-0 bg-background/98 backdrop-blur-2xl overflow-hidden shadow-none z-50">
+          <DialogHeader className="px-6 py-3.5 border-b border-border/40 flex flex-row items-center justify-between shrink-0 bg-card/60 backdrop-blur-md space-y-0 select-none">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                <Activity className="w-5 h-5" />
+              </div>
+              <div className="flex flex-col">
+                <DialogTitle className="text-sm font-bold text-foreground">
+                  Diagrama / Flujo — Vista Pantalla Completa
+                </DialogTitle>
+                <span className="text-[11px] text-muted-foreground font-mono">
+                  Escala actual: {Math.round(scale * 100)}% | Modo: {fitMode === "fit" ? "Ajustado" : "Tamaño Real"}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 mr-10 select-none">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setFitMode(fitMode === "fit" ? "scroll" : "fit")}
+                className="h-8 px-3 text-xs font-medium rounded-xl"
+              >
+                {fitMode === "fit" ? "Modo Ajustado" : "Tamaño Real (100%)"}
+              </Button>
+
+              <div className="flex items-center gap-1 bg-muted/60 border border-border/40 rounded-xl p-1">
+                <Button variant="ghost" size="icon" onClick={handleZoomOut} className="h-7 w-7 rounded-lg" title="Reducir zoom">
+                  <ZoomOut className="w-4 h-4" />
+                </Button>
+                <span className="text-xs font-mono font-bold px-2 text-foreground select-none">{Math.round(scale * 100)}%</span>
+                <Button variant="ghost" size="icon" onClick={handleZoomIn} className="h-7 w-7 rounded-lg" title="Aumentar zoom">
+                  <ZoomIn className="w-4 h-4" />
+                </Button>
+                <Button variant="ghost" size="icon" onClick={handleResetZoom} className="h-7 w-7 rounded-lg" title="Restablecer zoom">
+                  <RotateCcw className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div 
+            ref={modalContainerRef} 
+            className="flex-1 w-full h-full p-8 overflow-auto flex justify-center items-center custom-scrollbar bg-background/50"
+          >
+            {svg && (
+              <div
+                className={cn(
+                  "mermaid-svg-container transition-transform duration-200 ease-out origin-center text-foreground flex items-center justify-center min-w-0 py-4",
+                  "[&>svg]:mx-auto [&>svg]:h-auto [&>svg]:bg-transparent [&>svg]:drop-shadow-lg",
+                  fitMode === "fit" 
+                    ? "[&>svg]:!w-full [&>svg]:!min-w-0 [&>svg]:!max-w-none" 
+                    : "[&>svg]:w-auto [&>svg]:max-w-none"
+                )}
+                style={{ transform: `scale(${scale})` }}
+                dangerouslySetInnerHTML={{ __html: svg }}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -62,11 +62,19 @@ export const markdownToBlocks = (md: string): Block[] => {
         i++;
       }
       i++; // Skip closing fence
-      blocks.push({
-        id: Math.random().toString(36).substring(2, 9),
-        type: "code",
-        data: { code: codeLines.join("\n"), language, title }
-      });
+      if (language.toLowerCase() === "mermaid") {
+        blocks.push({
+          id: Math.random().toString(36).substring(2, 9),
+          type: "mermaid",
+          data: { chart: codeLines.join("\n") }
+        });
+      } else {
+        blocks.push({
+          id: Math.random().toString(36).substring(2, 9),
+          type: "code",
+          data: { code: codeLines.join("\n"), language, title }
+        });
+      }
       continue;
     }
 
