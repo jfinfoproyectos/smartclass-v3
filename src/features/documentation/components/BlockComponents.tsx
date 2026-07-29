@@ -1593,6 +1593,26 @@ export function EmbedBlock({ url, height = 450, caption }: { url: string; height
         const separator = cleanUrl.includes("?") ? "&" : "?";
         return `${cleanUrl}${separator}embed=true`;
       }
+      if (cleanUrl.includes("vimeo.com") || cleanUrl.includes("player.vimeo.com")) {
+        const vimeoMatch = cleanUrl.match(/(?:vimeo\.com\/|player\.vimeo\.com\/video\/)(?:.*\/)?(\d+)/);
+        if (vimeoMatch && vimeoMatch[1]) {
+          return `https://player.vimeo.com/video/${vimeoMatch[1]}`;
+        }
+      }
+
+      if (cleanUrl.includes("loom.com")) {
+        const loomMatch = cleanUrl.match(/loom\.com\/(?:share|embed)\/([a-zA-Z0-9]+)/);
+        if (loomMatch && loomMatch[1]) {
+          return `https://www.loom.com/embed/${loomMatch[1]}`;
+        }
+      }
+
+      if (cleanUrl.includes("dailymotion.com") || cleanUrl.includes("dai.ly")) {
+        const dmMatch = cleanUrl.match(/(?:dailymotion\.com\/(?:video|embed\/video)\/|dai\.ly\/)([a-zA-Z0-9]+)/);
+        if (dmMatch && dmMatch[1]) {
+          return `https://www.dailymotion.com/embed/video/${dmMatch[1]}`;
+        }
+      }
     } catch (e) {
       console.warn("Error parsing embed URL:", e);
     }
@@ -1608,6 +1628,11 @@ export function EmbedBlock({ url, height = 450, caption }: { url: string; height
     if (targetUrl.includes("figma.com")) return "Figma";
     if (targetUrl.includes("replit.com")) return "Replit";
     if (targetUrl.includes("youtube.com") || targetUrl.includes("youtu.be")) return "YouTube";
+    if (targetUrl.includes("vimeo.com")) return "Vimeo";
+    if (targetUrl.includes("loom.com")) return "Loom";
+    if (targetUrl.includes("dailymotion.com") || targetUrl.includes("dai.ly")) return "Dailymotion";
+    if (targetUrl.includes("drive.google.com")) return "Google Drive";
+    if (targetUrl.includes("streamable.com")) return "Streamable";
     return "Enlace Externo";
   };
 
@@ -2140,28 +2165,74 @@ export function ListBlock({ items, ordered }: { items: { text: string; checked?:
   );
 }
 
-// Subcomponent: Video Player (GFM compatible)
+// Subcomponent: Video Player (GFM compatible - YouTube, Vimeo, Loom, Dailymotion, Google Drive, MP4, etc.)
 export function VideoBlock({ url, caption }: { url: string; caption?: string }) {
   if (!url) return null;
 
-  const getYoutubeEmbedUrl = (videoUrl: string) => {
-    let videoId = "";
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-    const match = videoUrl.match(regExp);
-    if (match && match[2].length === 11) {
-      videoId = match[2];
+  const getVideoEmbedDetails = (rawUrl: string): { type: "iframe" | "video"; src: string } => {
+    const cleanUrl = rawUrl.trim();
+    if (!cleanUrl) return { type: "video", src: "" };
+
+    // 1. YouTube
+    const ytMatch = cleanUrl.match(/(?:youtu\.be\/|v\/|u\/\w\/|embed\/|shorts\/|watch\?v=|\&v=)([^#\&\?]*)/);
+    if (ytMatch && ytMatch[1] && ytMatch[1].length === 11) {
+      return { type: "iframe", src: `https://www.youtube.com/embed/${ytMatch[1]}` };
     }
-    return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
+
+    // 2. Vimeo
+    const vimeoMatch = cleanUrl.match(/(?:vimeo\.com\/|player\.vimeo\.com\/video\/)(?:.*\/)?(\d+)/);
+    if (vimeoMatch && vimeoMatch[1]) {
+      return { type: "iframe", src: `https://player.vimeo.com/video/${vimeoMatch[1]}` };
+    }
+
+    // 3. Loom
+    const loomMatch = cleanUrl.match(/loom\.com\/(?:share|embed)\/([a-zA-Z0-9]+)/);
+    if (loomMatch && loomMatch[1]) {
+      return { type: "iframe", src: `https://www.loom.com/embed/${loomMatch[1]}` };
+    }
+
+    // 4. Dailymotion
+    const dmMatch = cleanUrl.match(/(?:dailymotion\.com\/(?:video|embed\/video)\/|dai\.ly\/)([a-zA-Z0-9]+)/);
+    if (dmMatch && dmMatch[1]) {
+      return { type: "iframe", src: `https://www.dailymotion.com/embed/video/${dmMatch[1]}` };
+    }
+
+    // 5. Google Drive
+    const gdriveMatch = cleanUrl.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/) || cleanUrl.match(/drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/);
+    if (gdriveMatch && gdriveMatch[1]) {
+      return { type: "iframe", src: `https://drive.google.com/file/d/${gdriveMatch[1]}/preview` };
+    }
+
+    // 6. Streamable
+    const streamableMatch = cleanUrl.match(/streamable\.com\/(?:e\/)?([a-zA-Z0-9]+)/);
+    if (streamableMatch && streamableMatch[1]) {
+      return { type: "iframe", src: `https://streamable.com/e/${streamableMatch[1]}` };
+    }
+
+    // 7. Wistia
+    const wistiaMatch = cleanUrl.match(/(?:wistia\.com\/medias|wistia\.net\/embed\/iframe)\/([a-zA-Z0-9]+)/);
+    if (wistiaMatch && wistiaMatch[1]) {
+      return { type: "iframe", src: `https://fast.wistia.net/embed/iframe/${wistiaMatch[1]}` };
+    }
+
+    // 8. Direct Video file formats (.mp4, .webm, .ogg, .ogv, .mov, .m4v, .m3u8, blob:, data:video/)
+    const isDirectVideo = /\.(mp4|webm|ogg|ogv|mov|m4v|m3u8)(\?.*)?$/i.test(cleanUrl) || cleanUrl.startsWith("blob:") || cleanUrl.startsWith("data:video/");
+    if (isDirectVideo) {
+      return { type: "video", src: cleanUrl };
+    }
+
+    // 9. Generic Fallback: Any other web link is rendered as an iframe embed
+    return { type: "iframe", src: cleanUrl };
   };
 
-  const ytUrl = getYoutubeEmbedUrl(url);
+  const { type, src } = getVideoEmbedDetails(url);
 
   return (
     <div className="my-6 space-y-2 max-w-4xl mx-auto">
       <div className="relative rounded-2xl overflow-hidden border border-border/80 shadow-lg bg-zinc-950 aspect-video">
-        {ytUrl ? (
+        {type === "iframe" ? (
           <iframe
-            src={ytUrl}
+            src={src}
             title={caption || "Video player"}
             frameBorder="0"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -2170,7 +2241,7 @@ export function VideoBlock({ url, caption }: { url: string; caption?: string }) 
           />
         ) : (
           <video
-            src={url}
+            src={src}
             controls
             className="absolute inset-0 w-full h-full object-cover"
           />

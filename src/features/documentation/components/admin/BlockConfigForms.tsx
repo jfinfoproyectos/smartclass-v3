@@ -1279,12 +1279,12 @@ export function BlockConfigForms({
                   {currentBlock.type === "video" && (
                     <div className="grid grid-cols-1 gap-4">
                       <div className="space-y-2">
-                        <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80">URL del Video (YouTube o enlace MP4 directo)</Label>
+                        <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80">URL del Video (YouTube, Vimeo, Loom, MP4, etc.)</Label>
                         <Input 
                           value={currentBlock.data.url || ""} 
                           onChange={e => updateBlockData(currentBlock.id, "url", e.target.value)}
                           className="rounded-xl h-10 text-sm"
-                          placeholder="https://www.youtube.com/watch?v=... o https://ejemplo.com/video.mp4"
+                          placeholder="https://vimeo.com/... o https://youtube.com/... o enlace de video"
                         />
                       </div>
                       <div className="space-y-2">
