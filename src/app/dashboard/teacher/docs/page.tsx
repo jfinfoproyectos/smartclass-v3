@@ -14,10 +14,10 @@ import { Button } from "@/components/ui/button";
 import { getRoleFromUser } from "@/features/auth/services/authService";
 import { 
   Search, 
-  Files
+  Files,
+  BookMarked,
 } from "lucide-react";
 import Link from "next/link";
-// import { DocStatusToggle } from "@/components/DocStatusToggle";
 import { CreateProjectDialog } from "@/features/documentation/components/admin/CreateProjectDialog";
 import { CreateAiProjectDialog } from "@/features/documentation/components/admin/CreateAiProjectDialog";
 import { ProjectRowActions } from "@/features/documentation/components/admin/ProjectRowActions";
@@ -25,6 +25,7 @@ import { Toaster } from "@/components/ui/sonner";
 import {
   TooltipProvider,
 } from "@/components/ui/tooltip";
+import { DashboardContainer } from "@/components/ui/dashboard-container";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Documentación | SmartClass" };
@@ -37,7 +38,7 @@ export default async function DocsScannerPage() {
   const isAdmin = role === "admin" || role === "teacher";
   if (!isAdmin) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
+      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4 max-w-7xl mx-auto px-4">
         <Files className="w-12 h-12 text-muted-foreground opacity-20" />
         <h2 className="text-xl font-bold">Acceso Restringido</h2>
         <p className="text-muted-foreground">Solo los profesores o admins pueden gestionar la documentación.</p>
@@ -54,76 +55,87 @@ export default async function DocsScannerPage() {
   });
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 p-4 sm:p-6 md:p-8 pt-6">
+    <DashboardContainer>
       <Toaster />
       
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-3xl font-bold tracking-tight">Gestión de Docs</h2>
-          <p className="text-muted-foreground">
-            {projects.length} Proyectos de Documentación
-          </p>
-        </div>
+      {/* Header Banner AI Canvas */}
+      <div className="relative overflow-hidden rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-slate-900/90 text-white p-6 sm:p-8 shadow-xl">
+        <div className="pointer-events-none absolute -top-32 right-1/4 w-96 h-96 rounded-full bg-gradient-to-br from-amber-500/20 via-orange-500/10 to-transparent blur-3xl opacity-70" />
+        <div className="relative z-10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 backdrop-blur-md">
+              <BookMarked className="w-3.5 h-3.5" />
+              <span>Gestión de Documentación</span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-slate-300">
+              Proyectos de Documentación
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-400">
+              Crea y administra documentación técnica, guías y recursos asistidos por Inteligencia Artificial.
+            </p>
+          </div>
 
-        <div className="flex items-center justify-end gap-3 w-full sm:w-auto">
-          <CreateAiProjectDialog />
-          <CreateProjectDialog />
+          <div className="flex flex-wrap items-center gap-3">
+            <CreateAiProjectDialog />
+            <CreateProjectDialog />
+          </div>
         </div>
       </div>
 
+      {/* Search Bar & Table Container */}
       <div className="space-y-4">
-        <div className="flex items-center gap-4 bg-muted/10 p-4 rounded-2xl border border-border/15">
-           <Search className="w-4 h-4 text-muted-foreground" />
+        <div className="flex items-center gap-3 bg-card p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
+           <Search className="w-4 h-4 text-muted-foreground ml-1" />
            <input 
               type="text" 
-              placeholder="Buscar documentación..." 
-              className="bg-transparent border-none outline-none text-xs font-medium w-full placeholder:text-muted-foreground/40"
+              placeholder="Buscar proyectos de documentación..." 
+              className="bg-transparent border-none outline-none text-sm font-medium w-full placeholder:text-muted-foreground/60 text-foreground"
            />
         </div>
 
-      <TooltipProvider delayDuration={150}>
-        <div className="rounded-2xl border border-border/15 overflow-hidden bg-card/25 backdrop-blur-md shadow-xl shadow-black/5">
-          <Table className="w-full min-w-[800px]">
-            <TableHeader>
-              <TableRow className="h-12 bg-muted/40 hover:bg-muted/40 border-b border-border/15">
-                <TableHead className="font-extrabold uppercase tracking-wider text-[10px] pl-5 text-muted-foreground/80">Nombre</TableHead>
-                <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-right pr-5 text-muted-foreground/80">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {projects.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={2} className="h-32 text-center text-muted-foreground pl-5">
-                    No se encontraron proyectos de documentación.
-                  </TableCell>
+        <TooltipProvider delayDuration={150}>
+          <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 overflow-hidden bg-card shadow-sm">
+            <Table className="w-full min-w-[700px]">
+              <TableHeader>
+                <TableRow className="h-12 bg-muted/50 hover:bg-muted/50 border-b border-slate-200/80 dark:border-slate-800">
+                  <TableHead className="font-bold uppercase tracking-wider text-xs pl-6 text-muted-foreground">Proyecto</TableHead>
+                  <TableHead className="font-bold uppercase tracking-wider text-xs text-right pr-6 text-muted-foreground">Acciones</TableHead>
                 </TableRow>
-              ) : (
-                projects.map((project) => (
-                  <TableRow key={project.id} className="group hover:bg-muted/30 transition-colors border-b border-border/10">
-                    <TableCell className="font-medium py-3.5 pl-5">
-                      <div className="flex items-center gap-3.5">
-                        <div className="p-2.5 rounded-xl bg-primary/10 text-primary group-hover:scale-110 transition-all duration-300 shadow-sm shadow-primary/5">
-                           <Files className="w-4 h-4" />
-                        </div>
-                        <span className="font-bold text-sm text-foreground/90 group-hover:text-primary transition-colors duration-300">{project.name}</span>
-                      </div>
-                    </TableCell>
-
-                    <TableCell className="text-right py-3.5 pr-5">
-                      <ProjectRowActions 
-                        projectId={project.id} 
-                        projectName={project.name} 
-                        projectSlug={project.slug} 
-                      />
+              </TableHeader>
+              <TableBody>
+                {projects.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={2} className="h-32 text-center text-muted-foreground text-sm">
+                      No se encontraron proyectos de documentación.
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </TooltipProvider>
-    </div>
-    </div>
+                ) : (
+                  projects.map((project) => (
+                    <TableRow key={project.id} className="group hover:bg-muted/40 transition-colors border-b border-slate-100 dark:border-slate-800/80">
+                      <TableCell className="font-medium py-4 pl-6">
+                        <div className="flex items-center gap-3.5">
+                          <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-500 group-hover:scale-110 transition-all duration-300 shadow-sm">
+                             <Files className="w-4 h-4" />
+                          </div>
+                          <span className="font-bold text-sm text-foreground group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">{project.name}</span>
+                        </div>
+                      </TableCell>
+
+                      <TableCell className="text-right py-4 pr-6">
+                        <ProjectRowActions 
+                          projectId={project.id} 
+                          projectName={project.name} 
+                          projectSlug={project.slug} 
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </TooltipProvider>
+      </div>
+    </DashboardContainer>
   );
 }

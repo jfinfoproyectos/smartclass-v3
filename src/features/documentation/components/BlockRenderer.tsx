@@ -81,31 +81,37 @@ export default function BlockRenderer({ content, initialCodeTheme }: { content: 
 
             if (data.level === "h2") {
               return (
-                <h2 id={slug} key={id} className={cn("text-2xl font-extrabold tracking-tight mt-12 mb-4 border-b border-border/15 pb-2 scroll-mt-20 text-foreground/90", alignClass)}>
-                  {renderFormattedText(data.title)}
-                  {data.subtitle && <span className="block text-sm font-normal text-muted-foreground mt-1">{renderFormattedText(data.subtitle)}</span>}
-                </h2>
+                <div id={slug} key={id} className="scroll-mt-24 mt-12 mb-5">
+                  <h2 className={cn("text-xl sm:text-2xl font-black tracking-tight pl-4 border-l-4 border-emerald-500 bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-transparent py-2.5 rounded-r-2xl text-foreground flex flex-col shadow-xs", alignClass)}>
+                    <span>{renderFormattedText(data.title)}</span>
+                    {data.subtitle && <span className="text-xs font-semibold text-muted-foreground/80 mt-1">{renderFormattedText(data.subtitle)}</span>}
+                  </h2>
+                </div>
               );
             }
             if (data.level === "h3") {
               return (
-                <h3 id={slug} key={id} className={cn("text-lg font-bold tracking-tight mt-8 mb-3 scroll-mt-20 text-foreground/90", alignClass)}>
-                  {renderFormattedText(data.title)}
-                  {data.subtitle && <span className="block text-xs font-normal text-muted-foreground mt-0.5">{renderFormattedText(data.subtitle)}</span>}
-                </h3>
+                <div id={slug} key={id} className="scroll-mt-24 mt-8 mb-4">
+                  <h3 className={cn("text-base sm:text-lg font-extrabold tracking-tight pl-3 border-l-2 border-teal-400 text-foreground/95 flex flex-col", alignClass)}>
+                    <span>{renderFormattedText(data.title)}</span>
+                    {data.subtitle && <span className="text-xs font-medium text-muted-foreground mt-0.5">{renderFormattedText(data.subtitle)}</span>}
+                  </h3>
+                </div>
               );
             }
             return (
-              <h1 id={slug} key={id} className={cn("text-3xl font-extrabold tracking-tight mb-8 border-b border-border/20 pb-3 leading-tight scroll-mt-20 text-foreground", alignClass)}>
-                {renderFormattedText(data.title)}
-                {data.subtitle && <span className="block text-base font-normal text-muted-foreground mt-2">{renderFormattedText(data.subtitle)}</span>}
-              </h1>
+              <div id={slug} key={id} className="scroll-mt-24 mb-8">
+                <h1 className={cn("text-3xl sm:text-4xl font-extrabold tracking-tight border-b border-slate-200/80 dark:border-slate-800/80 pb-4 leading-tight bg-clip-text text-transparent bg-gradient-to-r from-foreground via-foreground to-emerald-500", alignClass)}>
+                  {renderFormattedText(data.title)}
+                  {data.subtitle && <span className="block text-base font-normal text-muted-foreground mt-2">{renderFormattedText(data.subtitle)}</span>}
+                </h1>
+              </div>
             );
           }
           
           case "paragraph":
             return (
-              <p key={id} className="text-[15px] leading-relaxed text-foreground my-5 whitespace-pre-wrap font-normal antialiased">
+              <p key={id} className="text-[15px] sm:text-[16px] leading-relaxed text-foreground/90 my-5 whitespace-pre-wrap font-normal antialiased">
                 {renderFormattedText(data.text)}
               </p>
             );
@@ -113,30 +119,30 @@ export default function BlockRenderer({ content, initialCodeTheme }: { content: 
           case "callout": {
             const styleThemes = {
               info: {
-                border: "border-cyan-500/20",
-                bg: "bg-cyan-500/5",
-                text: "text-cyan-500",
+                border: "border-cyan-500/30",
+                bg: "bg-cyan-500/5 dark:bg-cyan-500/10",
+                text: "text-cyan-600 dark:text-cyan-400",
                 bar: "bg-cyan-500",
                 icon: Info
               },
               warning: {
-                border: "border-amber-500/20",
-                bg: "bg-amber-500/5",
-                text: "text-amber-500",
+                border: "border-amber-500/30",
+                bg: "bg-amber-500/5 dark:bg-amber-500/10",
+                text: "text-amber-600 dark:text-amber-400",
                 bar: "bg-amber-500",
                 icon: AlertTriangle
               },
               success: {
-                border: "border-emerald-500/20",
-                bg: "bg-emerald-500/5",
-                text: "text-emerald-500",
+                border: "border-emerald-500/30",
+                bg: "bg-emerald-500/5 dark:bg-emerald-500/10",
+                text: "text-emerald-600 dark:text-emerald-400",
                 bar: "bg-emerald-500",
                 icon: CheckCircle2
               },
               danger: {
-                border: "border-rose-500/20",
-                bg: "bg-rose-500/5",
-                text: "text-rose-500",
+                border: "border-rose-500/30",
+                bg: "bg-rose-500/5 dark:bg-rose-500/10",
+                text: "text-rose-600 dark:text-rose-400",
                 bar: "bg-rose-500",
                 icon: AlertCircle
               }
@@ -146,14 +152,14 @@ export default function BlockRenderer({ content, initialCodeTheme }: { content: 
             const Icon = theme.icon;
             
             return (
-              <div key={id} className={cn("my-6 rounded-2xl border bg-card/40 backdrop-blur-md shadow-sm relative overflow-hidden flex items-start gap-4 p-5", theme.border)}>
-                <div className={cn("absolute left-0 top-0 bottom-0 w-1", theme.bar)} />
-                <div className={cn("p-1.5 rounded-xl shrink-0 mt-0.5 bg-background/50", theme.text)}>
+              <div key={id} className={cn("my-6 rounded-2xl border backdrop-blur-xl shadow-md relative overflow-hidden flex items-start gap-4 p-5 transition-all", theme.border, theme.bg)}>
+                <div className={cn("absolute left-0 top-0 bottom-0 w-1.5", theme.bar)} />
+                <div className={cn("p-2 rounded-xl shrink-0 mt-0.5 bg-background/80 shadow-xs border border-border/40", theme.text)}>
                   <Icon className="w-4 h-4" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  {data.title && <h5 className={cn("text-xs font-black uppercase tracking-widest mb-1.5", theme.text)}>{renderFormattedText(data.title)}</h5>}
-                  <div className="text-[13.5px] leading-relaxed text-foreground/80 font-medium">
+                  {data.title && <h5 className={cn("text-xs font-black uppercase tracking-wider mb-1.5", theme.text)}>{renderFormattedText(data.title)}</h5>}
+                  <div className="text-[14px] leading-relaxed text-foreground/90 font-medium">
                     {renderFormattedText(data.text)}
                   </div>
                 </div>
@@ -350,7 +356,7 @@ export default function BlockRenderer({ content, initialCodeTheme }: { content: 
           case "divider":
             return (
               <div key={id} className="my-8 flex items-center justify-center">
-                <div className="w-full h-px bg-border/40 dark:bg-border/60" />
+                <div className="w-full h-px bg-gradient-to-r from-transparent via-emerald-500/40 to-transparent" />
               </div>
             );
             

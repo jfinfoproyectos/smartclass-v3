@@ -15,7 +15,7 @@ import { ThemeEnforcer } from "@/components/theme/ThemeEnforcer";
 import { PWARegister } from "@/components/PWARegister";
 import { PushNotificationToggle } from "@/components/notification/PushNotificationToggle";
 import { MobileSettingsMenu } from "@/components/MobileSettingsMenu";
-
+import { Sparkles } from "lucide-react";
 
 export default async function DashboardLayout({
   children,
@@ -39,8 +39,7 @@ export default async function DashboardLayout({
   const showThemeSelector = visualSettings.allowThemeColorChange || isStaff;
 
   return (
-
-    <SidebarProvider defaultOpen={false}>
+    <SidebarProvider defaultOpen={true}>
       <PWARegister />
       <ThemeEnforcer 
         themeMode={visualSettings.themeMode} 
@@ -48,14 +47,27 @@ export default async function DashboardLayout({
         allowThemeColorChange={visualSettings.allowThemeColorChange}
       />
       <ProfileCompletionCheck />
+      
+      {/* Global Top Ambient Glow Line spanning entire width across Sidebar & Header */}
+      <div className="fixed top-0 left-0 right-0 z-50 h-0.5 bg-gradient-to-r from-emerald-500 via-teal-400 via-indigo-500 to-amber-400 pointer-events-none" />
+
       <AppSidebar />
-      <SidebarInset className="h-svh overflow-hidden flex flex-col">
-        <header className="shrink-0 sticky top-0 z-40 flex h-16 w-full items-center gap-2 bg-background/95 backdrop-blur-md text-foreground border-b border-border/30 group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 transition-all">
-          <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 w-full">
-            <SidebarTrigger className="-ml-1" />
-            <div className="ml-auto flex items-center gap-1 sm:gap-2">
-              {/* Desktop Header Buttons */}
-              <div className="hidden md:flex items-center gap-1 sm:gap-2">
+      <SidebarInset className="h-svh overflow-hidden flex flex-col bg-background">
+        {/* Top Header Bar matching AppIdentity height (h-16), background and bottom border */}
+        <header className="shrink-0 sticky top-0 z-40 flex h-16 w-full items-center bg-background/80 dark:bg-slate-950/80 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800/80 transition-all shadow-none">
+          <div className="flex h-full w-full items-center justify-between px-3 sm:px-6">
+            <div className="flex items-center gap-3">
+              <SidebarTrigger className="h-9 w-9 rounded-xl border border-slate-200/80 dark:border-slate-800 hover:bg-muted/60 transition-all" />
+              
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 border border-emerald-500/20 text-xs font-bold">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>SmartClass Engine</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 sm:gap-3">
+              {/* Desktop Header Action Bar */}
+              <div className="hidden md:flex items-center gap-2 bg-muted/40 p-1.5 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 backdrop-blur-md">
                 {showThemeSelector && <ThemeSelector themes={themes} />}
                 {showModeToggle && <ModeToggle />}
                 <PushNotificationToggle />
@@ -73,9 +85,10 @@ export default async function DashboardLayout({
             </div>
           </div>
         </header>
+
         <div className="flex flex-1 flex-col overflow-hidden relative">
           {/* Subtle Grid Background */}
-          <div className="absolute inset-0 bg-grid-pattern [mask-image:radial-gradient(ellipse_at_center,white,transparent)] pointer-events-none -z-10" />
+          <div className="absolute inset-0 bg-grid-pattern [mask-image:radial-gradient(ellipse_at_center,white,transparent)] pointer-events-none -z-10 opacity-60" />
           <div className="flex-1 flex flex-col p-2 sm:p-4 min-h-0 overflow-y-auto">
             {children}
           </div>
@@ -83,6 +96,5 @@ export default async function DashboardLayout({
         <Footer />
       </SidebarInset>
     </SidebarProvider>
-
   );
 }

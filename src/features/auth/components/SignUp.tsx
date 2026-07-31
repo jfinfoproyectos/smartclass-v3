@@ -1,18 +1,16 @@
 "use client";
 
+import React, { useState, useEffect } from "react";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { ArrowRight, Eye, EyeOff, Lock, Mail } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowRight, Eye, EyeOff, Lock, Mail, BrainCircuit, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { getRedirectForSession, signUpEmail } from "@/features/auth/services/authService";
-import Image from "next/image";
-
- 
 
 export default function SignUp() {
   const [isVisible, setIsVisible] = useState<boolean>(false);
@@ -48,108 +46,151 @@ export default function SignUp() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen px-4">
-      <div className="mx-auto w-full max-w-md space-y-6">
-        <div className="space-y-2 text-center">
-          <Image src="/logo.svg" alt="Logo" width={64} height={64} className="mx-auto h-16 w-16" />
-          <h1 className="text-3xl font-semibold">Crear cuenta</h1>
-          <p className="text-muted-foreground">Regístrate con tu correo y contraseña.</p>
+    <div className="relative min-h-screen w-full flex items-center justify-center bg-slate-950 text-white overflow-hidden p-4">
+      {/* AI Canvas Ambient Lighting */}
+      <div className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[700px] h-[700px] rounded-full bg-gradient-to-tr from-emerald-500/20 via-teal-500/15 to-cyan-500/0 blur-[130px] opacity-70 animate-pulse" />
+      <div className="pointer-events-none absolute bottom-0 right-1/4 w-96 h-96 rounded-full bg-gradient-to-t from-purple-500/10 to-transparent blur-[120px]" />
+
+      {/* Grid pattern overlay */}
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.04]"
+        style={{
+          backgroundImage: `radial-gradient(circle at 1px 1px, rgba(255,255,255,0.8) 1px, transparent 0)`,
+          backgroundSize: "28px 28px",
+        }}
+      />
+
+      <motion.div
+        initial={{ opacity: 0, y: 25, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.5, ease: "easeOut" }}
+        className="relative z-10 w-full max-w-md"
+      >
+        {/* Glassmorphism Card */}
+        <div className="relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/80 backdrop-blur-xl p-8 shadow-2xl space-y-6">
+          {/* Accent top gradient bar */}
+          <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-500" />
+
+          {/* Header */}
+          <div className="space-y-3 text-center">
+            <Link href="/" className="inline-flex items-center gap-2 p-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 mb-1 hover:scale-105 transition-transform">
+              <BrainCircuit className="w-7 h-7 text-emerald-400" />
+            </Link>
+
+            <h1 className="text-3xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-slate-300">
+              Crear cuenta
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
+              Regístrate con tu correo y contraseña para acceder al sistema.
+            </p>
+          </div>
+
+          <div className="space-y-5">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleEmailSignUp();
+              }}
+              className="space-y-4"
+            >
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-xs font-semibold text-slate-300">
+                  Correo Electrónico
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="email"
+                    className="peer ps-10 h-11 rounded-xl bg-slate-950/70 border-slate-800 text-white placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500/20 text-sm"
+                    placeholder="tu@correo.com"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                  <div className="text-slate-500 pointer-events-none absolute inset-y-0 start-0 flex items-center justify-center ps-3.5 peer-focus:text-emerald-400 transition-colors">
+                    <Mail size={17} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-xs font-semibold text-slate-300">
+                  Contraseña
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    className="ps-10 pe-10 h-11 rounded-xl bg-slate-950/70 border-slate-800 text-white placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500/20 text-sm"
+                    placeholder="Ingresa tu contraseña"
+                    type={isVisible ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                  <div className="text-slate-500 pointer-events-none absolute inset-y-0 start-0 flex items-center justify-center ps-3.5 peer-focus:text-emerald-400 transition-colors">
+                    <Lock size={17} />
+                  </div>
+                  <button
+                    className="text-slate-500 hover:text-slate-300 absolute inset-y-0 end-0 flex h-full w-10 items-center justify-center transition-colors outline-none"
+                    type="button"
+                    onClick={toggleVisibility}
+                    aria-label={isVisible ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  >
+                    {isVisible ? <EyeOff size={17} /> : <Eye size={17} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password" className="text-xs font-semibold text-slate-300">
+                  Confirmar Contraseña
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="confirm-password"
+                    className="ps-10 pe-10 h-11 rounded-xl bg-slate-950/70 border-slate-800 text-white placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500/20 text-sm"
+                    placeholder="Repite tu contraseña"
+                    type={isVisibleConfirm ? "text" : "password"}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                  />
+                  <div className="text-slate-500 pointer-events-none absolute inset-y-0 start-0 flex items-center justify-center ps-3.5 peer-focus:text-emerald-400 transition-colors">
+                    <Lock size={17} />
+                  </div>
+                  <button
+                    className="text-slate-500 hover:text-slate-300 absolute inset-y-0 end-0 flex h-full w-10 items-center justify-center transition-colors outline-none"
+                    type="button"
+                    onClick={toggleVisibilityConfirm}
+                    aria-label={isVisibleConfirm ? "Ocultar confirmación" : "Mostrar confirmación"}
+                  >
+                    {isVisibleConfirm ? <EyeOff size={17} /> : <Eye size={17} />}
+                  </button>
+                </div>
+              </div>
+
+              {error && (
+                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs text-center font-medium">
+                  {error}
+                </div>
+              )}
+
+              <Button
+                type="submit"
+                className="w-full h-11 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm shadow-lg shadow-emerald-500/20 border-none transition-all hover:scale-[1.01]"
+                disabled={loading}
+              >
+                {loading ? "Creando cuenta..." : "Crear cuenta"}
+                <ArrowRight className="ml-1.5 h-4 w-4" />
+              </Button>
+            </form>
+
+            <div className="text-center text-xs text-slate-400 pt-2 border-t border-slate-800/80">
+              ¿Ya tienes cuenta?{" "}
+              <Link href="/signin" className="text-emerald-400 font-semibold hover:underline">
+                Inicia sesión
+              </Link>
+            </div>
+          </div>
         </div>
-
-        <div className="space-y-5">
-          <div className="flex items-center gap-2">
-            <Separator className="flex-1" />
-            <span className="text-sm text-muted-foreground">Completa tus datos</span>
-            <Separator className="flex-1" />
-          </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="md:col-span-2">
-              <Label htmlFor="email">Correo</Label>
-              <div className="relative mt-2.5">
-                <Input
-                  id="email"
-                  className="peer ps-9"
-                  placeholder="tu@correo.com"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-                <div className="text-muted-foreground/80 pointer-events-none absolute inset-y-0 start-0 flex items-center justify-center ps-3 peer-disabled:opacity-50">
-                  <Mail size={16} aria-hidden="true" />
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <Label htmlFor="password">Contraseña</Label>
-              <div className="relative mt-2.5">
-                <Input
-                  id="password"
-                  className="ps-9 pe-9"
-                  placeholder="Ingresa tu contraseña"
-                  type={isVisible ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-                <div className="text-muted-foreground/80 pointer-events-none absolute inset-y-0 start-0 flex items-center justify-center ps-3 peer-disabled:opacity-50">
-                  <Lock size={16} aria-hidden="true" />
-                </div>
-                <button
-                  className="text-muted-foreground/80 hover:text-foreground focus-visible:border-ring focus-visible:ring-ring/50 absolute inset-y-0 end-0 flex h-full w-9 items-center justify-center rounded-e-md transition-[color,box-shadow] outline-none focus:z-10 focus-visible:ring-[3px] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
-                  type="button"
-                  onClick={toggleVisibility}
-                  aria-label={isVisible ? "Ocultar contraseña" : "Mostrar contraseña"}
-                  aria-pressed={isVisible}
-                  aria-controls="password"
-                >
-                  {isVisible ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <Label htmlFor="confirm-password">Confirmar contraseña</Label>
-              <div className="relative mt-2.5">
-                <Input
-                  id="confirm-password"
-                  className="ps-9 pe-9"
-                  placeholder="Repite tu contraseña"
-                  type={isVisibleConfirm ? "text" : "password"}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                />
-                <div className="text-muted-foreground/80 pointer-events-none absolute inset-y-0 start-0 flex items-center justify-center ps-3 peer-disabled:opacity-50">
-                  <Lock size={16} aria-hidden="true" />
-                </div>
-                <button
-                  className="text-muted-foreground/80 hover:text-foreground focus-visible:border-ring focus-visible:ring-ring/50 absolute inset-y-0 end-0 flex h-full w-9 items-center justify-center rounded-e-md transition-[color,box-shadow] outline-none focus:z-10 focus-visible:ring-[3px] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
-                  type="button"
-                  onClick={toggleVisibilityConfirm}
-                  aria-label={isVisibleConfirm ? "Ocultar confirmación" : "Mostrar confirmación"}
-                  aria-pressed={isVisibleConfirm}
-                  aria-controls="confirm-password"
-                >
-                  {isVisibleConfirm ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
-                </button>
-              </div>
-            </div>
-
-
-            {error && <div className="text-sm text-red-600">{error}</div>}
-          </div>
-
-          <Button className="w-full" onClick={handleEmailSignUp} disabled={loading}>
-            Crear cuenta
-            <ArrowRight className="h-4 w-4" />
-          </Button>
-
-          <div className="text-center text-sm">
-            ¿Ya tienes cuenta? {""}
-            <Link href="/signin" className="text-primary font-medium hover:underline">Inicia sesión</Link>
-          </div>
-        </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

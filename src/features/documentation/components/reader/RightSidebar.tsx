@@ -15,17 +15,26 @@ export default function RightSidebar({ className, onItemClick }: { className?: s
     function scanHeadings() {
       // Scan h1, h2 and h3 headings inside the doc-content div
       const elements = Array.from(document.querySelectorAll('#doc-content h1, #doc-content h2, #doc-content h3'));
-      const newHeadings = elements.map((elem) => {
-        // Clean text to create valid ID if not present
-        const cleanId = elem.id || elem.textContent?.toLowerCase()
+      const seenIds = new Set<string>();
+
+      const newHeadings = elements.map((elem, idx) => {
+        let baseId = elem.id || elem.textContent?.toLowerCase()
           .trim()
           .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove accents for fallback ID
           .replace(/[^\w\s-]/g, '')
           .replace(/\s+/g, '-')
-          || 'id-' + Math.random().toString(36).substr(2, 9);
+          || `id-${idx}`;
+        
+        let uniqueId = baseId;
+        let counter = 1;
+        while (seenIds.has(uniqueId)) {
+          uniqueId = `${baseId}-${counter}`;
+          counter++;
+        }
+        seenIds.add(uniqueId);
         
         return {
-          id: elem.id || cleanId, // Prefer existing ID from rehype-slug
+          id: uniqueId,
           text: elem.textContent || '',
           level: Number(elem.tagName.replace('H', ''))
         };
@@ -148,12 +157,12 @@ export default function RightSidebar({ className, onItemClick }: { className?: s
           
           <div className="relative border-l border-border/30 ml-1 py-1">
             <ul className="space-y-3.5 relative">
-              {headings.map((heading) => {
+              {headings.map((heading, idx) => {
                 const isActive = activeId === heading.id;
                 
                 return (
                   <li 
-                    key={heading.id} 
+                    key={`${heading.id}-${idx}`} 
                     className={cn(
                       "relative transition-all duration-300",
                       heading.level === 2 ? 'pl-4' : 
@@ -190,7 +199,7 @@ export default function RightSidebar({ className, onItemClick }: { className?: s
           </div>
           <div className="space-y-3">
             <div className="h-3 bg-foreground/5 rounded w-full" />
-            <div className="h-3 bg-foreground/5 rounded w-5/6" />
+            <div className="h-3 bg-foreground/5 rounded w-4/6" />
             <div className="h-3 bg-foreground/5 rounded w-4/6" />
             <div className="h-3 bg-foreground/5 rounded w-full" />
           </div>

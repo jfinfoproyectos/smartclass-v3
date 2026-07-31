@@ -264,127 +264,131 @@ export default function DocEditorPage() {
         : "absolute inset-0 z-40 rounded-xl m-2 sm:m-4"
     )}>
       {/* Visual Top Toolbar */}
-      <div className="flex-none bg-background border-b border-border/50 px-6 py-3 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+      <div className="flex-none bg-background/90 dark:bg-slate-950/90 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800/80 flex flex-col transition-all shadow-sm">
+        {/* Top ambient glowing line */}
+        <div className="h-0.5 w-full bg-gradient-to-r from-emerald-500 via-teal-400 via-indigo-500 to-amber-400" />
+        
+        <div className="px-4 sm:px-6 py-2.5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            {/* Project Name Editing */}
+            {isEditingProjectName ? (
+              <div className="flex items-center gap-2">
+                <Input 
+                  value={projectNameInput}
+                  onChange={e => setProjectNameInput(e.target.value)}
+                  className="h-8 rounded-xl text-xs py-1"
+                  autoFocus
+                  onKeyDown={e => {
+                    if (e.key === "Enter") handleProjectNameSave();
+                    if (e.key === "Escape") {
+                      setIsEditingProjectName(false);
+                      setProjectNameInput(project?.name || "");
+                    }
+                  }}
+                />
+                <Button size="sm" className="h-8 px-3 text-xs font-bold rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950" onClick={handleProjectNameSave}>
+                  Listo
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 group">
+                <span className="font-heading font-extrabold uppercase text-sm tracking-tight text-foreground">{project?.name || "Cargando..."}</span>
+                <button 
+                  onClick={() => setIsEditingProjectName(true)}
+                  className="p-1 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors hover:bg-muted rounded-lg"
+                  title="Editar nombre"
+                >
+                  <Edit className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
 
-          {/* Project Name Editing */}
-          {isEditingProjectName ? (
-            <div className="flex items-center gap-2">
-              <Input 
-                value={projectNameInput}
-                onChange={e => setProjectNameInput(e.target.value)}
-                className="h-8 rounded-lg text-xs py-1"
-                autoFocus
-                onKeyDown={e => {
-                  if (e.key === "Enter") handleProjectNameSave();
-                  if (e.key === "Escape") {
-                    setIsEditingProjectName(false);
-                    setProjectNameInput(project?.name || "");
-                  }
-                }}
-              />
-              <Button size="sm" className="h-8 px-3 text-xs font-bold" onClick={handleProjectNameSave}>
-                Listo
+          {/* Center Tab Selector */}
+          {selectedFile && (
+            <div className="hidden md:flex items-center gap-1 bg-muted/40 p-1 rounded-xl border border-slate-200/60 dark:border-slate-800/60">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setActiveTab("edit")}
+                className={cn(
+                  "font-bold rounded-lg gap-2 h-8 text-[11px] uppercase tracking-wider px-3 transition-all",
+                  activeTab === "edit" 
+                    ? "shadow-sm bg-background text-emerald-600 dark:text-emerald-400 hover:bg-background" 
+                    : "text-muted-foreground hover:text-foreground hover:bg-transparent"
+                )}
+              >
+                <Edit3 className="w-3.5 h-3.5 text-emerald-500" />
+                Diseñador
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setActiveTab("markdown")}
+                className={cn(
+                  "font-bold rounded-lg gap-2 h-8 text-[11px] uppercase tracking-wider px-3 transition-all",
+                  activeTab === "markdown" 
+                    ? "shadow-sm bg-background text-emerald-600 dark:text-emerald-400 hover:bg-background" 
+                    : "text-muted-foreground hover:text-foreground hover:bg-transparent"
+                )}
+              >
+                <FileText className="w-3.5 h-3.5 text-emerald-500" />
+                Editor Markdown
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setActiveTab("preview")}
+                className={cn(
+                  "font-bold rounded-lg gap-2 h-8 text-[11px] uppercase tracking-wider px-3 transition-all",
+                  activeTab === "preview" 
+                    ? "shadow-sm bg-background text-emerald-600 dark:text-emerald-400 hover:bg-background" 
+                    : "text-muted-foreground hover:text-foreground hover:bg-transparent"
+                )}
+              >
+                <Eye className="w-3.5 h-3.5 text-emerald-500" />
+                Vista Previa
               </Button>
             </div>
-          ) : (
-            <div className="flex items-center gap-2 group">
-              <span className="font-heading font-black uppercase text-sm tracking-tight">{project?.name || "Cargando..."}</span>
-              <button 
-                onClick={() => setIsEditingProjectName(true)}
-                className="p-1 text-muted-foreground/30 group-hover:text-muted-foreground transition-colors hover:bg-muted rounded"
-                title="Editar nombre"
-              >
-                <Edit className="w-3.5 h-3.5" />
-              </button>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-3">
+            {/* Themes, Styles, and DarkMode controls */}
+            <div className="flex items-center gap-1.5 border-r border-slate-200 dark:border-slate-800 pr-3 mr-1">
+              <ThemeSelector themes={themes} />
+              <CodeThemeSelector currentTheme={currentCodeTheme} />
+              <ModeToggle />
             </div>
-          )}
-        </div>
 
-        {/* Center Tab Selector */}
-        {selectedFile && (
-          <div className="hidden md:flex items-center gap-1 bg-muted/40 p-1 rounded-xl border border-border/20">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setActiveTab("edit")}
-              className={cn(
-                "font-bold rounded-lg gap-2 h-8 text-[11px] uppercase tracking-wider px-3 transition-all",
-                activeTab === "edit" 
-                  ? "shadow-sm bg-background text-foreground hover:bg-background" 
-                  : "text-muted-foreground hover:text-foreground hover:bg-transparent"
-              )}
-            >
-              <Edit3 className="w-3.5 h-3.5 text-primary" />
-              Diseñador
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setActiveTab("markdown")}
-              className={cn(
-                "font-bold rounded-lg gap-2 h-8 text-[11px] uppercase tracking-wider px-3 transition-all",
-                activeTab === "markdown" 
-                  ? "shadow-sm bg-background text-foreground hover:bg-background" 
-                  : "text-muted-foreground hover:text-foreground hover:bg-transparent"
-              )}
-            >
-              <FileText className="w-3.5 h-3.5 text-primary" />
-              Editor Markdown
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setActiveTab("preview")}
-              className={cn(
-                "font-bold rounded-lg gap-2 h-8 text-[11px] uppercase tracking-wider px-3 transition-all",
-                activeTab === "preview" 
-                  ? "shadow-sm bg-background text-foreground hover:bg-background" 
-                  : "text-muted-foreground hover:text-foreground hover:bg-transparent"
-              )}
-            >
-              <Eye className="w-3.5 h-3.5 text-primary" />
-              Vista Previa
-            </Button>
-          </div>
-        )}
+            {selectedFile && (
+              <Button 
+                disabled={content === originalContent || saving}
+                onClick={handleSave} 
+                className="font-bold rounded-xl gap-2 h-9 px-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20 border-none transition-all"
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {content === originalContent ? "Guardado" : "Guardar"}
+              </Button>
+            )}
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-3">
-          {/* Themes, Styles, and DarkMode controls */}
-          <div className="flex items-center gap-1.5 border-r border-border/40 pr-3 mr-1">
-            <ThemeSelector themes={themes} />
-            <CodeThemeSelector currentTheme={currentCodeTheme} />
-            <ModeToggle />
-          </div>
-
-          {selectedFile && (
             <Button 
-              disabled={content === originalContent || saving}
-              onClick={handleSave} 
-              className="font-bold rounded-xl gap-2 h-9 px-4 shadow-sm animate-in fade-in duration-300"
+              variant="outline" 
+              onClick={() => {
+                if (content !== originalContent) {
+                  setPendingAction({ type: 'back' });
+                  setIsUnsavedDialogOpen(true);
+                } else {
+                  router.push("/dashboard/teacher/docs");
+                }
+              }}
+              className="font-bold rounded-xl gap-2 h-9 px-4 text-destructive border-destructive/20 hover:bg-destructive/10 hover:text-destructive transition-all shrink-0"
+              title="Cerrar Diseñador"
             >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              {content === originalContent ? "Guardado" : "Guardar"}
+              <X className="w-4 h-4" />
+              <span>Cerrar</span>
             </Button>
-          )}
-
-          <Button 
-            variant="outline" 
-            onClick={() => {
-              if (content !== originalContent) {
-                setPendingAction({ type: 'back' });
-                setIsUnsavedDialogOpen(true);
-              } else {
-                router.push("/dashboard/teacher/docs");
-              }
-            }}
-            className="font-bold rounded-xl gap-2 h-9 px-4 text-destructive border-destructive/20 hover:bg-destructive/10 hover:text-destructive transition-all duration-300 shrink-0"
-            title="Cerrar Diseñador"
-          >
-            <X className="w-4 h-4" />
-            <span>Cerrar</span>
-          </Button>
+          </div>
         </div>
       </div>
 

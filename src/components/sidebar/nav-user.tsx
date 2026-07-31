@@ -4,6 +4,7 @@ import {
   BadgeCheck,
   ChevronsUpDown,
   LogOut,
+  User
 } from "lucide-react"
 
 import {
@@ -97,7 +98,6 @@ export function NavUser({
   const [loadingProfile, setLoadingProfile] = useState(false)
   const fullName = useMemo(() => `${firstName}`.trim() + (lastName.trim() ? ` ${lastName.trim()}` : ""), [firstName, lastName])
 
-  // Load profile data when dialog opens
   const loadProfile = async () => {
     setLoadingProfile(true)
     try {
@@ -119,15 +119,12 @@ export function NavUser({
 
   const handleSaveAccount = async () => {
     setSaveError("")
-    
-    // Capitalize names before saving
     const capitalizedFirstName = formatName(firstName)
     const capitalizedLastName = formatName(lastName)
     const capitalizedFullName = `${capitalizedFirstName} ${capitalizedLastName}`.trim()
 
     setSaving(true)
 
-    // Update user name
     const { error } = await authClient.updateUser({ name: capitalizedFullName })
     if (error) {
       setSaveError(error.message || "Error al actualizar el perfil")
@@ -135,7 +132,6 @@ export function NavUser({
       return
     }
 
-    // Update profile data via server action
     try {
       const formData = new FormData()
       formData.append("identificacion", identificacion)
@@ -173,65 +169,69 @@ export function NavUser({
 
   return (
     <>
-      <SidebarMenu>
+      <SidebarMenu className="p-2">
         <SidebarMenuItem>
           <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
             <DropdownMenuTrigger asChild>
               <SidebarMenuButton
                 size="lg"
-                className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                className="h-14 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-card hover:bg-muted/60 transition-all p-2.5 shadow-sm"
               >
-                <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarImage src={displayedUser.avatar} alt={displayedUser.name ?? ""} />
-                  <AvatarFallback className="rounded-lg">{getInitials(displayedUser.name)}</AvatarFallback>
-                </Avatar>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">{formatName(displayedUser.name)}</span>
-                  <span className="truncate text-xs">{displayedUser.email}</span>
+                <div className="relative">
+                  <Avatar className="h-9 w-9 rounded-xl border border-emerald-500/20">
+                    <AvatarImage src={displayedUser.avatar} alt={displayedUser.name ?? ""} />
+                    <AvatarFallback className="rounded-xl bg-emerald-500/10 text-emerald-500 font-bold text-xs">{getInitials(displayedUser.name)}</AvatarFallback>
+                  </Avatar>
+                  <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-background" />
                 </div>
-                <ChevronsUpDown className="ml-auto size-4" />
+                <div className="grid flex-1 text-left text-xs leading-tight ml-2">
+                  <span className="truncate font-bold text-foreground">{formatName(displayedUser.name)}</span>
+                  <span className="truncate text-[10px] text-muted-foreground">{displayedUser.email}</span>
+                </div>
+                <ChevronsUpDown className="ml-auto size-4 text-muted-foreground" />
               </SidebarMenuButton>
             </DropdownMenuTrigger>
             <DropdownMenuContent
-              className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
+              className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-2 shadow-xl"
               side={isMobile ? "bottom" : "right"}
               align="end"
               sideOffset={4}
             >
-              <DropdownMenuLabel className="p-0 font-normal">
-                <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                  <Avatar className="h-8 w-8 rounded-lg">
+              <DropdownMenuLabel className="p-2 font-normal">
+                <div className="flex items-center gap-3 text-left text-sm">
+                  <Avatar className="h-9 w-9 rounded-xl border border-emerald-500/20">
                     <AvatarImage src={displayedUser.avatar} alt={displayedUser.name ?? ""} />
-                    <AvatarFallback className="rounded-lg">{getInitials(displayedUser.name)}</AvatarFallback>
+                    <AvatarFallback className="rounded-xl bg-emerald-500/10 text-emerald-500 font-bold text-xs">{getInitials(displayedUser.name)}</AvatarFallback>
                   </Avatar>
-                  <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-medium">{formatName(displayedUser.name)}</span>
-                    <span className="truncate text-xs">{displayedUser.email}</span>
+                  <div className="grid flex-1 text-left text-xs leading-tight">
+                    <span className="truncate font-bold">{formatName(displayedUser.name)}</span>
+                    <span className="truncate text-[11px] text-muted-foreground">{displayedUser.email}</span>
                   </div>
                 </div>
               </DropdownMenuLabel>
-              <DropdownMenuSeparator />
+              <DropdownMenuSeparator className="my-1" />
               <DropdownMenuGroup>
                 <DropdownMenuItem
                   onSelect={handleOpenAccount}
+                  className="rounded-xl text-xs font-semibold py-2 cursor-pointer"
                 >
-                  <BadgeCheck />
-                  Mi Cuenta
+                  <User className="w-4 h-4 mr-2 text-emerald-500" />
+                  Mi Cuenta & Perfil
                 </DropdownMenuItem>
-
               </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={handleLogout} disabled={loading}>
-                <LogOut />
+              <DropdownMenuSeparator className="my-1" />
+              <DropdownMenuItem onSelect={handleLogout} disabled={loading} className="rounded-xl text-xs font-semibold py-2 text-destructive cursor-pointer">
+                <LogOut className="w-4 h-4 mr-2" />
                 Cerrar Sesión
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </SidebarMenuItem>
       </SidebarMenu>
+
       <Dialog open={accountOpen} onOpenChange={setAccountOpen}>
         <DialogContent
-          className="max-h-[90vh] overflow-y-auto"
+          className="max-h-[90vh] overflow-y-auto rounded-3xl"
           onPointerDownOutside={(e) => {
             if (isMobile) e.preventDefault()
           }}
@@ -240,32 +240,31 @@ export function NavUser({
           }}
         >
           <DialogHeader>
-            <DialogTitle>Actualización de Perfil</DialogTitle>
-            <DialogDescription>Gestiona tus datos personales y de cuenta.</DialogDescription>
+            <DialogTitle className="text-xl font-bold">Actualización de Perfil</DialogTitle>
+            <DialogDescription className="text-xs">Gestiona tus datos personales y de cuenta.</DialogDescription>
           </DialogHeader>
-          <div className="flex flex-col gap-4 mt-4">
+          <div className="flex flex-col gap-4 mt-2">
             <div>
-              <Label htmlFor="identificacion" className="text-xs font-bold uppercase opacity-70">Identificación</Label>
-              <Input className="mt-1" id="identificacion" value={identificacion} onChange={(e) => setIdentificacion(e.target.value)} placeholder="Cédula" />
+              <Label htmlFor="identificacion" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Identificación</Label>
+              <Input className="mt-1 rounded-xl" id="identificacion" value={identificacion} onChange={(e) => setIdentificacion(e.target.value)} placeholder="Cédula / Documento" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="first-name" className="text-xs font-bold uppercase opacity-70">Nombres</Label>
-                <Input className="mt-1" id="first-name" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Tus nombres" />
+                <Label htmlFor="first-name" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Nombres</Label>
+                <Input className="mt-1 rounded-xl" id="first-name" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Tus nombres" />
               </div>
               <div>
-                <Label htmlFor="last-name" className="text-xs font-bold uppercase opacity-70">Apellido</Label>
-                <Input className="mt-1" id="last-name" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Tu apellido" />
+                <Label htmlFor="last-name" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Apellido</Label>
+                <Input className="mt-1 rounded-xl" id="last-name" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Tu apellido" />
               </div>
             </div>
             <div>
-              <Label htmlFor="telefono" className="text-xs font-bold uppercase opacity-70">Teléfono</Label>
-              <Input className="mt-1" id="telefono" value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="Número de teléfono" />
+              <Label htmlFor="telefono" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Teléfono</Label>
+              <Input className="mt-1 rounded-xl" id="telefono" value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="Número de teléfono" />
             </div>
 
-
-            <div className="flex items-center space-x-2 border p-3 rounded-md bg-muted/50 mt-2">
-              <div className={`h-4 w-4 rounded-full border flex items-center justify-center ${dataProcessingConsent ? 'bg-green-500 border-green-500' : 'bg-transparent border-gray-400'}`}>
+            <div className="flex items-center space-x-3 border border-slate-200/80 dark:border-slate-800 p-3 rounded-2xl bg-muted/30">
+              <div className={`h-4 w-4 rounded-full border flex items-center justify-center ${dataProcessingConsent ? 'bg-emerald-500 border-emerald-500' : 'bg-transparent border-gray-400'}`}>
                 {dataProcessingConsent && <div className="h-2 w-2 bg-white rounded-full" />}
               </div>
               <div className="space-y-1">
@@ -281,10 +280,10 @@ export function NavUser({
               </div>
             </div>
 
-            {saveError && <div className="text-sm text-destructive">{saveError}</div>}
-            <DialogFooter className="mt-4">
-              <Button variant="outline" onClick={() => setAccountOpen(false)}>Cancelar</Button>
-              <Button onClick={handleSaveAccount} disabled={saving || !fullName.trim() || !identificacion.trim()}>{saving ? "Guardando..." : "Guardar"}</Button>
+            {saveError && <div className="text-xs font-semibold text-destructive">{saveError}</div>}
+            <DialogFooter className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800">
+              <Button variant="outline" className="rounded-xl text-xs font-bold" onClick={() => setAccountOpen(false)}>Cancelar</Button>
+              <Button className="rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-md shadow-emerald-500/20" onClick={handleSaveAccount} disabled={saving || !fullName.trim() || !identificacion.trim()}>{saving ? "Guardando..." : "Guardar Cambios"}</Button>
             </DialogFooter>
           </div>
         </DialogContent>

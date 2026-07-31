@@ -771,9 +771,11 @@ function FileTreeNode({
       <div 
         className={cn(
           "group relative flex items-center h-10 px-3 gap-3 cursor-pointer transition-all duration-300 select-none rounded-xl mx-2",
-          isSelected ? "text-primary font-bold bg-primary/10 dark:bg-primary/20" : "text-muted-foreground hover:bg-primary/5 hover:text-primary",
+          isSelected 
+            ? "text-emerald-600 dark:text-emerald-400 font-extrabold bg-emerald-500/10 border border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.12)]" 
+            : "text-muted-foreground hover:bg-emerald-500/5 hover:text-emerald-500",
           node.draft && "opacity-60",
-          isDragOver && dragOverPos === 'middle' && "bg-primary/30 scale-[1.02]",
+          isDragOver && dragOverPos === 'middle' && "bg-emerald-500/30 scale-[1.02]",
           "active:scale-[0.98]"
         )}
         style={{ marginLeft: `${(level) * 12}px` }}

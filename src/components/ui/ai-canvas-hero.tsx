@@ -1,0 +1,98 @@
+"use client";
+
+import React from "react";
+import { motion } from "framer-motion";
+import { Sparkles, Calendar, ShieldCheck, GraduationCap, School, User } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+interface AICanvasHeroProps {
+  userName?: string;
+  userRole?: string;
+  institutionName?: string;
+  userImage?: string | null;
+}
+
+export function AICanvasHero({
+  userName = "Usuario",
+  userRole = "Estudiante",
+  institutionName = "SmartClass",
+  userImage,
+}: AICanvasHeroProps) {
+  const currentDateFormatted = new Date().toLocaleDateString("es-ES", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
+  const getRoleLabel = (role: string) => {
+    switch (role?.toLowerCase()) {
+      case "admin":
+        return { label: "Administrador", icon: ShieldCheck, color: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20" };
+      case "teacher":
+        return { label: "Docente", icon: GraduationCap, color: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" };
+      default:
+        return { label: "Estudiante", icon: User, color: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20" };
+    }
+  };
+
+  const roleInfo = getRoleLabel(userRole);
+  const RoleIcon = roleInfo.icon;
+
+  return (
+    <div className="relative overflow-hidden rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-gradient-to-b from-slate-900 via-slate-900/95 to-slate-950 text-white p-5 sm:p-8 md:p-12 shadow-2xl">
+      {/* Background Animated Conic & Radial Gradients */}
+      <div className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full bg-gradient-to-tr from-emerald-500/20 via-teal-500/15 to-cyan-500/0 blur-3xl opacity-70 animate-pulse" />
+      <div className="pointer-events-none absolute top-0 right-0 w-96 h-96 rounded-full bg-gradient-to-b from-blue-500/10 to-transparent blur-3xl" />
+      
+      {/* Grid Pattern overlay */}
+      <div 
+        className="pointer-events-none absolute inset-0 opacity-[0.04] dark:opacity-[0.07]" 
+        style={{
+          backgroundImage: `radial-gradient(circle at 1px 1px, rgba(255,255,255,0.8) 1px, transparent 0)`,
+          backgroundSize: '24px 24px'
+        }}
+      />
+
+      <div className="relative z-10 flex flex-col items-center text-center space-y-4 sm:space-y-6 max-w-4xl mx-auto">
+        {/* Top Pills: Date & Role */}
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="flex flex-wrap items-center justify-center gap-2 sm:gap-3"
+        >
+          <div className="inline-flex items-center gap-2 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-medium bg-white/10 dark:bg-white/5 border border-white/10 backdrop-blur-md text-slate-200">
+            <Calendar className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="capitalize">{currentDateFormatted}</span>
+          </div>
+
+          <div className={cn("inline-flex items-center gap-1.5 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-semibold border backdrop-blur-md", roleInfo.color)}>
+            <RoleIcon className="w-3.5 h-3.5" />
+            <span>{roleInfo.label}</span>
+          </div>
+        </motion.div>
+
+        {/* Main Title & Institution */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.6, delay: 0.1 }}
+          className="space-y-2 sm:space-y-3"
+        >
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] sm:text-xs font-semibold tracking-wider uppercase">
+            <School className="w-3.5 h-3.5" />
+            <span>{institutionName}</span>
+          </div>
+
+          <h1 className="text-2xl sm:text-4xl md:text-6xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-slate-300 drop-shadow-sm">
+            ¡Hola, {userName.split(" ")[0]}! 👋
+          </h1>
+          <p className="text-slate-400 text-xs sm:text-base md:text-lg max-w-2xl mx-auto leading-relaxed">
+            Bienvenido al portal académico. Accede a tus herramientas principales, módulos de gestión y actividades actualizadas.
+          </p>
+        </motion.div>
+      </div>
+    </div>
+  );
+}

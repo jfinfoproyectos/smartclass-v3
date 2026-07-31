@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { evaluationService } from "@/features/teacher/services/evaluationService";
-import { EvaluationManager } from "@/features/teacher/components/EvaluationManager";
+import { TeacherEvaluationsView } from "@/features/teacher/components/TeacherEvaluationsView";
 
 export default async function EvaluationsPage() {
     const session = await auth.api.getSession({
@@ -10,14 +10,10 @@ export default async function EvaluationsPage() {
     });
 
     if (!session || (session.user.role !== "teacher" && session.user.role !== "admin")) {
-        redirect("/login");
+        redirect("/signin");
     }
 
     const evaluations = await evaluationService.getTeacherEvaluations(session.user.id);
 
-    return (
-        <div className="space-y-8 animate-in fade-in duration-500 p-6">
-            <EvaluationManager evaluations={evaluations} />
-        </div>
-    );
+    return <TeacherEvaluationsView evaluations={evaluations} />;
 }

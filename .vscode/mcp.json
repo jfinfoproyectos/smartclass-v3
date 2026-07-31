@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "aicanvas": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@aicanvas/mcp"
+      ]
+    }
+  }
+}

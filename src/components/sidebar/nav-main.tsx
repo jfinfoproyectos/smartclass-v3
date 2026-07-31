@@ -1,7 +1,6 @@
 "use client"
 
 import { ChevronRight, type LucideIcon } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
@@ -48,20 +47,18 @@ export function NavMain({
   }
 
   return (
-    <SidebarGroup>
-      <SidebarGroupLabel>Navegación</SidebarGroupLabel>
-      <SidebarMenu>
+    <SidebarGroup className="px-3 py-4">
+      <SidebarGroupLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 px-2 mb-2">
+        Navegación Principal
+      </SidebarGroupLabel>
+      <SidebarMenu className="space-y-1.5">
         {items.map((item) => {
-          // Usar la propiedad isActive del item o comparar con el pathname actual
-          // Si el item es el dashboard principal (/dashboard), usar coincidencia exacta
-          // Para otros, ver si el pathname empieza con el url del item (para rutas anidadas)
           const isDashboard = item.url === "/dashboard"
           const active = item.isActive || 
             (isDashboard 
               ? pathname === item.url 
               : pathname === item.url || (pathname.startsWith(item.url + "/") && !items.some(other => other.url.length > item.url.length && pathname.startsWith(other.url))))
 
-          // Si no hay items anidados, renderizar como enlace directo
           if (!item.items || item.items.length === 0) {
             return (
               <SidebarMenuItem key={item.title}>
@@ -70,22 +67,23 @@ export function NavMain({
                   asChild
                   isActive={active}
                   className={cn(
-                    "h-11 rounded-xl transition-all duration-300",
+                    "h-11 rounded-xl transition-all duration-300 px-3 relative overflow-hidden group",
                     active
-                      ? "bg-primary/10 text-primary font-bold scale-[1.02]"
-                      : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      ? "bg-gradient-to-r from-emerald-500/15 via-emerald-500/5 to-transparent text-emerald-600 dark:text-emerald-400 font-bold border-l-4 border-emerald-500 shadow-sm shadow-emerald-500/10"
+                      : "text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800/60"
                   )}
                 >
                   <Link href={item.url} onClick={handleLinkClick}>
-                    {item.icon && <item.icon className={cn("h-5 w-5 transition-colors", active ? "text-primary scale-110" : "text-muted-foreground/70")} />}
-                    <span className="ml-2 font-medium">{item.title}</span>
+                    {item.icon && (
+                      <item.icon className={cn("h-5 w-5 transition-transform duration-300 group-hover:scale-110", active ? "text-emerald-500 dark:text-emerald-400" : "text-slate-400 dark:text-slate-500")} />
+                    )}
+                    <span className="ml-2 text-sm">{item.title}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )
           }
 
-          // Si hay items anidados, renderizar con Collapsible
           return (
             <Collapsible
               key={item.title}
@@ -95,17 +93,17 @@ export function NavMain({
             >
               <SidebarMenuItem>
                 <CollapsibleTrigger asChild>
-                  <SidebarMenuButton tooltip={item.title} isActive={active}>
+                  <SidebarMenuButton tooltip={item.title} isActive={active} className="h-11 rounded-xl">
                     {item.icon && <item.icon className="h-5 w-5" />}
-                    <span className="ml-2 font-medium">{item.title}</span>
+                    <span className="ml-2 font-medium text-sm">{item.title}</span>
                     <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                   </SidebarMenuButton>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
-                  <SidebarMenuSub>
+                  <SidebarMenuSub className="ml-4 border-l border-slate-200 dark:border-slate-800 space-y-1">
                     {item.items?.map((subItem) => (
                       <SidebarMenuSubItem key={subItem.title}>
-                        <SidebarMenuSubButton asChild isActive={pathname === subItem.url}>
+                        <SidebarMenuSubButton asChild isActive={pathname === subItem.url} className="rounded-lg">
                           <Link href={subItem.url} onClick={handleLinkClick}>
                             <span>{subItem.title}</span>
                           </Link>
