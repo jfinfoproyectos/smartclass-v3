@@ -27,6 +27,8 @@ import {
 } from "@/components/ui/tooltip";
 import { DashboardContainer } from "@/components/ui/dashboard-container";
 
+import { DocProjectsList } from "@/features/documentation/components/admin/DocProjectsList";
+
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Documentación | SmartClass" };
 
@@ -82,60 +84,7 @@ export default async function DocsScannerPage() {
         </div>
       </div>
 
-      {/* Search Bar & Table Container */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-3 bg-card p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
-           <Search className="w-4 h-4 text-muted-foreground ml-1" />
-           <input 
-              type="text" 
-              placeholder="Buscar proyectos de documentación..." 
-              className="bg-transparent border-none outline-none text-sm font-medium w-full placeholder:text-muted-foreground/60 text-foreground"
-           />
-        </div>
-
-        <TooltipProvider delayDuration={150}>
-          <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 overflow-hidden bg-card shadow-sm">
-            <Table className="w-full min-w-[700px]">
-              <TableHeader>
-                <TableRow className="h-12 bg-muted/50 hover:bg-muted/50 border-b border-slate-200/80 dark:border-slate-800">
-                  <TableHead className="font-bold uppercase tracking-wider text-xs pl-6 text-muted-foreground">Proyecto</TableHead>
-                  <TableHead className="font-bold uppercase tracking-wider text-xs text-right pr-6 text-muted-foreground">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {projects.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={2} className="h-32 text-center text-muted-foreground text-sm">
-                      No se encontraron proyectos de documentación.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  projects.map((project) => (
-                    <TableRow key={project.id} className="group hover:bg-muted/40 transition-colors border-b border-slate-100 dark:border-slate-800/80">
-                      <TableCell className="font-medium py-4 pl-6">
-                        <div className="flex items-center gap-3.5">
-                          <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-500 group-hover:scale-110 transition-all duration-300 shadow-sm">
-                             <Files className="w-4 h-4" />
-                          </div>
-                          <span className="font-bold text-sm text-foreground group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">{project.name}</span>
-                        </div>
-                      </TableCell>
-
-                      <TableCell className="text-right py-4 pr-6">
-                        <ProjectRowActions 
-                          projectId={project.id} 
-                          projectName={project.name} 
-                          projectSlug={project.slug} 
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </TooltipProvider>
-      </div>
+      <DocProjectsList projects={projects} />
     </DashboardContainer>
   );
 }

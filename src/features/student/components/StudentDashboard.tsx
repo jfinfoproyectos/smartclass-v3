@@ -45,47 +45,29 @@ export function StudentDashboard({
         router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     };
 
-    const activeEnrollmentsCount = myEnrollments.filter((e: any) => e.status === "approved" || e.status === "ACTIVE").length;
+    const activeEnrollments = myEnrollments.filter((e: any) => e.status === "approved" || e.status === "ACTIVE");
+    const activeEnrollmentsCount = activeEnrollments.length;
+
+    const totalPendingActivities = myEnrollments.reduce((acc: number, e: any) => {
+        const pending = e.course?.activities?.filter((a: any) => !a.submissions || a.submissions.length === 0).length || 0;
+        return acc + pending;
+    }, 0);
+
+    const totalAttendanceCount = myEnrollments.reduce((acc: number, e: any) => {
+        return acc + (e.course?.attendanceEvents?.length || 0);
+    }, 0);
 
     if (isInsideCourse) {
         return (
-            <div className="p-0 h-[calc(100vh-4rem)] overflow-hidden flex flex-col w-full">
+            <div className="w-full flex-1 flex flex-col min-h-0 h-full overflow-hidden">
                 <style jsx global>{`
                     main[data-slot="sidebar-inset"] > header {
                         display: none !important;
                     }
-                    main[data-slot="sidebar-inset"] {
-                        margin: 0 !important;
-                        border-radius: 0 !important;
-                        height: 100vh !important;
-                        overflow: hidden !important;
-                        display: flex !important;
-                        flex-direction: column !important;
-                    }
-                    main[data-slot="sidebar-inset"] > div {
-                        padding: 0 !important;
-                        margin: 0 !important;
-                        height: 100vh !important;
-                        max-height: 100vh !important;
-                        flex: 1 !important;
-                        display: flex !important;
-                        flex-direction: column !important;
-                        overflow: hidden !important;
-                    }
                     main[data-slot="sidebar-inset"] > div > div {
-                        padding: 0 !important;
-                        margin: 0 !important;
-                        flex: 1 !important;
-                        display: flex !important;
-                        flex-direction: column !important;
-                        overflow: hidden !important;
-                    }
-                    footer, .footer {
-                        display: none !important;
-                    }
-                    body, html {
-                        overflow: hidden !important;
-                        height: 100vh !important;
+                        padding-top: 0 !important;
+                        padding-left: 0 !important;
+                        padding-right: 0 !important;
                     }
                 `}</style>
                 <MyEnrollments
@@ -142,7 +124,7 @@ export function StudentDashboard({
 
                 <AICanvasCard
                     title="Mi Asistencia"
-                    description="Registro acumulado de clases presenciales"
+                    description="Registros de asistencia a clases"
                     icon={CalendarClock}
                     badge="Asistencia"
                     badgeColor="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
@@ -152,14 +134,14 @@ export function StudentDashboard({
                 >
                     <div className="pt-2">
                         <div className="text-3xl font-black tracking-tight text-foreground">
-                            100%
+                            {totalAttendanceCount} {totalAttendanceCount === 1 ? "Clase" : "Clases"}
                         </div>
                     </div>
                 </AICanvasCard>
 
                 <AICanvasCard
                     title="Actividades"
-                    description="Talleres y tareas en progreso"
+                    description="Tareas y entregas por realizar"
                     icon={Activity}
                     badge="Evaluación"
                     badgeColor="bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20"
@@ -169,7 +151,7 @@ export function StudentDashboard({
                 >
                     <div className="pt-2">
                         <div className="text-3xl font-black tracking-tight text-foreground">
-                            Activas
+                            {totalPendingActivities} {totalPendingActivities === 1 ? "Pendiente" : "Pendientes"}
                         </div>
                     </div>
                 </AICanvasCard>

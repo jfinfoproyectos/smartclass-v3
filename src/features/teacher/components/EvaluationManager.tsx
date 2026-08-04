@@ -2,7 +2,8 @@
 
 import { useState, useRef } from "react";
 import { format } from "date-fns";
-import { Plus, Trash2, Edit, FileQuestion, FileText, Search, Download, Upload, MoreVertical } from "lucide-react";
+import { Plus, Trash2, Edit, FileQuestion, FileText, Search, Download, Upload, MoreVertical, LayoutGrid, List } from "lucide-react";
+import { AICanvasCard } from "@/components/ui/ai-canvas-card";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -51,6 +52,7 @@ export function EvaluationManager({ evaluations }: { evaluations: any[] }) {
     const [editingEvaluation, setEditingEvaluation] = useState<any>(null);
     const [description, setDescription] = useState("**Descripción de la evaluación**\n\n...");
     const [searchTerm, setSearchTerm] = useState("");
+    const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
     const [isImporting, setIsImporting] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -336,149 +338,264 @@ export function EvaluationManager({ evaluations }: { evaluations: any[] }) {
             </div>
 
             <div className="space-y-4">
-                <div className="flex items-center gap-4 bg-muted/10 p-4 rounded-2xl border border-border/50">
-                    <Search className="w-4 h-4 text-muted-foreground" />
-                    <input
-                        type="text"
-                        placeholder="Buscar evaluación..."
-                        className="bg-transparent border-none outline-none text-xs font-medium w-full placeholder:text-muted-foreground/40"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 bg-muted/10 p-3 rounded-2xl border border-border/50 flex-1">
+                        <Search className="w-4 h-4 text-muted-foreground ml-1" />
+                        <input
+                            type="text"
+                            placeholder="Buscar evaluación..."
+                            className="bg-transparent border-none outline-none text-xs font-medium w-full placeholder:text-muted-foreground/40"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+
+                    <div className="flex items-center gap-1.5 p-1 bg-muted rounded-xl text-xs font-semibold shrink-0">
+                        <Button
+                            type="button"
+                            variant={viewMode === "grid" ? "default" : "ghost"}
+                            size="sm"
+                            className="h-8 px-3 rounded-lg text-xs"
+                            onClick={() => setViewMode("grid")}
+                            title="Vista de Tarjetas AI Canvas"
+                        >
+                            <LayoutGrid className="h-4 w-4 mr-1.5" />
+                            <span>Tarjetas AI Canvas</span>
+                        </Button>
+                        <Button
+                            type="button"
+                            variant={viewMode === "table" ? "default" : "ghost"}
+                            size="sm"
+                            className="h-8 px-3 rounded-lg text-xs"
+                            onClick={() => setViewMode("table")}
+                            title="Vista de Tabla"
+                        >
+                            <List className="h-4 w-4 mr-1.5" />
+                            <span>Tabla</span>
+                        </Button>
+                    </div>
                 </div>
 
-                <div className="rounded-2xl border border-border/40 overflow-hidden bg-card/25 backdrop-blur-md shadow-xl shadow-black/5 overflow-x-auto">
-                    <Table className="min-w-[800px]">
-                        <TableHeader>
-                            <TableRow className="h-12 bg-muted/40 hover:bg-muted/40 border-b border-border/30">
-                                <TableHead className="font-extrabold uppercase tracking-wider text-[10px] pl-5 text-muted-foreground/80">Título</TableHead>
-                                <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-center text-muted-foreground/80">Preguntas</TableHead>
-                                <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-center text-muted-foreground/80">Intentos Realizados</TableHead>
-                                <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-center hidden md:table-cell text-muted-foreground/80">Fecha de Creación</TableHead>
-                                <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-right pr-5 text-muted-foreground/80">Acciones</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
+                {viewMode === "grid" ? (
+                    filteredEvaluations.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-16 bg-muted/5 rounded-[2rem] border border-dashed border-muted/30">
+                            <FileQuestion className="h-10 w-10 text-muted-foreground opacity-30 mb-3" />
+                            <p className="text-sm font-semibold text-muted-foreground">No se encontraron evaluaciones.</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {filteredEvaluations.map((evaluation) => (
-                                <TableRow key={evaluation.id} className="group hover:bg-muted/30 transition-colors border-b border-border/20">
-                                    <TableCell className="font-medium py-3.5 pl-5">
-                                        <div className="flex items-center gap-3.5">
-                                            <div className="p-2.5 rounded-xl bg-primary/10 text-primary group-hover:scale-110 transition-all duration-300 shadow-sm shadow-primary/5">
-                                                <FileText className="h-4 w-4" />
-                                            </div>
-                                            <span className="font-bold text-sm text-foreground/90 group-hover:text-primary transition-colors duration-300">{evaluation.title}</span>
+                                <AICanvasCard
+                                    key={evaluation.id}
+                                    title={evaluation.title}
+                                    description={(() => {
+                                        const raw = evaluation.description 
+                                             ? evaluation.description.replace(/[\*#_\n\r]/g, ' ').replace(/descripción de la evaluación/gi, '').replace(/instrucciones/gi, '').replace(/\s+/g, ' ').trim()
+                                             : "";
+                                        const cleanContent = raw.replace(/[\s\.\-_]/g, '');
+                                        return cleanContent.length > 0 
+                                             ? (raw.length > 90 ? raw.substring(0, 90) + "..." : raw)
+                                             : undefined;
+                                    })()}
+                                    icon={FileQuestion}
+                                    badge={`${evaluation._count?.questions || 0} Preguntas`}
+                                    badgeColor="bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20"
+                                    accentColor="from-purple-500/30 via-pink-500/20 to-transparent"
+                                    iconBgColor="bg-purple-500/10 dark:bg-purple-500/20"
+                                    iconTextColor="text-purple-600 dark:text-purple-400"
+                                    hideFooter={true}
+                                    className="h-full group"
+                                >
+                                    <div className="space-y-3 pt-2 text-xs text-muted-foreground border-t border-border/40 mt-3">
+                                        <div className="flex items-center justify-between">
+                                            <span className="font-semibold text-foreground">Intentos Realizados:</span>
+                                            <span className="font-mono font-bold px-2 py-0.5 rounded bg-muted text-foreground border border-border/30">
+                                                {evaluation._count?.attempts || 0}
+                                            </span>
                                         </div>
-                                    </TableCell>
-                                    <TableCell className="text-center py-3.5">
-                                        <span className="text-xs font-semibold bg-muted/65 px-2.5 py-1 rounded-lg border border-border/30 text-foreground">
-                                            {evaluation._count?.questions || 0}
-                                        </span>
-                                    </TableCell>
-                                    <TableCell className="text-center py-3.5">
-                                        <span className="text-xs font-semibold bg-muted/65 px-2.5 py-1 rounded-lg border border-border/30 text-foreground">
-                                            {evaluation._count?.attempts || 0}
-                                        </span>
-                                    </TableCell>
-                                    <TableCell className="text-center py-3.5 hidden md:table-cell">
-                                        <code className="text-[11px] bg-muted/80 text-muted-foreground px-2.5 py-1 rounded-lg font-mono border border-border/30 tracking-tight shadow-inner-sm">
-                                            {format(new Date(evaluation.createdAt), "dd/MM/yyyy HH:mm")}
-                                        </code>
-                                    </TableCell>
-                                    <TableCell className="text-right py-3.5 pr-5">
-                                        <div className="flex justify-end items-center gap-1.5">
-                                            <Button
-                                                variant="outline"
-                                                size="icon"
-                                                className="h-9 w-9 border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300"
-                                                title="Ver/Editar Preguntas"
-                                                asChild
-                                            >
-                                                <Link href={`/dashboard/teacher/evaluations/${evaluation.id}`}>
-                                                    <FileQuestion className="h-4 w-4" />
-                                                </Link>
-                                            </Button>
-
-                                            <Dialog>
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <Button
-                                                            variant="outline"
-                                                            size="icon"
-                                                            className="h-9 w-9 border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300"
-                                                            title="Acciones"
-                                                        >
-                                                            <MoreVertical className="h-4 w-4" />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end" className="w-40">
-                                                        <DropdownMenuItem onClick={() => handleOpenEdit(evaluation)} className="cursor-pointer">
-                                                            <Edit className="mr-2 h-4 w-4 text-muted-foreground" />
-                                                            <span>Editar</span>
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => handleExport(evaluation)} className="cursor-pointer">
-                                                            <Download className="mr-2 h-4 w-4 text-muted-foreground" />
-                                                            <span>Exportar</span>
-                                                        </DropdownMenuItem>
-                                                        <DialogTrigger asChild>
-                                                            <DropdownMenuItem className="text-red-600 focus:text-red-700 cursor-pointer">
-                                                                <Trash2 className="mr-2 h-4 w-4 text-red-600 focus:text-red-700" />
-                                                                <span>Eliminar</span>
-                                                            </DropdownMenuItem>
-                                                        </DialogTrigger>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-
-                                                <DialogTrigger asChild>
-                                                    <div />
-                                                </DialogTrigger>
-                                                <DialogContent>
-                                                    <form
-                                                        action={async (formData) => {
-                                                            await deleteEvaluationAction(formData);
-                                                        }}
-                                                    >
-                                                        <input type="hidden" name="evaluationId" value={evaluation.id} />
-                                                        <DialogHeader>
-                                                            <DialogTitle>Confirmar eliminación</DialogTitle>
-                                                            <DialogDescription>
-                                                                Escribe <strong>ELIMINAR</strong> para confirmar. Esto borrará la evaluación y todas sus preguntas e intentos asociados.
-                                                            </DialogDescription>
-                                                        </DialogHeader>
-                                                        <div className="grid grid-cols-4 items-center gap-4 py-4">
-                                                            <Label htmlFor={`confirm-${evaluation.id}`} className="text-right">
-                                                                Confirmación
-                                                            </Label>
-                                                            <Input
-                                                                id={`confirm-${evaluation.id}`}
-                                                                name="confirmText"
-                                                                placeholder="ELIMINAR"
-                                                                pattern="^ELIMINAR$"
-                                                                required
-                                                                className="col-span-3"
-                                                            />
-                                                        </div>
-                                                        <DialogFooter>
-                                                            <Button type="submit" variant="destructive">
-                                                                Confirmar eliminación
-                                                            </Button>
-                                                        </DialogFooter>
-                                                    </form>
-                                                </DialogContent>
-                                            </Dialog>
+                                        <div className="flex items-center justify-between">
+                                            <span>Fecha de Creación:</span>
+                                            <span className="font-medium text-foreground">
+                                                {format(new Date(evaluation.createdAt), "dd/MM/yyyy HH:mm")}
+                                            </span>
                                         </div>
-                                    </TableCell>
-                                </TableRow>
+                                    </div>
+
+                                    {/* Card Actions Footer */}
+                                    <div className="pt-4 mt-auto border-t border-border/40 flex items-center justify-between gap-2">
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button
+                                                    variant="outline"
+                                                    size="icon"
+                                                    className="h-9 w-9 rounded-xl border-border/50"
+                                                    title="Más opciones"
+                                                >
+                                                    <MoreVertical className="h-4 w-4" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="start" className="w-40">
+                                                <DropdownMenuItem onClick={() => handleOpenEdit(evaluation)} className="cursor-pointer">
+                                                    <Edit className="mr-2 h-4 w-4 text-muted-foreground" />
+                                                    <span>Editar</span>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => handleExport(evaluation)} className="cursor-pointer">
+                                                    <Download className="mr-2 h-4 w-4 text-muted-foreground" />
+                                                    <span>Exportar</span>
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+
+                                        <Button
+                                            variant="default"
+                                            size="sm"
+                                            className="flex-1 font-bold text-xs uppercase tracking-wider rounded-xl shadow-md"
+                                            asChild
+                                        >
+                                            <Link href={`/dashboard/teacher/evaluations/${evaluation.id}`}>
+                                                <FileQuestion className="h-4 w-4 mr-1.5" />
+                                                Ver / Editar Preguntas
+                                            </Link>
+                                        </Button>
+                                    </div>
+                                </AICanvasCard>
                             ))}
-                            {filteredEvaluations.length === 0 && (
-                                <TableRow>
-                                    <TableCell colSpan={5} className="h-24 text-center pl-5">
-                                        No se encontraron evaluaciones.
-                                    </TableCell>
+                        </div>
+                    )
+                ) : (
+                    <div className="rounded-2xl border border-border/40 overflow-hidden bg-card/25 backdrop-blur-md shadow-xl shadow-black/5 overflow-x-auto">
+                        <Table className="min-w-[800px]">
+                            <TableHeader>
+                                <TableRow className="h-12 bg-muted/40 hover:bg-muted/40 border-b border-border/30">
+                                    <TableHead className="font-extrabold uppercase tracking-wider text-[10px] pl-5 text-muted-foreground/80">Título</TableHead>
+                                    <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-center text-muted-foreground/80">Preguntas</TableHead>
+                                    <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-center text-muted-foreground/80">Intentos Realizados</TableHead>
+                                    <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-center hidden md:table-cell text-muted-foreground/80">Fecha de Creación</TableHead>
+                                    <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-right pr-5 text-muted-foreground/80">Acciones</TableHead>
                                 </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
-                </div>
+                            </TableHeader>
+                            <TableBody>
+                                {filteredEvaluations.map((evaluation) => (
+                                    <TableRow key={evaluation.id} className="group hover:bg-muted/30 transition-colors border-b border-border/20">
+                                        <TableCell className="font-medium py-3.5 pl-5">
+                                            <div className="flex items-center gap-3.5">
+                                                <div className="p-2.5 rounded-xl bg-primary/10 text-primary group-hover:scale-110 transition-all duration-300 shadow-sm shadow-primary/5">
+                                                    <FileText className="h-4 w-4" />
+                                                </div>
+                                                <span className="font-bold text-sm text-foreground/90 group-hover:text-primary transition-colors duration-300">{evaluation.title}</span>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="text-center py-3.5">
+                                            <span className="text-xs font-semibold bg-muted/65 px-2.5 py-1 rounded-lg border border-border/30 text-foreground">
+                                                {evaluation._count?.questions || 0}
+                                            </span>
+                                        </TableCell>
+                                        <TableCell className="text-center py-3.5">
+                                            <span className="text-xs font-semibold bg-muted/65 px-2.5 py-1 rounded-lg border border-border/30 text-foreground">
+                                                {evaluation._count?.attempts || 0}
+                                            </span>
+                                        </TableCell>
+                                        <TableCell className="text-center py-3.5 hidden md:table-cell">
+                                            <code className="text-[11px] bg-muted/80 text-muted-foreground px-2.5 py-1 rounded-lg font-mono border border-border/30 tracking-tight shadow-inner-sm">
+                                                {format(new Date(evaluation.createdAt), "dd/MM/yyyy HH:mm")}
+                                            </code>
+                                        </TableCell>
+                                        <TableCell className="text-right py-3.5 pr-5">
+                                            <div className="flex justify-end items-center gap-1.5">
+                                                <Button
+                                                    variant="outline"
+                                                    size="icon"
+                                                    className="h-9 w-9 border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300"
+                                                    title="Ver/Editar Preguntas"
+                                                    asChild
+                                                >
+                                                    <Link href={`/dashboard/teacher/evaluations/${evaluation.id}`}>
+                                                        <FileQuestion className="h-4 w-4" />
+                                                    </Link>
+                                                </Button>
+
+                                                <Dialog>
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button
+                                                                variant="outline"
+                                                                size="icon"
+                                                                className="h-9 w-9 border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300"
+                                                                title="Acciones"
+                                                            >
+                                                                <MoreVertical className="h-4 w-4" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end" className="w-40">
+                                                            <DropdownMenuItem onClick={() => handleOpenEdit(evaluation)} className="cursor-pointer">
+                                                                <Edit className="mr-2 h-4 w-4 text-muted-foreground" />
+                                                                <span>Editar</span>
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={() => handleExport(evaluation)} className="cursor-pointer">
+                                                                <Download className="mr-2 h-4 w-4 text-muted-foreground" />
+                                                                <span>Exportar</span>
+                                                            </DropdownMenuItem>
+                                                            <DialogTrigger asChild>
+                                                                <DropdownMenuItem className="text-red-600 focus:text-red-700 cursor-pointer">
+                                                                    <Trash2 className="mr-2 h-4 w-4 text-red-600 focus:text-red-700" />
+                                                                    <span>Eliminar</span>
+                                                                </DropdownMenuItem>
+                                                            </DialogTrigger>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+
+                                                    <DialogTrigger asChild>
+                                                        <div />
+                                                    </DialogTrigger>
+                                                    <DialogContent>
+                                                        <form
+                                                            action={async (formData) => {
+                                                                await deleteEvaluationAction(formData);
+                                                            }}
+                                                        >
+                                                            <input type="hidden" name="evaluationId" value={evaluation.id} />
+                                                            <DialogHeader>
+                                                                <DialogTitle>Confirmar eliminación</DialogTitle>
+                                                                <DialogDescription>
+                                                                    Escribe <strong>ELIMINAR</strong> para confirmar. Esto borrará la evaluación y todas sus preguntas e intentos asociados.
+                                                                </DialogDescription>
+                                                            </DialogHeader>
+                                                            <div className="grid grid-cols-4 items-center gap-4 py-4">
+                                                                <Label htmlFor={`confirm-${evaluation.id}`} className="text-right">
+                                                                    Confirmación
+                                                                </Label>
+                                                                <Input
+                                                                    id={`confirm-${evaluation.id}`}
+                                                                    name="confirmText"
+                                                                    placeholder="ELIMINAR"
+                                                                    pattern="^ELIMINAR$"
+                                                                    required
+                                                                    className="col-span-3"
+                                                                />
+                                                            </div>
+                                                            <DialogFooter>
+                                                                <Button type="submit" variant="destructive">
+                                                                    Confirmar eliminación
+                                                                </Button>
+                                                            </DialogFooter>
+                                                        </form>
+                                                    </DialogContent>
+                                                </Dialog>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                                {filteredEvaluations.length === 0 && (
+                                    <TableRow>
+                                        <TableCell colSpan={5} className="h-24 text-center pl-5">
+                                            No se encontraron evaluaciones.
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+                )}
             </div>
         </div>
     );

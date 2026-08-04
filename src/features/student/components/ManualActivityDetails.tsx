@@ -62,7 +62,7 @@ export function ManualActivityDetails({ activity, userId, studentName }: ManualA
         <div className="space-y-6 w-full p-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-muted/20 p-4 rounded-xl border">
                 <div className="space-y-1">
-                    <h1 className="text-3xl font-extrabold tracking-tight">{activity.title}</h1>
+                    <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">{activity.title}</h1>
                     <p className="text-muted-foreground font-medium flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-primary" />
                         {activity.course.title}

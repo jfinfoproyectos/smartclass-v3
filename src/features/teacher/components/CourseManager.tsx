@@ -25,7 +25,9 @@ import {
 } from "@/components/ui/table";
 import { createCourseAction, deleteCourseAction, cloneCourseAction, generateEnrollmentCodeAction, toggleCourseRegistrationSimpleAction } from "@/features/teacher/actions/courseActions";
 import { getCourseCompleteDataAction } from "@/features/teacher/actions/reportActions";
-import { Trash2, Settings, Copy, Users, BookOpen, Pencil, RefreshCw, Check, Maximize2, FolderArchive, Loader2, MoreVertical, ArrowRight } from "lucide-react";
+import { Trash2, Settings, Copy, Users, BookOpen, Pencil, RefreshCw, Check, Maximize2, FolderArchive, Loader2, MoreVertical, ArrowRight, LayoutGrid, List } from "lucide-react";
+import { AICanvasCard } from "@/components/ui/ai-canvas-card";
+import { useRouter } from "next/navigation";
 import {
     Tooltip,
     TooltipContent,
@@ -62,6 +64,7 @@ import { Badge } from "@/components/ui/badge";
 import { EnrollmentRequests } from "./EnrollmentRequests";
 import JSZip from "jszip";
 import { exportCourseAction } from "@/features/teacher/actions/courseZipActions";
+import { cn } from "@/lib/utils";
 
 // Helper function to format date consistently on server and client
 function formatDateTime(date: Date | string): string {
@@ -219,6 +222,8 @@ export function CourseManager({
 }) {
     const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
     const [isExporting, setIsExporting] = useState(false);
+    const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
+    const router = useRouter();
 
     const now = currentDate ? new Date(currentDate) : new Date();
     const activeCourses = initialCourses.filter(course => !course.endDate || new Date(course.endDate) >= now);
@@ -434,7 +439,7 @@ export function CourseManager({
                                                         </DialogDescription>
                                                     </DialogHeader>
                                                     <div className="flex-1 flex flex-col items-center justify-center my-10 w-full">
-                                                        <div className="w-full text-center font-mono text-[9rem] sm:text-[12rem] md:text-[15rem] leading-none font-black tracking-widest select-all text-primary bg-primary/5 rounded-[2.5rem] py-12 px-6 border-2 border-primary/20 shadow-2xl relative overflow-hidden group">
+                                                        <div className="w-full text-center font-mono text-4xl sm:text-6xl md:text-7xl lg:text-8xl leading-tight font-black tracking-wider select-all text-primary bg-primary/5 rounded-3xl py-8 px-4 sm:px-8 border-2 border-primary/20 shadow-2xl relative overflow-hidden group">
                                                             <div className="absolute inset-0 bg-gradient-to-tr from-primary/5 to-transparent opacity-50 pointer-events-none" />
                                                             {course.enrollmentCode}
                                                         </div>
@@ -566,10 +571,299 @@ export function CourseManager({
         );
     };
 
+    const CourseCardsGrid = ({ courses }: { courses: Course[] }) => {
+        if (courses.length === 0) {
+            return (
+                <motion.div 
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="flex flex-col items-center justify-center py-24 bg-muted/5 rounded-[2.5rem] border-2 border-dashed border-muted/30 backdrop-blur-sm"
+                >
+                    <div className="bg-primary/5 p-6 rounded-full mb-6 relative">
+                        <div className="absolute inset-0 bg-primary/10 rounded-full animate-ping opacity-20" />
+                        <BookOpen className="h-12 w-12 text-primary/40 relative z-10" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-foreground/80 mb-2">No hay cursos disponibles</h3>
+                    <p className="text-muted-foreground text-center max-w-md px-6">
+                        Parece que todavía no hay cursos en esta sección.
+                    </p>
+                </motion.div>
+            );
+        }
+
+        return (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {courses.map((course) => {
+                    const isSelected = selectedCourses.includes(course.id);
+                    return (
+                        <div key={course.id} className="relative group/card">
+                            <AICanvasCard
+                                title={course.title}
+                                description={course.description || "Asignatura académica activa en la plataforma."}
+                                icon={BookOpen}
+                                badge={course.registrationOpen ? "Inscripción Abierta" : "Inscripción Cerrada"}
+                                badgeColor={course.registrationOpen ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" : "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20"}
+                                accentColor="from-emerald-500/30 via-teal-500/20 to-transparent"
+                                iconBgColor="bg-emerald-500/10 dark:bg-emerald-500/20"
+                                iconTextColor="text-emerald-600 dark:text-emerald-400"
+                                hideFooter={true}
+                                className={cn("h-full transition-all border", isSelected && "ring-2 ring-primary border-primary/50")}
+                            >
+                                {/* Top Controls Bar: Multi-select Checkbox & Dropdown Menu */}
+                                <div className="flex items-center justify-between border-b border-border/40 pb-3 mb-2">
+                                    <div className="flex items-center gap-2">
+                                        <Checkbox
+                                            id={`card-select-${course.id}`}
+                                            checked={isSelected}
+                                            onCheckedChange={() => toggleCourseSelection(course.id)}
+                                            className="h-4 w-4 rounded border-muted-foreground/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                                        />
+                                        <span className="text-xs font-semibold text-muted-foreground">
+                                            {course._count.enrollments} Estudiante(s)
+                                        </span>
+                                    </div>
+
+                                    {/* Action Dropdown Menu */}
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7 text-muted-foreground hover:text-foreground rounded-lg"
+                                            >
+                                                <MoreVertical className="h-4 w-4" />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="w-44">
+                                            <DropdownMenuItem onClick={() => onEdit?.(course)} className="cursor-pointer">
+                                                <Pencil className="mr-2 h-4 w-4 text-muted-foreground" />
+                                                <span>Editar</span>
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => onClone?.(course)} className="cursor-pointer">
+                                                <Copy className="mr-2 h-4 w-4 text-muted-foreground" />
+                                                <span>Clonar</span>
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem asChild className="cursor-pointer">
+                                                <Link href={`/dashboard/teacher/courses/${course.id}?tab=students`}>
+                                                    <Users className="mr-2 h-4 w-4 text-muted-foreground" />
+                                                    <span>Alumnos</span>
+                                                </Link>
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem 
+                                                onClick={() => handleExportCourseZip(course.id, course.title)} 
+                                                disabled={exportingCourseId === course.id}
+                                                className="cursor-pointer"
+                                            >
+                                                {exportingCourseId === course.id ? (
+                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin text-muted-foreground" />
+                                                ) : (
+                                                    <FolderArchive className="mr-2 h-4 w-4 text-muted-foreground" />
+                                                )}
+                                                <span>Exportar (ZIP)</span>
+                                            </DropdownMenuItem>
+                                            <DeleteCourseDialog 
+                                                courseId={course.id} 
+                                                courseTitle={course.title} 
+                                                trigger={
+                                                    <DropdownMenuItem 
+                                                        onSelect={(e) => e.preventDefault()} 
+                                                        className="text-red-600 focus:text-red-700 cursor-pointer"
+                                                    >
+                                                        <Trash2 className="mr-2 h-4 w-4 text-red-600 focus:text-red-700" />
+                                                        <span>Eliminar</span>
+                                                    </DropdownMenuItem>
+                                                }
+                                            />
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </div>
+
+                                {/* Body Section: Registration Switch & Enrollment Code Actions */}
+                                <div className="space-y-3 pt-1 text-xs text-muted-foreground">
+                                    {/* Registration Toggle Switch */}
+                                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-muted/40 border border-border/30">
+                                        <span className="font-semibold text-foreground">
+                                            Inscripción:
+                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            <Switch
+                                                checked={course.registrationOpen}
+                                                onCheckedChange={async () => {
+                                                    try {
+                                                        await toggleCourseRegistrationSimpleAction(course.id);
+                                                        toast.success(course.registrationOpen ? "Inscripción cerrada" : "Inscripción abierta");
+                                                    } catch (e) {
+                                                        toast.error("Error al cambiar inscripción");
+                                                    }
+                                                }}
+                                            />
+                                            <span className="text-[10px] font-bold select-none min-w-[45px] text-left">
+                                                {course.registrationOpen ? "Abierta" : "Cerrada"}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Enrollment Code Actions */}
+                                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-muted/40 border border-border/30">
+                                        <span className="font-semibold text-foreground">Código:</span>
+                                        {course.enrollmentCode ? (
+                                            <div className="flex items-center gap-1">
+                                                <code className="bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded font-mono text-xs font-bold tracking-wider">
+                                                    {course.enrollmentCode}
+                                                </code>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                                    onClick={() => {
+                                                        navigator.clipboard.writeText(course.enrollmentCode || "");
+                                                        toast.success("Código copiado");
+                                                    }}
+                                                    title="Copiar código"
+                                                >
+                                                    <Copy className="h-3 w-3" />
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                                    onClick={async () => {
+                                                        try {
+                                                            const res = await generateEnrollmentCodeAction(course.id);
+                                                            toast.success(`Código regenerado: ${res.code}`);
+                                                        } catch (e) {
+                                                            toast.error("Error al generar código");
+                                                        }
+                                                    }}
+                                                    title="Regenerar código"
+                                                >
+                                                    <RefreshCw className="h-3 w-3" />
+                                                </Button>
+                                                <Dialog>
+                                                    <DialogTrigger asChild>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                                            title="Proyectar código"
+                                                        >
+                                                            <Maximize2 className="h-3 w-3" />
+                                                        </Button>
+                                                    </DialogTrigger>
+                                                    <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col items-center justify-center p-12">
+                                                        <DialogHeader className="w-full text-center">
+                                                            <DialogTitle className="text-3xl font-black text-center mb-1">Código de Inscripción</DialogTitle>
+                                                            <DialogDescription className="text-lg text-center text-muted-foreground font-semibold">
+                                                                {course.title}
+                                                            </DialogDescription>
+                                                        </DialogHeader>
+                                                        <div className="flex-1 flex flex-col items-center justify-center my-6 sm:my-10 w-full">
+                                                            <div className="w-full text-center font-mono text-6xl sm:text-8xl md:text-9xl leading-tight font-black tracking-wider select-all text-primary bg-primary/5 rounded-3xl py-8 px-4 sm:px-8 border-2 border-primary/20 shadow-2xl relative overflow-hidden group">
+                                                                <div className="absolute inset-0 bg-gradient-to-tr from-primary/5 to-transparent opacity-50 pointer-events-none" />
+                                                                {course.enrollmentCode}
+                                                            </div>
+                                                            <p className="text-base sm:text-xl md:text-2xl text-center text-muted-foreground font-bold tracking-tight mt-6 sm:mt-8">
+                                                                Ingresa a la aplicación, haz clic en <span className="text-primary font-black">"Inscribirse a un curso"</span> e ingresa este código.
+                                                            </p>
+                                                        </div>
+                                                    </DialogContent>
+                                                </Dialog>
+                                            </div>
+                                        ) : (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-7 text-[10px] uppercase font-bold tracking-wider px-2"
+                                                onClick={async () => {
+                                                    try {
+                                                        const res = await generateEnrollmentCodeAction(course.id);
+                                                        toast.success(`Código generado: ${res.code}`);
+                                                    } catch (e) {
+                                                        toast.error("Error al generar código");
+                                                    }
+                                                }}
+                                            >
+                                                Generar
+                                            </Button>
+                                        )}
+                                    </div>
+
+                                    {/* Dates */}
+                                    {(course.startDate || course.endDate) && (
+                                        <div className="space-y-1.5 px-1 pt-1">
+                                            {course.startDate && (
+                                                <div className="flex items-center justify-between">
+                                                    <span>Inicio:</span>
+                                                    <span className="font-medium text-foreground">
+                                                        {formatCalendarDate(course.startDate)}
+                                                    </span>
+                                                </div>
+                                            )}
+                                            {course.endDate && (
+                                                <div className="flex items-center justify-between">
+                                                    <span>Finalización:</span>
+                                                    <span className="font-medium text-foreground">
+                                                        {formatCalendarDate(course.endDate)}
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Footer Action Button */}
+                                <div className="pt-4 mt-auto border-t border-border/40 flex items-center justify-between">
+                                    <Button
+                                        variant="default"
+                                        size="sm"
+                                        className="w-full font-bold text-xs uppercase tracking-wider shadow-md rounded-xl"
+                                        asChild
+                                    >
+                                        <Link href={`/dashboard/teacher/courses/${course.id}`}>
+                                            <ArrowRight className="h-4 w-4 mr-2" />
+                                            Ingresar al Aula
+                                        </Link>
+                                    </Button>
+                                </div>
+                            </AICanvasCard>
+                        </div>
+                    );
+                })}
+            </div>
+        );
+    };
+
     const currentCourses = filter === "active" ? activeCourses : archivedCourses;
 
     return (
         <div className="space-y-4">
+            <div className="flex items-center justify-between gap-4 px-1">
+                <div className="flex items-center gap-1.5 p-1 bg-muted rounded-xl text-xs font-semibold">
+                    <Button
+                        type="button"
+                        variant={viewMode === "grid" ? "default" : "ghost"}
+                        size="sm"
+                        className="h-8 px-3 rounded-lg text-xs"
+                        onClick={() => setViewMode("grid")}
+                        title="Vista de Tarjetas AI Canvas"
+                    >
+                        <LayoutGrid className="h-4 w-4 mr-1.5" />
+                        <span>Tarjetas AI Canvas</span>
+                    </Button>
+                    <Button
+                        type="button"
+                        variant={viewMode === "table" ? "default" : "ghost"}
+                        size="sm"
+                        className="h-8 px-3 rounded-lg text-xs"
+                        onClick={() => setViewMode("table")}
+                        title="Vista de Tabla"
+                    >
+                        <List className="h-4 w-4 mr-1.5" />
+                        <span>Tabla</span>
+                    </Button>
+                </div>
+            </div>
+
             {selectedCourses.length > 0 && currentCourses.length > 0 && (
                 <div className="flex items-center justify-between gap-4 px-4 py-2.5 bg-muted/20 border border-border/50 rounded-xl backdrop-blur-sm">
                     <div className="flex items-center gap-3">
@@ -598,7 +892,11 @@ export function CourseManager({
             )}
 
             <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <CourseTable courses={currentCourses} />
+                {viewMode === "grid" ? (
+                    <CourseCardsGrid courses={currentCourses} />
+                ) : (
+                    <CourseTable courses={currentCourses} />
+                )}
             </div>
         </div>
     );

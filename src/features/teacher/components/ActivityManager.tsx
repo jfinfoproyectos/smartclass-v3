@@ -33,7 +33,8 @@ import {
 import { createActivityAction, updateActivityAction, deleteActivityAction } from "@/features/teacher/actions/activityActions";
 import { scanRepositoryAction } from "@/features/github/actions/githubActions";
 import { getMissingSubmissionsAction } from "@/features/teacher/actions/studentActions";;
-import { Plus, Calendar, FileText, MessageSquare, Pencil, Trash2, Eye, X, ChevronUp, ChevronDown, AlertCircle, Sparkles, Upload, Download, Loader2, Search, UserX, GripVertical, MoreVertical } from "lucide-react";
+import { Plus, Calendar, FileText, MessageSquare, Pencil, Trash2, Eye, X, ChevronUp, ChevronDown, AlertCircle, Sparkles, Upload, Download, Loader2, Search, UserX, GripVertical, MoreVertical, LayoutGrid, List, ClipboardCheck } from "lucide-react";
+import { AICanvasCard } from "@/components/ui/ai-canvas-card";
 import { toast } from "sonner";
 import {
     DropdownMenu,
@@ -374,6 +375,7 @@ export function ActivityManager({ courseId, activities }: { courseId: string; ac
     }, []);
 
     const [isOpen, setIsOpen] = useState(false);
+    const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
     const [selectedType, setSelectedType] = useState<string>("GITHUB");
     const [description, setDescription] = useState("**Instrucciones de la actividad**\n\n...");
     const [statement, setStatement] = useState(TEMPLATE_GITHUB);
@@ -477,12 +479,44 @@ export function ActivityManager({ courseId, activities }: { courseId: string; ac
 
     return (
         <div className="space-y-4">
-            <div className="flex justify-between items-center">
-                <h3 className="text-xl font-semibold">Actividades del Curso</h3>
-                <Sheet open={isOpen} onOpenChange={setIsOpen}>
-                    <SheetTrigger asChild>
-                        <Button><Plus className="mr-2 h-4 w-4" /> Nueva Actividad</Button>
-                    </SheetTrigger>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2 border-b border-border/40">
+                <div className="flex items-center gap-3">
+                    <h3 className="text-xl font-semibold">Actividades del Curso</h3>
+                    <Badge variant="secondary" className="font-semibold text-xs px-2.5 py-0.5 rounded-full">
+                        {activities.length} {activities.length === 1 ? 'actividad' : 'actividades'}
+                    </Badge>
+                </div>
+
+                <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                    <div className="flex items-center gap-1.5 p-1 bg-muted rounded-xl text-xs font-semibold shrink-0">
+                        <Button
+                            type="button"
+                            variant={viewMode === "grid" ? "default" : "ghost"}
+                            size="sm"
+                            className="h-8 px-3 rounded-lg text-xs"
+                            onClick={() => setViewMode("grid")}
+                            title="Vista de Tarjetas AI Canvas"
+                        >
+                            <LayoutGrid className="h-4 w-4 mr-1.5" />
+                            <span>Tarjetas AI Canvas</span>
+                        </Button>
+                        <Button
+                            type="button"
+                            variant={viewMode === "table" ? "default" : "ghost"}
+                            size="sm"
+                            className="h-8 px-3 rounded-lg text-xs"
+                            onClick={() => setViewMode("table")}
+                            title="Vista de Tabla"
+                        >
+                            <List className="h-4 w-4 mr-1.5" />
+                            <span>Tabla</span>
+                        </Button>
+                    </div>
+
+                    <Sheet open={isOpen} onOpenChange={setIsOpen}>
+                        <SheetTrigger asChild>
+                            <Button><Plus className="mr-2 h-4 w-4" /> Nueva Actividad</Button>
+                        </SheetTrigger>
                     <SheetContent side="right" className="w-full max-w-none sm:max-w-none p-0">
                         <form key={formKey} ref={formRef} action={async (formData) => {
                             const form = formRef.current;
@@ -685,79 +719,70 @@ export function ActivityManager({ courseId, activities }: { courseId: string; ac
                     activityType={selectedType}
                 />
             </div>
+            </div>
 
-            <div className="rounded-xl border border-border/50 overflow-x-auto shadow-sm">
-                <Table className="min-w-[800px]">
-                    <TableHeader>
-                        <TableRow className="bg-muted/30 hover:bg-muted/30">
-                            <TableHead className="w-[50px] pl-4 font-bold uppercase tracking-wider text-xs">Orden</TableHead>
-                            <TableHead className="font-bold uppercase tracking-wider text-xs">Título</TableHead>
-                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Tipo</TableHead>
-                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden md:table-cell">Fecha Límite</TableHead>
-                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Entregas</TableHead>
-                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Acciones</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {activities.map((activity, index) => (
-                            <TableRow key={activity.id} className="group hover:bg-muted/20 transition-colors border-border/30">
-                                <TableCell>
-                                    <div className="flex flex-col gap-1">
+            {viewMode === "grid" ? (
+                activities.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 bg-muted/5 rounded-[2rem] border border-dashed border-muted/30">
+                        <ClipboardCheck className="h-10 w-10 text-muted-foreground opacity-30 mb-3" />
+                        <p className="text-sm font-semibold text-muted-foreground">No hay actividades creadas para este curso.</p>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {activities.map((activity, index) => {
+                            const rawDesc = activity.description 
+                                ? activity.description.replace(/[\*#_\n\r]/g, ' ').replace(/instrucciones de la actividad/gi, '').replace(/\s+/g, ' ').trim()
+                                : "";
+                            const cleanContent = rawDesc.replace(/[\s\.\-_]/g, '');
+                            const displayDesc = cleanContent.length > 0 
+                                ? (rawDesc.length > 90 ? rawDesc.substring(0, 90) + "..." : rawDesc)
+                                : undefined;
 
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-6 w-6"
-                                            disabled={index === 0 || isReordering}
-                                            onClick={() => handleReorder('up', index)}
-                                        >
-                                            <ChevronUp className="h-4 w-4" />
-                                        </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-6 w-6"
-                                            disabled={index === activities.length - 1 || isReordering}
-                                            onClick={() => handleReorder('down', index)}
-                                        >
-                                            <ChevronDown className="h-4 w-4" />
-                                        </Button>
-                                    </div >
-                                </TableCell >
-                                <TableCell className="font-medium">
-                                    <div className="flex items-center gap-3">
-                                        <div className="shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold">
-                                            {index + 1}
+                            return (
+                                <AICanvasCard
+                                    key={activity.id}
+                                    title={activity.title}
+                                    description={displayDesc}
+                                    icon={ClipboardCheck}
+                                    badge={`Peso: ${(activity.weight || 0).toFixed(1)}%`}
+                                    badgeColor="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20"
+                                    accentColor="from-blue-500/30 via-indigo-500/20 to-transparent"
+                                    iconBgColor="bg-blue-500/10 dark:bg-blue-500/20"
+                                    iconTextColor="text-blue-600 dark:text-blue-400"
+                                    hideFooter={true}
+                                    className="h-full group"
+                                >
+                                    <div className="space-y-3 pt-2 text-xs text-muted-foreground border-t border-border/40 mt-3">
+                                        <div className="flex items-center justify-between">
+                                            <span className="font-semibold text-foreground">Tipo de Actividad:</span>
+                                            <Badge variant="outline" className="font-semibold text-[11px]">{activity.type}</Badge>
                                         </div>
-                                        <div className="flex items-center">
-                                            {activity.title}
+                                        <div className="flex items-center justify-between">
+                                            <span>Vencimiento:</span>
+                                            <span className="font-medium text-foreground">
+                                                {activity.type === "MANUAL" ? "Sin fecha límite" : format(new Date(activity.deadline), "PP p")}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <span>Entregas recibidas:</span>
+                                            <span className="font-mono font-bold px-2 py-0.5 rounded bg-muted text-foreground border border-border/30">
+                                                {activity.type === "MANUAL" ? "-" : `${activity.submissions.length}`}
+                                            </span>
                                         </div>
                                     </div>
-                                </TableCell>
-                                <TableCell>
-                                    <Badge variant="outline">{activity.type}</Badge>
-                                </TableCell>
-                                <TableCell>
-                                    <div className="flex items-center text-sm text-muted-foreground">
-                                        <Calendar className="mr-2 h-3 w-3" />
-                                        {format(new Date(activity.deadline), "PP p")}
-                                    </div>
-                                </TableCell>
-                                <TableCell>
-                                    {activity.type === "MANUAL" ? "-" : `${activity.submissions.length} entregas`}
-                                </TableCell>
-                                <TableCell className="text-right">
-                                    <div className="flex justify-end items-center gap-1.5 pr-2">
-                                        <Link href={`/dashboard/teacher/courses/${courseId}/activities/${activity.id}`}>
-                                            <Button variant="outline" size="icon" title="Ver Entregas" className="h-8 w-8 sm:h-9 sm:w-9">
+
+                                    <div className="pt-4 mt-auto border-t border-border/40 flex items-center justify-between gap-2">
+                                        <Link href={`/dashboard/teacher/courses/${courseId}/activities/${activity.id}`} className="flex-1">
+                                            <Button variant="default" size="sm" className="w-full gap-1.5 text-xs font-semibold">
                                                 <Eye className="h-4 w-4" />
+                                                <span>Ver Entregas</span>
                                             </Button>
                                         </Link>
 
                                         <Dialog>
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
-                                                    <Button variant="outline" size="icon" className="h-8 w-8 sm:h-9 sm:w-9 text-muted-foreground hover:text-foreground">
+                                                    <Button variant="outline" size="sm" className="h-9 w-9 p-0 text-muted-foreground hover:text-foreground">
                                                         <MoreVertical className="h-4 w-4" />
                                                     </Button>
                                                 </DropdownMenuTrigger>
@@ -819,21 +844,158 @@ export function ActivityManager({ courseId, activities }: { courseId: string; ac
                                             </DialogContent>
                                         </Dialog>
                                     </div>
-                                </TableCell>
-                            </TableRow >
-                        ))}
-                        {
-                            activities.length === 0 && (
+                                </AICanvasCard>
+                            );
+                        })}
+                    </div>
+                )
+            ) : (
+                <div className="rounded-xl border border-border/50 overflow-x-auto shadow-sm">
+                    <Table className="min-w-[800px]">
+                        <TableHeader>
+                            <TableRow className="bg-muted/30 hover:bg-muted/30">
+                                <TableHead className="w-[50px] pl-4 font-bold uppercase tracking-wider text-xs">Orden</TableHead>
+                                <TableHead className="font-bold uppercase tracking-wider text-xs">Título</TableHead>
+                                <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Tipo</TableHead>
+                                <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden md:table-cell">Fecha Límite</TableHead>
+                                <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Entregas</TableHead>
+                                <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Acciones</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {activities.map((activity, index) => (
+                                <TableRow key={activity.id} className="group hover:bg-muted/20 transition-colors border-border/30">
+                                    <TableCell>
+                                        <div className="flex flex-col gap-1">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-6 w-6"
+                                                disabled={index === 0 || isReordering}
+                                                onClick={() => handleReorder('up', index)}
+                                            >
+                                                <ChevronUp className="h-4 w-4" />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-6 w-6"
+                                                disabled={index === activities.length - 1 || isReordering}
+                                                onClick={() => handleReorder('down', index)}
+                                            >
+                                                <ChevronDown className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="font-medium">
+                                        <div className="flex items-center gap-3">
+                                            <div className="shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold">
+                                                {index + 1}
+                                            </div>
+                                            <div className="flex items-center">
+                                                {activity.title}
+                                            </div>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge variant="outline">{activity.type}</Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="flex items-center text-sm text-muted-foreground">
+                                            <Calendar className="mr-2 h-3 w-3" />
+                                            {format(new Date(activity.deadline), "PP p")}
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>
+                                        {activity.type === "MANUAL" ? "-" : `${activity.submissions.length} entregas`}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        <div className="flex justify-end items-center gap-1.5 pr-2">
+                                            <Link href={`/dashboard/teacher/courses/${courseId}/activities/${activity.id}`}>
+                                                <Button variant="outline" size="icon" title="Ver Entregas" className="h-8 w-8 sm:h-9 sm:w-9">
+                                                    <Eye className="h-4 w-4" />
+                                                </Button>
+                                            </Link>
+
+                                            <Dialog>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="outline" size="icon" className="h-8 w-8 sm:h-9 sm:w-9 text-muted-foreground hover:text-foreground">
+                                                            <MoreVertical className="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end" className="w-48">
+                                                        <EditActivityDialog 
+                                                            activity={activity} 
+                                                            courseId={courseId} 
+                                                            mode={mode} 
+                                                            trigger={
+                                                                <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="cursor-pointer">
+                                                                    <Pencil className="mr-2 h-4 w-4 text-muted-foreground" />
+                                                                    <span>Editar</span>
+                                                                </DropdownMenuItem>
+                                                            }
+                                                        />
+
+                                                        {activity.type !== "MANUAL" && (
+                                                            <MissingSubmissionsDialog 
+                                                                activityId={activity.id} 
+                                                                activityTitle={activity.title} 
+                                                                trigger={
+                                                                    <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="cursor-pointer">
+                                                                        <UserX className="mr-2 h-4 w-4 text-muted-foreground" />
+                                                                        <span>Ver Faltantes</span>
+                                                                    </DropdownMenuItem>
+                                                                }
+                                                            />
+                                                        )}
+
+                                                        <DialogTrigger asChild>
+                                                            <DropdownMenuItem className="text-red-600 focus:text-red-700 cursor-pointer">
+                                                                <Trash2 className="mr-2 h-4 w-4 text-red-600 focus:text-red-700" />
+                                                                <span>Eliminar</span>
+                                                            </DropdownMenuItem>
+                                                        </DialogTrigger>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+
+                                                <DialogContent>
+                                                    <form action={async (formData) => {
+                                                        await deleteActivityAction(formData);
+                                                    }}>
+                                                        <input type="hidden" name="courseId" value={courseId} />
+                                                        <input type="hidden" name="activityId" value={activity.id} />
+                                                        <DialogHeader>
+                                                            <DialogTitle>Confirmar eliminación</DialogTitle>
+                                                            <DialogDescription>
+                                                                Escribe <strong>ELIMINAR</strong> para confirmar.
+                                                            </DialogDescription>
+                                                        </DialogHeader>
+                                                        <div className="grid grid-cols-4 items-center gap-4 py-4">
+                                                            <Label htmlFor={`confirm-${activity.id}`} className="text-right">Confirmación</Label>
+                                                            <Input id={`confirm-${activity.id}`} name="confirmText" placeholder="ELIMINAR" pattern="^ELIMINAR$" required className="col-span-3" />
+                                                        </div>
+                                                        <DialogFooter>
+                                                            <Button type="submit" variant="destructive">Confirmar eliminación</Button>
+                                                        </DialogFooter>
+                                                    </form>
+                                                </DialogContent>
+                                            </Dialog>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                            {activities.length === 0 && (
                                 <TableRow>
                                     <TableCell colSpan={7} className="h-24 text-center">
                                         No hay actividades creadas para este curso.
                                     </TableCell>
                                 </TableRow>
-                            )
-                        }
-                    </TableBody >
-                </Table >
-            </div >
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
+            )}
         </div >
     );
 }

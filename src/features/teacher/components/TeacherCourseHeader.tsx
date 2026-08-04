@@ -49,87 +49,70 @@ export function TeacherCourseHeader({
     const showModeToggle = true;
     const showThemeSelector = true;
      return (
-        <div className="flex-none relative bg-background/95 backdrop-blur-md w-full z-30 border-b border-border/50 shadow-sm transition-all duration-300">
+        <div className="flex-none bg-background/95 dark:bg-slate-950/95 backdrop-blur-xl w-full border-b border-border/50 shadow-sm transition-all duration-300">
             <style jsx global>{`
-                /* Global layout adjustments for the course dashboard */
                 main[data-slot="sidebar-inset"] > header {
                     display: none !important;
                 }
-
                 main[data-slot="sidebar-inset"] > div > div {
-                    padding: 0 !important;
-                    overflow: hidden !important;
-                }
-
-                .nav-indicator-active {
-                    position: relative;
-                }
-                
-                .nav-indicator-active::after {
-                    content: '';
-                    position: absolute;
-                    bottom: -1px;
-                    left: 0;
-                    right: 0;
-                    height: 2px;
-                    background: hsl(var(--primary));
-                    border-radius: 2px 2px 0 0;
-                    box-shadow: 0 0 10px hsl(var(--primary) / 0.5);
+                    padding-top: 0 !important;
+                    padding-left: 0 !important;
+                    padding-right: 0 !important;
                 }
             `}</style>
 
             <TooltipProvider delayDuration={300}>
-                {/* Row 1: Primary Controls & Identity (h-12 with full-height border dividers) */}
-                <div className="flex items-center h-12 border-b border-foreground/10 bg-background/50">
-                    {/* Left: Sidebar trigger with full-height border */}
-                    <div className="flex items-center h-full px-3 border-r border-foreground/10">
-                        <SidebarTrigger className="h-8 w-8 hover:bg-muted/80 rounded-lg transition-colors" />
+                {/* Row 1: Primary Controls & Identity (h-16 to match AppIdentity sidebar header) */}
+                <div className="flex items-center h-16 border-b border-border/40 bg-background/80 dark:bg-slate-950/80 backdrop-blur-xl">
+                    {/* Left: Sidebar trigger */}
+                    <div className="flex items-center h-full px-3 border-r border-border/40">
+                        <SidebarTrigger className="h-8 w-8 hover:bg-muted/80 rounded-xl transition-colors" />
                     </div>
 
                     {/* Middle: Course details */}
                     <div className="flex-1 flex flex-col justify-center h-full px-4 min-w-0">
-                        <h2 className="text-[13px] font-black tracking-tight leading-none uppercase truncate opacity-90 transition-opacity">
+                        <h2 className="text-sm sm:text-base font-semibold tracking-tight text-foreground truncate">
                             {courseTitle}
                         </h2>
                         <div className="flex items-center gap-1.5 mt-0.5">
-                            <Users className="h-2.5 w-2.5 text-primary/60" />
-                            <span className="text-[9px] font-medium text-muted-foreground uppercase tracking-widest truncate">{userName}</span>
+                            <Users className="h-3 w-3 text-primary" />
+                            <span className="text-xs font-medium text-muted-foreground truncate">{userName}</span>
                         </div>
                     </div>
 
-                    {/* Right: Asistencia & utilities separated by full-height borders */}
-                    <div className="flex items-center h-full px-2 sm:px-4 border-l border-foreground/10">
+                    {/* Right: Asistencia & utilities */}
+                    <div className="flex items-center h-full px-2 sm:px-4 border-l border-border/40">
                         <AttendanceTaker 
                             courseId={courseId} 
                             trigger={
-                                <Button variant="ghost" size="sm" className="h-8 text-[10px] font-bold px-2 gap-1.5 hover:bg-muted transition-all">
-                                    <CalendarCheck2 className="h-3.5 w-3.5 text-primary" />
-                                    <span className="hidden sm:inline uppercase tracking-tighter">Asistencia</span>
+                                <Button variant="ghost" size="sm" className="h-8 text-xs font-semibold px-3 gap-1.5 hover:bg-muted/80 rounded-xl transition-all">
+                                    <CalendarCheck2 className="h-4 w-4 text-primary" />
+                                    <span className="hidden sm:inline">Asistencia</span>
                                 </Button>
                             }
                         />
                     </div>
 
-                    <div className="flex items-center h-full px-3 gap-1.5 border-l border-foreground/10">
+                    <div className="flex items-center h-full px-3 gap-1.5 border-l border-border/40">
                         {showThemeSelector && <ThemeSelector themes={themes} />}
                         {showModeToggle && <ModeToggle />}
                         <CreditsModal />
                     </div>
                 </div>
 
-                {/* Row 2: Content Navigation (scrollable on mobile, grid on desktop) */}
-                <div className="border-b border-foreground/10 bg-muted/5">
-                    <div className="overflow-x-auto scrollbar-none w-full flex items-center justify-start lg:justify-center lg:h-11 px-4 py-1.5 lg:py-0">
-                        <TabsList className="flex w-max lg:w-full lg:grid lg:grid-cols-9 h-9 p-0.5 bg-muted/60 dark:bg-muted/30 rounded-lg gap-0.5 border border-border/30 lg:border-none shadow-none min-w-full">
-                            <NavTab value="activities" icon={<ClipboardCheck className="h-3.5 w-3.5" />} label="Actividades" />
-                            <NavTab value="students" icon={<Users className="h-3.5 w-3.5" />} label="Estudiantes" />
-                            <NavTab value="evaluations" icon={<FileCheck className="h-3.5 w-3.5" />} label="Evaluaciones" />
-                            <NavTab value="grades" icon={<LayoutDashboard className="h-3.5 w-3.5" />} label="Calificaciones" />
-                            <NavTab value="stats" icon={<BarChart3 className="h-3.5 w-3.5" />} label="Estadísticas" />
-                            <NavTab value="roulette" icon={<Dices className="h-3.5 w-3.5" />} label="Ruleta" />
-                            <NavTab value="groups" icon={<Settings2 className="h-3.5 w-3.5" />} label="Grupos" />
-                            <NavTab value="share" icon={<Share2 className="h-3.5 w-3.5" />} label="Compartir" />
-                            <NavTab value="docs" icon={<BookOpenText className="h-3.5 w-3.5" />} label="Documentación" />
+                {/* Row 2: Content Navigation */}
+                <div className="border-b border-border/40 bg-muted/30">
+                    <div className="overflow-x-auto scrollbar-none w-full flex items-center justify-start lg:justify-center px-3 py-1.5">
+                        <TabsList className="flex w-max lg:w-full lg:grid lg:grid-cols-9 h-10 p-1 bg-muted/60 dark:bg-muted/30 rounded-xl gap-1 border border-border/40 shadow-none min-w-full">
+                            <NavTab value="activities" icon={<ClipboardCheck className="h-4 w-4" />} label="Actividades" />
+                            <NavTab value="students" icon={<Users className="h-4 w-4" />} label="Estudiantes" />
+                            <NavTab value="evaluations" icon={<FileCheck className="h-4 w-4" />} label="Evaluaciones" />
+                            <NavTab value="grades" icon={<LayoutDashboard className="h-4 w-4" />} label="Calificaciones" />
+                            <NavTab value="stats" icon={<BarChart3 className="h-4 w-4" />} label="Estadísticas" />
+                            <NavTab value="roulette" icon={<Dices className="h-4 w-4" />} label="Ruleta" />
+                            <NavTab value="groups" icon={<Settings2 className="h-4 w-4" />} label="Grupos" />
+                            <NavTab value="share" icon={<Share2 className="h-4 w-4" />} label="Compartir" />
+                            <NavTab value="docs" icon={<BookOpenText className="h-4 w-4" />} label="Documentación" />
                         </TabsList>
                     </div>
                 </div>
@@ -167,7 +150,7 @@ function NavTab({ value, icon, label }: { value: string, icon: React.ReactNode, 
             value={value} 
             onClick={handleClick}
             disabled={isPending}
-            className="group relative flex items-center justify-center gap-1.5 h-8 px-2.5 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm disabled:opacity-40 whitespace-nowrap shrink-0"
+            className="group relative flex items-center justify-center gap-2 h-8 px-3 text-xs font-semibold rounded-lg transition-all hover:bg-background/40 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm disabled:opacity-40 whitespace-nowrap shrink-0"
         >
             <span className="group-data-[state=active]:text-primary transition-colors">
                 {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : icon}

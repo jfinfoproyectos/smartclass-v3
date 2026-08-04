@@ -1,6 +1,7 @@
 "use client";
 
-import { MessageSquare, Users, ClipboardCheck, Clock, BookOpen, GraduationCap, FileText, AlertCircle, ArrowLeft, Calendar, ArrowRight } from "lucide-react";
+import { useState } from "react";
+import { MessageSquare, Users, ClipboardCheck, Clock, BookOpen, GraduationCap, FileText, AlertCircle, ArrowLeft, Calendar, ArrowRight, LayoutGrid, List } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -21,6 +22,7 @@ import { CreditsModal } from "@/components/CreditsModal";
 import { ThemeSelector } from "@/components/theme/ThemeSelector";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { UserDocsList } from "@/features/documentation/components/student/UserDocsList";
+import { AICanvasCard } from "@/components/ui/ai-canvas-card";
 
 export function MyEnrollments({
     enrollments,
@@ -37,6 +39,10 @@ export function MyEnrollments({
     onTabChange?: (tab: string) => void,
     themes?: any[]
 }) {
+    const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
+    const [activitiesViewMode, setActivitiesViewMode] = useState<"grid" | "table">("grid");
+    const [evaluationsViewMode, setEvaluationsViewMode] = useState<"grid" | "table">("grid");
+
     const filteredEnrollments = selectedCourse
         ? enrollments.filter(e => e.course.id === selectedCourse)
         : enrollments;
@@ -51,83 +57,162 @@ export function MyEnrollments({
 
     if (!selectedCourse) {
         return (
-            <div className="rounded-2xl border border-border/40 overflow-hidden bg-card/25 backdrop-blur-md shadow-xl shadow-black/5 overflow-x-auto">
-                <Table className="w-full min-w-[800px]">
-                    <TableHeader>
-                        <TableRow className="h-12 bg-muted/40 hover:bg-muted/40 border-b border-border/30">
-                            <TableHead className="font-extrabold uppercase tracking-wider text-[10px] pl-5 text-muted-foreground/80">Curso</TableHead>
-                            <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-muted-foreground/80 hidden sm:table-cell">Docente</TableHead>
-                            <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-center hidden md:table-cell text-muted-foreground/80">Inicio</TableHead>
-                            <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-center hidden md:table-cell text-muted-foreground/80">Finaliza</TableHead>
-                            <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-center hidden lg:table-cell text-muted-foreground/80">Estado</TableHead>
-                            <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-right pr-5 text-muted-foreground/80">Acción</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {enrollments.map((enrollment) => (
-                            <TableRow
-                                key={enrollment.id}
-                                className="group hover:bg-muted/30 transition-colors border-b border-border/20"
-                            >
-                                <TableCell className="font-medium py-3.5 pl-5">
-                                    <div className="flex items-center gap-3.5">
-                                        <div className="p-2.5 rounded-xl bg-primary/10 text-primary group-hover:scale-110 transition-all duration-300 shadow-sm shadow-primary/5 shrink-0">
-                                            <BookOpen className="w-4 h-4" />
-                                        </div>
-                                        <div className="flex flex-col gap-0.5">
-                                            <span className="font-bold text-sm text-foreground/90 group-hover:text-primary transition-colors duration-300 leading-tight">
-                                                {enrollment.course.title}
+            <div className="space-y-4">
+                <div className="flex items-center justify-between gap-4 px-1">
+                    <div className="flex items-center gap-1.5 p-1 bg-muted rounded-xl text-xs font-semibold">
+                        <Button
+                            type="button"
+                            variant={viewMode === "grid" ? "default" : "ghost"}
+                            size="sm"
+                            className="h-8 px-3 rounded-lg text-xs"
+                            onClick={() => setViewMode("grid")}
+                            title="Vista de Tarjetas AI Canvas"
+                        >
+                            <LayoutGrid className="h-4 w-4 mr-1.5" />
+                            <span>Tarjetas AI Canvas</span>
+                        </Button>
+                        <Button
+                            type="button"
+                            variant={viewMode === "table" ? "default" : "ghost"}
+                            size="sm"
+                            className="h-8 px-3 rounded-lg text-xs"
+                            onClick={() => setViewMode("table")}
+                            title="Vista de Tabla"
+                        >
+                            <List className="h-4 w-4 mr-1.5" />
+                            <span>Tabla</span>
+                        </Button>
+                    </div>
+                </div>
+
+                {viewMode === "grid" ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {enrollments.map((enrollment) => {
+                            const teacherName = formatName(enrollment.course.teacher.name, enrollment.course.teacher.profile);
+                            return (
+                                <AICanvasCard
+                                    key={enrollment.id}
+                                    title={enrollment.course.title}
+                                    description={enrollment.course.description || "Asignatura académica en la que estás matriculado."}
+                                    icon={BookOpen}
+                                    badge="Matriculado"
+                                    badgeColor="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                                    accentColor="from-emerald-500/30 via-teal-500/20 to-transparent"
+                                    iconBgColor="bg-emerald-500/10 dark:bg-emerald-500/20"
+                                    iconTextColor="text-emerald-600 dark:text-emerald-400"
+                                    actionLabel={`Docente: ${teacherName}`}
+                                    actionText="Entrar al Aula →"
+                                    onClick={() => onSelectCourse(enrollment.course.id)}
+                                    className="h-full cursor-pointer group"
+                                >
+                                    <div className="space-y-2 pt-2 text-xs text-muted-foreground border-t border-border/40 mt-3">
+                                        <div className="flex items-center justify-between">
+                                            <span className="font-semibold text-foreground">Docente:</span>
+                                            <span className="font-medium text-foreground">
+                                                {teacherName}
                                             </span>
-                                            <Badge variant="outline" className="text-[9px] w-fit px-2 h-4 uppercase font-black tracking-widest bg-primary/5 text-primary border-primary/20 rounded-full mt-0.5">
-                                                Matriculado
-                                            </Badge>
                                         </div>
+                                        {enrollment.course.startDate && (
+                                            <div className="flex items-center justify-between">
+                                                <span>Inicio del Curso:</span>
+                                                <span className="font-medium text-foreground">
+                                                    {formatCalendarDate(enrollment.course.startDate, "dd/MM/yyyy")}
+                                                </span>
+                                            </div>
+                                        )}
+                                        {enrollment.course.endDate && (
+                                            <div className="flex items-center justify-between">
+                                                <span>Finalización:</span>
+                                                <span className="font-medium text-foreground">
+                                                    {formatCalendarDate(enrollment.course.endDate, "dd/MM/yyyy")}
+                                                </span>
+                                            </div>
+                                        )}
                                     </div>
-                                </TableCell>
-
-                                <TableCell className="py-3.5 hidden sm:table-cell">
-                                    <div className="flex items-center gap-2">
-                                        <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-[10px] shadow-inner shrink-0">
-                                            {formatName(enrollment.course.teacher.name, enrollment.course.teacher.profile).charAt(0)}
-                                        </div>
-                                        <span className="text-xs font-semibold text-muted-foreground truncate max-w-[140px]">
-                                            {formatName(enrollment.course.teacher.name, enrollment.course.teacher.profile)}
-                                        </span>
-                                    </div>
-                                </TableCell>
-
-                                <TableCell className="text-center py-3.5 hidden md:table-cell">
-                                    <code className="text-[11px] bg-muted/80 text-muted-foreground px-2.5 py-1 rounded-lg font-mono border border-border/30 tracking-tight shadow-inner-sm">
-                                        {enrollment.course.startDate ? formatCalendarDate(enrollment.course.startDate, "dd/MM/yy") : "---"}
-                                    </code>
-                                </TableCell>
-
-                                <TableCell className="text-center py-3.5 hidden md:table-cell">
-                                    <code className="text-[11px] bg-muted/80 text-muted-foreground px-2.5 py-1 rounded-lg font-mono border border-border/30 tracking-tight shadow-inner-sm">
-                                        {enrollment.course.endDate ? formatCalendarDate(enrollment.course.endDate, "dd/MM/yy") : "Indeterminado"}
-                                    </code>
-                                </TableCell>
-
-                                <TableCell className="text-center py-3.5 hidden lg:table-cell">
-                                    <Badge className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 border font-bold gap-1 rounded-lg">
-                                        <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                        Activo
-                                    </Badge>
-                                </TableCell>
-
-                                <TableCell className="text-right py-3.5 pr-5">
-                                    <Button
-                                        size="sm"
-                                        className="h-8 px-4 font-black text-[10px] uppercase tracking-wider shadow-sm hover:shadow-primary/20 transition-all rounded-xl gap-1.5"
-                                        onClick={() => onSelectCourse(enrollment.course.id)}
+                                </AICanvasCard>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <div className="rounded-2xl border border-border/40 overflow-hidden bg-card/25 backdrop-blur-md shadow-xl shadow-black/5 overflow-x-auto">
+                        <Table className="w-full min-w-[800px]">
+                            <TableHeader>
+                                <TableRow className="h-12 bg-muted/40 hover:bg-muted/40 border-b border-border/30">
+                                    <TableHead className="font-extrabold uppercase tracking-wider text-[10px] pl-5 text-muted-foreground/80">Curso</TableHead>
+                                    <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-muted-foreground/80 hidden sm:table-cell">Docente</TableHead>
+                                    <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-center hidden md:table-cell text-muted-foreground/80">Inicio</TableHead>
+                                    <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-center hidden md:table-cell text-muted-foreground/80">Finaliza</TableHead>
+                                    <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-center hidden lg:table-cell text-muted-foreground/80">Estado</TableHead>
+                                    <TableHead className="font-extrabold uppercase tracking-wider text-[10px] text-right pr-5 text-muted-foreground/80">Acción</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {enrollments.map((enrollment) => (
+                                    <TableRow
+                                        key={enrollment.id}
+                                        className="group hover:bg-muted/30 transition-colors border-b border-border/20"
                                     >
-                                        Ingresar <ArrowRight className="h-3.5 w-3.5" />
-                                    </Button>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
+                                        <TableCell className="font-medium py-3.5 pl-5">
+                                            <div className="flex items-center gap-3.5">
+                                                <div className="p-2.5 rounded-xl bg-primary/10 text-primary group-hover:scale-110 transition-all duration-300 shadow-sm shadow-primary/5 shrink-0">
+                                                    <BookOpen className="w-4 h-4" />
+                                                </div>
+                                                <div className="flex flex-col gap-0.5">
+                                                    <span className="font-bold text-sm text-foreground/90 group-hover:text-primary transition-colors duration-300 leading-tight">
+                                                        {enrollment.course.title}
+                                                    </span>
+                                                    <Badge variant="outline" className="text-[9px] w-fit px-2 h-4 uppercase font-black tracking-widest bg-primary/5 text-primary border-primary/20 rounded-full mt-0.5">
+                                                        Matriculado
+                                                    </Badge>
+                                                </div>
+                                            </div>
+                                        </TableCell>
+
+                                        <TableCell className="py-3.5 hidden sm:table-cell">
+                                            <div className="flex items-center gap-2">
+                                                <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-[10px] shadow-inner shrink-0">
+                                                    {formatName(enrollment.course.teacher.name, enrollment.course.teacher.profile).charAt(0)}
+                                                </div>
+                                                <span className="text-xs font-semibold text-muted-foreground truncate max-w-[140px]">
+                                                    {formatName(enrollment.course.teacher.name, enrollment.course.teacher.profile)}
+                                                </span>
+                                            </div>
+                                        </TableCell>
+
+                                        <TableCell className="text-center py-3.5 hidden md:table-cell">
+                                            <code className="text-[11px] bg-muted/80 text-muted-foreground px-2.5 py-1 rounded-lg font-mono border border-border/30 tracking-tight shadow-inner-sm">
+                                                {enrollment.course.startDate ? formatCalendarDate(enrollment.course.startDate, "dd/MM/yy") : "---"}
+                                            </code>
+                                        </TableCell>
+
+                                        <TableCell className="text-center py-3.5 hidden md:table-cell">
+                                            <code className="text-[11px] bg-muted/80 text-muted-foreground px-2.5 py-1 rounded-lg font-mono border border-border/30 tracking-tight shadow-inner-sm">
+                                                {enrollment.course.endDate ? formatCalendarDate(enrollment.course.endDate, "dd/MM/yy") : "Indeterminado"}
+                                            </code>
+                                        </TableCell>
+
+                                        <TableCell className="text-center py-3.5 hidden lg:table-cell">
+                                            <Badge className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 border font-bold gap-1 rounded-lg">
+                                                <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                                Activo
+                                            </Badge>
+                                        </TableCell>
+
+                                        <TableCell className="text-right py-3.5 pr-5">
+                                            <Button
+                                                size="sm"
+                                                className="h-8 px-4 font-black text-[10px] uppercase tracking-wider shadow-sm hover:shadow-primary/20 transition-all rounded-xl gap-1.5"
+                                                onClick={() => onSelectCourse(enrollment.course.id)}
+                                            >
+                                                Ingresar <ArrowRight className="h-3.5 w-3.5" />
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                )}
             </div>
         );
     }
@@ -140,103 +225,85 @@ export function MyEnrollments({
                 const progressPercentage = totalActivities > 0 ? Math.round((submittedActivities / totalActivities) * 100) : 0;
 
                 return (
-                    <div key={enrollment.id} className="flex flex-col h-screen overflow-hidden">
-                        <Tabs key={activeTab} defaultValue={activeTab} onValueChange={onTabChange} className="w-full h-full flex flex-col">
-                            {/* Unified Master Header: Matching Teacher Style */}
-                            <div className="flex-none bg-background/95 backdrop-blur-md w-full z-30 border-b border-border/50 shadow-sm transition-all duration-300">
-                                <style jsx global>{`
-                                    .nav-indicator-active-student {
-                                        position: relative;
-                                    }
-                                    
-                                    .nav-indicator-active-student::after {
-                                        content: '';
-                                        position: absolute;
-                                        bottom: -1px;
-                                        left: 0;
-                                        right: 0;
-                                        height: 2px;
-                                        background: hsl(var(--primary));
-                                        border-radius: 2px 2px 0 0;
-                                        box-shadow: 0 0 10px hsl(var(--primary) / 0.5);
-                                    }
-                                `}</style>
-
+                    <div key={enrollment.id} className="flex flex-col w-full h-full min-h-0 overflow-hidden">
+                        <Tabs key={activeTab} defaultValue={activeTab} onValueChange={onTabChange} className="w-full flex-1 flex flex-col h-full min-h-0 overflow-hidden">
+                            {/* Unified Master Header: AI Canvas Style */}
+                            <div className="flex-none bg-background/95 dark:bg-slate-950/95 backdrop-blur-xl w-full border-b border-border/50 shadow-sm transition-all duration-300">
                                 <TooltipProvider delayDuration={300}>
-                                    {/* Row 1: Primary Controls & Identity (h-12 with full-height border dividers) */}
-                                    <div className="flex items-center h-12 border-b border-foreground/10 bg-background/50">
-                                        {/* Left: Sidebar trigger with full-height border */}
-                                        <div className="flex items-center h-full px-3 border-r border-foreground/10">
-                                            <SidebarTrigger className="h-8 w-8 hover:bg-muted/80 rounded-lg transition-colors" />
+                                    {/* Row 1: Primary Controls & Identity (h-16 to match AppIdentity sidebar header) */}
+                                    <div className="flex items-center h-16 border-b border-border/40 bg-background/80 dark:bg-slate-950/80 backdrop-blur-xl">
+                                        {/* Left: Sidebar trigger */}
+                                        <div className="flex items-center h-full px-3 border-r border-border/40">
+                                            <SidebarTrigger className="h-8 w-8 hover:bg-muted/80 rounded-xl transition-colors" />
                                         </div>
 
                                         {/* Middle: Course details */}
                                         <div className="flex-1 flex flex-col justify-center h-full px-4 min-w-0">
-                                            <h2 className="text-[13px] font-black tracking-tight leading-none uppercase truncate opacity-90 transition-opacity">
+                                            <h2 className="text-sm sm:text-base font-semibold tracking-tight text-foreground truncate">
                                                 {enrollment.course.title}
                                             </h2>
                                             <div className="flex items-center gap-1.5 mt-0.5">
-                                                <Users className="h-2.5 w-2.5 text-primary/60" />
-                                                <span className="text-[9px] font-medium text-muted-foreground uppercase tracking-widest truncate">Docente: {formatName(enrollment.course.teacher.name, enrollment.course.teacher.profile)}</span>
+                                                <Users className="h-3 w-3 text-primary" />
+                                                <span className="text-xs font-medium text-muted-foreground truncate">
+                                                    Docente: {formatName(enrollment.course.teacher.name, enrollment.course.teacher.profile)}
+                                                </span>
                                             </div>
                                         </div>
 
-                                        {/* Right: Progress, Documentation, and Utilities separated by full-height borders */}
-                                        <div className="hidden md:flex flex-col items-end justify-center h-full px-4 border-l border-foreground/10">
-                                            <span className="text-[8px] text-muted-foreground uppercase tracking-widest font-black leading-none mb-0.5">Tu Progreso</span>
+                                        {/* Right: Progress & Utilities */}
+                                        <div className="hidden sm:flex flex-col items-end justify-center h-full px-4 border-l border-border/40">
+                                            <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-0.5">Tu Progreso</span>
                                             <div className="flex items-center gap-2">
-                                                <Badge variant="secondary" className="px-1.5 py-0 h-4 text-[9px] font-black bg-primary/10 text-primary border-none rounded-sm">
+                                                <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-semibold text-xs px-2.5 py-0.5 rounded-full">
                                                     {progressPercentage}%
                                                 </Badge>
                                             </div>
                                         </div>
 
-
-
-                                        <div className="flex items-center h-full px-3 gap-1.5 border-l border-foreground/10">
+                                        <div className="flex items-center h-full px-3 gap-1.5 border-l border-border/40">
                                             <ThemeSelector themes={themes} />
                                             <ModeToggle />
                                             <CreditsModal />
                                         </div>
                                     </div>
 
-                                    {/* Row 2: Content Navigation — scrollable on mobile, grid on desktop */}
-                                    <div className="border-b border-foreground/10 bg-muted/5">
-                                        <div className="overflow-x-auto scrollbar-none">
-                                            <TabsList className="flex w-max lg:w-full lg:grid lg:grid-cols-7 h-auto p-1 bg-muted/60 dark:bg-muted/30 rounded-none lg:rounded-none gap-0.5 border-0 shadow-none min-w-full">
-                                                <TabsTrigger value="activities" className="group relative flex items-center justify-center gap-1.5 h-9 px-3 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm whitespace-nowrap shrink-0">
-                                                    <ClipboardCheck className="h-3.5 w-3.5 group-data-[state=active]:text-primary shrink-0" />
-                                                    <span className="group-data-[state=active]:text-primary">Actividades</span>
+                                    {/* Row 2: Content Navigation */}
+                                    <div className="border-b border-border/40 bg-muted/30">
+                                        <div className="overflow-x-auto scrollbar-none w-full flex items-center justify-start lg:justify-center px-3 py-1.5">
+                                            <TabsList className="flex w-max lg:w-full lg:grid lg:grid-cols-7 h-10 p-1 bg-muted/60 dark:bg-muted/30 rounded-xl gap-1 border border-border/40 shadow-none min-w-full">
+                                                <TabsTrigger value="activities" className="group relative flex items-center justify-center gap-2 h-8 px-3 text-xs font-semibold rounded-lg transition-all hover:bg-background/40 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm whitespace-nowrap shrink-0">
+                                                    <ClipboardCheck className="h-4 w-4 group-data-[state=active]:text-primary shrink-0 transition-colors" />
+                                                    <span>Actividades</span>
                                                 </TabsTrigger>
 
-                                                <TabsTrigger value="evaluations" className="group relative flex items-center justify-center gap-1.5 h-9 px-3 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm whitespace-nowrap shrink-0">
-                                                    <FileText className="h-3.5 w-3.5 group-data-[state=active]:text-primary shrink-0" />
-                                                    <span className="group-data-[state=active]:text-primary">Evaluaciones</span>
+                                                <TabsTrigger value="evaluations" className="group relative flex items-center justify-center gap-2 h-8 px-3 text-xs font-semibold rounded-lg transition-all hover:bg-background/40 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm whitespace-nowrap shrink-0">
+                                                    <FileText className="h-4 w-4 group-data-[state=active]:text-primary shrink-0 transition-colors" />
+                                                    <span>Evaluaciones</span>
                                                 </TabsTrigger>
 
-                                                <TabsTrigger value="attendance" className="group relative flex items-center justify-center gap-1.5 h-9 px-3 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm whitespace-nowrap shrink-0">
-                                                    <Clock className="h-3.5 w-3.5 group-data-[state=active]:text-primary shrink-0" />
-                                                    <span className="group-data-[state=active]:text-primary">Asistencia</span>
+                                                <TabsTrigger value="attendance" className="group relative flex items-center justify-center gap-2 h-8 px-3 text-xs font-semibold rounded-lg transition-all hover:bg-background/40 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm whitespace-nowrap shrink-0">
+                                                    <Clock className="h-4 w-4 group-data-[state=active]:text-primary shrink-0 transition-colors" />
+                                                    <span>Asistencia</span>
                                                 </TabsTrigger>
 
-                                                <TabsTrigger value="grades" className="group relative flex items-center justify-center gap-1.5 h-9 px-3 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm whitespace-nowrap shrink-0">
-                                                    <GraduationCap className="h-3.5 w-3.5 group-data-[state=active]:text-primary shrink-0" />
-                                                    <span className="group-data-[state=active]:text-primary">Calificaciones</span>
+                                                <TabsTrigger value="grades" className="group relative flex items-center justify-center gap-2 h-8 px-3 text-xs font-semibold rounded-lg transition-all hover:bg-background/40 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm whitespace-nowrap shrink-0">
+                                                    <GraduationCap className="h-4 w-4 group-data-[state=active]:text-primary shrink-0 transition-colors" />
+                                                    <span>Calificaciones</span>
                                                 </TabsTrigger>
 
-                                                <TabsTrigger value="remarks" className="group relative flex items-center justify-center gap-1.5 h-9 px-3 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm whitespace-nowrap shrink-0">
-                                                    <MessageSquare className="h-3.5 w-3.5 group-data-[state=active]:text-primary shrink-0" />
-                                                    <span className="group-data-[state=active]:text-primary">Observaciones</span>
+                                                <TabsTrigger value="remarks" className="group relative flex items-center justify-center gap-2 h-8 px-3 text-xs font-semibold rounded-lg transition-all hover:bg-background/40 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm whitespace-nowrap shrink-0">
+                                                    <MessageSquare className="h-4 w-4 group-data-[state=active]:text-primary shrink-0 transition-colors" />
+                                                    <span>Observaciones</span>
                                                 </TabsTrigger>
 
-                                                <TabsTrigger value="resources" className="group relative flex items-center justify-center gap-1.5 h-9 px-3 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm whitespace-nowrap shrink-0">
-                                                    <BookOpen className="h-3.5 w-3.5 group-data-[state=active]:text-primary shrink-0" />
-                                                    <span className="group-data-[state=active]:text-primary">Recursos</span>
+                                                <TabsTrigger value="resources" className="group relative flex items-center justify-center gap-2 h-8 px-3 text-xs font-semibold rounded-lg transition-all hover:bg-background/40 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm whitespace-nowrap shrink-0">
+                                                    <BookOpen className="h-4 w-4 group-data-[state=active]:text-primary shrink-0 transition-colors" />
+                                                    <span>Recursos</span>
                                                 </TabsTrigger>
 
-                                                <TabsTrigger value="docs" className="group relative flex items-center justify-center gap-1.5 h-9 px-3 text-[9px] uppercase tracking-wider font-extrabold rounded-md transition-all hover:bg-background/20 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm whitespace-nowrap shrink-0">
-                                                    <FileText className="h-3.5 w-3.5 group-data-[state=active]:text-primary shrink-0" />
-                                                    <span className="group-data-[state=active]:text-primary">Documentación</span>
+                                                <TabsTrigger value="docs" className="group relative flex items-center justify-center gap-2 h-8 px-3 text-xs font-semibold rounded-lg transition-all hover:bg-background/40 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm whitespace-nowrap shrink-0">
+                                                    <FileText className="h-4 w-4 group-data-[state=active]:text-primary shrink-0 transition-colors" />
+                                                    <span>Documentación</span>
                                                 </TabsTrigger>
                                             </TabsList>
                                         </div>
@@ -244,59 +311,77 @@ export function MyEnrollments({
                                 </TooltipProvider>
                             </div>
 
-                            {/* Independently Scrollable Content Area - Subdivided by Tabs */}
-                            <div className="flex-1 min-h-0 w-full overflow-hidden">
-                                <TabsContent value="activities" className="h-full overflow-y-auto p-3 sm:p-5 md:p-8 pt-0 mt-0 scrollbar-thin">
+                            {/* Scrollable Content Area - Subdivided by Tabs (Scrollbar starts strictly AFTER the header bar) */}
+                            <div className="flex-1 w-full overflow-y-auto min-h-0">
+                                <TabsContent value="activities" className="p-3 sm:p-5 md:p-8 pt-0 mt-0 pb-12">
                                     <div className="space-y-4 pt-4 sm:pt-6">
-                                        <h3 className="text-lg sm:text-2xl font-bold flex items-center gap-2">
-                                            <ClipboardCheck className="h-4 w-4 text-primary shrink-0" />
-                                            <span>Actividades Pendientes y Entregas</span>
-                                        </h3>
-                                        {enrollment.course.activities.length > 0 ? (
-                                            <div className="rounded-xl border border-border/50 overflow-x-auto shadow-sm text-foreground">
-                                                <Table className="min-w-[700px]">
-                                                    <TableHeader>
-                                                        <TableRow className="bg-muted/30 hover:bg-muted/30">
-                                                            <TableHead className="font-bold uppercase tracking-wider text-xs pl-4 w-[300px]">Actividad</TableHead>
-                                                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Estado</TableHead>
-                                                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden sm:table-cell">Nota</TableHead>
-                                                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden md:table-cell">Vencimiento</TableHead>
-                                                            <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Acciones</TableHead>
-                                                        </TableRow>
-                                                    </TableHeader>
-                                                    <TableBody>
-                                                        {enrollment.course.activities.map((activity: any, index: number) => {
-                                                            const submission = activity.submissions[0];
-                                                            const isSubmitted = !!submission;
-                                                            const isGraded = submission && submission.grade !== null;
-                                                            const isRejected = submission && submission.grade === null && submission.feedback && submission.feedback.includes("[ENTREGA RECHAZADA]");
-                                                            const isOpen = !activity.openDate || new Date() >= new Date(activity.openDate);
+                                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2 border-b border-border/40">
+                                            <h3 className="text-lg sm:text-xl font-semibold flex items-center gap-2">
+                                                <ClipboardCheck className="h-4 w-4 text-primary shrink-0" />
+                                                <span>Actividades Pendientes y Entregas</span>
+                                            </h3>
 
-                                                            return (
-                                                                <TableRow key={activity.id} suppressHydrationWarning className="group hover:bg-muted/20 transition-colors border-border/30">
-                                                                    <TableCell className="font-medium py-4">
-                                                                        <div className="flex items-start gap-3">
-                                                                            <div className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary text-xs font-bold">
-                                                                                {index + 1}
-                                                                            </div>
-                                                                            <div className="space-y-1">
-                                                                                <div className="font-bold text-sm sm:text-base">{activity.title}</div>
-                                                                                <div className="text-[10px] sm:text-xs text-muted-foreground flex items-center gap-2">
-                                                                                    <Badge variant="secondary" className="px-1 py-0 h-4 text-[9px] font-normal">
-                                                                                        Peso: {activity.weight.toFixed(1)}%
-                                                                                    </Badge>
-                                                                                    {activity.type === "MANUAL" && <span>• Manual</span>}
-                                                                                </div>
-                                                                                {!isOpen && (
-                                                                                    <div className="text-[10px] text-warning font-medium mt-1 flex items-center text-yellow-600 dark:text-yellow-400">
-                                                                                        <Clock className="mr-1 h-3 w-3" />
-                                                                                        Disponible el: {format(new Date(activity.openDate), "PP p")}
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    </TableCell>
-                                                                    <TableCell suppressHydrationWarning>
+                                            <div className="flex items-center gap-1.5 p-1 bg-muted rounded-xl text-xs font-semibold shrink-0">
+                                                <Button
+                                                    type="button"
+                                                    variant={activitiesViewMode === "grid" ? "default" : "ghost"}
+                                                    size="sm"
+                                                    className="h-8 px-3 rounded-lg text-xs"
+                                                    onClick={() => setActivitiesViewMode("grid")}
+                                                    title="Vista de Tarjetas AI Canvas"
+                                                >
+                                                    <LayoutGrid className="h-4 w-4 mr-1.5" />
+                                                    <span>Tarjetas AI Canvas</span>
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant={activitiesViewMode === "table" ? "default" : "ghost"}
+                                                    size="sm"
+                                                    className="h-8 px-3 rounded-lg text-xs"
+                                                    onClick={() => setActivitiesViewMode("table")}
+                                                    title="Vista de Tabla"
+                                                >
+                                                    <List className="h-4 w-4 mr-1.5" />
+                                                    <span>Tabla</span>
+                                                </Button>
+                                            </div>
+                                        </div>
+
+                                        {enrollment.course.activities.length > 0 ? (
+                                            activitiesViewMode === "grid" ? (
+                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                                    {enrollment.course.activities.map((activity: any, index: number) => {
+                                                        const submission = activity.submissions[0];
+                                                        const isSubmitted = !!submission;
+                                                        const isGraded = submission && submission.grade !== null;
+                                                        const isRejected = submission && submission.grade === null && submission.feedback && submission.feedback.includes("[ENTREGA RECHAZADA]");
+                                                        const isOpen = !activity.openDate || new Date() >= new Date(activity.openDate);
+
+                                                        const rawDesc = activity.description 
+                                                            ? activity.description.replace(/[\*#_\n\r]/g, ' ').replace(/instrucciones de la actividad/gi, '').replace(/\s+/g, ' ').trim()
+                                                            : "";
+                                                        const cleanContent = rawDesc.replace(/[\s\.\-_]/g, '');
+                                                        const displayDesc = cleanContent.length > 0 
+                                                            ? (rawDesc.length > 90 ? rawDesc.substring(0, 90) + "..." : rawDesc)
+                                                            : undefined;
+
+                                                        return (
+                                                            <AICanvasCard
+                                                                key={activity.id}
+                                                                title={activity.title}
+                                                                description={displayDesc}
+                                                                icon={ClipboardCheck}
+                                                                badge={`Peso: ${activity.weight.toFixed(1)}%`}
+                                                                badgeColor="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20"
+                                                                accentColor="from-blue-500/30 via-indigo-500/20 to-transparent"
+                                                                iconBgColor="bg-blue-500/10 dark:bg-blue-500/20"
+                                                                iconTextColor="text-blue-600 dark:text-blue-400"
+                                                                hideFooter={true}
+                                                                className="h-full group"
+                                                            >
+                                                                <div className="space-y-3 pt-2 text-xs text-muted-foreground border-t border-border/40 mt-3">
+                                                                    <div className="flex items-center justify-between">
+                                                                        <span className="font-semibold text-foreground">Estado:</span>
                                                                         {!isOpen ? (
                                                                             <Badge variant="secondary">Bloqueado</Badge>
                                                                         ) : isGraded ? (
@@ -314,96 +399,235 @@ export function MyEnrollments({
                                                                                 <AlertCircle className="h-3 w-3" /> Pendiente
                                                                             </Badge>
                                                                         )}
-                                                                    </TableCell>
-                                                                    <TableCell className="hidden sm:table-cell" suppressHydrationWarning>
-                                                                        {isGraded ? (
-                                                                            <div className="flex flex-col">
-                                                                                <span className="font-bold text-lg text-primary">
-                                                                                    {submission.grade.toFixed(1)}
-                                                                                </span>
-                                                                            </div>
-                                                                        ) : !isSubmitted && activity.deadline && new Date(activity.deadline) < new Date() && activity.type !== 'MANUAL' ? (
-                                                                            <span className="font-bold text-destructive">0.0</span>
+                                                                    </div>
+                                                                    <div className="flex items-center justify-between">
+                                                                        <span>Calificación:</span>
+                                                                        <span className="font-bold text-foreground">
+                                                                            {isGraded ? submission.grade.toFixed(1) : !isSubmitted && activity.deadline && new Date(activity.deadline) < new Date() && activity.type !== 'MANUAL' ? '0.0' : '-'}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="flex items-center justify-between">
+                                                                        <span>Vencimiento:</span>
+                                                                        <span className="font-medium text-foreground">
+                                                                            {activity.type === "MANUAL" ? "Sin fecha límite" : format(new Date(activity.deadline), "PP", { locale: es })}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="pt-4 mt-auto border-t border-border/40">
+                                                                    <Button
+                                                                        variant={!isOpen ? "ghost" : isSubmitted ? "secondary" : "default"}
+                                                                        size="sm"
+                                                                        disabled={!isOpen}
+                                                                        className="w-full font-bold text-xs uppercase tracking-wider rounded-xl shadow-md"
+                                                                        asChild={isOpen}
+                                                                    >
+                                                                        {isOpen ? (
+                                                                            <Link href={`/dashboard/student/activities/${activity.id}`}>
+                                                                                {isSubmitted ? "Revisar" : "Abrir"}
+                                                                                <ArrowRight className="ml-2 h-4 w-4" />
+                                                                            </Link>
                                                                         ) : (
-                                                                            <span className="text-muted-foreground">-</span>
+                                                                            <span>Bloqueado</span>
                                                                         )}
-                                                                    </TableCell>
-                                                                    <TableCell className="hidden md:table-cell" suppressHydrationWarning>
-                                                                        <div className="text-xs text-muted-foreground font-medium" suppressHydrationWarning>
-                                                                            {activity.type === "MANUAL" ? (
-                                                                                <span className="italic">Sin fecha límite</span>
+                                                                    </Button>
+                                                                </div>
+                                                            </AICanvasCard>
+                                                        );
+                                                    })}
+                                                </div>
+                                            ) : (
+                                                <div className="rounded-xl border border-border/50 overflow-x-auto shadow-sm text-foreground">
+                                                    <Table className="min-w-[700px]">
+                                                        <TableHeader>
+                                                            <TableRow className="bg-muted/30 hover:bg-muted/30">
+                                                                <TableHead className="font-bold uppercase tracking-wider text-xs pl-4 w-[300px]">Actividad</TableHead>
+                                                                <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Estado</TableHead>
+                                                                <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden sm:table-cell">Nota</TableHead>
+                                                                <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden md:table-cell">Vencimiento</TableHead>
+                                                                <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Acciones</TableHead>
+                                                            </TableRow>
+                                                        </TableHeader>
+                                                        <TableBody>
+                                                            {enrollment.course.activities.map((activity: any, index: number) => {
+                                                                const submission = activity.submissions[0];
+                                                                const isSubmitted = !!submission;
+                                                                const isGraded = submission && submission.grade !== null;
+                                                                const isRejected = submission && submission.grade === null && submission.feedback && submission.feedback.includes("[ENTREGA RECHAZADA]");
+                                                                const isOpen = !activity.openDate || new Date() >= new Date(activity.openDate);
+
+                                                                return (
+                                                                    <TableRow key={activity.id} suppressHydrationWarning className="group hover:bg-muted/20 transition-colors border-border/30">
+                                                                        <TableCell className="font-medium py-4">
+                                                                            <div className="flex items-start gap-3">
+                                                                                <div className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary text-xs font-semibold">
+                                                                                    {index + 1}
+                                                                                </div>
+                                                                                <div className="space-y-1">
+                                                                                    <div className="font-semibold text-sm text-foreground">{activity.title}</div>
+                                                                                    <div className="text-[10px] sm:text-xs text-muted-foreground flex items-center gap-2">
+                                                                                        <Badge variant="secondary" className="px-1 py-0 h-4 text-[9px] font-normal">
+                                                                                            Peso: {activity.weight.toFixed(1)}%
+                                                                                        </Badge>
+                                                                                        {activity.type === "MANUAL" && <span>• Manual</span>}
+                                                                                    </div>
+                                                                                    {!isOpen && (
+                                                                                        <div className="text-[10px] text-warning font-medium mt-1 flex items-center text-yellow-600 dark:text-yellow-400">
+                                                                                            <Clock className="mr-1 h-3 w-3" />
+                                                                                            Disponible el: {format(new Date(activity.openDate), "PP p")}
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        </TableCell>
+                                                                        <TableCell suppressHydrationWarning>
+                                                                            {!isOpen ? (
+                                                                                <Badge variant="secondary">Bloqueado</Badge>
+                                                                            ) : isGraded ? (
+                                                                                <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/15">Completado</Badge>
+                                                                            ) : isRejected ? (
+                                                                                <Badge variant="destructive" className="gap-1">
+                                                                                    <AlertCircle className="h-3 w-3" /> Corregir
+                                                                                </Badge>
+                                                                            ) : isSubmitted ? (
+                                                                                <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/15 gap-1">
+                                                                                    <Clock className="h-3 w-3" /> En Revisión
+                                                                                </Badge>
                                                                             ) : (
-                                                                                <span className={new Date(activity.deadline) < new Date() ? "text-destructive" : ""}>
-                                                                                    {format(new Date(activity.deadline), "PP", { locale: es })}
-                                                                                </span>
+                                                                                <Badge className="bg-primary/10 text-primary border border-primary/20 hover:bg-primary/10 gap-1">
+                                                                                    <AlertCircle className="h-3 w-3" /> Pendiente
+                                                                                </Badge>
                                                                             )}
-                                                                        </div>
-                                                                    </TableCell>
-                                                                    <TableCell className="text-right">
-                                                                        <Button 
-                                                                            variant={!isOpen ? "ghost" : isSubmitted ? "secondary" : "default"} 
-                                                                            size="sm" 
-                                                                            asChild 
-                                                                            disabled={!isOpen}
-                                                                            className="shadow-sm"
-                                                                        >
-                                                                            {isOpen ? (
-                                                                                <Link href={`/dashboard/student/activities/${activity.id}`}>
-                                                                                    {isSubmitted ? "Revisar" : "Abrir"}
-                                                                                    <ArrowRight className="ml-2 h-4 w-4" />
-                                                                                </Link>
+                                                                        </TableCell>
+                                                                        <TableCell className="hidden sm:table-cell" suppressHydrationWarning>
+                                                                            {isGraded ? (
+                                                                                <div className="flex flex-col">
+                                                                                    <span className="font-bold text-lg text-primary">
+                                                                                        {submission.grade.toFixed(1)}
+                                                                                    </span>
+                                                                                </div>
+                                                                            ) : !isSubmitted && activity.deadline && new Date(activity.deadline) < new Date() && activity.type !== 'MANUAL' ? (
+                                                                                <span className="font-bold text-destructive">0.0</span>
                                                                             ) : (
-                                                                                <span className="text-muted-foreground cursor-not-allowed flex items-center justify-end text-xs">
-                                                                                    Bloqueado
-                                                                                </span>
+                                                                                <span className="text-muted-foreground">-</span>
                                                                             )}
-                                                                        </Button>
-                                                                    </TableCell>
-                                                                </TableRow>
-                                                            );
-                                                        })}
-                                                    </TableBody>
-                                                </Table>
-                                            </div>
+                                                                        </TableCell>
+                                                                        <TableCell className="hidden md:table-cell" suppressHydrationWarning>
+                                                                            <div className="text-xs text-muted-foreground font-medium" suppressHydrationWarning>
+                                                                                {activity.type === "MANUAL" ? (
+                                                                                    <span className="italic">Sin fecha límite</span>
+                                                                                ) : (
+                                                                                    <span className={new Date(activity.deadline) < new Date() ? "text-destructive" : ""}>
+                                                                                        {format(new Date(activity.deadline), "PP", { locale: es })}
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                        </TableCell>
+                                                                        <TableCell className="text-right">
+                                                                            <Button 
+                                                                                variant={!isOpen ? "ghost" : isSubmitted ? "secondary" : "default"} 
+                                                                                size="sm" 
+                                                                                asChild 
+                                                                                disabled={!isOpen}
+                                                                                className="shadow-sm"
+                                                                            >
+                                                                                {isOpen ? (
+                                                                                    <Link href={`/dashboard/student/activities/${activity.id}`}>
+                                                                                        {isSubmitted ? "Revisar" : "Abrir"}
+                                                                                        <ArrowRight className="ml-2 h-4 w-4" />
+                                                                                    </Link>
+                                                                                ) : (
+                                                                                    <span className="text-muted-foreground cursor-not-allowed flex items-center justify-end text-xs">
+                                                                                        Bloqueado
+                                                                                    </span>
+                                                                                )}
+                                                                            </Button>
+                                                                        </TableCell>
+                                                                    </TableRow>
+                                                                );
+                                                            })}
+                                                        </TableBody>
+                                                    </Table>
+                                                </div>
+                                            )
                                         ) : (
                                             <p className="text-sm text-muted-foreground">No hay actividades en este curso.</p>
                                         )}
                                     </div>
                                 </TabsContent>
 
-                                <TabsContent value="evaluations" className="h-full overflow-y-auto p-3 sm:p-5 md:p-8 pt-0 mt-0 scrollbar-thin">
-    <div className="space-y-4 pt-6">
-                                        <h3 className="text-lg sm:text-2xl font-bold flex items-center gap-2">
-                                            <FileText className="h-4 w-4 text-primary shrink-0" />
-                                            <span>Evaluaciones del Curso</span>
-                                        </h3>
-                                        {enrollment.course.evaluationAttempts?.length > 0 ? (
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 pb-20">
-                                                {enrollment.course.evaluationAttempts.map((attempt: any) => {
-                                                    const submission = attempt.submissions[0];
-                                                    const isSubmitted = !!submission?.submittedAt;
-                                                    const now = new Date();
-                                                    const startTime = new Date(attempt.startTime);
-                                                    const endTime = new Date(attempt.endTime);
-                                                    const isOpen = now >= startTime && now <= endTime;
-                                                    const isUpcoming = now < startTime;
-                                                    const isExpired = now > endTime && !isSubmitted;
+                                <TabsContent value="evaluations" className="p-3 sm:p-5 md:p-8 pt-0 mt-0 pb-12">
+                                    <div className="space-y-4 pt-4 sm:pt-6">
+                                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2 border-b border-border/40">
+                                            <h3 className="text-lg sm:text-xl font-semibold flex items-center gap-2">
+                                                <FileText className="h-4 w-4 text-primary shrink-0" />
+                                                <span>Evaluaciones del Curso</span>
+                                            </h3>
 
-                                                    return (
-                                                        <Card key={attempt.id} className="overflow-hidden border-muted shadow-sm hover:shadow-md transition-shadow">
-                                                            <CardHeader className="pb-3 border-b bg-muted/10">
-                                                                <CardTitle className="text-lg">{attempt.evaluation.title}</CardTitle>
-                                                                <CardDescription className="flex items-center gap-1.5 text-xs font-medium">
-                                                                    <Clock className="h-3.5 w-3.5 text-primary" />
-                                                                    <span suppressHydrationWarning>
-                                                                        {format(startTime, "PP p", { locale: es })}
-                                                                    </span>
-                                                                </CardDescription>
-                                                            </CardHeader>
-                                                            <CardContent className="pt-4 flex flex-col gap-4">
-                                                                <div className="flex items-center justify-between">
-                                                                    <div className="flex flex-col gap-1">
-                                                                        <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Estado</span>
+                                            <div className="flex items-center gap-1.5 p-1 bg-muted rounded-xl text-xs font-semibold shrink-0">
+                                                <Button
+                                                    type="button"
+                                                    variant={evaluationsViewMode === "grid" ? "default" : "ghost"}
+                                                    size="sm"
+                                                    className="h-8 px-3 rounded-lg text-xs"
+                                                    onClick={() => setEvaluationsViewMode("grid")}
+                                                    title="Vista de Tarjetas AI Canvas"
+                                                >
+                                                    <LayoutGrid className="h-4 w-4 mr-1.5" />
+                                                    <span>Tarjetas AI Canvas</span>
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant={evaluationsViewMode === "table" ? "default" : "ghost"}
+                                                    size="sm"
+                                                    className="h-8 px-3 rounded-lg text-xs"
+                                                    onClick={() => setEvaluationsViewMode("table")}
+                                                    title="Vista de Tabla"
+                                                >
+                                                    <List className="h-4 w-4 mr-1.5" />
+                                                    <span>Tabla</span>
+                                                </Button>
+                                            </div>
+                                        </div>
+
+                                        {enrollment.course.evaluationAttempts?.length > 0 ? (
+                                            evaluationsViewMode === "grid" ? (
+                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
+                                                    {enrollment.course.evaluationAttempts.map((attempt: any) => {
+                                                        const submission = attempt.submissions[0];
+                                                        const isSubmitted = !!submission?.submittedAt;
+                                                        const now = new Date();
+                                                        const startTime = new Date(attempt.startTime);
+                                                        const endTime = new Date(attempt.endTime);
+                                                        const isOpen = now >= startTime && now <= endTime;
+                                                        const isUpcoming = now < startTime;
+                                                        const isExpired = now > endTime && !isSubmitted;
+
+                                                        const rawDesc = attempt.evaluation.description 
+                                                            ? attempt.evaluation.description.replace(/[\*#_\n\r]/g, ' ').replace(/descripción de la evaluación/gi, '').replace(/instrucciones/gi, '').replace(/\s+/g, ' ').trim()
+                                                            : "";
+                                                        const cleanContent = rawDesc.replace(/[\s\.\-_]/g, '');
+                                                        const displayDesc = cleanContent.length > 0 
+                                                            ? (rawDesc.length > 90 ? rawDesc.substring(0, 90) + "..." : rawDesc)
+                                                            : undefined;
+
+                                                        return (
+                                                            <AICanvasCard
+                                                                key={attempt.id}
+                                                                title={attempt.evaluation.title}
+                                                                description={displayDesc}
+                                                                icon={FileText}
+                                                                badge={isSubmitted ? "Completado" : isExpired ? "Expirado" : isUpcoming ? "Próximamente" : isOpen ? "Abierto" : "Evaluación"}
+                                                                badgeColor={isSubmitted ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" : isExpired ? "bg-red-500/10 text-red-600 border-red-500/20" : "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20"}
+                                                                accentColor="from-purple-500/30 via-pink-500/20 to-transparent"
+                                                                iconBgColor="bg-purple-500/10 dark:bg-purple-500/20"
+                                                                iconTextColor="text-purple-600 dark:text-purple-400"
+                                                                hideFooter={true}
+                                                                className="h-full group"
+                                                            >
+                                                                <div className="space-y-3 pt-2 text-xs text-muted-foreground border-t border-border/40 mt-3">
+                                                                    <div className="flex items-center justify-between">
+                                                                        <span className="font-semibold text-foreground">Estado:</span>
                                                                         {isSubmitted ? (
                                                                             <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">Completado</Badge>
                                                                         ) : isExpired ? (
@@ -415,27 +639,98 @@ export function MyEnrollments({
                                                                         ) : null}
                                                                     </div>
                                                                     {isSubmitted && submission.score !== null && (
-                                                                        <div className="flex flex-col items-end gap-1">
-                                                                            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Nota</span>
-                                                                            <span className="text-xl font-bold text-primary">{submission.score.toFixed(1)}</span>
+                                                                        <div className="flex items-center justify-between">
+                                                                            <span className="font-semibold text-foreground">Nota Final:</span>
+                                                                            <span className="font-bold text-primary text-base">{submission.score.toFixed(1)}</span>
                                                                         </div>
                                                                     )}
+                                                                    <div className="flex items-center justify-between">
+                                                                        <span>Fecha Inicio:</span>
+                                                                        <span className="font-medium text-foreground">{format(startTime, "PP p", { locale: es })}</span>
+                                                                    </div>
                                                                 </div>
-                                                                <Button 
-                                                                    className="w-full font-bold shadow-sm" 
-                                                                    variant={isSubmitted ? "outline" : isOpen ? "default" : "secondary"}
-                                                                    disabled={!isOpen && !isSubmitted}
-                                                                    asChild
-                                                                >
-                                                                    <Link href={`/evaluations/${attempt.id}`}>
-                                                                        {isSubmitted ? "Ver Resultados" : isOpen ? "Realizar Evaluación" : "No disponible"}
-                                                                    </Link>
-                                                                </Button>
-                                                            </CardContent>
-                                                        </Card>
-                                                    );
-                                                })}
-                                            </div>
+
+                                                                <div className="pt-4 mt-auto border-t border-border/40">
+                                                                    <Button 
+                                                                        className="w-full font-bold text-xs uppercase tracking-wider rounded-xl shadow-md" 
+                                                                        variant={isSubmitted ? "outline" : isOpen ? "default" : "secondary"}
+                                                                        disabled={!isOpen && !isSubmitted}
+                                                                        asChild
+                                                                    >
+                                                                        <Link href={`/evaluations/${attempt.id}`}>
+                                                                            {isSubmitted ? "Ver Resultados" : isOpen ? "Realizar Evaluación" : "No disponible"}
+                                                                        </Link>
+                                                                    </Button>
+                                                                </div>
+                                                            </AICanvasCard>
+                                                        );
+                                                    })}
+                                                </div>
+                                            ) : (
+                                                <div className="rounded-xl border border-border/50 overflow-x-auto shadow-sm text-foreground mb-20">
+                                                    <Table className="min-w-[700px]">
+                                                        <TableHeader>
+                                                            <TableRow className="bg-muted/30 hover:bg-muted/30">
+                                                                <TableHead className="font-bold uppercase tracking-wider text-xs pl-4">Evaluación</TableHead>
+                                                                <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Estado</TableHead>
+                                                                <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden sm:table-cell">Nota</TableHead>
+                                                                <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden md:table-cell">Fecha Inicio</TableHead>
+                                                                <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Acción</TableHead>
+                                                            </TableRow>
+                                                        </TableHeader>
+                                                        <TableBody>
+                                                            {enrollment.course.evaluationAttempts.map((attempt: any) => {
+                                                                const submission = attempt.submissions[0];
+                                                                const isSubmitted = !!submission?.submittedAt;
+                                                                const now = new Date();
+                                                                const startTime = new Date(attempt.startTime);
+                                                                const endTime = new Date(attempt.endTime);
+                                                                const isOpen = now >= startTime && now <= endTime;
+                                                                const isUpcoming = now < startTime;
+                                                                const isExpired = now > endTime && !isSubmitted;
+
+                                                                return (
+                                                                    <TableRow key={attempt.id} className="group hover:bg-muted/20 transition-colors border-border/30">
+                                                                        <TableCell className="font-semibold text-sm py-4 pl-4">
+                                                                            {attempt.evaluation.title}
+                                                                        </TableCell>
+                                                                        <TableCell className="text-center">
+                                                                            {isSubmitted ? (
+                                                                                <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">Completado</Badge>
+                                                                            ) : isExpired ? (
+                                                                                <Badge variant="destructive">Expirado</Badge>
+                                                                            ) : isUpcoming ? (
+                                                                                <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">Próximamente</Badge>
+                                                                            ) : isOpen ? (
+                                                                                <Badge className="bg-primary/15 text-primary border border-primary/30 animate-pulse">Abierto</Badge>
+                                                                            ) : null}
+                                                                        </TableCell>
+                                                                        <TableCell className="text-center font-bold text-primary hidden sm:table-cell">
+                                                                            {isSubmitted && submission.score !== null ? submission.score.toFixed(1) : "-"}
+                                                                        </TableCell>
+                                                                        <TableCell className="text-center text-xs text-muted-foreground hidden md:table-cell">
+                                                                            {format(startTime, "PP p", { locale: es })}
+                                                                        </TableCell>
+                                                                        <TableCell className="text-center">
+                                                                            <Button 
+                                                                                size="sm" 
+                                                                                className="font-bold text-xs uppercase tracking-wider rounded-xl shadow-sm"
+                                                                                variant={isSubmitted ? "outline" : isOpen ? "default" : "secondary"}
+                                                                                disabled={!isOpen && !isSubmitted}
+                                                                                asChild
+                                                                            >
+                                                                                <Link href={`/evaluations/${attempt.id}`}>
+                                                                                    {isSubmitted ? "Ver Resultados" : isOpen ? "Realizar Evaluación" : "No disponible"}
+                                                                                </Link>
+                                                                            </Button>
+                                                                        </TableCell>
+                                                                    </TableRow>
+                                                                );
+                                                            })}
+                                                        </TableBody>
+                                                    </Table>
+                                                </div>
+                                            )
                                         ) : (
                                             <div className="flex flex-col items-center justify-center py-12 text-center border-2 border-dashed rounded-xl bg-muted/5">
                                                 <FileText className="h-12 w-12 text-muted-foreground/30 mb-4" />
@@ -445,31 +740,31 @@ export function MyEnrollments({
                                     </div>
                                 </TabsContent>
 
-                                <TabsContent value="attendance" className="h-full overflow-y-auto p-4 sm:p-6 md:p-8 pt-0 mt-0 scrollbar-thin">
+                                <TabsContent value="attendance" className="p-4 sm:p-6 md:p-8 pt-0 mt-0 pb-12">
                                     <div className="pt-6">
                                         <StudentAttendanceSummary courseId={enrollment.course.id} userId={enrollment.userId} />
                                     </div>
                                 </TabsContent>
 
-                                <TabsContent value="resources" className="h-full overflow-y-auto p-4 sm:p-6 md:p-8 pt-0 mt-0 scrollbar-thin">
+                                <TabsContent value="resources" className="p-4 sm:p-6 md:p-8 pt-0 mt-0 pb-12">
                                     <div className="pt-6">
                                         <SharedContentList contents={enrollment.course.sharedContent || []} />
                                     </div>
                                 </TabsContent>
 
-                                <TabsContent value="remarks" className="h-full overflow-y-auto p-4 sm:p-6 md:p-8 pt-0 mt-0 scrollbar-thin">
+                                <TabsContent value="remarks" className="p-4 sm:p-6 md:p-8 pt-0 mt-0 pb-12">
                                     <div className="pt-6">
                                         <StudentRemarks courseId={enrollment.course.id} userId={enrollment.userId} />
                                     </div>
                                 </TabsContent>
 
-                                <TabsContent value="grades" className="h-full overflow-y-auto p-4 sm:p-6 md:p-8 pt-0 mt-0 scrollbar-thin">
+                                <TabsContent value="grades" className="p-4 sm:p-6 md:p-8 pt-0 mt-0 pb-12">
                                     <div className="pt-6">
                                         <StudentGradesView enrollment={enrollment} />
                                     </div>
                                 </TabsContent>
 
-                                <TabsContent value="docs" className="h-full overflow-y-auto p-4 sm:p-6 md:p-8 pt-0 mt-0 scrollbar-thin">
+                                <TabsContent value="docs" className="p-4 sm:p-6 md:p-8 pt-0 mt-0 pb-12">
                                     <div className="pt-6">
                                         {enrollment.course.docLinks && enrollment.course.docLinks.length > 0 ? (
                                             <UserDocsList

@@ -17,7 +17,7 @@ import { getRoleFromUser } from "@/features/auth/services/authService";
 import { getSettingsAction } from "@/features/admin/actions/settingsActions";
 import { AICanvasHero } from "@/components/ui/ai-canvas-hero";
 import { AICanvasCard } from "@/components/ui/ai-canvas-card";
-import { AICanvasStatsWidget } from "@/components/ui/ai-canvas-stats-widget";
+import { AICanvasActivityMatrix } from "@/components/ui/ai-canvas-activity";
 import { DashboardContainer } from "@/components/ui/dashboard-container";
 
 export default function HomePage() {
@@ -242,9 +242,9 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Stats & Announcements Section */}
-      <section className="pt-4">
-        <AICanvasStatsWidget role={userRole} />
+      {/* AI Canvas Timeline & Activity Matrix */}
+      <section className="w-full">
+        <AICanvasActivityMatrix />
       </section>
     </DashboardContainer>
   );

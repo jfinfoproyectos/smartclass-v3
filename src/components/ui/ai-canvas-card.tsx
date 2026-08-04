@@ -17,6 +17,9 @@ interface AICanvasCardProps {
   onClick?: () => void;
   className?: string;
   children?: React.ReactNode;
+  actionLabel?: string;
+  actionText?: string;
+  hideFooter?: boolean;
 }
 
 export function AICanvasCard({
@@ -28,8 +31,12 @@ export function AICanvasCard({
   accentColor = "from-emerald-500/20 via-teal-500/10 to-transparent",
   iconBgColor = "bg-emerald-500/10 dark:bg-emerald-500/20",
   iconTextColor = "text-emerald-600 dark:text-emerald-400",
+  onClick,
   className,
   children,
+  actionLabel,
+  actionText,
+  hideFooter = false,
 }: AICanvasCardProps) {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [isHovered, setIsHovered] = useState(false);
@@ -50,8 +57,10 @@ export function AICanvasCard({
       onMouseMove={handleMouseMove}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      onClick={onClick}
       className={cn(
         "group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-card p-6 shadow-sm hover:shadow-xl transition-all duration-300",
+        onClick && "cursor-pointer",
         className
       )}
     >
@@ -115,12 +124,14 @@ export function AICanvasCard({
       </div>
 
       {/* Footer / Action indicator */}
-      <div className="relative z-10 pt-4 mt-auto border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors">
-        <span>Explorar módulo</span>
-        <span className="font-semibold text-emerald-600 dark:text-emerald-400 opacity-80 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all">
-          Acceder &rarr;
-        </span>
-      </div>
+      {!hideFooter && (
+        <div className="relative z-10 pt-4 mt-auto border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors">
+          <span>{actionLabel || "Explorar módulo"}</span>
+          <span className="font-semibold text-emerald-600 dark:text-emerald-400 opacity-80 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all">
+            {actionText || "Acceder →"}
+          </span>
+        </div>
+      )}
     </motion.div>
   );
 }

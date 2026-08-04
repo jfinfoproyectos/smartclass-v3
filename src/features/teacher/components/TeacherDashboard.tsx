@@ -264,6 +264,7 @@ export function TeacherDashboard({ courses, pendingEnrollments, stats, currentDa
                         accentColor={kpi.accentColor}
                         iconBgColor={kpi.iconBgColor}
                         iconTextColor={kpi.iconTextColor}
+                        hideFooter={true}
                         className="h-full"
                     >
                         <div className="pt-2">
