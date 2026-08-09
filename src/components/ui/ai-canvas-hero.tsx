@@ -28,11 +28,11 @@ export function AICanvasHero({
   const getRoleLabel = (role: string) => {
     switch (role?.toLowerCase()) {
       case "admin":
-        return { label: "Administrador", icon: ShieldCheck, color: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20" };
+        return { label: "Administrador", icon: ShieldCheck, color: "bg-primary/10 text-primary border-primary/20" };
       case "teacher":
-        return { label: "Docente", icon: GraduationCap, color: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" };
+        return { label: "Docente", icon: GraduationCap, color: "bg-primary/10 text-primary border-primary/20" };
       default:
-        return { label: "Estudiante", icon: User, color: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20" };
+        return { label: "Estudiante", icon: User, color: "bg-primary/10 text-primary border-primary/20" };
     }
   };
 
@@ -42,8 +42,8 @@ export function AICanvasHero({
   return (
     <div className="relative overflow-hidden rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-gradient-to-b from-slate-900 via-slate-900/95 to-slate-950 text-white p-5 sm:p-8 md:p-12 shadow-2xl">
       {/* Background Animated Conic & Radial Gradients */}
-      <div className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full bg-gradient-to-tr from-emerald-500/20 via-teal-500/15 to-cyan-500/0 blur-3xl opacity-70 animate-pulse" />
-      <div className="pointer-events-none absolute top-0 right-0 w-96 h-96 rounded-full bg-gradient-to-b from-blue-500/10 to-transparent blur-3xl" />
+      <div className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full bg-gradient-to-tr from-primary/20 via-primary/10 to-transparent blur-3xl opacity-70 animate-pulse" />
+      <div className="pointer-events-none absolute top-0 right-0 w-96 h-96 rounded-full bg-gradient-to-b from-primary/10 to-transparent blur-3xl" />
       
       {/* Grid Pattern overlay */}
       <div 

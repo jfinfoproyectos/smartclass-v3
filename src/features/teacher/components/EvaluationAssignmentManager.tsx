@@ -224,10 +224,10 @@ export function EvaluationAssignmentManager({
                                     description={displayDesc}
                                     icon={FileText}
                                     badge={isActive ? "Activa ahora" : isFinished ? "Finalizada" : "Programada"}
-                                    badgeColor={isActive ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" : isFinished ? "bg-red-500/10 text-red-600 border-red-500/20" : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"}
-                                    accentColor="from-purple-500/30 via-pink-500/20 to-transparent"
-                                    iconBgColor="bg-purple-500/10 dark:bg-purple-500/20"
-                                    iconTextColor="text-purple-600 dark:text-purple-400"
+                                    badgeColor={isActive ? "bg-primary/10 text-primary border-primary/20" : isFinished ? "bg-muted text-muted-foreground border-border" : "bg-primary/10 text-primary border-primary/20"}
+                                    accentColor="from-primary/30 via-primary/15 to-transparent"
+                                    iconBgColor="bg-primary/10"
+                                    iconTextColor="text-primary"
                                     hideFooter={true}
                                     className="h-full group"
                                 >

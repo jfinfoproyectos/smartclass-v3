@@ -399,10 +399,10 @@ export function EvaluationManager({ evaluations }: { evaluations: any[] }) {
                                     })()}
                                     icon={FileQuestion}
                                     badge={`${evaluation._count?.questions || 0} Preguntas`}
-                                    badgeColor="bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20"
-                                    accentColor="from-purple-500/30 via-pink-500/20 to-transparent"
-                                    iconBgColor="bg-purple-500/10 dark:bg-purple-500/20"
-                                    iconTextColor="text-purple-600 dark:text-purple-400"
+                                    badgeColor="bg-primary/10 text-primary border-primary/20"
+                                    accentColor="from-primary/30 via-primary/15 to-transparent"
+                                    iconBgColor="bg-primary/10"
+                                    iconTextColor="text-primary"
                                     hideFooter={true}
                                     className="h-full group"
                                 >

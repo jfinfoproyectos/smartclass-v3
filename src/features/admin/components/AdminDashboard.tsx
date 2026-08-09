@@ -56,10 +56,10 @@ export function AdminDashboard({ stats, recentActivity }: AdminDashboardProps) {
             value: stats.users.total,
             icon: Users,
             badge: "Comunidad",
-            badgeColor: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
-            accentColor: "from-blue-500/30 via-cyan-500/20 to-transparent",
-            iconBgColor: "bg-blue-500/10 dark:bg-blue-500/20",
-            iconTextColor: "text-blue-600 dark:text-blue-400",
+            badgeColor: "bg-primary/10 text-primary border-primary/20",
+            accentColor: "from-primary/30 via-primary/15 to-transparent",
+            iconBgColor: "bg-primary/10",
+            iconTextColor: "text-primary",
             link: "/dashboard/admin/users"
         },
         {
@@ -68,10 +68,10 @@ export function AdminDashboard({ stats, recentActivity }: AdminDashboardProps) {
             value: stats.courses.active,
             icon: BookOpen,
             badge: "Académico",
-            badgeColor: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20",
-            accentColor: "from-indigo-500/30 via-purple-500/20 to-transparent",
-            iconBgColor: "bg-indigo-500/10 dark:bg-indigo-500/20",
-            iconTextColor: "text-indigo-600 dark:text-indigo-400",
+            badgeColor: "bg-primary/10 text-primary border-primary/20",
+            accentColor: "from-primary/30 via-primary/15 to-transparent",
+            iconBgColor: "bg-primary/10",
+            iconTextColor: "text-primary",
             link: "/dashboard/admin/courses"
         },
         {
@@ -80,10 +80,10 @@ export function AdminDashboard({ stats, recentActivity }: AdminDashboardProps) {
             value: stats.activity.submissions,
             icon: Activity,
             badge: "Actividad",
-            badgeColor: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
-            accentColor: "from-emerald-500/30 via-teal-500/20 to-transparent",
-            iconBgColor: "bg-emerald-500/10 dark:bg-emerald-500/20",
-            iconTextColor: "text-emerald-600 dark:text-emerald-400",
+            badgeColor: "bg-primary/10 text-primary border-primary/20",
+            accentColor: "from-primary/30 via-primary/15 to-transparent",
+            iconBgColor: "bg-primary/10",
+            iconTextColor: "text-primary",
             link: "/dashboard/admin"
         },
         {
@@ -92,28 +92,28 @@ export function AdminDashboard({ stats, recentActivity }: AdminDashboardProps) {
             value: (stats as any).documentation?.total || 0,
             icon: FileText,
             badge: "Recursos",
-            badgeColor: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
-            accentColor: "from-amber-500/30 via-orange-500/20 to-transparent",
-            iconBgColor: "bg-amber-500/10 dark:bg-amber-500/20",
-            iconTextColor: "text-amber-600 dark:text-amber-400",
+            badgeColor: "bg-primary/10 text-primary border-primary/20",
+            accentColor: "from-primary/30 via-primary/15 to-transparent",
+            iconBgColor: "bg-primary/10",
+            iconTextColor: "text-primary",
             link: "/dashboard/admin/docs"
         }
     ];
 
     const userDistribution = [
-        { label: "Estudiantes", value: stats.users.student, icon: GraduationCap, color: "bg-blue-500", text: "text-blue-500" },
-        { label: "Profesores", value: stats.users.teacher, icon: UserCheck, color: "bg-indigo-500", text: "text-indigo-500" },
-        { label: "Administradores", value: stats.users.admin, icon: ShieldCheck, color: "bg-emerald-500", text: "text-emerald-500" },
+        { label: "Estudiantes", value: stats.users.student, icon: GraduationCap, color: "bg-primary/80", text: "text-primary" },
+        { label: "Profesores", value: stats.users.teacher, icon: UserCheck, color: "bg-primary/60", text: "text-primary" },
+        { label: "Administradores", value: stats.users.admin, icon: ShieldCheck, color: "bg-primary", text: "text-primary" },
     ];
 
     return (
         <DashboardContainer>
             {/* Header Banner - AI Canvas Ambient Lighting */}
             <div className="relative overflow-hidden rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-slate-900/90 text-white p-6 sm:p-8 shadow-xl">
-                <div className="pointer-events-none absolute -top-32 left-1/3 w-96 h-96 rounded-full bg-gradient-to-br from-emerald-500/20 via-blue-500/10 to-transparent blur-3xl opacity-70" />
+                <div className="pointer-events-none absolute -top-32 left-1/3 w-96 h-96 rounded-full bg-gradient-to-br from-primary/20 via-primary/10 to-transparent blur-3xl opacity-70" />
                 <div className="relative z-10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div className="space-y-1.5">
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 backdrop-blur-md">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20 backdrop-blur-md">
                             <Shield className="w-3.5 h-3.5" />
                             <span>Panel de Administración Central</span>
                         </div>
@@ -132,7 +132,7 @@ export function AdminDashboard({ stats, recentActivity }: AdminDashboardProps) {
                                 Ajustes
                             </Link>
                         </Button>
-                        <Button size="sm" className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/20 border-none" asChild>
+                        <Button size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs rounded-xl shadow-lg border-none" asChild>
                             <Link href="/dashboard/admin/users">
                                 <UserPlus className="h-4 w-4 mr-1.5" />
                                 Nuevo Usuario

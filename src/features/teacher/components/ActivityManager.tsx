@@ -745,10 +745,10 @@ export function ActivityManager({ courseId, activities }: { courseId: string; ac
                                     description={displayDesc}
                                     icon={ClipboardCheck}
                                     badge={`Peso: ${(activity.weight || 0).toFixed(1)}%`}
-                                    badgeColor="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20"
-                                    accentColor="from-blue-500/30 via-indigo-500/20 to-transparent"
-                                    iconBgColor="bg-blue-500/10 dark:bg-blue-500/20"
-                                    iconTextColor="text-blue-600 dark:text-blue-400"
+                                    badgeColor="bg-primary/10 text-primary border-primary/20"
+                                    accentColor="from-primary/30 via-primary/15 to-transparent"
+                                    iconBgColor="bg-primary/10"
+                                    iconTextColor="text-primary"
                                     hideFooter={true}
                                     className="h-full group"
                                 >

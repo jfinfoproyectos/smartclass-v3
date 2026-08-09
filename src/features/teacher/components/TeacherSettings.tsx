@@ -109,7 +109,7 @@ export function TeacherSettings({ initialCredentials, themes }: TeacherSettingsP
                 <Card className="rounded-2xl border border-slate-200/80 dark:border-slate-800 overflow-hidden bg-card shadow-sm">
                     <CardHeader className="border-b border-slate-100 dark:border-slate-800 pb-4">
                         <CardTitle className="flex items-center gap-2 text-lg font-bold">
-                            <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500">
+                            <div className="p-2 rounded-lg bg-primary/10 text-primary">
                                 <Bot className="h-5 w-5" />
                             </div>
                             Proveedor & Modelo de IA
@@ -124,7 +124,7 @@ export function TeacherSettings({ initialCredentials, themes }: TeacherSettingsP
                                 <Label htmlFor="aiProvider" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Proveedor</Label>
                                 <select
                                     id="aiProvider"
-                                    className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all"
+                                    className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
                                     value={aiProvider}
                                     onChange={(e) => {
                                         setAiProvider(e.target.value);
@@ -183,8 +183,8 @@ export function TeacherSettings({ initialCredentials, themes }: TeacherSettingsP
                             </Button>
 
                             {testResult && (
-                                <div className={`flex items-center gap-2 text-xs font-semibold ${testResult.success ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}>
-                                    {testResult.success ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                                <div className={`flex items-center gap-2 text-xs font-semibold ${testResult.success ? "text-primary" : "text-destructive"}`}>
+                                    {testResult.success ? <CheckCircle2 className="h-4 w-4 text-primary" /> : <XCircle className="h-4 w-4" />}
                                     <span>{testResult.message}</span>
                                 </div>
                             )}
@@ -196,7 +196,7 @@ export function TeacherSettings({ initialCredentials, themes }: TeacherSettingsP
                 <Card className="rounded-2xl border border-slate-200/80 dark:border-slate-800 overflow-hidden bg-card shadow-sm">
                     <CardHeader className="border-b border-slate-100 dark:border-slate-800 pb-4">
                         <CardTitle className="flex items-center gap-2 text-lg font-bold">
-                            <div className="p-2 rounded-lg bg-slate-900 text-white dark:bg-slate-800">
+                            <div className="p-2 rounded-lg bg-primary/10 text-primary">
                                 <Github className="h-5 w-5" />
                             </div>
                             Integración con GitHub

@@ -20,10 +20,10 @@ export function TeacherEvaluationsView({ evaluations }: TeacherEvaluationsViewPr
             value: `${evaluations.length} Pruebas`,
             icon: FileText,
             badge: "Historial",
-            badgeColor: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
-            accentColor: "from-blue-500/30 via-indigo-500/20 to-transparent",
-            iconBgColor: "bg-blue-500/10 dark:bg-blue-500/20",
-            iconTextColor: "text-blue-600 dark:text-blue-400",
+            badgeColor: "bg-primary/10 text-primary border-primary/20",
+            accentColor: "from-primary/30 via-primary/15 to-transparent",
+            iconBgColor: "bg-primary/10",
+            iconTextColor: "text-primary",
         },
         {
             title: "Exámenes Activos",
@@ -31,10 +31,10 @@ export function TeacherEvaluationsView({ evaluations }: TeacherEvaluationsViewPr
             value: `${activeEvaluationsCount} Activos`,
             icon: CheckCircle2,
             badge: "En curso",
-            badgeColor: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
-            accentColor: "from-emerald-500/30 via-teal-500/20 to-transparent",
-            iconBgColor: "bg-emerald-500/10 dark:bg-emerald-500/20",
-            iconTextColor: "text-emerald-600 dark:text-emerald-400",
+            badgeColor: "bg-primary/10 text-primary border-primary/20",
+            accentColor: "from-primary/30 via-primary/15 to-transparent",
+            iconBgColor: "bg-primary/10",
+            iconTextColor: "text-primary",
         },
         {
             title: "Calificación Automática",
@@ -42,10 +42,10 @@ export function TeacherEvaluationsView({ evaluations }: TeacherEvaluationsViewPr
             value: "IA Integrada",
             icon: Award,
             badge: "Inteligente",
-            badgeColor: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20",
-            accentColor: "from-purple-500/30 via-pink-500/20 to-transparent",
-            iconBgColor: "bg-purple-500/10 dark:bg-purple-500/20",
-            iconTextColor: "text-purple-600 dark:text-purple-400",
+            badgeColor: "bg-primary/10 text-primary border-primary/20",
+            accentColor: "from-primary/30 via-primary/15 to-transparent",
+            iconBgColor: "bg-primary/10",
+            iconTextColor: "text-primary",
         },
     ];
 
@@ -53,9 +53,9 @@ export function TeacherEvaluationsView({ evaluations }: TeacherEvaluationsViewPr
         <DashboardContainer>
             {/* Header Banner AI Canvas */}
             <div className="relative overflow-hidden rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-slate-900/90 text-white p-6 sm:p-8 shadow-xl">
-                <div className="pointer-events-none absolute -top-32 right-1/4 w-96 h-96 rounded-full bg-gradient-to-br from-purple-500/20 via-emerald-500/10 to-transparent blur-3xl opacity-70" />
+                <div className="pointer-events-none absolute -top-32 right-1/4 w-96 h-96 rounded-full bg-gradient-to-br from-primary/20 via-primary/10 to-transparent blur-3xl opacity-70" />
                 <div className="relative z-10 space-y-2">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20 backdrop-blur-md">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20 backdrop-blur-md">
                         <FileText className="w-3.5 h-3.5" />
                         <span>Módulo de Evaluaciones</span>
                     </div>

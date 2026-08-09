@@ -16,10 +16,10 @@ export function TeacherAttendanceView() {
             value: "94.2%",
             icon: CheckCircle2,
             badge: "Estadística",
-            badgeColor: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
-            accentColor: "from-emerald-500/30 via-teal-500/20 to-transparent",
-            iconBgColor: "bg-emerald-500/10 dark:bg-emerald-500/20",
-            iconTextColor: "text-emerald-600 dark:text-emerald-400",
+            badgeColor: "bg-primary/10 text-primary border-primary/20",
+            accentColor: "from-primary/30 via-primary/15 to-transparent",
+            iconBgColor: "bg-primary/10",
+            iconTextColor: "text-primary",
         },
         {
             title: "Asistencias Registradas",
@@ -27,10 +27,10 @@ export function TeacherAttendanceView() {
             value: "48 Sesiones",
             icon: CalendarClock,
             badge: "Historial",
-            badgeColor: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
-            accentColor: "from-blue-500/30 via-cyan-500/20 to-transparent",
-            iconBgColor: "bg-blue-500/10 dark:bg-blue-500/20",
-            iconTextColor: "text-blue-600 dark:text-blue-400",
+            badgeColor: "bg-primary/10 text-primary border-primary/20",
+            accentColor: "from-primary/30 via-primary/15 to-transparent",
+            iconBgColor: "bg-primary/10",
+            iconTextColor: "text-primary",
         },
         {
             title: "Justificantes Pendientes",
@@ -38,10 +38,10 @@ export function TeacherAttendanceView() {
             value: "3 Pendientes",
             icon: AlertCircle,
             badge: "Revisión",
-            badgeColor: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
-            accentColor: "from-amber-500/30 via-orange-500/20 to-transparent",
-            iconBgColor: "bg-amber-500/10 dark:bg-amber-500/20",
-            iconTextColor: "text-amber-600 dark:text-amber-400",
+            badgeColor: "bg-primary/10 text-primary border-primary/20",
+            accentColor: "from-primary/30 via-primary/15 to-transparent",
+            iconBgColor: "bg-primary/10",
+            iconTextColor: "text-primary",
         },
     ];
 
@@ -49,10 +49,10 @@ export function TeacherAttendanceView() {
         <DashboardContainer>
             {/* Header Banner AI Canvas */}
             <div className="relative overflow-hidden rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-slate-900/90 text-white p-6 sm:p-8 shadow-xl">
-                <div className="pointer-events-none absolute -top-32 right-1/4 w-96 h-96 rounded-full bg-gradient-to-br from-emerald-500/20 via-teal-500/10 to-transparent blur-3xl opacity-70" />
+                <div className="pointer-events-none absolute -top-32 right-1/4 w-96 h-96 rounded-full bg-gradient-to-br from-primary/20 via-primary/10 to-transparent blur-3xl opacity-70" />
                 <div className="relative z-10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div className="space-y-2">
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 backdrop-blur-md">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20 backdrop-blur-md">
                             <CalendarClock className="w-3.5 h-3.5" />
                             <span>Módulo de Asistencia</span>
                         </div>
@@ -64,7 +64,7 @@ export function TeacherAttendanceView() {
                         </p>
                     </div>
 
-                    <Button size="sm" className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/20 border-none" asChild>
+                    <Button size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs rounded-xl shadow-lg border-none" asChild>
                         <Link href="/dashboard/teacher">
                             <QrCode className="w-4 h-4 mr-1.5" />
                             Ir a Mis Cursos
@@ -99,7 +99,7 @@ export function TeacherAttendanceView() {
 
             {/* Main Action Section */}
             <Card className="overflow-hidden border border-slate-200/80 dark:border-slate-800 bg-card shadow-sm rounded-2xl p-8 text-center space-y-4">
-                <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center mx-auto border border-emerald-500/20">
+                <div className="w-16 h-16 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto border border-primary/20">
                     <QrCode className="w-8 h-8" />
                 </div>
                 <div className="space-y-2 max-w-md mx-auto">
@@ -109,7 +109,7 @@ export function TeacherAttendanceView() {
                     </p>
                 </div>
                 <div className="pt-4">
-                    <Button size="default" className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl px-6 shadow-md" asChild>
+                    <Button size="default" className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl px-6 shadow-md" asChild>
                         <Link href="/dashboard/teacher">Seleccionar Curso &rarr;</Link>
                     </Button>
                 </div>

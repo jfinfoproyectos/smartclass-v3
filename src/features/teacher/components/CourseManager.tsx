@@ -602,10 +602,10 @@ export function CourseManager({
                                 description={course.description || "Asignatura académica activa en la plataforma."}
                                 icon={BookOpen}
                                 badge={course.registrationOpen ? "Inscripción Abierta" : "Inscripción Cerrada"}
-                                badgeColor={course.registrationOpen ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" : "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20"}
-                                accentColor="from-emerald-500/30 via-teal-500/20 to-transparent"
-                                iconBgColor="bg-emerald-500/10 dark:bg-emerald-500/20"
-                                iconTextColor="text-emerald-600 dark:text-emerald-400"
+                                badgeColor={course.registrationOpen ? "bg-primary/10 text-primary border-primary/20" : "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20"}
+                                accentColor="from-primary/30 via-primary/15 to-transparent"
+                                iconBgColor="bg-primary/10"
+                                iconTextColor="text-primary"
                                 hideFooter={true}
                                 className={cn("h-full transition-all border", isSelected && "ring-2 ring-primary border-primary/50")}
                             >

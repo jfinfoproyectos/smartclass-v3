@@ -618,10 +618,10 @@ export function MyEnrollments({
                                                                 description={displayDesc}
                                                                 icon={FileText}
                                                                 badge={isSubmitted ? "Completado" : isExpired ? "Expirado" : isUpcoming ? "Próximamente" : isOpen ? "Abierto" : "Evaluación"}
-                                                                badgeColor={isSubmitted ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" : isExpired ? "bg-red-500/10 text-red-600 border-red-500/20" : "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20"}
-                                                                accentColor="from-purple-500/30 via-pink-500/20 to-transparent"
-                                                                iconBgColor="bg-purple-500/10 dark:bg-purple-500/20"
-                                                                iconTextColor="text-purple-600 dark:text-purple-400"
+                                                                badgeColor={isSubmitted ? "bg-primary/10 text-primary border-primary/20" : isExpired ? "bg-destructive/10 text-destructive border-destructive/20" : "bg-primary/10 text-primary border-primary/20"}
+                                                                accentColor="from-primary/30 via-primary/15 to-transparent"
+                                                                iconBgColor="bg-primary/10"
+                                                                iconTextColor="text-primary"
                                                                 hideFooter={true}
                                                                 className="h-full group"
                                                             >
