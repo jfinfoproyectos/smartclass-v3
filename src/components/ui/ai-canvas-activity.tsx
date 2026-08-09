@@ -67,22 +67,22 @@ export function AICanvasActivityMatrix({ className }: { className?: string }) {
   const getCategoryIcon = (category: RealActivityItem["category"]) => {
     switch (category) {
       case "ai":
-        return <BrainCircuit className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />;
+        return <BrainCircuit className="w-4 h-4 text-primary" />;
       case "evaluation":
-        return <TrendingUp className="w-4 h-4 text-blue-500 dark:text-blue-400" />;
+        return <TrendingUp className="w-4 h-4 text-primary" />;
       case "attendance":
-        return <Clock className="w-4 h-4 text-amber-500 dark:text-amber-400" />;
+        return <Clock className="w-4 h-4 text-primary" />;
       case "achievement":
-        return <Award className="w-4 h-4 text-purple-500 dark:text-purple-400" />;
+        return <Award className="w-4 h-4 text-primary" />;
     }
   };
 
   const getStatusBadge = (status: RealActivityItem["status"]) => {
     switch (status) {
       case "completed":
-        return <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[10px]">Completado</Badge>;
+        return <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-[10px]">Completado</Badge>;
       case "in_progress":
-        return <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 text-[10px]">En Proceso</Badge>;
+        return <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-[10px]">En Proceso</Badge>;
       case "alert":
         return <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 text-[10px]">Revisar</Badge>;
     }
@@ -93,13 +93,13 @@ export function AICanvasActivityMatrix({ className }: { className?: string }) {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary/10 text-primary">
             <Activity className="w-5 h-5" />
           </div>
           <div>
             <h3 className="text-lg font-bold tracking-tight text-foreground flex items-center gap-2">
               AI Canvas Timeline
-              <Sparkles className="w-4 h-4 text-emerald-500 animate-pulse" />
+              <Sparkles className="w-4 h-4 text-primary animate-pulse" />
             </h3>
             <p className="text-xs text-muted-foreground">
               Historial y actividad real sincronizada de la plataforma.
@@ -135,7 +135,7 @@ export function AICanvasActivityMatrix({ className }: { className?: string }) {
       <div className="space-y-3">
         {loading ? (
           <div className="flex items-center justify-center py-10 text-muted-foreground text-xs gap-2">
-            <RefreshCw className="w-4 h-4 animate-spin text-emerald-500" />
+            <RefreshCw className="w-4 h-4 animate-spin text-primary" />
             <span>Cargando actividad del sistema...</span>
           </div>
         ) : filteredItems.length > 0 ? (
@@ -153,7 +153,7 @@ export function AICanvasActivityMatrix({ className }: { className?: string }) {
                 </div>
                 <div className="space-y-0.5 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h4 className="text-sm font-bold text-foreground group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                    <h4 className="text-sm font-bold text-foreground group-hover:text-primary transition-colors">
                       {item.title}
                     </h4>
                     {getStatusBadge(item.status)}
@@ -166,7 +166,7 @@ export function AICanvasActivityMatrix({ className }: { className?: string }) {
 
               <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 self-end sm:self-auto text-xs text-muted-foreground">
                 {item.score && (
-                  <span className="font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                  <span className="font-mono font-bold px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
                     {item.score}
                   </span>
                 )}

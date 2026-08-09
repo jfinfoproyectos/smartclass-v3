@@ -27,10 +27,10 @@ export function AICanvasCard({
   description,
   icon: Icon,
   badge,
-  badgeColor = "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
-  accentColor = "from-emerald-500/20 via-teal-500/10 to-transparent",
-  iconBgColor = "bg-emerald-500/10 dark:bg-emerald-500/20",
-  iconTextColor = "text-emerald-600 dark:text-emerald-400",
+  badgeColor = "bg-primary/10 text-primary border-primary/20",
+  accentColor = "from-primary/20 via-primary/10 to-transparent",
+  iconBgColor = "bg-primary/10",
+  iconTextColor = "text-primary",
   onClick,
   className,
   children,
@@ -69,7 +69,7 @@ export function AICanvasCard({
         <div
           className="pointer-events-none absolute -inset-px opacity-100 transition-opacity duration-300 z-0"
           style={{
-            background: `radial-gradient(400px circle at ${mousePos.x}px ${mousePos.y}px, rgba(16, 185, 129, 0.12), transparent 80%)`,
+            background: `radial-gradient(400px circle at ${mousePos.x}px ${mousePos.y}px, var(--primary, rgba(16, 185, 129, 0.12)), transparent 80%)`,
           }}
         />
       )}
@@ -110,9 +110,9 @@ export function AICanvasCard({
 
           {/* Text Content */}
           <div className="space-y-1.5">
-            <h3 className="text-lg font-bold tracking-tight text-foreground group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors duration-200 flex items-center justify-between">
+            <h3 className="text-lg font-bold tracking-tight text-foreground group-hover:text-primary transition-colors duration-200 flex items-center justify-between">
               <span>{title}</span>
-              <ArrowUpRight className="w-4 h-4 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200 text-emerald-600 dark:text-emerald-400" />
+              <ArrowUpRight className="w-4 h-4 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200 text-primary" />
             </h3>
             {description && (
               <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">
@@ -129,7 +129,7 @@ export function AICanvasCard({
       {!hideFooter && (
         <div className="relative z-10 pt-4 mt-auto border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors">
           <span>{actionLabel || "Explorar módulo"}</span>
-          <span className="font-semibold text-emerald-600 dark:text-emerald-400 opacity-80 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all">
+          <span className="font-semibold text-primary opacity-80 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all">
             {actionText || "Acceder →"}
           </span>
         </div>

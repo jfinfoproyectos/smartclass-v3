@@ -96,10 +96,10 @@ export function MyEnrollments({
                                     description={enrollment.course.description || "Asignatura académica en la que estás matriculado."}
                                     icon={BookOpen}
                                     badge="Matriculado"
-                                    badgeColor="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
-                                    accentColor="from-emerald-500/30 via-teal-500/20 to-transparent"
-                                    iconBgColor="bg-emerald-500/10 dark:bg-emerald-500/20"
-                                    iconTextColor="text-emerald-600 dark:text-emerald-400"
+                                    badgeColor="bg-primary/10 text-primary border-primary/20"
+                                    accentColor="from-primary/30 via-primary/15 to-transparent"
+                                    iconBgColor="bg-primary/10"
+                                    iconTextColor="text-primary"
                                     actionLabel={`Docente: ${teacherName}`}
                                     actionText="Entrar al Aula →"
                                     onClick={() => onSelectCourse(enrollment.course.id)}
