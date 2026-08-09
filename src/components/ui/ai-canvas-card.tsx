@@ -82,42 +82,44 @@ export function AICanvasCard({
         )}
       />
 
-      <div className="relative z-10 flex flex-col space-y-4">
-        {/* Header: Icon & Badge */}
-        <div className="flex items-center justify-between">
-          <div
-            className={cn(
-              "flex items-center justify-center w-12 h-12 rounded-xl transition-transform duration-300 group-hover:scale-110 shadow-sm",
-              iconBgColor,
-              iconTextColor
-            )}
-          >
-            <Icon className="w-6 h-6" />
-          </div>
-
-          {badge && (
-            <span
+      <div className="relative z-10 flex flex-col justify-between h-full flex-1 space-y-4">
+        <div className="space-y-4">
+          {/* Header: Icon & Badge */}
+          <div className="flex items-center justify-between">
+            <div
               className={cn(
-                "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border backdrop-blur-sm",
-                badgeColor
+                "flex items-center justify-center w-12 h-12 rounded-xl transition-transform duration-300 group-hover:scale-110 shadow-sm",
+                iconBgColor,
+                iconTextColor
               )}
             >
-              {badge}
-            </span>
-          )}
-        </div>
+              <Icon className="w-6 h-6" />
+            </div>
 
-        {/* Text Content */}
-        <div className="space-y-1.5">
-          <h3 className="text-lg font-bold tracking-tight text-foreground group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors duration-200 flex items-center justify-between">
-            <span>{title}</span>
-            <ArrowUpRight className="w-4 h-4 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200 text-emerald-600 dark:text-emerald-400" />
-          </h3>
-          {description && (
-            <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">
-              {description}
-            </p>
-          )}
+            {badge && (
+              <span
+                className={cn(
+                  "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border backdrop-blur-sm",
+                  badgeColor
+                )}
+              >
+                {badge}
+              </span>
+            )}
+          </div>
+
+          {/* Text Content */}
+          <div className="space-y-1.5">
+            <h3 className="text-lg font-bold tracking-tight text-foreground group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors duration-200 flex items-center justify-between">
+              <span>{title}</span>
+              <ArrowUpRight className="w-4 h-4 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200 text-emerald-600 dark:text-emerald-400" />
+            </h3>
+            {description && (
+              <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">
+                {description}
+              </p>
+            )}
+          </div>
         </div>
 
         {children}

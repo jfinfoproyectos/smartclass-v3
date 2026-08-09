@@ -65,9 +65,9 @@ export function CreateAiProjectDialog() {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="shadow-sm hover:shadow-md transition-all active:scale-95">
-          <Sparkles className="w-4 h-4 group-hover:scale-110 transition-transform animate-pulse text-primary" />
-          Nueva Doc con IA
+        <Button size="sm" className="font-bold rounded-xl shadow-md border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 transition-all active:scale-95">
+          <Sparkles className="w-4 h-4 mr-1.5 animate-pulse text-primary shrink-0" />
+          <span>Nueva Doc con IA</span>
         </Button>
       </DialogTrigger>
       

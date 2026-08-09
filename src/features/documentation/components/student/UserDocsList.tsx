@@ -96,16 +96,16 @@ export function UserDocsList({ docs }: UserDocsListProps) {
               description="Accede al contenido completo de esta guía y recursos de estudio asignados por tu docente."
               icon={BookOpen}
               badge="Material del Curso"
-              badgeColor="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
-              accentColor="from-emerald-500/30 via-teal-500/20 to-transparent"
-              iconBgColor="bg-emerald-500/10 dark:bg-emerald-500/20"
-              iconTextColor="text-emerald-600 dark:text-emerald-400"
+              badgeColor="bg-primary/10 text-primary border-primary/20"
+              accentColor="from-primary/30 via-primary/20 to-transparent"
+              iconBgColor="bg-primary/10 dark:bg-primary/20"
+              iconTextColor="text-primary"
               hideFooter={true}
               className="h-full group"
             >
               <div className="pt-4 mt-auto">
                 <Button
-                  className="w-full font-bold text-xs uppercase tracking-wider rounded-xl shadow-md bg-emerald-600 hover:bg-emerald-500 text-white"
+                  className="w-full font-bold text-xs uppercase tracking-wider rounded-xl shadow-md bg-primary hover:bg-primary/90 text-primary-foreground"
                   asChild
                 >
                   <Link href={`/docs/${doc.id}`}>
@@ -131,11 +131,11 @@ export function UserDocsList({ docs }: UserDocsListProps) {
                 <TableRow key={`${doc.groupName}-${doc.id}`} className="group hover:bg-muted/30 transition-colors border-b border-border/20">
                   <TableCell className="font-medium py-4 pl-6">
                     <div className="flex items-center gap-3.5">
-                      <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-500 group-hover:scale-110 transition-all duration-300 shadow-sm">
+                      <div className="p-2.5 rounded-xl bg-primary/10 text-primary group-hover:scale-110 transition-all duration-300 shadow-sm">
                         <BookOpen className="w-4 h-4" />
                       </div>
                       <div>
-                        <span className="font-semibold text-sm text-foreground group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                        <span className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors">
                           {doc.title}
                         </span>
                         <p className="text-xs text-muted-foreground">Material del Curso</p>
@@ -147,7 +147,7 @@ export function UserDocsList({ docs }: UserDocsListProps) {
                     <Button
                       variant="default"
                       size="sm"
-                      className="font-bold text-xs uppercase tracking-wider bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-sm"
+                      className="font-bold text-xs uppercase tracking-wider bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl shadow-sm"
                       asChild
                     >
                       <Link href={`/docs/${doc.id}`}>

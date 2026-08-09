@@ -124,7 +124,7 @@ export function renderFormattedText(text: string) {
   result = result.replace(/`([^`]+)`/g, (_, code) => {
     const placeholder = `@@CODEPLACEHOLDER${codeBlocks.length}@@`;
     const escapedCode = code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    codeBlocks.push(`<code class="bg-primary/10 text-primary px-1.5 py-0.5 rounded font-mono text-[0.88em] border border-primary/15">${escapedCode}</code>`);
+    codeBlocks.push(`<code class="bg-primary/10 text-primary px-2 py-0.5 rounded-md font-mono text-[0.88em] border border-primary/20 font-semibold shadow-2xs">${escapedCode}</code>`);
     return placeholder;
   });
 
@@ -132,7 +132,7 @@ export function renderFormattedText(text: string) {
   const imagePlaceholders: string[] = [];
   result = result.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
     const placeholder = `@@IMGPLACEHOLDER${imagePlaceholders.length}@@`;
-    imagePlaceholders.push(`<img src="${url}" alt="${alt || ''}" class="my-2 rounded-xl border border-border/50 max-h-96 object-contain inline-block shadow-sm" />`);
+    imagePlaceholders.push(`<img src="${url}" alt="${alt || ''}" class="my-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 max-h-96 object-contain inline-block shadow-md" />`);
     return placeholder;
   });
 
@@ -140,7 +140,7 @@ export function renderFormattedText(text: string) {
   const linkPlaceholders: string[] = [];
   result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, linkText, url) => {
     const placeholder = `@@LINKPLACEHOLDER${linkPlaceholders.length}@@`;
-    linkPlaceholders.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-primary font-bold hover:underline inline-flex items-center gap-1 transition-all">${linkText}</a>`);
+    linkPlaceholders.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-primary font-bold underline decoration-primary/40 underline-offset-4 hover:decoration-primary transition-all inline-flex items-center gap-1">${linkText}</a>`);
     return placeholder;
   });
 
@@ -160,9 +160,9 @@ export function renderFormattedText(text: string) {
 
   // Restore safe tags
   result = result
-    .replace(/@@KBDOPEN@@/g, "<kbd class='px-1.5 py-0.5 text-xs font-mono font-semibold bg-muted text-muted-foreground border border-border rounded-md shadow-xs'>")
+    .replace(/@@KBDOPEN@@/g, "<kbd class='px-2 py-0.5 text-xs font-mono font-semibold bg-muted text-muted-foreground border border-slate-200 dark:border-slate-800 rounded-lg shadow-xs'>")
     .replace(/@@KBDCLOSE@@/g, "</kbd>")
-    .replace(/@@MARKOPEN@@/g, "<mark class='bg-yellow-200/80 dark:bg-yellow-800/40 text-foreground px-1 rounded'>")
+    .replace(/@@MARKOPEN@@/g, "<mark class='bg-amber-500/20 text-amber-900 dark:text-amber-200 px-1.5 py-0.5 rounded-md border border-amber-500/30 font-medium'>")
     .replace(/@@MARKCLOSE@@/g, "</mark>")
     .replace(/@@SUBOPEN@@/g, "<sub>").replace(/@@SUBCLOSE@@/g, "</sub>")
     .replace(/@@SUPOPEN@@/g, "<sup>").replace(/@@SUPCLOSE@@/g, "</sup>")
@@ -2120,19 +2120,19 @@ export function ListBlock({ items, ordered }: { items: { text: string; checked?:
   
   if (isTaskList) {
     return (
-      <ul className="my-5 space-y-2.5">
+      <ul className="my-6 space-y-3">
         {items.map((item, idx) => {
           const isChecked = !!item.checked;
           return (
-            <li key={idx} className="flex items-start gap-2.5 text-[15px] font-semibold text-foreground/90">
-              <div className="shrink-0 mt-0.5 text-primary">
+            <li key={idx} className="flex items-start gap-3 text-[15.5px] leading-[1.75] font-medium text-foreground/90">
+              <div className="shrink-0 mt-1 text-primary">
                 {isChecked ? (
-                  <CheckSquare className="w-4 h-4 text-emerald-500" />
+                  <CheckSquare className="w-4 h-4 text-primary" />
                 ) : (
-                  <Square className="w-4 h-4 opacity-50" />
+                  <Square className="w-4 h-4 text-muted-foreground/40" />
                 )}
               </div>
-              <span className={cn(isChecked && "line-through text-muted-foreground/60 font-medium")}>
+              <span className={cn(isChecked && "line-through text-muted-foreground/60 font-normal")}>
                 {renderFormattedText(item.text)}
               </span>
             </li>
@@ -2144,10 +2144,15 @@ export function ListBlock({ items, ordered }: { items: { text: string; checked?:
   
   if (ordered) {
     return (
-      <ol className="my-5 list-decimal pl-6 space-y-2 text-[15px] leading-relaxed text-foreground/90 font-medium">
+      <ol className="my-6 space-y-3 text-[15.5px] leading-[1.8] text-foreground/90 font-medium list-none pl-0">
         {items.map((item, idx) => (
-          <li key={idx} className="pl-1">
-            {renderFormattedText(item.text)}
+          <li key={idx} className="flex items-start gap-3">
+            <span className="flex items-center justify-center h-5 w-5 rounded-full bg-primary/10 text-primary border border-primary/20 text-[11px] font-black shrink-0 mt-1">
+              {idx + 1}
+            </span>
+            <div className="flex-1">
+              {renderFormattedText(item.text)}
+            </div>
           </li>
         ))}
       </ol>
@@ -2155,10 +2160,13 @@ export function ListBlock({ items, ordered }: { items: { text: string; checked?:
   }
   
   return (
-    <ul className="my-5 list-disc pl-6 space-y-2 text-[15px] leading-relaxed text-foreground/90 font-medium">
+    <ul className="my-6 space-y-3 text-[15.5px] leading-[1.8] text-foreground/90 font-medium list-none pl-0">
       {items.map((item, idx) => (
-        <li key={idx} className="pl-1">
-          {renderFormattedText(item.text)}
+        <li key={idx} className="flex items-start gap-3">
+          <span className="h-2 w-2 rounded-full bg-primary shrink-0 mt-2.5 shadow-xs shadow-primary/50" />
+          <div className="flex-1">
+            {renderFormattedText(item.text)}
+          </div>
         </li>
       ))}
     </ul>

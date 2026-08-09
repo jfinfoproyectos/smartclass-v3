@@ -48,9 +48,6 @@ export default async function DashboardLayout({
       />
       <ProfileCompletionCheck />
       
-      {/* Global Top Ambient Glow Line spanning entire width across Sidebar & Header */}
-      <div className="fixed top-0 left-0 right-0 z-50 h-0.5 bg-gradient-to-r from-emerald-500 via-teal-400 via-indigo-500 to-amber-400 pointer-events-none" />
-
       <AppSidebar />
       <SidebarInset className="h-svh overflow-hidden flex flex-col bg-background">
         {/* Top Header Bar matching AppIdentity height (h-16), background and bottom border */}
@@ -59,7 +56,7 @@ export default async function DashboardLayout({
             <div className="flex items-center gap-3">
               <SidebarTrigger className="h-9 w-9 rounded-xl border border-slate-200/80 dark:border-slate-800 hover:bg-muted/60 transition-all" />
               
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 border border-emerald-500/20 text-xs font-bold">
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 text-xs font-bold">
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>SmartClass Engine</span>
               </div>

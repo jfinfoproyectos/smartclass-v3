@@ -69,13 +69,13 @@ export function NavMain({
                   className={cn(
                     "h-11 rounded-xl transition-all duration-300 px-3 relative overflow-hidden group",
                     active
-                      ? "bg-gradient-to-r from-emerald-500/15 via-emerald-500/5 to-transparent text-emerald-600 dark:text-emerald-400 font-bold border-l-4 border-emerald-500 shadow-sm shadow-emerald-500/10"
+                      ? "bg-gradient-to-r from-primary/15 via-primary/5 to-transparent text-primary font-bold border-l-4 border-primary shadow-sm shadow-primary/10"
                       : "text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800/60"
                   )}
                 >
                   <Link href={item.url} onClick={handleLinkClick}>
                     {item.icon && (
-                      <item.icon className={cn("h-5 w-5 transition-transform duration-300 group-hover:scale-110", active ? "text-emerald-500 dark:text-emerald-400" : "text-slate-400 dark:text-slate-500")} />
+                      <item.icon className={cn("h-5 w-5 transition-transform duration-300 group-hover:scale-110", active ? "text-primary" : "text-slate-400 dark:text-slate-500")} />
                     )}
                     <span className="ml-2 text-sm">{item.title}</span>
                   </Link>

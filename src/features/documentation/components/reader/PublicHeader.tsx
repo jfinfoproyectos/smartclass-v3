@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { ConfigControls } from "./ConfigControls";
 import { ThemeInfo } from "@/app/actions/themes";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { Menu, ChevronDown, AlignRight, ArrowLeft, Sparkles } from "lucide-react";
+import { Menu, ChevronDown, AlignRight, ArrowLeft } from "lucide-react";
 import { NavItem } from "../../services/public-docs";
 import { Button } from "@/components/ui/button";
 import {
@@ -81,9 +81,6 @@ export function PublicHeader({
 
   return (
     <header className="flex-none border-b border-slate-200/80 dark:border-slate-800/80 bg-background/80 dark:bg-slate-950/80 backdrop-blur-xl z-50 sticky top-0 w-full flex flex-col shadow-sm">
-      {/* Top Ambient Glow Line */}
-      <div className="h-0.5 w-full bg-gradient-to-r from-emerald-500 via-teal-400 via-indigo-500 to-amber-400" />
-
       <div className="h-13 w-full flex items-center justify-between px-3 sm:px-5 gap-3">
         <div className="flex items-center gap-2 flex-1 min-w-0">
           {/* Back to app button */}
@@ -100,14 +97,6 @@ export function PublicHeader({
               </Link>
             </Button>
           )}
-
-          {/* Project Title Badge */}
-          <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 border border-emerald-500/20 text-xs font-bold shrink-0">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span className="truncate max-w-[150px]">{projectName}</span>
-          </div>
-
-          <div className="h-4 w-px bg-slate-200 dark:bg-slate-800 mx-1 hidden md:block" />
 
           {/* Mobile Menu (Left Nav) */}
           <div className="md:hidden">
@@ -137,19 +126,19 @@ export function PublicHeader({
 
           {/* Mobile/Tablet Topics Dropdown */}
           {mounted && (
-            <div className="lg:hidden flex items-center shrink-0">
+            <div className="lg:hidden flex items-center shrink-0 min-w-0">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    className="h-8 gap-1.5 px-3 bg-muted/50 border border-slate-200/80 dark:border-slate-800 rounded-xl text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 cursor-pointer"
+                    className="h-8 gap-1.5 px-2.5 bg-muted/50 border border-slate-200/80 dark:border-slate-800 rounded-xl text-[10px] font-bold uppercase tracking-wider text-primary cursor-pointer max-w-[110px] sm:max-w-[200px] truncate"
                   >
-                    <span>{activeTitle}</span>
-                    <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+                    <span className="truncate">{activeTitle}</span>
+                    <ChevronDown className="w-3.5 h-3.5 opacity-60 shrink-0" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-48 p-1 z-[100] rounded-xl border border-slate-200/80 dark:border-slate-800">
+                <DropdownMenuContent align="start" className="w-52 p-1 z-[100] rounded-xl border border-slate-200/80 dark:border-slate-800">
                   <DropdownMenuLabel className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground px-2.5 py-1.5">
                     Seleccionar Tema
                   </DropdownMenuLabel>
@@ -159,9 +148,9 @@ export function PublicHeader({
                     <Link
                       href={`/docs/${projectId}`}
                       className={cn(
-                        "w-full text-left px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg cursor-pointer block",
+                        "w-full text-left px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg cursor-pointer block truncate",
                         !activeTopicSlug 
-                          ? "text-emerald-500 bg-emerald-500/10 font-black" 
+                          ? "text-primary bg-primary/10 font-black" 
                           : "text-muted-foreground hover:text-foreground"
                       )}
                     >
@@ -176,9 +165,9 @@ export function PublicHeader({
                         <Link
                           href={`/docs/${projectId}/${topic.slug}`}
                           className={cn(
-                            "w-full text-left px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg cursor-pointer block",
+                            "w-full text-left px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg cursor-pointer block truncate",
                             isActive 
-                              ? "text-emerald-500 bg-emerald-500/10 font-black" 
+                              ? "text-primary bg-primary/10 font-black" 
                               : "text-muted-foreground hover:text-foreground"
                           )}
                         >
@@ -194,14 +183,14 @@ export function PublicHeader({
 
           {/* Desktop Topics Tabs */}
           {mounted && (
-            <div className="hidden lg:flex items-center h-8 gap-1 bg-muted/40 p-1 rounded-xl border border-slate-200/60 dark:border-slate-800/60 overflow-x-auto no-scrollbar shrink-0">
+            <div className="hidden lg:flex items-center h-9 gap-1 bg-muted/50 p-1 rounded-xl border border-slate-200/80 dark:border-slate-800/80 overflow-x-auto no-scrollbar shrink-0">
               <Link
                 href={`/docs/${projectId}`}
                 className={cn(
                   "px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all whitespace-nowrap",
                   !activeTopicSlug 
-                    ? "bg-background text-emerald-500 shadow-sm font-extrabold" 
-                    : "text-muted-foreground hover:text-foreground"
+                    ? "bg-background text-primary border border-primary/30 shadow-xs font-extrabold" 
+                    : "text-muted-foreground hover:text-foreground hover:bg-background/50"
                 )}
               >
                 Inicio
@@ -215,8 +204,8 @@ export function PublicHeader({
                     className={cn(
                       "px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all whitespace-nowrap",
                       isActive 
-                        ? "bg-background text-emerald-500 shadow-sm font-extrabold" 
-                        : "text-muted-foreground hover:text-foreground"
+                        ? "bg-background text-primary border border-primary/30 shadow-xs font-extrabold" 
+                        : "text-muted-foreground hover:text-foreground hover:bg-background/50"
                     )}
                   >
                     {topic.title}
@@ -227,7 +216,7 @@ export function PublicHeader({
           )}
 
           {/* Search Area */}
-          <div className="hidden md:flex items-center w-full max-w-[220px] lg:max-w-xs">
+          <div className="flex items-center flex-1 max-w-[120px] sm:max-w-[220px] lg:max-w-xs min-w-0">
             {mounted && <Search projectId={projectId} />}
           </div>
         </div>

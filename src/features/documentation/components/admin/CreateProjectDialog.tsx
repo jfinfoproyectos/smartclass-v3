@@ -47,9 +47,9 @@ export function CreateProjectDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" className="shadow-md hover:shadow-lg transition-all active:scale-95">
-          <Plus className="h-4 w-4 group-hover:rotate-90 transition-transform" />
-          Nueva Doc
+        <Button size="sm" className="font-bold rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition-all active:scale-95">
+          <Plus className="h-4 w-4 mr-1.5 group-hover:rotate-90 transition-transform shrink-0" />
+          <span>Nueva Doc</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px] bg-background border-border rounded-2xl shadow-2xl">

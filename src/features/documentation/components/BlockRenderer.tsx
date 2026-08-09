@@ -66,7 +66,7 @@ export default function BlockRenderer({ content, initialCodeTheme }: { content: 
   }
 
   return (
-    <div className="space-y-6 select-text max-w-none font-sans">
+    <div className="space-y-6 select-text max-w-4xl mx-auto font-sans">
       {blocks.map((block) => {
         const { id, type, data } = block;
         
@@ -81,10 +81,10 @@ export default function BlockRenderer({ content, initialCodeTheme }: { content: 
 
             if (data.level === "h2") {
               return (
-                <div id={slug} key={id} className="scroll-mt-24 mt-12 mb-5">
-                  <h2 className={cn("text-xl sm:text-2xl font-black tracking-tight pl-4 border-l-4 border-emerald-500 bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-transparent py-2.5 rounded-r-2xl text-foreground flex flex-col shadow-xs", alignClass)}>
+                <div id={slug} key={id} className="scroll-mt-24 mt-12 mb-6">
+                  <h2 className={cn("text-xl sm:text-2xl font-bold tracking-tight pl-4 border-l-4 border-primary bg-gradient-to-r from-primary/10 via-primary/5 to-transparent py-3 rounded-r-2xl text-foreground flex flex-col shadow-xs", alignClass)}>
                     <span>{renderFormattedText(data.title)}</span>
-                    {data.subtitle && <span className="text-xs font-semibold text-muted-foreground/80 mt-1">{renderFormattedText(data.subtitle)}</span>}
+                    {data.subtitle && <span className="text-xs font-medium text-muted-foreground mt-1.5">{renderFormattedText(data.subtitle)}</span>}
                   </h2>
                 </div>
               );
@@ -92,7 +92,7 @@ export default function BlockRenderer({ content, initialCodeTheme }: { content: 
             if (data.level === "h3") {
               return (
                 <div id={slug} key={id} className="scroll-mt-24 mt-8 mb-4">
-                  <h3 className={cn("text-base sm:text-lg font-extrabold tracking-tight pl-3 border-l-2 border-teal-400 text-foreground/95 flex flex-col", alignClass)}>
+                  <h3 className={cn("text-base sm:text-lg font-bold tracking-tight pl-3 border-l-2 border-primary text-foreground flex flex-col", alignClass)}>
                     <span>{renderFormattedText(data.title)}</span>
                     {data.subtitle && <span className="text-xs font-medium text-muted-foreground mt-0.5">{renderFormattedText(data.subtitle)}</span>}
                   </h3>
@@ -101,7 +101,7 @@ export default function BlockRenderer({ content, initialCodeTheme }: { content: 
             }
             return (
               <div id={slug} key={id} className="scroll-mt-24 mb-8">
-                <h1 className={cn("text-3xl sm:text-4xl font-extrabold tracking-tight border-b border-slate-200/80 dark:border-slate-800/80 pb-4 leading-tight bg-clip-text text-transparent bg-gradient-to-r from-foreground via-foreground to-emerald-500", alignClass)}>
+                <h1 className={cn("text-3xl sm:text-4xl font-extrabold tracking-tight border-b border-slate-200/80 dark:border-slate-800/80 pb-4 leading-tight bg-clip-text text-transparent bg-gradient-to-r from-foreground via-foreground to-primary", alignClass)}>
                   {renderFormattedText(data.title)}
                   {data.subtitle && <span className="block text-base font-normal text-muted-foreground mt-2">{renderFormattedText(data.subtitle)}</span>}
                 </h1>
@@ -111,7 +111,7 @@ export default function BlockRenderer({ content, initialCodeTheme }: { content: 
           
           case "paragraph":
             return (
-              <p key={id} className="text-[15px] sm:text-[16px] leading-relaxed text-foreground/90 my-5 whitespace-pre-wrap font-normal antialiased">
+              <p key={id} className="text-[15.5px] sm:text-[16.5px] leading-[1.85] text-foreground/90 my-6 whitespace-pre-wrap font-normal antialiased tracking-normal">
                 {renderFormattedText(data.text)}
               </p>
             );
@@ -152,14 +152,14 @@ export default function BlockRenderer({ content, initialCodeTheme }: { content: 
             const Icon = theme.icon;
             
             return (
-              <div key={id} className={cn("my-6 rounded-2xl border backdrop-blur-xl shadow-md relative overflow-hidden flex items-start gap-4 p-5 transition-all", theme.border, theme.bg)}>
+              <div key={id} className={cn("my-7 rounded-2xl border backdrop-blur-xl shadow-sm relative overflow-hidden flex items-start gap-4 p-5 transition-all", theme.border, theme.bg)}>
                 <div className={cn("absolute left-0 top-0 bottom-0 w-1.5", theme.bar)} />
                 <div className={cn("p-2 rounded-xl shrink-0 mt-0.5 bg-background/80 shadow-xs border border-border/40", theme.text)}>
                   <Icon className="w-4 h-4" />
                 </div>
                 <div className="flex-1 min-w-0">
                   {data.title && <h5 className={cn("text-xs font-black uppercase tracking-wider mb-1.5", theme.text)}>{renderFormattedText(data.title)}</h5>}
-                  <div className="text-[14px] leading-relaxed text-foreground/90 font-medium">
+                  <div className="text-[15px] leading-[1.75] text-foreground/90 font-medium">
                     {renderFormattedText(data.text)}
                   </div>
                 </div>

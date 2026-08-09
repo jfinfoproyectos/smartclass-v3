@@ -267,13 +267,6 @@ export function PublicDocsShell({
 
   return (
     <div className="public-docs-root flex flex-col h-screen w-full overflow-hidden bg-background text-foreground transition-all duration-500">
-      {/* Thin top bar with project name, centered with small font */}
-      <div className="flex-none h-5 bg-muted/40 dark:bg-black/15 border-b border-border/40 dark:border-white/5 flex items-center justify-center no-print">
-        <span className="text-[8px] font-bold uppercase tracking-[0.3em] text-muted-foreground/80 truncate px-4">
-          {projectName}
-        </span>
-      </div>
-
       {/* Primary Header Area */}
       <div className="relative z-50">
         <PublicHeader 
@@ -332,7 +325,7 @@ export function PublicDocsShell({
         <div className="public-docs-center flex-1 flex flex-col min-w-0 overflow-hidden relative bg-background">
           <div className="flex flex-1 overflow-hidden relative">
             
-            {/* MAIN CONTENT AREA WRAPPER (TO CONSTRAIN PROGRESS BAR) */}
+            {/* MAIN CONTENT AREA WRAPPER (TO CONSTRAIN PROGRESS BAR & FOOTER) */}
             <div className="flex-1 flex flex-col relative overflow-hidden">
               {/* PROGRESS BAR */}
               <ReadingProgress targetId="main-content" />
@@ -342,7 +335,7 @@ export function PublicDocsShell({
                 id="main-content" 
                 className="flex-1 w-full overflow-y-auto custom-scrollbar relative scroll-smooth bg-background bg-grid-pattern"
               >
-                <div id="doc-content" className="w-full relative z-10 p-6 md:p-8 mx-auto max-w-6xl">
+                <div id="doc-content" className="w-full relative z-10 p-3 sm:p-6 md:p-8 mx-auto max-w-6xl">
                   <AnimatePresence mode="wait">
                     <motion.div
                       key={pathname}
@@ -365,15 +358,28 @@ export function PublicDocsShell({
 
                 {/* Classic MD Footer */}
                 <footer className="mt-20 border-t border-border/10">
-                  <div className="w-full max-w-4xl mx-auto px-6 py-12 md:py-16 text-center space-y-6">
-                    <div className="flex items-center justify-center gap-3 opacity-30 hover:opacity-80 transition-all duration-500">
-                      <div className="h-px w-8 bg-foreground" />
-                      <span className="text-[10px] font-black uppercase tracking-[0.5em]">FusionDoc Engine</span>
-                      <div className="h-px w-8 bg-foreground" />
+                  <div className="w-full max-w-4xl mx-auto px-6 py-8 text-center space-y-2">
+                    <div className="flex items-center justify-center gap-3 opacity-60">
+                      <div className="h-px w-8 bg-border" />
+                      <span className="text-[10px] font-black uppercase tracking-[0.25em] text-primary">{projectName}</span>
+                      <div className="h-px w-8 bg-border" />
                     </div>
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/60">SmartClass © 2026</p>
                   </div>
                 </footer>
               </main>
+
+              {/* Minimalist Fixed Bottom Bar (Bounded between Left & Right sidebars) */}
+              <div className="no-print border-t border-border bg-card/40 backdrop-blur-md px-6 py-2 flex-none">
+                 <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.15em] text-muted-foreground font-bold">
+                    <div className="flex items-center gap-2 min-w-0 pr-4">
+                      <span className="text-foreground font-black tracking-[0.15em] truncate">{projectName}</span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <p className="text-muted-foreground/70 text-[9px]">SmartClass <span className="text-muted-foreground/50">© 2026</span></p>
+                    </div>
+                 </div>
+              </div>
             </div>
 
             {/* RIGHT COLUMN with animated collapse */}
@@ -404,17 +410,6 @@ export function PublicDocsShell({
                 </div>
               </motion.div>
             </div>
-          </div>
-
-          {/* Minimalist Fixed Bottom Bar */}
-          <div className="no-print">
-            <footer className="flex-none border-t border-border bg-card/40 backdrop-blur-md px-6 py-2.5">
-               <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.15em] text-muted-foreground font-bold">
-                  <div className="flex items-center gap-4">
-                    <p>SmartClass <span className="text-muted-foreground/70">© 2026</span></p>
-                  </div>
-               </div>
-            </footer>
           </div>
         </div>
       </div>

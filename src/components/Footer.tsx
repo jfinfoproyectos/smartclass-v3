@@ -22,11 +22,11 @@ export function Footer() {
     return (
         <footer className="relative shrink-0 w-full bg-background/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200/80 dark:border-slate-800/80 text-[11px] transition-all py-2">
             {/* Subtle ambient top line */}
-            <div className="h-[1px] w-full bg-gradient-to-r from-transparent via-emerald-500/30 to-transparent absolute top-0 left-0" />
+            <div className="h-[1px] w-full bg-gradient-to-r from-transparent via-primary/30 to-transparent absolute top-0 left-0" />
 
             <div className="max-w-7xl mx-auto px-4 flex items-center justify-center gap-2 text-muted-foreground">
                 <div className="flex items-center gap-1.5 font-bold text-foreground">
-                    <Sparkles className="w-3 h-3 text-emerald-500" />
+                    <Sparkles className="w-3 h-3 text-primary" />
                     <span>{institutionName}</span>
                 </div>
 

@@ -145,18 +145,18 @@ export default function RightSidebar({ className, onItemClick }: { className?: s
 
   return (
     <aside className={cn(
-      "w-72 p-8 shrink-0 h-full overflow-y-auto border-l border-border dark:border-white/10 custom-scrollbar bg-card/5 backdrop-blur-sm",
+      "w-72 p-6 shrink-0 h-full overflow-y-auto border-l border-slate-200/80 dark:border-slate-800/80 custom-scrollbar bg-background/50 backdrop-blur-xl",
       className ?? "hidden xl:block"
     )}>
       {headings.length > 0 ? (
         <>
-          <div className="flex items-center gap-2 mb-6 opacity-60">
-            <div className="w-1 h-4 bg-primary rounded-full" />
-            <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-foreground/70">En esta página</h4>
+          <div className="flex items-center gap-2 mb-5 pb-3 border-b border-slate-200/60 dark:border-slate-800/60">
+            <div className="w-1.5 h-4 bg-primary rounded-full" />
+            <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/80">En esta página</h4>
           </div>
           
-          <div className="relative border-l border-border/30 ml-1 py-1">
-            <ul className="space-y-3.5 relative">
+          <div className="relative border-l border-slate-200/80 dark:border-slate-800/80 ml-1 py-1">
+            <ul className="space-y-1.5 relative">
               {headings.map((heading, idx) => {
                 const isActive = activeId === heading.id;
                 
@@ -165,22 +165,22 @@ export default function RightSidebar({ className, onItemClick }: { className?: s
                     key={`${heading.id}-${idx}`} 
                     className={cn(
                       "relative transition-all duration-300",
-                      heading.level === 2 ? 'pl-4' : 
-                      heading.level === 3 ? 'pl-7' : 
-                      'pl-3'
+                      heading.level === 2 ? 'pl-3' : 
+                      heading.level === 3 ? 'pl-6' : 
+                      'pl-2'
                     )}
                   >
                     {isActive && (
-                      <div className="absolute left-[-1.5px] top-1/2 -translate-y-1/2 w-[2px] h-3.5 bg-primary rounded-full shadow-[0_0_8px_rgba(var(--primary),0.5)]" />
+                      <div className="absolute left-[-1.5px] top-1/2 -translate-y-1/2 w-[3px] h-4 bg-primary rounded-full shadow-[0_0_8px_rgba(var(--primary),0.5)]" />
                     )}
                       <a 
                         href={`#${heading.id}`}
                         onClick={(e) => handleScroll(e, heading.id)}
                         className={cn(
-                          "text-[11px] font-medium transition-all block leading-relaxed py-0.5 cursor-pointer",
+                          "text-[11px] font-medium transition-all block leading-relaxed py-1 px-2 rounded-lg cursor-pointer",
                           isActive 
-                            ? "text-primary font-bold translate-x-0.5" 
-                            : "text-muted-foreground hover:text-foreground hover:translate-x-0.5"
+                            ? "text-primary font-extrabold bg-primary/10 border border-primary/20 translate-x-0.5" 
+                            : "text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:translate-x-0.5"
                         )}
                       >
                         {heading.text}

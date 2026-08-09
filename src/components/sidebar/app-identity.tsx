@@ -61,8 +61,8 @@ export function AppIdentity() {
           <div className={cn("flex items-center gap-3 w-full", isCollapsed && "justify-center")}>
             {/* Glowing Icon Box */}
             <div className="relative group shrink-0">
-              <div className="absolute -inset-0.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 opacity-60 blur-sm group-hover:opacity-100 transition duration-300" />
-              <div className="relative flex items-center justify-center h-9 w-9 rounded-xl bg-slate-900 text-emerald-400 border border-emerald-500/30">
+              <div className="absolute -inset-0.5 rounded-xl bg-gradient-to-r from-primary via-primary/80 to-primary/50 opacity-60 blur-sm group-hover:opacity-100 transition duration-300" />
+              <div className="relative flex items-center justify-center h-9 w-9 rounded-xl bg-card text-primary border border-primary/30">
                 {isMounted && !isPending ? (
                   <RoleIcon className="h-4.5 w-4.5" />
                 ) : (
@@ -77,7 +77,7 @@ export function AppIdentity() {
                   <span className="text-sm font-extrabold tracking-tight text-foreground truncate">
                     SmartClass
                   </span>
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 border border-emerald-500/20">
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-primary/10 text-primary border border-primary/20">
                     <Sparkles className="w-2.5 h-2.5 mr-0.5" />
                     AI
                   </span>

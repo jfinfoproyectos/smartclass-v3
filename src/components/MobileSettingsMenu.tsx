@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ThemeSelector } from "@/components/theme/ThemeSelector";
 import { ModeToggle } from "@/components/theme/ModeToggle";
+import { PaperModeToggle } from "@/components/theme/PaperModeToggle";
 import { PushNotificationToggle } from "@/components/notification/PushNotificationToggle";
 import { CreditsModal } from "@/components/CreditsModal";
 
@@ -55,6 +56,11 @@ export function MobileSettingsMenu({ themes, showThemeSelector, showModeToggle }
         {showModeToggle && (
           <ModeToggle asMenuItem={true} />
         )}
+        
+        <div className="px-2 py-1.5 flex items-center justify-between">
+          <span className="text-xs font-medium">Modo Papel</span>
+          <PaperModeToggle />
+        </div>
         
         <PushNotificationToggle asMenuItem={true} />
         

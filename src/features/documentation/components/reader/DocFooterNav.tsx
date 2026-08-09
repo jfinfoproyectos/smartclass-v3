@@ -42,16 +42,16 @@ export function DocFooterNav({ navTree, currentSlug, projectId }: DocFooterNavPr
       {prev ? (
         <Link 
           href={`/docs/${projectId}/${prev.slug === "index" ? "" : prev.slug}`}
-          className="group relative overflow-hidden flex items-center gap-4 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-background/80 dark:bg-slate-950/80 backdrop-blur-xl hover:border-emerald-500/40 hover:shadow-lg hover:shadow-emerald-500/5 hover:-translate-y-0.5 transition-all duration-300"
+          className="group relative overflow-hidden flex items-center gap-4 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-background/80 dark:bg-slate-950/80 backdrop-blur-xl hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-0.5 transition-all duration-300"
         >
-          <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 group-hover:scale-110 transition-transform duration-300 shrink-0">
+          <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20 group-hover:scale-110 transition-transform duration-300 shrink-0">
             <ArrowLeft className="w-4 h-4" />
           </div>
           <div className="flex flex-col min-w-0">
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 group-hover:text-emerald-500 transition-colors mb-0.5">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 group-hover:text-primary transition-colors mb-0.5">
               Tema Anterior
             </span>
-            <span className="text-sm font-bold text-foreground group-hover:text-emerald-500 transition-colors truncate">
+            <span className="text-sm font-bold text-foreground group-hover:text-primary transition-colors truncate">
               {prev.title}
             </span>
           </div>
@@ -61,17 +61,17 @@ export function DocFooterNav({ navTree, currentSlug, projectId }: DocFooterNavPr
       {next ? (
         <Link 
           href={`/docs/${projectId}/${next.slug === "index" ? "" : next.slug}`}
-          className="group relative overflow-hidden flex items-center justify-end gap-4 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-background/80 dark:bg-slate-950/80 backdrop-blur-xl hover:border-emerald-500/40 hover:shadow-lg hover:shadow-emerald-500/5 hover:-translate-y-0.5 transition-all duration-300 text-right"
+          className="group relative overflow-hidden flex items-center justify-end gap-4 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-background/80 dark:bg-slate-950/80 backdrop-blur-xl hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-0.5 transition-all duration-300 text-right"
         >
           <div className="flex flex-col min-w-0">
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 group-hover:text-emerald-500 transition-colors mb-0.5">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 group-hover:text-primary transition-colors mb-0.5">
               Siguiente Tema
             </span>
-            <span className="text-sm font-bold text-foreground group-hover:text-emerald-500 transition-colors truncate">
+            <span className="text-sm font-bold text-foreground group-hover:text-primary transition-colors truncate">
               {next.title}
             </span>
           </div>
-          <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 group-hover:scale-110 transition-transform duration-300 shrink-0">
+          <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20 group-hover:scale-110 transition-transform duration-300 shrink-0">
             <ArrowRight className="w-4 h-4" />
           </div>
         </Link>

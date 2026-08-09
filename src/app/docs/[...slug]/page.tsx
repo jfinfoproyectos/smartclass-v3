@@ -10,7 +10,7 @@ import { getCodeTheme } from '@/app/actions/code-themes';
 import { getAvailableThemes } from '@/app/actions/themes';
 import dynamic from 'next/dynamic';
 import { Suspense } from 'react';
-import { Folder } from 'lucide-react';
+import { Folder, Sparkles } from 'lucide-react';
 
 // Lazy loading heavy components
 const DocTracker = dynamic(() => import('@/features/documentation/components/reader/DocTracker').then(mod => mod.DocTracker));
@@ -227,11 +227,25 @@ export default async function Page({ params }: PageProps) {
         allowThemeColorChange: allowThemeColorChange
       }}
     >
-      <div className="py-8 w-full">
+      <div className="py-6 w-full">
         {!page ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <h1 className="text-3xl font-black text-muted-foreground/30">Bienvenido a la Documentación</h1>
-            <p className="text-muted-foreground mt-2 mb-12">Selecciona un tema en el menú de la izquierda para comenzar.</p>
+          <div className="relative overflow-hidden rounded-3xl p-8 md:p-12 bg-gradient-to-br from-primary/10 via-background to-primary/5 border border-primary/20 shadow-xl shadow-primary/5 mb-8">
+            <div className="absolute -right-12 -top-12 w-64 h-64 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
+            
+            <div className="relative z-10 flex flex-col items-center text-center max-w-2xl mx-auto space-y-4">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/15 text-primary border border-primary/30 text-xs font-bold uppercase tracking-widest">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Portal de Documentación</span>
+              </div>
+
+              <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-foreground">
+                Bienvenido a la Documentación
+              </h1>
+              
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Explora el material pedagógico, guías técnicas y recursos interactivos preparados para tu aprendizaje. Selecciona un tema a continuación o en el menú lateral.
+              </p>
+            </div>
             
             {/* Automatic navigation for the root level if no page selected */}
             <Suspense fallback={<div className="h-20 animate-pulse bg-muted rounded-xl" />}>
@@ -256,21 +270,35 @@ export default async function Page({ params }: PageProps) {
                 />
               </Suspense>
             ) : (
-              <div className="mb-12">
-                <div className="flex items-center gap-5 mb-8">
-                  <div className="h-16 w-16 rounded-3xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <div className="relative overflow-hidden rounded-3xl p-6 sm:p-8 bg-gradient-to-br from-primary/10 via-card/80 to-primary/5 dark:from-primary/20 dark:via-slate-900/60 dark:to-primary/10 border border-primary/20 shadow-xl shadow-primary/5 mb-8 backdrop-blur-xl">
+                {/* Background ambient glow */}
+                <div className="absolute -right-10 -bottom-10 w-56 h-56 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
+
+                <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center gap-5">
+                  <div className="h-16 w-16 rounded-2xl bg-primary/15 text-primary border border-primary/30 flex items-center justify-center shrink-0 shadow-md shadow-primary/10">
                      {currentNavItem.icon ? (
                        <DynamicIcon icon={currentNavItem.icon} className="w-8 h-8" />
                      ) : (
                        <Folder className="w-8 h-8" />
                      )}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <h1 className="text-4xl font-black tracking-tight text-foreground leading-none">{currentNavItem.title}</h1>
-                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground/40 mt-2">Sección de Documentación</p>
+
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-black uppercase tracking-[0.2em] px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                        Sección de Documentación
+                      </span>
+                      {currentNavItem?.children && (
+                        <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/70">
+                          • {currentNavItem.children.length} temas disponibles
+                        </span>
+                      )}
+                    </div>
+                    <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground leading-tight">
+                      {currentNavItem.title}
+                    </h1>
                   </div>
                 </div>
-                <div className="h-px w-full bg-gradient-to-r from-border/50 via-transparent to-transparent mb-12" />
               </div>
             )}
 
@@ -280,8 +308,6 @@ export default async function Page({ params }: PageProps) {
                 <TopicNavigation items={currentNavItem.children} projectId={project.slug} />
               </Suspense>
             )}
-
-
           </>
         )}
       </div>

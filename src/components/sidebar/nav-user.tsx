@@ -178,11 +178,11 @@ export function NavUser({
                 className="h-14 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-card hover:bg-muted/60 transition-all p-2.5 shadow-sm"
               >
                 <div className="relative">
-                  <Avatar className="h-9 w-9 rounded-xl border border-emerald-500/20">
+                  <Avatar className="h-9 w-9 rounded-xl border border-primary/20">
                     <AvatarImage src={displayedUser.avatar} alt={displayedUser.name ?? ""} />
-                    <AvatarFallback className="rounded-xl bg-emerald-500/10 text-emerald-500 font-bold text-xs">{getInitials(displayedUser.name)}</AvatarFallback>
+                    <AvatarFallback className="rounded-xl bg-primary/10 text-primary font-bold text-xs">{getInitials(displayedUser.name)}</AvatarFallback>
                   </Avatar>
-                  <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-background" />
+                  <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-primary ring-2 ring-background" />
                 </div>
                 <div className="grid flex-1 text-left text-xs leading-tight ml-2">
                   <span className="truncate font-bold text-foreground">{formatName(displayedUser.name)}</span>
@@ -199,9 +199,9 @@ export function NavUser({
             >
               <DropdownMenuLabel className="p-2 font-normal">
                 <div className="flex items-center gap-3 text-left text-sm">
-                  <Avatar className="h-9 w-9 rounded-xl border border-emerald-500/20">
+                  <Avatar className="h-9 w-9 rounded-xl border border-primary/20">
                     <AvatarImage src={displayedUser.avatar} alt={displayedUser.name ?? ""} />
-                    <AvatarFallback className="rounded-xl bg-emerald-500/10 text-emerald-500 font-bold text-xs">{getInitials(displayedUser.name)}</AvatarFallback>
+                    <AvatarFallback className="rounded-xl bg-primary/10 text-primary font-bold text-xs">{getInitials(displayedUser.name)}</AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left text-xs leading-tight">
                     <span className="truncate font-bold">{formatName(displayedUser.name)}</span>

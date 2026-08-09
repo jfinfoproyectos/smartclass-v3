@@ -3,6 +3,7 @@
 import React from "react";
 import { CodeThemeSelector } from "./CodeThemeSelector";
 import { ModeToggle } from "@/components/theme/ModeToggle";
+import { PaperModeToggle } from "@/components/theme/PaperModeToggle";
 import { ThemeSelector } from "@/components/theme/ThemeSelector";
 import { ThemeInfo } from "@/app/actions/themes";
 import { CreditsModal } from "@/components/CreditsModal";
@@ -82,6 +83,7 @@ export function ConfigControls({
         {showThemeSelector && <ThemeSelector themes={themes} />}
         {showCodeThemeSelector && <CodeThemeSelector currentTheme={currentCodeTheme} />}
         {showModeToggle && <ModeToggle />}
+        <PaperModeToggle />
 
         {/* Font Size Accessibility Controls */}
         <TooltipProvider delayDuration={150}>

@@ -66,13 +66,13 @@ function NavNode({ node, projectId, activeSlug, expandToken }: {
               e.stopPropagation();
               setIsOpen(!isOpen);
             }}
-            className="p-1.5 hover:bg-emerald-500/10 rounded-lg transition-colors mr-1 cursor-pointer"
+            className="p-1.5 hover:bg-primary/10 rounded-lg transition-colors mr-1 cursor-pointer"
           >
             <motion.div
               animate={{ rotate: isOpen ? 0 : -90 }}
               transition={{ duration: 0.2 }}
             >
-              <ChevronDown className={cn("w-3.5 h-3.5 transition-colors", (isActive || isChildActive) ? "text-emerald-500 opacity-100" : "opacity-40 group-hover:opacity-100")} />
+              <ChevronDown className={cn("w-3.5 h-3.5 transition-colors", (isActive || isChildActive) ? "text-primary opacity-100" : "opacity-40 group-hover:opacity-100")} />
             </motion.div>
           </button>
           
@@ -80,19 +80,19 @@ function NavNode({ node, projectId, activeSlug, expandToken }: {
             <Link 
               href={`/docs/${projectId}/${node.slug}`}
               className={cn(
-                "flex-1 flex items-center gap-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.15em] transition-all truncate",
-                isActive ? "text-emerald-500 font-extrabold" : "text-muted-foreground hover:text-emerald-500"
+                "flex-1 flex items-start gap-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.15em] transition-all whitespace-normal break-words leading-tight",
+                isActive ? "text-primary font-extrabold" : "text-muted-foreground hover:text-primary"
               )}
             >
-              {node.icon && <DynamicIcon icon={node.icon} className="w-3.5 h-3.5" />}
-              <span className="flex-1 text-left truncate">{node.title}</span>
+              {node.icon && <DynamicIcon icon={node.icon} className="w-3.5 h-3.5 mt-0.5 shrink-0" />}
+              <span className="flex-1 text-left whitespace-normal break-words leading-tight">{node.title}</span>
             </Link>
           ) : (
             <button 
               onClick={() => setIsOpen(!isOpen)}
-              className="flex-1 flex items-center gap-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/80 hover:text-emerald-500 transition-all text-left truncate cursor-pointer"
+              className="flex-1 flex items-start gap-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/80 hover:text-primary transition-all text-left whitespace-normal break-words leading-tight cursor-pointer"
             >
-              <span className="flex-1 truncate">{node.title}</span>
+              <span className="flex-1 text-left whitespace-normal break-words leading-tight">{node.title}</span>
             </button>
           )}
         </div>
@@ -104,7 +104,7 @@ function NavNode({ node, projectId, activeSlug, expandToken }: {
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="ml-4 pl-3 border-l border-slate-200/80 dark:border-slate-800/80 hover:border-emerald-500/30 transition-colors duration-300 flex flex-col gap-1 mt-1 overflow-hidden"
+              className="ml-4 pl-3 border-l border-slate-200/80 dark:border-slate-800/80 hover:border-primary/30 transition-colors duration-300 flex flex-col gap-1 mt-1 overflow-hidden"
             >
               {node.children.map(child => (
                 <NavNode key={child.id} node={child} projectId={projectId} activeSlug={activeSlug} expandToken={expandToken} />
@@ -131,37 +131,37 @@ function NavNode({ node, projectId, activeSlug, expandToken }: {
           if (isScheduled) e.preventDefault();
         }}
         className={cn(
-          "flex items-center gap-2.5 px-3 py-2 w-full rounded-xl text-[13px] transition-all duration-300 group mb-1 relative overflow-hidden",
+          "flex items-start gap-2.5 px-3 py-2 w-full rounded-xl text-[13px] transition-all duration-300 group mb-1 relative overflow-hidden",
           isActive 
-            ? "text-emerald-600 dark:text-emerald-400 font-extrabold bg-emerald-500/10 border border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.12)]" 
-            : "text-muted-foreground hover:text-emerald-500 hover:bg-emerald-500/5 hover:translate-x-1 font-medium",
+            ? "text-primary font-extrabold bg-primary/10 border border-primary/30 shadow-sm" 
+            : "text-muted-foreground hover:text-primary hover:bg-primary/5 hover:translate-x-1 font-medium",
           isScheduled && "cursor-not-allowed opacity-60 grayscale"
         )}
       >
         {isActive && (
           <motion.div 
             layoutId="active-nav-glow"
-            className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500 rounded-full"
+            className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-full"
             transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
           />
         )}
         
         {node.icon ? (
-          <DynamicIcon icon={node.icon} className={cn("w-4 h-4 transition-transform duration-300 group-hover:scale-110 shrink-0", isActive ? "text-emerald-500" : "opacity-50 group-hover:opacity-100 group-hover:text-emerald-500")} />
+          <DynamicIcon icon={node.icon} className={cn("w-4 h-4 mt-0.5 transition-transform duration-300 group-hover:scale-110 shrink-0", isActive ? "text-primary" : "opacity-50 group-hover:opacity-100 group-hover:text-primary")} />
         ) : (
-          <FileText className={cn("w-4 h-4 transition-transform duration-300 group-hover:scale-110 shrink-0", isActive ? "text-emerald-500" : "opacity-50 group-hover:opacity-100 group-hover:text-emerald-500")} />
+          <FileText className={cn("w-4 h-4 mt-0.5 transition-transform duration-300 group-hover:scale-110 shrink-0", isActive ? "text-primary" : "opacity-50 group-hover:opacity-100 group-hover:text-primary")} />
         )}
         
-        <span className="flex-1 tracking-tight text-left truncate">{node.title}</span>
+        <span className="flex-1 tracking-tight text-left whitespace-normal break-words leading-snug">{node.title}</span>
         
         {isScheduled && (
-          <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-500 border border-amber-500/20 whitespace-nowrap">
+          <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-500 border border-amber-500/20 whitespace-nowrap shrink-0 mt-0.5">
             {formattedDate}
           </span>
         )}
 
         {isPublished && (
-          <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
+          <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5">
             {formattedDate}
           </span>
         )}

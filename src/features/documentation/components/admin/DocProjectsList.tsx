@@ -76,7 +76,7 @@ export function DocProjectsList({ projects }: { projects: DocProject[] }) {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
               {filteredProjects.map((project) => (
                 <AICanvasCard
                   key={project.id}
@@ -84,22 +84,13 @@ export function DocProjectsList({ projects }: { projects: DocProject[] }) {
                   description={project.description || "Proyecto de documentación técnica y guías pedagógicas."}
                   icon={Files}
                   badge="Documentación"
-                  badgeColor="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
-                  accentColor="from-amber-500/30 via-orange-500/20 to-transparent"
-                  iconBgColor="bg-amber-500/10 dark:bg-amber-500/20"
-                  iconTextColor="text-amber-600 dark:text-amber-400"
+                  badgeColor="bg-primary/10 text-primary border-primary/20"
+                  accentColor="from-primary/30 via-primary/15 to-transparent"
+                  iconBgColor="bg-primary/10 dark:bg-primary/20"
+                  iconTextColor="text-primary"
                   hideFooter={true}
                   className="h-full group"
                 >
-                  <div className="space-y-2 pt-2 text-xs text-muted-foreground border-t border-slate-100 dark:border-slate-800/80 mt-3">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-foreground">Ruta / Identificador:</span>
-                      <span className="font-mono font-bold px-2 py-0.5 rounded bg-muted text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                        {project.slug}
-                      </span>
-                    </div>
-                  </div>
-
                   {/* Actions Footer */}
                   <div className="pt-4 mt-auto border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2">
                     <ProjectRowActions
@@ -111,7 +102,7 @@ export function DocProjectsList({ projects }: { projects: DocProject[] }) {
                     <Button
                       variant="default"
                       size="sm"
-                      className="flex-1 font-bold text-xs uppercase tracking-wider bg-amber-600 hover:bg-amber-500 text-white rounded-xl shadow-md"
+                      className="flex-1 font-bold text-xs uppercase tracking-wider bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl shadow-md"
                       asChild
                     >
                       <Link href={`/docs/${project.slug}`}>
@@ -152,10 +143,10 @@ export function DocProjectsList({ projects }: { projects: DocProject[] }) {
                     >
                       <TableCell className="font-medium py-4 pl-6">
                         <div className="flex items-center gap-3.5">
-                          <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-500 group-hover:scale-110 transition-all duration-300 shadow-sm">
+                          <div className="p-2.5 rounded-xl bg-primary/10 text-primary group-hover:scale-110 transition-all duration-300 shadow-sm">
                             <Files className="w-4 h-4" />
                           </div>
-                          <span className="font-bold text-sm text-foreground group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
+                          <span className="font-bold text-sm text-foreground group-hover:text-primary transition-colors">
                             {project.name}
                           </span>
                         </div>
