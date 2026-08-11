@@ -11,6 +11,12 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -423,28 +429,41 @@ export function EvaluationManager({ evaluations }: { evaluations: any[] }) {
 
                                     {/* Card Actions Footer */}
                                     <div className="pt-4 mt-auto border-t border-border/40 flex items-center justify-between gap-2">
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button
-                                                    variant="outline"
-                                                    size="icon"
-                                                    className="h-9 w-9 rounded-xl border-border/50"
-                                                    title="Más opciones"
-                                                >
-                                                    <MoreVertical className="h-4 w-4" />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="start" className="w-40">
-                                                <DropdownMenuItem onClick={() => handleOpenEdit(evaluation)} className="cursor-pointer">
-                                                    <Edit className="mr-2 h-4 w-4 text-muted-foreground" />
-                                                    <span>Editar</span>
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => handleExport(evaluation)} className="cursor-pointer">
-                                                    <Download className="mr-2 h-4 w-4 text-muted-foreground" />
-                                                    <span>Exportar</span>
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
+                                        <TooltipProvider>
+                                            <div className="flex items-center gap-1 shrink-0">
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="icon"
+                                                            className="h-9 w-9 rounded-xl border-border/50 text-muted-foreground hover:text-foreground"
+                                                            onClick={() => handleOpenEdit(evaluation)}
+                                                        >
+                                                            <Edit className="h-4 w-4" />
+                                                        </Button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                        <p>Editar evaluación</p>
+                                                    </TooltipContent>
+                                                </Tooltip>
+
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="icon"
+                                                            className="h-9 w-9 rounded-xl border-border/50 text-muted-foreground hover:text-foreground"
+                                                            onClick={() => handleExport(evaluation)}
+                                                        >
+                                                            <Download className="h-4 w-4" />
+                                                        </Button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                        <p>Exportar evaluación</p>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </div>
+                                        </TooltipProvider>
 
                                         <Button
                                             variant="default"
@@ -514,73 +533,94 @@ export function EvaluationManager({ evaluations }: { evaluations: any[] }) {
                                                     </Link>
                                                 </Button>
 
-                                                <Dialog>
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
+                                                <TooltipProvider>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
                                                             <Button
                                                                 variant="outline"
                                                                 size="icon"
                                                                 className="h-9 w-9 border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300"
-                                                                title="Acciones"
+                                                                onClick={() => handleOpenEdit(evaluation)}
                                                             >
-                                                                <MoreVertical className="h-4 w-4" />
+                                                                <Edit className="h-4 w-4" />
                                                             </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end" className="w-40">
-                                                            <DropdownMenuItem onClick={() => handleOpenEdit(evaluation)} className="cursor-pointer">
-                                                                <Edit className="mr-2 h-4 w-4 text-muted-foreground" />
-                                                                <span>Editar</span>
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem onClick={() => handleExport(evaluation)} className="cursor-pointer">
-                                                                <Download className="mr-2 h-4 w-4 text-muted-foreground" />
-                                                                <span>Exportar</span>
-                                                            </DropdownMenuItem>
-                                                            <DialogTrigger asChild>
-                                                                <DropdownMenuItem className="text-red-600 focus:text-red-700 cursor-pointer">
-                                                                    <Trash2 className="mr-2 h-4 w-4 text-red-600 focus:text-red-700" />
-                                                                    <span>Eliminar</span>
-                                                                </DropdownMenuItem>
-                                                            </DialogTrigger>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>
+                                                            <p>Editar evaluación</p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
 
-                                                    <DialogTrigger asChild>
-                                                        <div />
-                                                    </DialogTrigger>
-                                                    <DialogContent>
-                                                        <form
-                                                            action={async (formData) => {
-                                                                await deleteEvaluationAction(formData);
-                                                            }}
-                                                        >
-                                                            <input type="hidden" name="evaluationId" value={evaluation.id} />
-                                                            <DialogHeader>
-                                                                <DialogTitle>Confirmar eliminación</DialogTitle>
-                                                                <DialogDescription>
-                                                                    Escribe <strong>ELIMINAR</strong> para confirmar. Esto borrará la evaluación y todas sus preguntas e intentos asociados.
-                                                                </DialogDescription>
-                                                            </DialogHeader>
-                                                            <div className="grid grid-cols-4 items-center gap-4 py-4">
-                                                                <Label htmlFor={`confirm-${evaluation.id}`} className="text-right">
-                                                                    Confirmación
-                                                                </Label>
-                                                                <Input
-                                                                    id={`confirm-${evaluation.id}`}
-                                                                    name="confirmText"
-                                                                    placeholder="ELIMINAR"
-                                                                    pattern="^ELIMINAR$"
-                                                                    required
-                                                                    className="col-span-3"
-                                                                />
-                                                            </div>
-                                                            <DialogFooter>
-                                                                <Button type="submit" variant="destructive">
-                                                                    Confirmar eliminación
-                                                                </Button>
-                                                            </DialogFooter>
-                                                        </form>
-                                                    </DialogContent>
-                                                </Dialog>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <Button
+                                                                variant="outline"
+                                                                size="icon"
+                                                                className="h-9 w-9 border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300"
+                                                                onClick={() => handleExport(evaluation)}
+                                                            >
+                                                                <Download className="h-4 w-4" />
+                                                            </Button>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>
+                                                            <p>Exportar evaluación</p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+
+                                                    <Dialog>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <DialogTrigger asChild>
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="icon"
+                                                                        className="h-9 w-9 border-border/50 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 border-red-200/60 dark:border-red-800/40"
+                                                                    >
+                                                                        <Trash2 className="h-4 w-4" />
+                                                                    </Button>
+                                                                </DialogTrigger>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent>
+                                                                <p>Eliminar evaluación</p>
+                                                            </TooltipContent>
+                                                        </Tooltip>
+
+                                                        <DialogContent>
+                                                            <form
+                                                                action={async (formData) => {
+                                                                    await deleteEvaluationAction(formData);
+                                                                }}
+                                                            >
+                                                                <input type="hidden" name="evaluationId" value={evaluation.id} />
+                                                                <DialogHeader>
+                                                                    <DialogTitle>Confirmar eliminación</DialogTitle>
+                                                                    <DialogDescription>
+                                                                        Escribe <strong>ELIMINAR</strong> para confirmar. Esto borrará la evaluación y todas sus preguntas e intentos asociados.
+                                                                    </DialogDescription>
+                                                                </DialogHeader>
+                                                                <div className="grid grid-cols-4 items-center gap-4 py-4">
+                                                                    <Label htmlFor={`confirm-${evaluation.id}`} className="text-right">
+                                                                        Confirmación
+                                                                    </Label>
+                                                                    <Input
+                                                                        id={`confirm-${evaluation.id}`}
+                                                                        name="confirmText"
+                                                                        placeholder="ELIMINAR"
+                                                                        pattern="^ELIMINAR$"
+                                                                        required
+                                                                        className="col-span-3"
+                                                                    />
+                                                                </div>
+                                                                <DialogFooter>
+                                                                    <Button type="submit" variant="destructive">
+                                                                        Confirmar eliminación
+                                                                    </Button>
+                                                                </DialogFooter>
+                                                            </form>
+                                                        </DialogContent>
+                                                    </Dialog>
+                                                </TooltipProvider>
+
+
                                             </div>
                                         </TableCell>
                                     </TableRow>

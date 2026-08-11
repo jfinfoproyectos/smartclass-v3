@@ -5,16 +5,9 @@ import Link from "next/link";
 import { 
   BookOpen, 
   Edit3, 
-  MoreVertical, 
   Trash2 
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Tooltip,
   TooltipTrigger,
@@ -29,11 +22,10 @@ interface ProjectRowActionsProps {
 }
 
 export function ProjectRowActions({ projectId, projectName, projectSlug }: ProjectRowActionsProps) {
-  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   return (
-    <div className="flex items-center justify-end gap-2">
+    <div className="flex items-center justify-end gap-1.5">
       <Tooltip>
         <TooltipTrigger asChild>
           <Button asChild size="icon" variant="outline" className="h-9 w-9 border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300">
@@ -44,37 +36,40 @@ export function ProjectRowActions({ projectId, projectName, projectSlug }: Proje
           </Button>
         </TooltipTrigger>
         <TooltipContent side="top">
-          <p className="text-[10px] font-bold uppercase tracking-wider">Abrir Documentación</p>
+          <p className="text-xs">Abrir documentación</p>
         </TooltipContent>
       </Tooltip>
 
-      <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
-        <DropdownMenuTrigger asChild>
-          <Button size="icon" variant="outline" className="h-9 w-9 border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300">
-            <MoreVertical className="w-4 h-4" />
-            <span className="sr-only">Acciones</span>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-40 bg-background border-border rounded-xl shadow-xl">
-          <DropdownMenuItem asChild className="cursor-pointer">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button asChild size="icon" variant="outline" className="h-9 w-9 border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all duration-300">
             <Link href={`/dashboard/teacher/docs/${projectSlug}`}>
-              <Edit3 className="mr-2 h-4 w-4 text-muted-foreground" />
-              <span>Editar</span>
+              <Edit3 className="w-4 h-4" />
+              <span className="sr-only">Editar Proyecto</span>
             </Link>
-          </DropdownMenuItem>
-          <DropdownMenuItem 
-            onSelect={(e) => {
-              e.preventDefault();
-              setDropdownOpen(false);
-              setDeleteOpen(true);
-            }} 
-            className="text-red-600 focus:text-red-700 cursor-pointer"
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top">
+          <p className="text-xs">Editar proyecto</p>
+        </TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button 
+            size="icon" 
+            variant="outline" 
+            className="h-9 w-9 border-border/50 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 border-red-200/60 dark:border-red-800/40 transition-all duration-300"
+            onClick={() => setDeleteOpen(true)}
           >
-            <Trash2 className="mr-2 h-4 w-4" />
-            <span>Eliminar</span>
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+            <Trash2 className="w-4 h-4" />
+            <span className="sr-only">Eliminar Proyecto</span>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top">
+          <p className="text-xs">Eliminar proyecto</p>
+        </TooltipContent>
+      </Tooltip>
 
       <DeleteProjectDialog 
         projectId={projectId} 

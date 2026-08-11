@@ -42,6 +42,12 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatName } from "@/lib/utils";
@@ -772,77 +778,101 @@ export function ActivityManager({ courseId, activities }: { courseId: string; ac
                                     </div>
 
                                     <div className="pt-4 mt-auto border-t border-border/40 flex items-center justify-between gap-2">
-                                        <Link href={`/dashboard/teacher/courses/${courseId}/activities/${activity.id}`} className="flex-1">
-                                            <Button variant="default" size="sm" className="w-full gap-1.5 text-xs font-semibold">
-                                                <Eye className="h-4 w-4" />
-                                                <span>Ver Entregas</span>
-                                            </Button>
-                                        </Link>
+                                        <TooltipProvider>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Link href={`/dashboard/teacher/courses/${courseId}/activities/${activity.id}`} className="flex-1">
+                                                        <Button variant="default" size="sm" className="w-full gap-1.5 text-xs font-semibold">
+                                                            <Eye className="h-4 w-4" />
+                                                            <span>Ver Entregas</span>
+                                                        </Button>
+                                                    </Link>
+                                                </TooltipTrigger>
+                                                <TooltipContent>
+                                                    <p>Ver entregas de la actividad</p>
+                                                </TooltipContent>
+                                            </Tooltip>
 
-                                        <Dialog>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="outline" size="sm" className="h-9 w-9 p-0 text-muted-foreground hover:text-foreground">
-                                                        <MoreVertical className="h-4 w-4" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end" className="w-48">
-                                                    <EditActivityDialog 
-                                                        activity={activity} 
-                                                        courseId={courseId} 
-                                                        mode={mode} 
-                                                        trigger={
-                                                            <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="cursor-pointer">
-                                                                <Pencil className="mr-2 h-4 w-4 text-muted-foreground" />
-                                                                <span>Editar</span>
-                                                            </DropdownMenuItem>
-                                                        }
-                                                    />
+                                            <div className="flex items-center gap-1 shrink-0">
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <div>
+                                                            <EditActivityDialog 
+                                                                activity={activity} 
+                                                                courseId={courseId} 
+                                                                mode={mode} 
+                                                                trigger={
+                                                                    <Button variant="outline" size="sm" className="h-9 w-9 p-0 text-muted-foreground hover:text-foreground">
+                                                                        <Pencil className="h-4 w-4" />
+                                                                    </Button>
+                                                                }
+                                                            />
+                                                        </div>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                        <p>Editar actividad</p>
+                                                    </TooltipContent>
+                                                </Tooltip>
 
-                                                    {activity.type !== "MANUAL" && (
-                                                        <MissingSubmissionsDialog 
-                                                            activityId={activity.id} 
-                                                            activityTitle={activity.title} 
-                                                            trigger={
-                                                                <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="cursor-pointer">
-                                                                    <UserX className="mr-2 h-4 w-4 text-muted-foreground" />
-                                                                    <span>Ver Faltantes</span>
-                                                                </DropdownMenuItem>
-                                                            }
-                                                        />
-                                                    )}
+                                                {activity.type !== "MANUAL" && (
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <div>
+                                                                <MissingSubmissionsDialog 
+                                                                    activityId={activity.id} 
+                                                                    activityTitle={activity.title} 
+                                                                    trigger={
+                                                                        <Button variant="outline" size="sm" className="h-9 w-9 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30 border-amber-200/60 dark:border-amber-800/40">
+                                                                            <UserX className="h-4 w-4" />
+                                                                        </Button>
+                                                                    }
+                                                                />
+                                                            </div>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>
+                                                            <p>Ver estudiantes sin entrega</p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                )}
 
-                                                    <DialogTrigger asChild>
-                                                        <DropdownMenuItem className="text-red-600 focus:text-red-700 cursor-pointer">
-                                                            <Trash2 className="mr-2 h-4 w-4 text-red-600 focus:text-red-700" />
-                                                            <span>Eliminar</span>
-                                                        </DropdownMenuItem>
-                                                    </DialogTrigger>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
+                                                <Dialog>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <DialogTrigger asChild>
+                                                                <Button variant="outline" size="sm" className="h-9 w-9 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 border-red-200/60 dark:border-red-800/40">
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </Button>
+                                                            </DialogTrigger>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>
+                                                            <p>Eliminar actividad</p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
 
-                                            <DialogContent>
-                                                <form action={async (formData) => {
-                                                    await deleteActivityAction(formData);
-                                                }}>
-                                                    <input type="hidden" name="courseId" value={courseId} />
-                                                    <input type="hidden" name="activityId" value={activity.id} />
-                                                    <DialogHeader>
-                                                        <DialogTitle>Confirmar eliminación</DialogTitle>
-                                                        <DialogDescription>
-                                                            Escribe <strong>ELIMINAR</strong> para confirmar.
-                                                        </DialogDescription>
-                                                    </DialogHeader>
-                                                    <div className="grid grid-cols-4 items-center gap-4 py-4">
-                                                        <Label htmlFor={`confirm-${activity.id}`} className="text-right">Confirmación</Label>
-                                                        <Input id={`confirm-${activity.id}`} name="confirmText" placeholder="ELIMINAR" pattern="^ELIMINAR$" required className="col-span-3" />
-                                                    </div>
-                                                    <DialogFooter>
-                                                        <Button type="submit" variant="destructive">Confirmar eliminación</Button>
-                                                    </DialogFooter>
-                                                </form>
-                                            </DialogContent>
-                                        </Dialog>
+                                                    <DialogContent>
+                                                        <form action={async (formData) => {
+                                                            await deleteActivityAction(formData);
+                                                        }}>
+                                                            <input type="hidden" name="courseId" value={courseId} />
+                                                            <input type="hidden" name="activityId" value={activity.id} />
+                                                            <DialogHeader>
+                                                                <DialogTitle>Confirmar eliminación</DialogTitle>
+                                                                <DialogDescription>
+                                                                    Escribe <strong>ELIMINAR</strong> para confirmar.
+                                                                </DialogDescription>
+                                                            </DialogHeader>
+                                                            <div className="grid grid-cols-4 items-center gap-4 py-4">
+                                                                <Label htmlFor={`confirm-${activity.id}`} className="text-right">Confirmación</Label>
+                                                                <Input id={`confirm-${activity.id}`} name="confirmText" placeholder="ELIMINAR" pattern="^ELIMINAR$" required className="col-span-3" />
+                                                            </div>
+                                                            <DialogFooter>
+                                                                <Button type="submit" variant="destructive">Confirmar eliminación</Button>
+                                                            </DialogFooter>
+                                                        </form>
+                                                    </DialogContent>
+                                                </Dialog>
+                                            </div>
+                                        </TooltipProvider>
                                     </div>
                                 </AICanvasCard>
                             );
@@ -911,76 +941,98 @@ export function ActivityManager({ courseId, activities }: { courseId: string; ac
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex justify-end items-center gap-1.5 pr-2">
-                                            <Link href={`/dashboard/teacher/courses/${courseId}/activities/${activity.id}`}>
-                                                <Button variant="outline" size="icon" title="Ver Entregas" className="h-8 w-8 sm:h-9 sm:w-9">
-                                                    <Eye className="h-4 w-4" />
-                                                </Button>
-                                            </Link>
+                                            <TooltipProvider>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <Link href={`/dashboard/teacher/courses/${courseId}/activities/${activity.id}`}>
+                                                            <Button variant="outline" size="icon" className="h-8 w-8 sm:h-9 sm:w-9">
+                                                                <Eye className="h-4 w-4" />
+                                                            </Button>
+                                                        </Link>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                        <p>Ver entregas</p>
+                                                    </TooltipContent>
+                                                </Tooltip>
 
-                                            <Dialog>
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <Button variant="outline" size="icon" className="h-8 w-8 sm:h-9 sm:w-9 text-muted-foreground hover:text-foreground">
-                                                            <MoreVertical className="h-4 w-4" />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end" className="w-48">
-                                                        <EditActivityDialog 
-                                                            activity={activity} 
-                                                            courseId={courseId} 
-                                                            mode={mode} 
-                                                            trigger={
-                                                                <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="cursor-pointer">
-                                                                    <Pencil className="mr-2 h-4 w-4 text-muted-foreground" />
-                                                                    <span>Editar</span>
-                                                                </DropdownMenuItem>
-                                                            }
-                                                        />
-
-                                                        {activity.type !== "MANUAL" && (
-                                                            <MissingSubmissionsDialog 
-                                                                activityId={activity.id} 
-                                                                activityTitle={activity.title} 
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <div>
+                                                            <EditActivityDialog 
+                                                                activity={activity} 
+                                                                courseId={courseId} 
+                                                                mode={mode} 
                                                                 trigger={
-                                                                    <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="cursor-pointer">
-                                                                        <UserX className="mr-2 h-4 w-4 text-muted-foreground" />
-                                                                        <span>Ver Faltantes</span>
-                                                                    </DropdownMenuItem>
+                                                                    <Button variant="outline" size="icon" className="h-8 w-8 sm:h-9 sm:w-9 text-muted-foreground hover:text-foreground">
+                                                                        <Pencil className="h-4 w-4" />
+                                                                    </Button>
                                                                 }
                                                             />
-                                                        )}
-
-                                                        <DialogTrigger asChild>
-                                                            <DropdownMenuItem className="text-red-600 focus:text-red-700 cursor-pointer">
-                                                                <Trash2 className="mr-2 h-4 w-4 text-red-600 focus:text-red-700" />
-                                                                <span>Eliminar</span>
-                                                            </DropdownMenuItem>
-                                                        </DialogTrigger>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-
-                                                <DialogContent>
-                                                    <form action={async (formData) => {
-                                                        await deleteActivityAction(formData);
-                                                    }}>
-                                                        <input type="hidden" name="courseId" value={courseId} />
-                                                        <input type="hidden" name="activityId" value={activity.id} />
-                                                        <DialogHeader>
-                                                            <DialogTitle>Confirmar eliminación</DialogTitle>
-                                                            <DialogDescription>
-                                                                Escribe <strong>ELIMINAR</strong> para confirmar.
-                                                            </DialogDescription>
-                                                        </DialogHeader>
-                                                        <div className="grid grid-cols-4 items-center gap-4 py-4">
-                                                            <Label htmlFor={`confirm-${activity.id}`} className="text-right">Confirmación</Label>
-                                                            <Input id={`confirm-${activity.id}`} name="confirmText" placeholder="ELIMINAR" pattern="^ELIMINAR$" required className="col-span-3" />
                                                         </div>
-                                                        <DialogFooter>
-                                                            <Button type="submit" variant="destructive">Confirmar eliminación</Button>
-                                                        </DialogFooter>
-                                                    </form>
-                                                </DialogContent>
-                                            </Dialog>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                        <p>Editar actividad</p>
+                                                    </TooltipContent>
+                                                </Tooltip>
+
+                                                {activity.type !== "MANUAL" && (
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <div>
+                                                                <MissingSubmissionsDialog 
+                                                                    activityId={activity.id} 
+                                                                    activityTitle={activity.title} 
+                                                                    trigger={
+                                                                        <Button variant="outline" size="icon" className="h-8 w-8 sm:h-9 sm:w-9 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30 border-amber-200/60 dark:border-amber-800/40">
+                                                                            <UserX className="h-4 w-4" />
+                                                                        </Button>
+                                                                    }
+                                                                />
+                                                            </div>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>
+                                                            <p>Ver estudiantes sin entrega</p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                )}
+
+                                                <Dialog>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <DialogTrigger asChild>
+                                                                <Button variant="outline" size="icon" className="h-8 w-8 sm:h-9 sm:w-9 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 border-red-200/60 dark:border-red-800/40">
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </Button>
+                                                            </DialogTrigger>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>
+                                                            <p>Eliminar actividad</p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+
+                                                    <DialogContent>
+                                                        <form action={async (formData) => {
+                                                            await deleteActivityAction(formData);
+                                                        }}>
+                                                            <input type="hidden" name="courseId" value={courseId} />
+                                                            <input type="hidden" name="activityId" value={activity.id} />
+                                                            <DialogHeader>
+                                                                <DialogTitle>Confirmar eliminación</DialogTitle>
+                                                                <DialogDescription>
+                                                                    Escribe <strong>ELIMINAR</strong> para confirmar.
+                                                                </DialogDescription>
+                                                            </DialogHeader>
+                                                            <div className="grid grid-cols-4 items-center gap-4 py-4">
+                                                                <Label htmlFor={`confirm-${activity.id}`} className="text-right">Confirmación</Label>
+                                                                <Input id={`confirm-${activity.id}`} name="confirmText" placeholder="ELIMINAR" pattern="^ELIMINAR$" required className="col-span-3" />
+                                                            </div>
+                                                            <DialogFooter>
+                                                                <Button type="submit" variant="destructive">Confirmar eliminación</Button>
+                                                            </DialogFooter>
+                                                        </form>
+                                                    </DialogContent>
+                                                </Dialog>
+                                            </TooltipProvider>
                                         </div>
                                     </TableCell>
                                 </TableRow>
