@@ -13,6 +13,10 @@ async function getSession() {
 export async function getVisualSettingsAction() {
     try {
         const session = await getSession();
+        const settings = await prisma.systemSettings.findUnique({
+            where: { id: "settings" }
+        });
+
         if (session?.user?.id) {
             const user = await prisma.user.findUnique({
                 where: { id: session.user.id },
@@ -26,18 +30,14 @@ export async function getVisualSettingsAction() {
             });
             if (user) {
                 return {
-                    themeMode: user.appThemeMode || "STUDENT",
-                    themeColor: user.appThemeColor || "zinc",
-                    allowThemeColorChange: user.appAllowThemeColorChange ?? true,
-                    codeTheme: user.appCodeTheme || "one-dark-pro",
-                    allowCodeThemeChange: user.appAllowCodeThemeChange ?? true
+                    themeMode: user.appThemeMode || settings?.appThemeMode || "STUDENT",
+                    themeColor: user.appThemeColor || settings?.appThemeColor || "zinc",
+                    allowThemeColorChange: user.appAllowThemeColorChange ?? settings?.appAllowThemeColorChange ?? true,
+                    codeTheme: user.appCodeTheme || settings?.appCodeTheme || "one-dark-pro",
+                    allowCodeThemeChange: user.appAllowCodeThemeChange ?? settings?.appAllowCodeThemeChange ?? true
                 };
             }
         }
-
-        const settings = await prisma.systemSettings.findUnique({
-            where: { id: "settings" }
-        });
 
         return { 
             themeMode: settings?.appThemeMode || "STUDENT",

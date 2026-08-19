@@ -46,7 +46,27 @@ export function ThemeSelector({ themes, asSubMenu }: ThemeSelectorProps) {
     setMounted(true);
     const savedTheme = localStorage.getItem("smartclass-theme") || "default";
     setActiveTheme(savedTheme);
+
+    const handleExternalThemeChange = () => {
+      const current = localStorage.getItem("smartclass-theme") || "default";
+      setActiveTheme(current);
+    };
+
+    window.addEventListener("smartclass-theme-changed", handleExternalThemeChange);
+    return () => {
+      window.removeEventListener("smartclass-theme-changed", handleExternalThemeChange);
+    };
   }, []);
+
+  const handleThemeSelect = async (themeId: string) => {
+    setActiveTheme(themeId);
+    try {
+      const { updateUserVisualSettingsAction } = await import("@/app/actions/settings");
+      await updateUserVisualSettingsAction({ appThemeColor: themeId });
+    } catch (err) {
+      console.error("Failed to persist theme color to DB:", err);
+    }
+  };
 
   useEffect(() => {
     if (!mounted || activeTheme === null) return;
@@ -178,7 +198,7 @@ export function ThemeSelector({ themes, asSubMenu }: ThemeSelectorProps) {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem 
-              onClick={() => setActiveTheme("default")}
+              onClick={() => handleThemeSelect("default")}
               className="flex items-center justify-between cursor-pointer text-xs"
             >
               <div className="flex items-center gap-2">
@@ -191,7 +211,7 @@ export function ThemeSelector({ themes, asSubMenu }: ThemeSelectorProps) {
             {themes.map((theme) => (
               <DropdownMenuItem 
                 key={theme.id}
-                onClick={() => setActiveTheme(theme.id)}
+                onClick={() => handleThemeSelect(theme.id)}
                 className="flex items-center justify-between cursor-pointer text-xs"
               >
                 <div className="flex items-center gap-2">
@@ -231,7 +251,7 @@ export function ThemeSelector({ themes, asSubMenu }: ThemeSelectorProps) {
         <DropdownMenuSeparator />
         
         <DropdownMenuItem 
-          onClick={() => setActiveTheme("default")}
+          onClick={() => handleThemeSelect("default")}
           className="flex items-center justify-between cursor-pointer text-xs"
         >
           <div className="flex items-center gap-2">
@@ -244,7 +264,7 @@ export function ThemeSelector({ themes, asSubMenu }: ThemeSelectorProps) {
         {themes.map((theme) => (
           <DropdownMenuItem 
             key={theme.id}
-            onClick={() => setActiveTheme(theme.id)}
+            onClick={() => handleThemeSelect(theme.id)}
             className="flex items-center justify-between cursor-pointer text-xs"
           >
             <div className="flex items-center gap-2">

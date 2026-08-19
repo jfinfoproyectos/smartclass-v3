@@ -10,25 +10,34 @@ interface ThemeEnforcerProps {
 }
 
 export function ThemeEnforcer({ themeMode, themeColor, allowThemeColorChange }: ThemeEnforcerProps) {
-    const { setTheme } = useTheme();
+    const { setTheme, theme } = useTheme();
 
     useEffect(() => {
-        // 1. Force Theme Mode (Light/Dark)
+        // 1. Force/Sync Theme Mode (Light/Dark)
         if (themeMode === "LIGHT" || themeMode === "DARK") {
             const target = themeMode.toLowerCase();
-            setTheme(target);
+            if (theme !== target) {
+                setTheme(target);
+            }
         }
 
-        // 2. Force Theme Color (Palette)
-        // If it's forced OR if it's not forced but the user is on 'default', 
-        // we might want to apply the admin's choice as the new default.
+        // 2. Sync Theme Color (Palette) from user's DB settings
         if (themeColor) {
-            const isDefault = localStorage.getItem("smartclass-theme") === "default" || !localStorage.getItem("smartclass-theme");
-            
-            // Apply if forced OR if user is on default (to adopt the institutional default)
-            if (!allowThemeColorChange || isDefault) {
+            const currentSaved = localStorage.getItem("smartclass-theme") || "default";
+
+            if (currentSaved !== themeColor) {
                 const applyColor = async () => {
                     try {
+                        if (themeColor === "zinc" || themeColor === "default") {
+                            const elId = "smartclass-dynamic-theme";
+                            const styleEl = document.getElementById(elId);
+                            if (styleEl) styleEl.remove();
+                            localStorage.setItem("smartclass-theme", "default");
+                            localStorage.removeItem("smartclass-theme-css-v2");
+                            window.dispatchEvent(new CustomEvent("smartclass-theme-changed"));
+                            return;
+                        }
+
                         const response = await fetch("/api/themes");
                         const themes = await response.json();
                         const themeData = themes.find((t: any) => t.id === themeColor);
@@ -41,29 +50,16 @@ export function ThemeEnforcer({ themeMode, themeColor, allowThemeColorChange }: 
                                 styleEl.id = elId;
                                 document.head.appendChild(styleEl);
                             }
-                            
-                            // Only update if it's different to avoid flickering
-                            if (styleEl.innerHTML !== themeData.cssContent) {
-                                styleEl.innerHTML = themeData.cssContent;
-                                
-                                // Sync localStorage so ThemeInitializer and ThemeSelector are happy
-                                // We sync if it's forced OR if we are adopting the new institutional default
-                                if (!allowThemeColorChange || isDefault) {
-                                    localStorage.setItem("smartclass-theme", themeColor);
-                                    localStorage.setItem("smartclass-theme-css-v2", themeData.cssContent);
-                                    window.dispatchEvent(new CustomEvent("smartclass-theme-changed"));
-                                }
+
+                            let finalCss = themeData.cssContent;
+                            if (!finalCss.includes('!important')) {
+                                finalCss = finalCss.replace(/(--[a-zA-Z0-9-]+:\s*[^;!]+)(;)/g, "$1 !important$2");
                             }
-                        } else if (themeColor === "zinc") {
-                            // Revert to zinc if that's the admin choice
-                            const elId = "smartclass-dynamic-theme";
-                            const styleEl = document.getElementById(elId);
-                            if (styleEl) styleEl.remove();
-                            if (!allowThemeColorChange) {
-                                localStorage.setItem("smartclass-theme", "default");
-                                localStorage.removeItem("smartclass-theme-css-v2");
-                                window.dispatchEvent(new CustomEvent("smartclass-theme-changed"));
-                            }
+
+                            styleEl.innerHTML = finalCss;
+                            localStorage.setItem("smartclass-theme", themeColor);
+                            localStorage.setItem("smartclass-theme-css-v2", finalCss);
+                            window.dispatchEvent(new CustomEvent("smartclass-theme-changed"));
                         }
                     } catch (error) {
                         console.error("Failed to enforce theme color:", error);
@@ -72,7 +68,7 @@ export function ThemeEnforcer({ themeMode, themeColor, allowThemeColorChange }: 
                 applyColor();
             }
         }
-    }, [themeMode, themeColor, allowThemeColorChange, setTheme]);
+    }, [themeMode, themeColor, allowThemeColorChange, setTheme, theme]);
 
     return null;
 }

@@ -20,9 +20,16 @@ export function ModeToggle({ asMenuItem }: { asMenuItem?: boolean }) {
     setMounted(true)
   }, [])
 
-  const toggle = React.useCallback(() => {
-    setTheme(theme === "dark" ? "light" : "dark")
-  }, [theme, setTheme])
+  const toggle = React.useCallback(async () => {
+    const nextMode = theme === "dark" ? "light" : "dark";
+    setTheme(nextMode);
+    try {
+      const { updateUserVisualSettingsAction } = await import("@/app/actions/settings");
+      await updateUserVisualSettingsAction({ appThemeMode: nextMode.toUpperCase() });
+    } catch (err) {
+      console.error("Failed to persist theme mode to DB:", err);
+    }
+  }, [theme, setTheme]);
 
   if (!mounted) {
     if (asMenuItem) {
