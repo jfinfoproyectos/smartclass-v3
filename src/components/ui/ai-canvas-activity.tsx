@@ -145,10 +145,10 @@ export function AICanvasActivityMatrix({ className }: { className?: string }) {
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.2, delay: index * 0.05 }}
-              className="group flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/80 bg-slate-50/50 hover:bg-slate-100/80 dark:bg-muted/30 dark:hover:bg-muted/60 transition-colors"
+              className="group flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl border border-border/80 bg-muted/30 hover:bg-muted/60 transition-colors"
             >
               <div className="flex items-start gap-3 min-w-0">
-                <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shrink-0 mt-0.5 shadow-sm">
+                <div className="p-2 rounded-xl bg-card border border-border shrink-0 mt-0.5 shadow-sm">
                   {getCategoryIcon(item.category)}
                 </div>
                 <div className="space-y-0.5 min-w-0">

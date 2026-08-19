@@ -54,7 +54,7 @@ export function AppIdentity() {
       <SidebarMenuItem>
         <div
           className={cn(
-            "flex items-center h-16 w-full border-b border-slate-200/80 dark:border-slate-800/80 bg-background/80 dark:bg-slate-950/80 backdrop-blur-xl transition-all",
+            "flex items-center h-16 w-full border-b border-sidebar-border/80 bg-sidebar/80 backdrop-blur-xl transition-all",
             isCollapsed ? "justify-center px-2" : "px-4"
           )}
         >

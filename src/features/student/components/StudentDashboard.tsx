@@ -83,7 +83,7 @@ export function StudentDashboard({
     return (
         <DashboardContainer>
             {/* AI Canvas Welcome Banner */}
-            <div className="relative overflow-hidden rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-slate-900/90 text-white p-6 sm:p-8 shadow-xl">
+            <div className="relative overflow-hidden rounded-3xl border border-border bg-card text-card-foreground p-6 sm:p-8 shadow-xl">
                 <div className="pointer-events-none absolute -top-32 left-1/3 w-96 h-96 rounded-full bg-gradient-to-br from-primary/20 via-primary/10 to-transparent blur-3xl opacity-70" />
                 <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div className="space-y-1.5">
@@ -91,10 +91,10 @@ export function StudentDashboard({
                             <GraduationCap className="w-3.5 h-3.5" />
                             <span>Portal Estudiantil</span>
                         </div>
-                        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-slate-300">
+                        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
                             ¡Hola, {formatName(studentName).split(' ')[0]}! 👋
                         </h1>
-                        <p className="text-xs sm:text-sm text-slate-400">
+                        <p className="text-xs sm:text-sm text-muted-foreground">
                             Revisa el estado de tus materias, entregas de actividades y asistencias diarias.
                         </p>
                     </div>

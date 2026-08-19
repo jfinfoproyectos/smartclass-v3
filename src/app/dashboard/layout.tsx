@@ -51,10 +51,10 @@ export default async function DashboardLayout({
       <AppSidebar />
       <SidebarInset className="h-svh overflow-hidden flex flex-col bg-background">
         {/* Top Header Bar matching AppIdentity height (h-16), background and bottom border */}
-        <header className="shrink-0 sticky top-0 z-40 flex h-16 w-full items-center bg-background/80 dark:bg-slate-950/80 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800/80 transition-all shadow-none">
+        <header className="shrink-0 sticky top-0 z-40 flex h-16 w-full items-center bg-background/80 backdrop-blur-xl border-b border-border/80 transition-all shadow-none">
           <div className="flex h-full w-full items-center justify-between px-3 sm:px-6">
             <div className="flex items-center gap-3">
-              <SidebarTrigger className="h-9 w-9 rounded-xl border border-slate-200/80 dark:border-slate-800 hover:bg-muted/60 transition-all" />
+              <SidebarTrigger className="h-9 w-9 rounded-xl border border-border hover:bg-muted/60 transition-all" />
               
               <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 text-xs font-bold">
                 <Sparkles className="w-3.5 h-3.5" />
@@ -64,7 +64,7 @@ export default async function DashboardLayout({
 
             <div className="flex items-center gap-2 sm:gap-3">
               {/* Desktop Header Action Bar */}
-              <div className="hidden md:flex items-center gap-2 bg-muted/40 p-1.5 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 backdrop-blur-md">
+              <div className="hidden md:flex items-center gap-2 bg-muted/40 p-1.5 rounded-2xl border border-border/60 backdrop-blur-md">
                 {showThemeSelector && <ThemeSelector themes={themes} />}
                 {showModeToggle && <ModeToggle />}
                 <PushNotificationToggle />

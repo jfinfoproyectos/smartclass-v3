@@ -38,11 +38,11 @@ export function DocFooterNav({ navTree, currentSlug, projectId }: DocFooterNavPr
   if (!prev && !next) return null;
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-16 pt-8 border-t border-slate-200/80 dark:border-slate-800/80">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-16 pt-8 border-t border-border/80">
       {prev ? (
         <Link 
           href={`/docs/${projectId}/${prev.slug === "index" ? "" : prev.slug}`}
-          className="group relative overflow-hidden flex items-center gap-4 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-background/80 dark:bg-slate-950/80 backdrop-blur-xl hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-0.5 transition-all duration-300"
+          className="group relative overflow-hidden flex items-center gap-4 p-5 rounded-2xl border border-border/80 bg-card/80 backdrop-blur-xl hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-0.5 transition-all duration-300"
         >
           <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20 group-hover:scale-110 transition-transform duration-300 shrink-0">
             <ArrowLeft className="w-4 h-4" />
@@ -61,7 +61,7 @@ export function DocFooterNav({ navTree, currentSlug, projectId }: DocFooterNavPr
       {next ? (
         <Link 
           href={`/docs/${projectId}/${next.slug === "index" ? "" : next.slug}`}
-          className="group relative overflow-hidden flex items-center justify-end gap-4 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-background/80 dark:bg-slate-950/80 backdrop-blur-xl hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-0.5 transition-all duration-300 text-right"
+          className="group relative overflow-hidden flex items-center justify-end gap-4 p-5 rounded-2xl border border-border/80 bg-card/80 backdrop-blur-xl hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-0.5 transition-all duration-300 text-right"
         >
           <div className="flex flex-col min-w-0">
             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 group-hover:text-primary transition-colors mb-0.5">

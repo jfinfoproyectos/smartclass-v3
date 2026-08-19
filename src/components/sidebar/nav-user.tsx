@@ -175,7 +175,7 @@ export function NavUser({
             <DropdownMenuTrigger asChild>
               <SidebarMenuButton
                 size="lg"
-                className="h-14 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-card hover:bg-muted/60 transition-all p-2.5 shadow-sm"
+                className="h-14 rounded-2xl border border-sidebar-border bg-sidebar-accent/50 hover:bg-sidebar-accent transition-all p-2.5 shadow-sm"
               >
                 <div className="relative">
                   <Avatar className="h-9 w-9 rounded-xl border border-primary/20">

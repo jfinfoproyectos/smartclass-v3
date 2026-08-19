@@ -49,7 +49,7 @@ export function TeacherCourseHeader({
     const showModeToggle = true;
     const showThemeSelector = true;
      return (
-        <div className="flex-none bg-background/95 dark:bg-slate-950/95 backdrop-blur-xl w-full border-b border-border/50 shadow-sm transition-all duration-300">
+        <div className="flex-none bg-background/95 backdrop-blur-xl w-full border-b border-border/50 shadow-sm transition-all duration-300">
             <style jsx global>{`
                 main[data-slot="sidebar-inset"] > header {
                     display: none !important;
@@ -63,7 +63,7 @@ export function TeacherCourseHeader({
 
             <TooltipProvider delayDuration={300}>
                 {/* Row 1: Primary Controls & Identity (h-16 to match AppIdentity sidebar header) */}
-                <div className="flex items-center h-16 border-b border-border/40 bg-background/80 dark:bg-slate-950/80 backdrop-blur-xl">
+                <div className="flex items-center h-16 border-b border-border/40 bg-background/80 backdrop-blur-xl">
                     {/* Left: Sidebar trigger */}
                     <div className="flex items-center h-full px-3 border-r border-border/40">
                         <SidebarTrigger className="h-8 w-8 hover:bg-muted/80 rounded-xl transition-colors" />

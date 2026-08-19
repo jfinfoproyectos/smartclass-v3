@@ -1,7 +1,7 @@
 "use client";
 
 import { useTheme } from "next-themes";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 interface ThemeEnforcerProps {
     themeMode: string;
@@ -10,18 +10,22 @@ interface ThemeEnforcerProps {
 }
 
 export function ThemeEnforcer({ themeMode, themeColor, allowThemeColorChange }: ThemeEnforcerProps) {
-    const { setTheme, theme } = useTheme();
+    const { setTheme } = useTheme();
+    const initializedRef = useRef(false);
 
+    // 1. Force/Sync Theme Mode (Light/Dark) on initial load or when server prop changes
     useEffect(() => {
-        // 1. Force/Sync Theme Mode (Light/Dark)
-        if (themeMode === "LIGHT" || themeMode === "DARK") {
-            const target = themeMode.toLowerCase();
-            if (theme !== target) {
+        if (!initializedRef.current) {
+            initializedRef.current = true;
+            if (themeMode === "LIGHT" || themeMode === "DARK") {
+                const target = themeMode.toLowerCase();
                 setTheme(target);
             }
         }
+    }, [themeMode, setTheme]);
 
-        // 2. Sync Theme Color (Palette) from user's DB settings
+    // 2. Sync Theme Color (Palette) from user's DB settings
+    useEffect(() => {
         if (themeColor) {
             const currentSaved = localStorage.getItem("smartclass-theme") || "default";
 
@@ -68,7 +72,7 @@ export function ThemeEnforcer({ themeMode, themeColor, allowThemeColorChange }: 
                 applyColor();
             }
         }
-    }, [themeMode, themeColor, allowThemeColorChange, setTheme, theme]);
+    }, [themeColor]);
 
     return null;
 }

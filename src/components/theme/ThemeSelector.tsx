@@ -17,6 +17,7 @@ import {
   DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 
+import { updateUserVisualSettingsAction } from "@/app/actions/settings";
 import {
   Tooltip,
   TooltipContent,
@@ -58,14 +59,11 @@ export function ThemeSelector({ themes, asSubMenu }: ThemeSelectorProps) {
     };
   }, []);
 
-  const handleThemeSelect = async (themeId: string) => {
+  const handleThemeSelect = (themeId: string) => {
     setActiveTheme(themeId);
-    try {
-      const { updateUserVisualSettingsAction } = await import("@/app/actions/settings");
-      await updateUserVisualSettingsAction({ appThemeColor: themeId });
-    } catch (err) {
+    updateUserVisualSettingsAction({ appThemeColor: themeId }).catch((err) => {
       console.error("Failed to persist theme color to DB:", err);
-    }
+    });
   };
 
   useEffect(() => {

@@ -20,7 +20,7 @@ export function Footer() {
     }, []);
 
     return (
-        <footer className="relative shrink-0 w-full bg-background/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200/80 dark:border-slate-800/80 text-[11px] transition-all py-2">
+        <footer className="relative shrink-0 w-full bg-background/80 backdrop-blur-xl border-t border-border/80 text-[11px] transition-all py-2">
             {/* Subtle ambient top line */}
             <div className="h-[1px] w-full bg-gradient-to-r from-transparent via-primary/30 to-transparent absolute top-0 left-0" />
 
@@ -30,7 +30,7 @@ export function Footer() {
                     <span>{institutionName}</span>
                 </div>
 
-                <span className="text-slate-300 dark:text-slate-700">•</span>
+                <span className="opacity-40">•</span>
 
                 {footerText ? (
                     <div

@@ -77,10 +77,6 @@ export async function updateUserVisualSettingsAction(data: {
         }
     });
 
-    revalidatePath("/", "layout");
-    revalidatePath("/dashboard/admin/settings");
-    revalidatePath("/dashboard/teacher/settings");
-    
     return { success: true, user: updatedUser };
 }
 

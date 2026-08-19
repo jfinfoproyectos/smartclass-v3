@@ -40,7 +40,7 @@ export function AICanvasHero({
   const RoleIcon = roleInfo.icon;
 
   return (
-    <div className="relative overflow-hidden rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-gradient-to-b from-slate-900 via-slate-900/95 to-slate-950 text-white p-5 sm:p-8 md:p-12 shadow-2xl">
+    <div className="relative overflow-hidden rounded-3xl border border-border bg-card text-card-foreground p-5 sm:p-8 md:p-12 shadow-xl">
       {/* Background Animated Conic & Radial Gradients */}
       <div className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full bg-gradient-to-tr from-primary/20 via-primary/10 to-transparent blur-3xl opacity-70 animate-pulse" />
       <div className="pointer-events-none absolute top-0 right-0 w-96 h-96 rounded-full bg-gradient-to-b from-primary/10 to-transparent blur-3xl" />
@@ -49,7 +49,7 @@ export function AICanvasHero({
       <div 
         className="pointer-events-none absolute inset-0 opacity-[0.04] dark:opacity-[0.07]" 
         style={{
-          backgroundImage: `radial-gradient(circle at 1px 1px, rgba(255,255,255,0.8) 1px, transparent 0)`,
+          backgroundImage: `radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)`,
           backgroundSize: '24px 24px'
         }}
       />
@@ -62,8 +62,8 @@ export function AICanvasHero({
           transition={{ duration: 0.5 }}
           className="flex flex-wrap items-center justify-center gap-2 sm:gap-3"
         >
-          <div className="inline-flex items-center gap-2 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-medium bg-white/10 dark:bg-white/5 border border-white/10 backdrop-blur-md text-slate-200">
-            <Calendar className="w-3.5 h-3.5 text-emerald-400" />
+          <div className="inline-flex items-center gap-2 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-medium bg-muted/60 border border-border/60 backdrop-blur-md text-muted-foreground">
+            <Calendar className="w-3.5 h-3.5 text-primary" />
             <span className="capitalize">{currentDateFormatted}</span>
           </div>
 
@@ -80,15 +80,15 @@ export function AICanvasHero({
           transition={{ duration: 0.6, delay: 0.1 }}
           className="space-y-2 sm:space-y-3"
         >
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] sm:text-xs font-semibold tracking-wider uppercase">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-primary/10 border border-primary/20 text-primary text-[10px] sm:text-xs font-semibold tracking-wider uppercase">
             <School className="w-3.5 h-3.5" />
             <span>{institutionName}</span>
           </div>
 
-          <h1 className="text-2xl sm:text-4xl md:text-6xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-slate-300 drop-shadow-sm">
+          <h1 className="text-2xl sm:text-4xl md:text-6xl font-extrabold tracking-tight text-foreground drop-shadow-sm">
             ¡Hola, {userName.split(" ")[0]}! 👋
           </h1>
-          <p className="text-slate-400 text-xs sm:text-base md:text-lg max-w-2xl mx-auto leading-relaxed">
+          <p className="text-muted-foreground text-xs sm:text-base md:text-lg max-w-2xl mx-auto leading-relaxed">
             Bienvenido al portal académico. Accede a tus herramientas principales, módulos de gestión y actividades actualizadas.
           </p>
         </motion.div>

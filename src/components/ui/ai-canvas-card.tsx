@@ -59,7 +59,7 @@ export function AICanvasCard({
       onMouseLeave={() => setIsHovered(false)}
       onClick={onClick}
       className={cn(
-        "group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-card p-6 shadow-sm hover:shadow-xl transition-all duration-300",
+        "group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-border bg-card p-6 shadow-sm hover:shadow-xl transition-all duration-300",
         onClick && "cursor-pointer",
         className
       )}
@@ -127,7 +127,7 @@ export function AICanvasCard({
 
       {/* Footer / Action indicator */}
       {!hideFooter && (
-        <div className="relative z-10 pt-4 mt-auto border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors">
+        <div className="relative z-10 pt-4 mt-auto border-t border-border/60 flex items-center justify-between text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors">
           <span>{actionLabel || "Explorar módulo"}</span>
           <span className="font-semibold text-primary opacity-80 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all">
             {actionText || "Acceder →"}

@@ -70,12 +70,12 @@ export function NavMain({
                     "h-11 rounded-xl transition-all duration-300 px-3 relative overflow-hidden group",
                     active
                       ? "bg-gradient-to-r from-primary/15 via-primary/5 to-transparent text-primary font-bold border-l-4 border-primary shadow-sm shadow-primary/10"
-                      : "text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800/60"
+                      : "text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-sidebar-accent"
                   )}
                 >
                   <Link href={item.url} onClick={handleLinkClick}>
                     {item.icon && (
-                      <item.icon className={cn("h-5 w-5 transition-transform duration-300 group-hover:scale-110", active ? "text-primary" : "text-slate-400 dark:text-slate-500")} />
+                      <item.icon className={cn("h-5 w-5 transition-transform duration-300 group-hover:scale-110", active ? "text-primary" : "text-muted-foreground")} />
                     )}
                     <span className="ml-2 text-sm">{item.title}</span>
                   </Link>

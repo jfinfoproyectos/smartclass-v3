@@ -228,10 +228,10 @@ export function MyEnrollments({
                     <div key={enrollment.id} className="flex flex-col w-full h-full min-h-0 overflow-hidden">
                         <Tabs key={activeTab} defaultValue={activeTab} onValueChange={onTabChange} className="w-full flex-1 flex flex-col h-full min-h-0 overflow-hidden">
                             {/* Unified Master Header: AI Canvas Style */}
-                            <div className="flex-none bg-background/95 dark:bg-slate-950/95 backdrop-blur-xl w-full border-b border-border/50 shadow-sm transition-all duration-300">
+                            <div className="flex-none bg-background/95 backdrop-blur-xl w-full border-b border-border/50 shadow-sm transition-all duration-300">
                                 <TooltipProvider delayDuration={300}>
                                     {/* Row 1: Primary Controls & Identity (h-16 to match AppIdentity sidebar header) */}
-                                    <div className="flex items-center h-16 border-b border-border/40 bg-background/80 dark:bg-slate-950/80 backdrop-blur-xl">
+                                    <div className="flex items-center h-16 border-b border-border/40 bg-background/80 backdrop-blur-xl">
                                         {/* Left: Sidebar trigger */}
                                         <div className="flex items-center h-full px-3 border-r border-border/40">
                                             <SidebarTrigger className="h-8 w-8 hover:bg-muted/80 rounded-xl transition-colors" />

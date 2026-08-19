@@ -11,25 +11,26 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
+import { updateUserVisualSettingsAction } from "@/app/actions/settings"
 
 export function ModeToggle({ asMenuItem }: { asMenuItem?: boolean }) {
-  const { theme, setTheme } = useTheme()
+  const { theme, resolvedTheme, setTheme } = useTheme()
   const [mounted, setMounted] = React.useState(false)
 
   React.useEffect(() => {
     setMounted(true)
   }, [])
 
-  const toggle = React.useCallback(async () => {
-    const nextMode = theme === "dark" ? "light" : "dark";
+  const activeMode = theme === "system" ? resolvedTheme : theme;
+
+  const toggle = React.useCallback(() => {
+    const current = theme === "system" ? resolvedTheme : theme;
+    const nextMode = current === "dark" ? "light" : "dark";
     setTheme(nextMode);
-    try {
-      const { updateUserVisualSettingsAction } = await import("@/app/actions/settings");
-      await updateUserVisualSettingsAction({ appThemeMode: nextMode.toUpperCase() });
-    } catch (err) {
+    updateUserVisualSettingsAction({ appThemeMode: nextMode.toUpperCase() }).catch((err) => {
       console.error("Failed to persist theme mode to DB:", err);
-    }
-  }, [theme, setTheme]);
+    });
+  }, [theme, resolvedTheme, setTheme]);
 
   if (!mounted) {
     if (asMenuItem) {
@@ -50,7 +51,7 @@ export function ModeToggle({ asMenuItem }: { asMenuItem?: boolean }) {
   if (asMenuItem) {
     return (
       <DropdownMenuItem onClick={toggle} className="cursor-pointer text-xs">
-        {theme === "dark" ? (
+        {activeMode === "dark" ? (
           <>
             <Sun className="mr-2 h-4 w-4 text-muted-foreground" />
             <span>Modo Claro</span>
@@ -75,7 +76,7 @@ export function ModeToggle({ asMenuItem }: { asMenuItem?: boolean }) {
         </Button>
       </TooltipTrigger>
       <TooltipContent>
-        <p>{theme === "dark" ? "Modo Claro" : "Modo Oscuro"}</p>
+        <p>{activeMode === "dark" ? "Modo Claro" : "Modo Oscuro"}</p>
       </TooltipContent>
     </Tooltip>
   )
