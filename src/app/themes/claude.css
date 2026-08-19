@@ -1,7 +1,7 @@
 :root {
   --background: hsl(47 47% 96%);
   --foreground: hsl(47 23% 19%);
-  --card: hsl(47 47% 96%);
+  --card: hsl(0 0% 100%);
   --card-foreground: hsl(0 0% 8%);
   --popover: hsl(0 0% 100%);
   --popover-foreground: hsl(51 21% 13%);
@@ -16,42 +16,32 @@
   --destructive: hsl(0 0% 8%);
   --border: hsl(60 10% 87%);
   --input: hsl(49 10% 67%);
-  --ring: hsl(210 78% 49%);
+  --ring: hsl(15 57% 53%);
   --chart-1: hsl(18 58% 44%);
   --chart-2: hsl(251 86% 75%);
   --chart-3: hsl(45 30% 82%);
   --chart-4: hsl(257 48% 88%);
   --chart-5: hsl(18 58% 44%);
-  --sidebar: hsl(47 36% 95%);
+  --sidebar: hsl(47 36% 94%);
   --sidebar-foreground: hsl(60 5% 23%);
   --sidebar-primary: hsl(15 57% 53%);
   --sidebar-primary-foreground: hsl(0 0% 99%);
-  --sidebar-accent: hsl(0 0% 11%);
-  --sidebar-accent-foreground: hsl(0 0% 21%);
-  --sidebar-border: hsl(0 0% 92%);
-  --sidebar-ring: hsl(0 0% 71%);
+  --sidebar-accent: hsl(42 17% 89%);
+  --sidebar-accent-foreground: hsl(51 21% 13%);
+  --sidebar-border: hsl(60 10% 87%);
+  --sidebar-ring: hsl(15 57% 53%);
 
-  --font-sans: 'Geist', 'Geist Fallback', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  --font-sans: 'Geist', 'Geist Fallback', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
   --font-serif: "Geist", "Geist Fallback", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
   --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
   --radius: 0.5rem;
-  
-  --shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
-  --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
-  --shadow-sm: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 1px 2px -1px hsl(0 0% 0% / 0.10);
-  --shadow: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 1px 2px -1px hsl(0 0% 0% / 0.10);
-  --shadow-md: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 2px 4px -1px hsl(0 0% 0% / 0.10);
-  --shadow-lg: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 4px 6px -1px hsl(0 0% 0% / 0.10);
-  --shadow-xl: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 8px 10px -1px hsl(0 0% 0% / 0.10);
-  --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
-  
 }
 
 .dark {
-  --background: hsl(0 0% 15%);
-  --foreground: hsl(47 7% 75%);
-  --card: hsl(0 0% 15%);
+  --background: hsl(0 0% 12%);
+  --foreground: hsl(47 7% 85%);
+  --card: hsl(0 0% 17%);
   --card-foreground: hsl(47 47% 96%);
   --popover: hsl(0 0% 19%);
   --popover-foreground: hsl(0 0% 89%);

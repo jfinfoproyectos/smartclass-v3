@@ -26,7 +26,9 @@ import {
 export interface ThemeInfo {
   id: string;
   name: string;
-  primaryColor: string;
+  primaryColor: string; // 10% Accent
+  cardColor?: string;   // 30% Secondary
+  bgColor?: string;     // 60% Base
   cssContent: string;
 }
 
@@ -135,6 +137,25 @@ export function ThemeSelector({ themes, asSubMenu }: ThemeSelectorProps) {
     return systemFonts.includes(font.toLowerCase());
   };
 
+  const renderThemeSwatch = (t?: ThemeInfo) => {
+    if (!t) {
+      return (
+        <div className="flex w-5 h-3.5 rounded-sm overflow-hidden border border-black/10 dark:border-white/10 shrink-0" title="Regla 60-30-10 Predeterminada">
+          <div className="w-[60%] h-full bg-background" />
+          <div className="w-[30%] h-full bg-card" />
+          <div className="w-[10%] h-full bg-primary" />
+        </div>
+      );
+    }
+    return (
+      <div className="flex w-5 h-3.5 rounded-sm overflow-hidden border border-black/10 dark:border-white/10 shrink-0" title="Regla 60-30-10: 60% Fondo, 30% Tarjetas, 10% Acento">
+        <div className="w-[60%] h-full" style={{ backgroundColor: t.bgColor || "var(--background)" }} />
+        <div className="w-[30%] h-full" style={{ backgroundColor: t.cardColor || "var(--card)" }} />
+        <div className="w-[10%] h-full" style={{ backgroundColor: t.primaryColor || "var(--primary)" }} />
+      </div>
+    );
+  };
+
   if (!mounted) {
     return (
       <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 opacity-50">
@@ -148,18 +169,20 @@ export function ThemeSelector({ themes, asSubMenu }: ThemeSelectorProps) {
       <DropdownMenuSub>
         <DropdownMenuSubTrigger className="cursor-pointer text-xs">
           <Palette className="mr-2 h-4 w-4 text-muted-foreground" />
-          <span>Apariencia</span>
+          <span>Apariencia (60-30-10)</span>
         </DropdownMenuSubTrigger>
         <DropdownMenuPortal>
-          <DropdownMenuSubContent className="w-[180px] bg-background border-border">
-            <DropdownMenuLabel className="text-[10px] uppercase tracking-widest opacity-50">Temas Visuales</DropdownMenuLabel>
+          <DropdownMenuSubContent className="w-[200px] bg-background border-border">
+            <DropdownMenuLabel className="text-[10px] uppercase tracking-widest opacity-50 flex items-center justify-between">
+              <span>Temas 60-30-10</span>
+            </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem 
               onClick={() => setActiveTheme("default")}
               className="flex items-center justify-between cursor-pointer text-xs"
             >
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-primary" />
+                {renderThemeSwatch()}
                 <span>Predeterminado</span>
               </div>
               {activeTheme === "default" && <Check className="w-3 h-3 ml-2" />}
@@ -172,10 +195,7 @@ export function ThemeSelector({ themes, asSubMenu }: ThemeSelectorProps) {
                 className="flex items-center justify-between cursor-pointer text-xs"
               >
                 <div className="flex items-center gap-2">
-                  <div 
-                    className="w-3 h-3 rounded-full border border-black/10 dark:border-white/10" 
-                    style={{ backgroundColor: theme.primaryColor }}
-                  />
+                  {renderThemeSwatch(theme)}
                   <span>{theme.name}</span>
                 </div>
                 {activeTheme === theme.id && <Check className="w-3 h-3 ml-2" />}
@@ -201,11 +221,13 @@ export function ThemeSelector({ themes, asSubMenu }: ThemeSelectorProps) {
           </span>
         </DropdownMenuTrigger>
         <TooltipContent>
-          <p>Apariencia</p>
+          <p>Apariencia (Sistema 60-30-10)</p>
         </TooltipContent>
       </Tooltip>
-      <DropdownMenuContent align="end" className="w-[180px] bg-background/80 backdrop-blur-md border-border/50">
-        <DropdownMenuLabel className="text-[10px] uppercase tracking-widest opacity-50">Temas Visuales</DropdownMenuLabel>
+      <DropdownMenuContent align="end" className="w-[200px] bg-background/95 backdrop-blur-md border-border/80 shadow-xl">
+        <DropdownMenuLabel className="text-[10px] uppercase tracking-widest opacity-60 flex items-center justify-between">
+          <span>Temas 60-30-10</span>
+        </DropdownMenuLabel>
         <DropdownMenuSeparator />
         
         <DropdownMenuItem 
@@ -213,7 +235,7 @@ export function ThemeSelector({ themes, asSubMenu }: ThemeSelectorProps) {
           className="flex items-center justify-between cursor-pointer text-xs"
         >
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-primary" />
+            {renderThemeSwatch()}
             <span>Predeterminado</span>
           </div>
           {activeTheme === "default" && <Check className="w-3 h-3 ml-2" />}
@@ -226,16 +248,14 @@ export function ThemeSelector({ themes, asSubMenu }: ThemeSelectorProps) {
             className="flex items-center justify-between cursor-pointer text-xs"
           >
             <div className="flex items-center gap-2">
-              <div 
-                className="w-3 h-3 rounded-full border border-black/10 dark:border-white/10" 
-                style={{ backgroundColor: theme.primaryColor }}
-              />
+              {renderThemeSwatch(theme)}
               <span>{theme.name}</span>
             </div>
-            {activeTheme === theme.id && <Check className="w-3 h-3 ml-2" />}
+            {activeTheme === theme.id && <Check className="w-3 h-3 ml-2 shrink-0" />}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
+

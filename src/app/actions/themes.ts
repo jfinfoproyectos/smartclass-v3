@@ -6,11 +6,26 @@ import path from "path";
 export interface ThemeInfo {
   id: string;
   name: string;
-  primaryColor: string;
+  primaryColor: string; // 10% Accent
+  cardColor: string;    // 30% Secondary
+  bgColor: string;      // 60% Dominant Canvas
   cssContent: string;
 }
 
 import { unstable_noStore as noStore } from 'next/cache';
+
+function parseCssColor(css: string, varName: string, fallback: string): string {
+  const reg = new RegExp(`${varName}:\\s*([^;!]+)`);
+  const match = css.match(reg);
+  if (match && match[1]) {
+    let color = match[1].trim();
+    if (/^[\d\.]+\s+[\d\.]+%/.test(color)) {
+      color = `hsl(${color})`;
+    }
+    return color;
+  }
+  return fallback;
+}
 
 export async function getAvailableThemes(): Promise<ThemeInfo[]> {
   noStore();
@@ -29,18 +44,17 @@ export async function getAvailableThemes(): Promise<ThemeInfo[]> {
       const id = file.replace(".css", "");
       const name = id.split("-").map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
       
-      const primaryMatch = cssContent.match(/--primary:\s*([^;]+);/);
-      let primaryColor = "hsl(0 0% 50%)"; // fallback
+      const primaryColor = parseCssColor(cssContent, "--primary", "hsl(210 100% 50%)");
+      const cardColor = parseCssColor(cssContent, "--card", "hsl(0 0% 100%)");
+      const bgColor = parseCssColor(cssContent, "--background", "hsl(0 0% 97%)");
       
-      if (primaryMatch && primaryMatch[1]) {
-        primaryColor = primaryMatch[1].trim();
-        if (/^[\d\.]+\s+[\d\.]+%/.test(primaryColor)) {
-          primaryColor = `hsl(${primaryColor})`;
-        }
-      }
+      // Clean up directives meant for build-time tailwind
+      let processedCss = cssContent
+        .replace(/@import\s+["']tailwindcss["'];?/g, "")
+        .replace(/@custom-variant\s+dark\s+\([^)]+\);?/g, "")
+        .replace(/@theme\s+inline\s*\{[\s\S]*?\}/g, "");
       
       // Increase specificity to ensure it overrides globals.css
-      let processedCss = cssContent;
       processedCss = processedCss.replace(/:root\s*\{/g, ":root, html {");
       processedCss = processedCss.replace(/\.dark\s*\{/g, ".dark, html.dark {");
       
@@ -51,6 +65,8 @@ export async function getAvailableThemes(): Promise<ThemeInfo[]> {
         id,
         name,
         primaryColor,
+        cardColor,
+        bgColor,
         cssContent: processedCss
       });
     }
@@ -61,3 +77,4 @@ export async function getAvailableThemes(): Promise<ThemeInfo[]> {
     return [];
   }
 }
+

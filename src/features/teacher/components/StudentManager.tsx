@@ -42,6 +42,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { addStudentToCourseAction, searchStudentsAction, removeStudentFromCourseAction, bulkAddStudentsToCourseAction, createAndEnrollStudentAction } from "@/features/teacher/actions/studentActions";
 import { getStudentCourseEnrollmentAction, updateStudentStatusAction, getStudentMissingActivitiesAction } from "@/features/teacher/actions/studentActions";
 import { recordAttendanceAction, deleteAttendanceAction, getAbsentStudentsForTodayAction } from "@/features/teacher/actions/attendanceActions";
+import { getTodayDateString } from "@/lib/dateUtils";
 
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -972,7 +973,7 @@ function LateArrivalsModal({ courseId }: { courseId: string }) {
 
     const handleMarkAsLate = async (studentId: string, name: string) => {
         try {
-            const today = format(new Date(), 'yyyy-MM-dd');
+            const today = getTodayDateString();
             await recordAttendanceAction(courseId, studentId, today, "LATE");
             toast.success(`${name} marcado como tarde`);
             fetchAbsentStudents(); // Refresh list

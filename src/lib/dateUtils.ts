@@ -6,10 +6,75 @@ import { es } from "date-fns/locale";
  * Objetivo: Evitar el desfase de días entre local y servidor (UTC).
  */
 
+export const DEFAULT_TIMEZONE = "America/Bogota";
+
+/**
+ * Retorna la fecha actual como string "YYYY-MM-DD" en la zona horaria regional.
+ * Garantiza coincidencia exacta entre cliente local y servidores UTC (Vercel).
+ */
+export function getTodayDateString(timeZone: string = DEFAULT_TIMEZONE): string {
+    const formatter = new Intl.DateTimeFormat("en-CA", {
+        timeZone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+    });
+    return formatter.format(new Date());
+}
+
+/**
+ * Convierte un objeto Date o string "YYYY-MM-DD" a medianoche UTC para Prisma,
+ * interpretando el objeto en la zona horaria regional (default: America/Bogota).
+ */
+export function toUTCStartOfDayFromRegional(date: Date | string = new Date(), timeZone: string = DEFAULT_TIMEZONE): Date {
+    if (typeof date === "string") {
+        const dateOnly = date.split("T")[0];
+        const parts = dateOnly.split("-").map(Number);
+        if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+            return new Date(Date.UTC(parts[0], parts[1] - 1, parts[2], 0, 0, 0, 0));
+        }
+        date = new Date(date);
+    }
+
+    if (isNaN(date.getTime())) {
+        date = new Date();
+    }
+
+    const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        year: "numeric",
+        month: "numeric",
+        day: "numeric"
+    }).formatToParts(date);
+
+    let month = 0, day = 1, year = 1970;
+    for (const p of parts) {
+        if (p.type === "year") year = parseInt(p.value, 10);
+        if (p.type === "month") month = parseInt(p.value, 10) - 1;
+        if (p.type === "day") day = parseInt(p.value, 10);
+    }
+
+    return new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+}
+
+/**
+ * Formatea horas de registro (llegada/salida) respetando la zona horaria regional.
+ */
+export function formatTimeRegional(date: Date | string | null | undefined, timeZone: string = DEFAULT_TIMEZONE): string {
+    if (!date) return "--:--";
+    const d = typeof date === "string" ? new Date(date) : date;
+    if (isNaN(d.getTime())) return "--:--";
+
+    return new Intl.DateTimeFormat("es-CO", {
+        timeZone,
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true
+    }).format(d);
+}
+
 /**
  * Convierte los componentes UTC de un objeto Date a la medianoche UTC.
- * Úsalo cuando la fecha YA es una "Fecha de Calendario" en UTC (como las de Prisma)
- * o cuando recibes una fecha ISO y quieres asegurar que se mantiene en UTC 00:00.
  */
 export function toUTCStartOfDay(date: Date): Date {
     return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 0, 0, 0, 0));
@@ -17,11 +82,9 @@ export function toUTCStartOfDay(date: Date): Date {
 
 /**
  * Convierte los componentes LOCALES de un objeto Date a la medianoche UTC.
- * Úsalo para normalizar "hoy" (new Date()) o fechas provenientes de inputs locales
- * (como date pickers) al registro de base de datos UTC.
  */
 export function toUTCStartOfDayFromLocal(date: Date): Date {
-    return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0));
+    return toUTCStartOfDayFromRegional(date);
 }
 
 /**

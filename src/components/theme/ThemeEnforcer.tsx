@@ -13,12 +13,10 @@ export function ThemeEnforcer({ themeMode, themeColor, allowThemeColorChange }: 
     const { setTheme } = useTheme();
 
     useEffect(() => {
-        return; // THEME DETECTIVE: Disabled Enforcer to check if this is the culprit
         // 1. Force Theme Mode (Light/Dark)
         if (themeMode === "LIGHT" || themeMode === "DARK") {
             const target = themeMode.toLowerCase();
             setTheme(target);
-            // Optional: prevent user from changing it via next-themes if we can
         }
 
         // 2. Force Theme Color (Palette)

@@ -65,7 +65,7 @@ export default async function RootLayout({
       </head>
       <body>
         <NextTopLoader 
-          color="#3b82f6" 
+          color="var(--primary, #3b82f6)" 
           initialPosition={0.08} 
           crawlSpeed={200} 
           height={3} 
@@ -73,7 +73,7 @@ export default async function RootLayout({
           showSpinner={false} 
           easing="ease" 
           speed={200} 
-          shadow="0 0 10px #3b82f6,0 0 5px #3b82f6"
+          shadow="0 0 10px var(--primary, #3b82f6),0 0 5px var(--primary, #3b82f6)"
           zIndex={999999}
         />
         <ThemeProvider

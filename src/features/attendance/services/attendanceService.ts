@@ -1,6 +1,6 @@
 import { AttendanceStatus } from "@/generated/prisma/client";
 import prisma from "@/lib/prisma";
-import { toUTCStartOfDay, toUTCStartOfDayFromLocal } from "@/lib/dateUtils";
+import { toUTCStartOfDayFromRegional } from "@/lib/dateUtils";
 
 
 export const attendanceService = {
@@ -13,19 +13,15 @@ export const attendanceService = {
         justification?: string | null,
         departureTime?: Date | null
     ) {
-        // Normalize date to start of day in UTC to avoid timezone shifts
-        const normalizedDate = typeof date === 'string'
-            ? new Date(`${date.split('T')[0]}T00:00:00.000Z`)
-            : toUTCStartOfDayFromLocal(date);
+        // Normalize date to start of day in UTC using regional timezone to avoid server/local shifts
+        const normalizedDate = toUTCStartOfDayFromRegional(date);
 
         // If status is LATE and no arrivalTime is provided, use current time
-        // If status is NOT LATE, arrivalTime should be null
         const finalArrivalTime = status === "LATE" 
             ? (arrivalTime || new Date()) 
             : null;
 
         // If status is LEAVE_EARLY and no departureTime is provided, use current time
-        // If status is NOT LEAVE_EARLY, departureTime should be null
         const finalDepartureTime = status === "LEAVE_EARLY"
             ? (departureTime || new Date())
             : null;
@@ -75,9 +71,7 @@ export const attendanceService = {
             justification?: string | null 
         }[]
     ) {
-        const normalizedDate = typeof date === 'string'
-            ? new Date(`${date.split('T')[0]}T00:00:00.000Z`)
-            : toUTCStartOfDayFromLocal(date);
+        const normalizedDate = toUTCStartOfDayFromRegional(date);
 
         return await prisma.$transaction(
             records.map(r => {
@@ -120,9 +114,7 @@ export const attendanceService = {
     },
 
     async getCourseAttendanceForDate(courseId: string, date: Date | string) {
-        const normalizedDate = typeof date === 'string'
-            ? new Date(`${date.split('T')[0]}T00:00:00.000Z`)
-            : toUTCStartOfDayFromLocal(date);
+        const normalizedDate = toUTCStartOfDayFromRegional(date);
 
         return await prisma.attendance.findMany({
             where: {
@@ -181,32 +173,15 @@ export const attendanceService = {
             throw new Error("El código ha expirado.");
         }
 
-        // Find existing attendance record for "today" (UTC range)
-        // We define "today" as the current UTC date (server always runs in UTC)
-        const now = new Date();
-        const todayUTC = toUTCStartOfDay(now);
-
-        // We look for a record with exactly this date, or create one if it doesn't exist (though late usually implies there was a session)
-        // Adjusting logic: Late arrival means they missed the roll call earlier TODAY.
-
-        const existingRecord = await prisma.attendance.findUnique({
-            where: {
-                courseId_userId_date: {
-                    courseId,
-                    userId,
-                    date: todayUTC
-                }
-            }
-        });
-
-        // If no record exists for today, we create a new one with LATE status
+        // Find existing attendance record for "today" in regional timezone
+        const todayRegional = toUTCStartOfDayFromRegional(new Date());
 
         return await prisma.attendance.upsert({
             where: {
                 courseId_userId_date: {
                     courseId,
                     userId,
-                    date: todayUTC,
+                    date: todayRegional,
                 },
             },
             update: {
@@ -217,7 +192,7 @@ export const attendanceService = {
             create: {
                 courseId,
                 userId,
-                date: todayUTC,
+                date: todayRegional,
                 status: "LATE",
                 arrivalTime: new Date(),
                 justification,
@@ -244,7 +219,7 @@ export const attendanceService = {
             }
         }
 
-        const normalizedDate = typeof date === 'string' ? new Date(date) : toUTCStartOfDay(date);
+        const normalizedDate = toUTCStartOfDayFromRegional(date);
 
         // Check current status to preserve LATE if it already exists
         const currentRecord = await prisma.attendance.findUnique({
@@ -332,9 +307,7 @@ export const attendanceService = {
     },
 
     async deleteAttendanceByDetails(courseId: string, userId: string, date: Date | string) {
-        const normalizedDate = typeof date === 'string'
-            ? new Date(date)
-            : toUTCStartOfDay(date);
+        const normalizedDate = toUTCStartOfDayFromRegional(date);
 
         try {
             return await prisma.attendance.delete({
@@ -405,7 +378,7 @@ export const attendanceService = {
     },
 
     async getAbsentStudentsForToday(courseId: string) {
-        const today = toUTCStartOfDay(new Date());
+        const today = toUTCStartOfDayFromRegional(new Date());
         return await prisma.attendance.findMany({
             where: {
                 courseId,

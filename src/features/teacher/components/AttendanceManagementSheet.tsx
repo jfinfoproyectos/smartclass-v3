@@ -36,7 +36,7 @@ import { es } from "date-fns/locale";
 import { cn, formatName } from "@/lib/utils";
 import { recordAttendanceAction, deleteAttendanceAction, deleteJustificationAction, getCourseScheduleAction } from "@/features/teacher/actions/attendanceActions";
 import { getStudentAttendanceStatsAction } from "@/features/student/actions/attendanceActions";;;
-import { formatCalendarDate, getCourseClassDates } from "@/lib/dateUtils";
+import { formatCalendarDate, getCourseClassDates, getTodayDateString, toUTCStartOfDayFromRegional } from "@/lib/dateUtils";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { 
@@ -166,13 +166,13 @@ export function AttendanceManagementSheet({
                     const dates = getCourseClassDates(sched.startDate, sched.endDate, sched.classDays);
                     setClassDates(dates);
                     
-                    const todayStr = format(new Date(), "yyyy-MM-dd");
+                    const todayStr = getTodayDateString();
                     if (dates.includes(todayStr)) {
-                        setDate(new Date(todayStr + "T00:00:00"));
+                        setDate(toUTCStartOfDayFromRegional(todayStr));
                     } else {
                         const closest = dates.find(d => d >= todayStr) || dates[dates.length - 1];
                         if (closest) {
-                            setDate(new Date(closest + "T00:00:00"));
+                            setDate(toUTCStartOfDayFromRegional(closest));
                         }
                     }
                 }
@@ -391,12 +391,12 @@ export function AttendanceManagementSheet({
                                 <select
                                     id="attendance-date-select"
                                     value={format(date, "yyyy-MM-dd")}
-                                    onChange={(e) => setDate(new Date(e.target.value + "T00:00:00"))}
+                                    onChange={(e) => setDate(toUTCStartOfDayFromRegional(e.target.value))}
                                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer font-bold text-foreground capitalize"
                                 >
                                     {classDates.map(dateStr => (
                                         <option key={dateStr} value={dateStr} className="text-foreground bg-background">
-                                            {formatCalendarDate(new Date(dateStr + "T00:00:00"), "EEEE, d 'de' MMMM 'de' yyyy")}
+                                            {formatCalendarDate(toUTCStartOfDayFromRegional(dateStr), "EEEE, d 'de' MMMM 'de' yyyy")}
                                         </option>
                                     ))}
                                     {classDates.length === 0 && (

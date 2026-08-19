@@ -23,7 +23,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { formatCalendarDate, fromUTC, toUTCStartOfDay } from "@/lib/dateUtils";
+import { formatCalendarDate, fromUTC, toUTCStartOfDay, formatTimeRegional } from "@/lib/dateUtils";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
@@ -232,9 +232,9 @@ export function StudentAttendanceSummary({ courseId, userId, readonly = false }:
                                         </TableCell>
                                         <TableCell className="text-sm text-muted-foreground">
                                             {record.status === "LATE" && record.arrivalTime ? (
-                                                <span>Llegada: {format(new Date(record.arrivalTime), "p", { locale: es })}{record.justification ? " (Justificado)" : ""}</span>
+                                                <span>Llegada: {formatTimeRegional(record.arrivalTime)}{record.justification ? " (Justificado)" : ""}</span>
                                             ) : record.status === "LEAVE_EARLY" && record.departureTime ? (
-                                                <span>Salida: {format(new Date(record.departureTime), "p", { locale: es })}{record.justification ? " (Justificado)" : ""}</span>
+                                                <span>Salida: {formatTimeRegional(record.departureTime)}{record.justification ? " (Justificado)" : ""}</span>
                                             ) : record.status === "EXCUSED" ? (
                                                 <span className="font-medium">
                                                     {record.justificationUrl ? "Justificado con soporte" : "Justificado sin soporte"}
@@ -479,7 +479,7 @@ export function StudentAttendanceSummary({ courseId, userId, readonly = false }:
                             <div className="space-y-2">
                                 <Label>Hora de Llegada</Label>
                                 <div className="p-2 bg-muted rounded-md">
-                                    {selectedRecord?.arrivalTime ? new Date(selectedRecord.arrivalTime).toLocaleTimeString() : "-"}
+                                    {selectedRecord?.arrivalTime ? formatTimeRegional(selectedRecord.arrivalTime) : "-"}
                                 </div>
                             </div>
                         )}

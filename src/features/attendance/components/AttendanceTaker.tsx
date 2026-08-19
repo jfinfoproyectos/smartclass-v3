@@ -15,7 +15,7 @@ import {
     getCourseAllStudentsAttendanceStatsAction,
     getCourseAllAttendanceRecordsAction
 } from "@/features/teacher/actions/attendanceActions";
-import { getCourseClassDates, formatCalendarDate } from "@/lib/dateUtils";
+import { getCourseClassDates, formatCalendarDate, getTodayDateString, toUTCStartOfDayFromRegional, formatTimeRegional } from "@/lib/dateUtils";
 import { getStudentAttendanceStatsAction } from "@/features/student/actions/attendanceActions";
 import { getCourseAttendanceReportAction } from "@/features/teacher/actions/reportActions";
 import { AttendanceStatistics } from "@/features/teacher/components/AttendanceStatistics";
@@ -69,7 +69,7 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
     const [loading, setLoading] = useState(false);
     const [loadingAttendance, setLoadingAttendance] = useState(false);
     const [loadingSummary, setLoadingSummary] = useState(false);
-    const [attendanceDate, setAttendanceDate] = useState<Date>(new Date());
+    const [attendanceDate, setAttendanceDate] = useState<Date>(() => toUTCStartOfDayFromRegional());
     const [summaryData, setSummaryData] = useState<any[]>([]);
     const [courseSchedule, setCourseSchedule] = useState<{
         startDate: Date | null;
@@ -218,12 +218,12 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
                 setClassDates(dates);
                 
                 if (dates.length > 0) {
-                    const todayStr = format(new Date(), "yyyy-MM-dd");
+                    const todayStr = getTodayDateString();
                     if (dates.includes(todayStr)) {
-                        setAttendanceDate(new Date(todayStr + "T00:00:00"));
+                        setAttendanceDate(toUTCStartOfDayFromRegional(todayStr));
                     } else {
                         const closest = dates.find(d => d >= todayStr) || dates[dates.length - 1];
-                        setAttendanceDate(new Date(closest + "T00:00:00"));
+                        setAttendanceDate(toUTCStartOfDayFromRegional(closest));
                     }
                 }
             }
@@ -235,10 +235,7 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
     const loadAttendanceForDate = async (targetDate: Date) => {
         setLoadingAttendance(true);
         try {
-            const y = targetDate.getFullYear();
-            const m = String(targetDate.getMonth() + 1).padStart(2, '0');
-            const d = String(targetDate.getDate()).padStart(2, '0');
-            const dateStr = `${y}-${m}-${d}`;
+            const dateStr = format(targetDate, "yyyy-MM-dd");
 
             const records = await getCourseAttendanceForDateAction(courseId, dateStr);
             
@@ -246,18 +243,12 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
             records.forEach((r: any) => {
                 let timeStr: string | null = null;
                 if (r.arrivalTime) {
-                    const parsedTime = new Date(r.arrivalTime);
-                    const hours = String(parsedTime.getUTCHours()).padStart(2, '0');
-                    const minutes = String(parsedTime.getUTCMinutes()).padStart(2, '0');
-                    timeStr = `${hours}:${minutes}`;
+                    timeStr = formatTimeRegional(r.arrivalTime);
                 }
 
                 let depTimeStr: string | null = null;
                 if (r.departureTime) {
-                    const parsedTime = new Date(r.departureTime);
-                    const hours = String(parsedTime.getUTCHours()).padStart(2, '0');
-                    const minutes = String(parsedTime.getUTCMinutes()).padStart(2, '0');
-                    depTimeStr = `${hours}:${minutes}`;
+                    depTimeStr = formatTimeRegional(r.departureTime);
                 }
                 
                 map[r.userId] = {
@@ -401,7 +392,7 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
     const handleDateChangeSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const val = e.target.value;
         if (!val) return;
-        setAttendanceDate(new Date(val + "T00:00:00"));
+        setAttendanceDate(toUTCStartOfDayFromRegional(val));
     };
 
     const handleMarkStudent = async (
@@ -552,18 +543,17 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
     }, [isOpen, attMode, currentIndex, students, handleNext, handlePrevious, view]);
 
     const isDateToday = (d: Date) => {
-        const today = new Date();
-        return d.getDate() === today.getDate() &&
-            d.getMonth() === today.getMonth() &&
-            d.getFullYear() === today.getFullYear();
+        const todayStr = getTodayDateString();
+        const dStr = format(d, "yyyy-MM-dd");
+        return todayStr === dStr;
     };
 
     const isDateYesterday = (d: Date) => {
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
-        return d.getDate() === yesterday.getDate() &&
-            d.getMonth() === yesterday.getMonth() &&
-            d.getFullYear() === yesterday.getFullYear();
+        const yesterdayStr = getTodayDateString();
+        const dStr = format(d, "yyyy-MM-dd");
+        return yesterdayStr === dStr;
     };
 
     const currentStudent = students[currentIndex];
@@ -654,13 +644,13 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
                                     size="sm"
                                     className="h-8 rounded-lg font-bold text-xs"
                                     onClick={() => {
-                                        const todayStr = format(new Date(), "yyyy-MM-dd");
+                                        const todayStr = getTodayDateString();
                                         if (classDates.includes(todayStr)) {
-                                            setAttendanceDate(new Date(todayStr + "T00:00:00"));
+                                            setAttendanceDate(toUTCStartOfDayFromRegional(todayStr));
                                         } else {
                                             const closest = classDates.find(d => d >= todayStr) || classDates[classDates.length - 1];
                                             if (closest) {
-                                                setAttendanceDate(new Date(closest + "T00:00:00"));
+                                                setAttendanceDate(toUTCStartOfDayFromRegional(closest));
                                             } else {
                                                 toast.error("No hay clases programadas");
                                             }
@@ -679,7 +669,7 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
                                             const currentDateStr = format(attendanceDate, "yyyy-MM-dd");
                                             const idx = classDates.indexOf(currentDateStr);
                                             if (idx > 0) {
-                                                setAttendanceDate(new Date(classDates[idx - 1] + "T00:00:00"));
+                                                setAttendanceDate(toUTCStartOfDayFromRegional(classDates[idx - 1]));
                                             }
                                         }}
                                         disabled={classDates.indexOf(format(attendanceDate, "yyyy-MM-dd")) <= 0}
@@ -695,7 +685,7 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
                                             const currentDateStr = format(attendanceDate, "yyyy-MM-dd");
                                             const idx = classDates.indexOf(currentDateStr);
                                             if (idx !== -1 && idx < classDates.length - 1) {
-                                                setAttendanceDate(new Date(classDates[idx + 1] + "T00:00:00"));
+                                                setAttendanceDate(toUTCStartOfDayFromRegional(classDates[idx + 1]));
                                             }
                                         }}
                                         disabled={classDates.indexOf(format(attendanceDate, "yyyy-MM-dd")) === -1 || classDates.indexOf(format(attendanceDate, "yyyy-MM-dd")) === classDates.length - 1}
@@ -713,7 +703,7 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
                                     >
                                         {classDates.map(dateStr => (
                                             <option key={dateStr} value={dateStr} className="text-foreground bg-background">
-                                                {formatCalendarDate(new Date(dateStr + "T00:00:00"), "EEEE, d 'de' MMMM 'de' yyyy")}
+                                                {formatCalendarDate(toUTCStartOfDayFromRegional(dateStr), "EEEE, d 'de' MMMM 'de' yyyy")}
                                             </option>
                                         ))}
                                         {classDates.length === 0 && (
