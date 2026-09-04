@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { 
-    Github, Sparkles, Send, Loader2, Bot, User, Trash2, ShieldAlert, GitCommit, Search, RefreshCw, Copy, Check,
-    Maximize2, Minimize2
+    Github, Sparkles, Send, Loader2, Bot, User, Trash2, ShieldAlert, GitCommit, Search,
+    Copy, Check, Maximize2, Minimize2, History, Plus, ChevronDown, MessageSquare, Clock, Eye
 } from "lucide-react";
 import {
     AlertDialog,
@@ -17,16 +17,27 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-    AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { 
     askRepoMcpQuestionAction, 
     getMcpChatHistoryAction, 
-    deleteMcpChatHistoryAction 
+    deleteMcpChatHistoryAction,
+    listMcpChatSessionsAction,
+    McpChatSessionSummary
 } from "@/features/github/actions/githubMcpActions";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
 
 function formatMarkdown(content: string): string {
     if (typeof content !== 'string') return content || "";
@@ -51,6 +62,7 @@ interface GitHubRepoChatInspectorProps {
     studentId?: string;
     isFullscreen?: boolean;
     onToggleFullscreen?: () => void;
+    readOnly?: boolean;
 }
 
 const PRESET_QUESTIONS = [
@@ -82,60 +94,102 @@ export function GitHubRepoChatInspector({
     activityId, 
     studentId,
     isFullscreen,
-    onToggleFullscreen
+    onToggleFullscreen,
+    readOnly = false,
 }: GitHubRepoChatInspectorProps) {
     const defaultWelcomeMessage: Message = {
         id: "welcome",
         role: "assistant",
-        content: `👋 **Asistente de Inspección GitHub MCP (docente)**\n\nPuedes hacerme cualquier pregunta técnica sobre el repositorio entregado ${studentName ? `por **${studentName}**` : ""}.\n\n> ⚠️ *Recuerda: Todas las respuestas aquí generadas son herramientas de investigación para ti y **no afectan la calificación ni la retroalimentación oficial**.*`,
+        content: readOnly
+            ? `👋 **Historial de Inspección GitHub MCP (estudiante)**\n\nAquí puedes consultar las auditorías y análisis técnicos realizados por tu docente sobre el repositorio de esta entrega.\n\n> ℹ️ *Esta información es de carácter formativo y de consulta.*`
+            : `👋 **Asistente de Inspección GitHub MCP (docente)**\n\nPuedes hacerme cualquier pregunta técnica sobre el repositorio entregado ${studentName ? `por **${studentName}**` : ""}.\n\n> ⚠️ *Recuerda: Todas las respuestas aquí generadas se guardan en el historial para consulta y **no afectan la calificación oficial** a menos que tú lo decidas.*`,
         timestamp: new Date(),
     };
 
     const [messages, setMessages] = useState<Message[]>([defaultWelcomeMessage]);
+    const [sessions, setSessions] = useState<McpChatSessionSummary[]>([]);
+    const [activeChatId, setActiveChatId] = useState<string | null>(null);
     const [input, setInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [isFetchingHistory, setIsFetchingHistory] = useState(false);
     const [isDeletingHistory, setIsDeletingHistory] = useState(false);
-    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<{ id?: string; title?: string; isAll?: boolean } | null>(null);
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const scrollBottomRef = useRef<HTMLDivElement>(null);
 
-    // Cargar historial de conversación guardado en PostgreSQL si existen activityId y studentId
-    useEffect(() => {
+    // Cargar mensajes de una sesión específica
+    const loadSessionMessages = useCallback(async (chatId: string) => {
+        setIsFetchingHistory(true);
+        try {
+            const res = await getMcpChatHistoryAction({ activityId, studentId, chatId });
+            if (res.success && Array.isArray(res.messages) && res.messages.length > 0) {
+                const loadedMsgs: Message[] = res.messages.map((m: any) => ({
+                    id: m.id || String(Date.now()),
+                    role: m.role,
+                    content: m.content,
+                    timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
+                    toolCallsCount: m.toolCallsCount,
+                }));
+                setMessages(loadedMsgs);
+                setActiveChatId(chatId);
+            } else {
+                setMessages([defaultWelcomeMessage]);
+                setActiveChatId(chatId);
+            }
+        } catch (err) {
+            console.error("Error cargando mensajes de la sesión:", err);
+            toast.error("No se pudo cargar la conversación seleccionada.");
+        } finally {
+            setIsFetchingHistory(false);
+        }
+    }, [activityId, studentId]);
+
+    // Cargar la lista de sesiones históricas
+    const refreshSessions = useCallback(async (autoSelectLatest = false) => {
         if (!activityId || !studentId) return;
 
-        let isMounted = true;
         setIsFetchingHistory(true);
-
-        getMcpChatHistoryAction({ activityId, studentId })
-            .then((res) => {
-                if (!isMounted) return;
-                if (res.success && Array.isArray(res.messages) && res.messages.length > 0) {
-                    const loadedMsgs: Message[] = res.messages.map((m: any) => ({
-                        id: m.id || String(Date.now()),
-                        role: m.role,
-                        content: m.content,
-                        timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
-                        toolCallsCount: m.toolCallsCount,
-                    }));
-                    setMessages(loadedMsgs);
+        try {
+            const res = await listMcpChatSessionsAction({ activityId, studentId });
+            if (res.success && Array.isArray(res.sessions)) {
+                setSessions(res.sessions);
+                if (autoSelectLatest) {
+                    if (res.sessions.length > 0) {
+                        await loadSessionMessages(res.sessions[0].id);
+                    } else {
+                        setActiveChatId(null);
+                        setMessages([defaultWelcomeMessage]);
+                    }
                 }
-            })
-            .catch((err) => console.error("Error al cargar historial MCP:", err))
-            .finally(() => {
-                if (isMounted) setIsFetchingHistory(false);
-            });
+            }
+        } catch (err) {
+            console.error("Error listando sesiones MCP:", err);
+        } finally {
+            setIsFetchingHistory(false);
+        }
+    }, [activityId, studentId, loadSessionMessages]);
 
-        return () => {
-            isMounted = false;
-        };
-    }, [activityId, studentId]);
+    // Carga inicial
+    useEffect(() => {
+        refreshSessions(true);
+    }, [refreshSessions]);
 
     useEffect(() => {
         scrollBottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages, isLoading]);
 
+    // Iniciar una nueva conversación (modo docente)
+    const handleStartNewChat = () => {
+        if (isLoading) return;
+        setActiveChatId(null);
+        setMessages([defaultWelcomeMessage]);
+        setInput("");
+        toast.info("Nueva sesión de conversación iniciada.");
+    };
+
+    // Enviar pregunta
     const handleSendMessage = async (textToSend?: string) => {
+        if (readOnly) return;
         const query = textToSend || input.trim();
         if (!query || isLoading) return;
 
@@ -166,6 +220,7 @@ export function GitHubRepoChatInspector({
                 chatHistory,
                 activityId,
                 studentId,
+                chatId: activeChatId || undefined,
             });
 
             if (!res.success) {
@@ -190,6 +245,12 @@ export function GitHubRepoChatInspector({
                         toolCallsCount: res.toolCallsCount,
                     },
                 ]);
+
+                if (res.chatId && res.chatId !== activeChatId) {
+                    setActiveChatId(res.chatId);
+                }
+                // Actualizar la lista de sesiones
+                await refreshSessions(false);
             }
         } catch (err: any) {
             toast.error("Error conectando con la IA de inspección");
@@ -214,60 +275,188 @@ export function GitHubRepoChatInspector({
         setTimeout(() => setCopiedId(null), 2000);
     };
 
-    const handleDeleteChat = async () => {
+    // Ejecutar eliminación confirmada (solo docente)
+    const handleConfirmDelete = async () => {
+        if (!deleteTarget || readOnly) return;
         setIsDeletingHistory(true);
+
         try {
-            if (activityId && studentId) {
-                const res = await deleteMcpChatHistoryAction({ activityId, studentId });
-                if (!res.success) {
-                    toast.error(res.error || "No se pudo eliminar la conversación.");
-                    return;
-                }
+            const targetChatId = deleteTarget.isAll ? undefined : deleteTarget.id;
+            const res = await deleteMcpChatHistoryAction({
+                activityId,
+                studentId,
+                chatId: targetChatId,
+            });
+
+            if (!res.success) {
+                toast.error(res.error || "No se pudo eliminar la conversación.");
+                return;
             }
-            setMessages([
-                {
-                    id: "welcome-" + Date.now(),
-                    role: "assistant",
-                    content: "Conversación eliminada. Puedes realizar una nueva consulta sobre el repositorio.",
-                    timestamp: new Date(),
-                },
-            ]);
-            toast.success("Conversación eliminada de la base de datos.");
+
+            toast.success(deleteTarget.isAll ? "Todas las conversaciones fueron eliminadas." : "Conversación histórica eliminada.");
+            setDeleteTarget(null);
+
+            // Refrescar y seleccionar la última o resetear
+            await refreshSessions(true);
         } catch (err: any) {
             toast.error("Error al eliminar la conversación", { description: err.message });
         } finally {
             setIsDeletingHistory(false);
-            setDeleteConfirmOpen(false);
         }
     };
 
+    // Sesión activa actual
+    const currentSession = sessions.find((s) => s.id === activeChatId);
+
     return (
         <div className="flex flex-col h-full bg-card rounded-xl border border-border overflow-hidden shadow-sm">
-            {/* Header del Copiloto MCP */}
+            {/* Header del Inspector MCP */}
             <div className="p-3 sm:p-4 bg-muted/40 border-b border-border flex flex-wrap items-center justify-between gap-2 shrink-0">
-                <div className="flex items-center gap-2.5">
-                    <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
                         <Github className="h-5 w-5" />
                     </div>
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <h3 className="font-bold text-sm tracking-tight">Inspector GitHub MCP</h3>
-                            <Badge variant="outline" className="text-[10px] bg-primary/5 text-primary border-primary/20 font-mono">
+                    <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-bold text-sm tracking-tight truncate">Inspector GitHub MCP</h3>
+                            <Badge variant="outline" className="text-[10px] bg-primary/5 text-primary border-primary/20 font-mono shrink-0">
                                 Protocol MCP
                             </Badge>
+                            {readOnly ? (
+                                <Badge variant="secondary" className="text-[10px] bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/30 gap-1 shrink-0">
+                                    <Eye className="h-3 w-3" /> Solo Lectura (Estudiante)
+                                </Badge>
+                            ) : null}
                             {isFetchingHistory && (
-                                <Badge variant="secondary" className="text-[10px] gap-1 animate-pulse">
+                                <Badge variant="secondary" className="text-[10px] gap-1 animate-pulse shrink-0">
                                     <Loader2 className="h-3 w-3 animate-spin" /> Cargando...
                                 </Badge>
                             )}
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                            Inspección libre sin afectar calificación oficial
+                        <p className="text-xs text-muted-foreground truncate">
+                            {readOnly 
+                                ? "Historial de análisis y consultas técnicas generadas por el docente"
+                                : "Inspección libre de repositorios sin afectar calificación oficial"}
                         </p>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 shrink-0">
+                    {/* Selector de Histórico de Conversaciones */}
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 gap-1.5 text-xs font-semibold max-w-[200px] sm:max-w-[240px] truncate"
+                                title="Ver histórico de conversaciones"
+                            >
+                                <History className="h-3.5 w-3.5 text-primary shrink-0" />
+                                <span className="truncate">
+                                    {currentSession ? currentSession.title : `Historial (${sessions.length})`}
+                                </span>
+                                <ChevronDown className="h-3 w-3 opacity-60 shrink-0" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-72 sm:w-80 max-h-96 overflow-y-auto">
+                            <DropdownMenuLabel className="text-xs flex items-center justify-between">
+                                <span>Histórico de Conversaciones</span>
+                                <Badge variant="outline" className="text-[10px]">{sessions.length}</Badge>
+                            </DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+
+                            {!readOnly && (
+                                <>
+                                    <DropdownMenuItem
+                                        onClick={handleStartNewChat}
+                                        className="gap-2 text-xs font-semibold text-primary cursor-pointer"
+                                    >
+                                        <Plus className="h-3.5 w-3.5" />
+                                        <span>+ Nueva Consulta / Sesión</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                </>
+                            )}
+
+                            {sessions.length === 0 ? (
+                                <div className="p-4 text-center text-xs text-muted-foreground">
+                                    <Clock className="h-6 w-6 mx-auto mb-1 opacity-40" />
+                                    No hay conversaciones históricas guardadas aún.
+                                </div>
+                            ) : (
+                                sessions.map((sess) => {
+                                    const isSelected = sess.id === activeChatId;
+                                    return (
+                                        <div
+                                            key={sess.id}
+                                            className={`group flex items-center justify-between px-2 py-1.5 rounded-md text-xs transition-colors ${
+                                                isSelected ? "bg-accent text-accent-foreground font-semibold" : "hover:bg-muted/60"
+                                            }`}
+                                        >
+                                            <button
+                                                type="button"
+                                                onClick={() => loadSessionMessages(sess.id)}
+                                                className="flex-1 text-left min-w-0 pr-2 cursor-pointer"
+                                            >
+                                                <div className="flex items-center gap-1.5">
+                                                    <MessageSquare className="h-3 w-3 shrink-0 text-muted-foreground" />
+                                                    <span className="truncate block font-medium">{sess.title}</span>
+                                                </div>
+                                                <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted-foreground">
+                                                    <span>{format(new Date(sess.createdAt), "dd MMM, HH:mm", { locale: es })}</span>
+                                                    <span>•</span>
+                                                    <span>{sess.messageCount} msgs</span>
+                                                </div>
+                                            </button>
+
+                                            {!readOnly && (
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setDeleteTarget({ id: sess.id, title: sess.title });
+                                                    }}
+                                                    className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-all shrink-0 cursor-pointer"
+                                                    title="Eliminar esta conversación"
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    );
+                                })
+                            )}
+
+                            {!readOnly && sessions.length > 1 && (
+                                <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                        onClick={() => setDeleteTarget({ isAll: true })}
+                                        className="gap-2 text-xs font-semibold text-destructive focus:text-destructive cursor-pointer"
+                                    >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                        <span>Eliminar todo el historial</span>
+                                    </DropdownMenuItem>
+                                </>
+                            )}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    {/* Botón Nueva Consulta (docente) */}
+                    {!readOnly && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 gap-1 text-xs"
+                            onClick={handleStartNewChat}
+                            title="Iniciar una nueva sesión de consulta en limpio"
+                        >
+                            <Plus className="h-3.5 w-3.5 text-primary" />
+                            <span className="hidden sm:inline">Nueva</span>
+                        </Button>
+                    )}
+
+                    {/* Botón Pantalla Completa */}
                     {onToggleFullscreen && (
                         <Button
                             variant="ghost"
@@ -280,140 +469,133 @@ export function GitHubRepoChatInspector({
                         </Button>
                     )}
 
-                    <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-                        <AlertDialogTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                title="Eliminar conversación de la base de datos"
-                            >
-                                <Trash2 className="h-4 w-4" />
-                            </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                            <AlertDialogHeader>
-                                <AlertDialogTitle>¿Eliminar conversación guardada?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                    Esta acción eliminará permanentemente todo el historial de consultas de esta entrega guardado en la base de datos.
-                                </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                                <AlertDialogCancel disabled={isDeletingHistory}>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        handleDeleteChat();
-                                    }}
-                                    disabled={isDeletingHistory}
-                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                >
-                                    {isDeletingHistory ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                                    Eliminar
-                                </AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
-                    </AlertDialog>
+                    {/* Botón Eliminar Conversación Activa (docente) */}
+                    {!readOnly && activeChatId && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            onClick={() => setDeleteTarget({ id: activeChatId, title: currentSession?.title })}
+                            title="Eliminar conversación activa de la base de datos"
+                        >
+                            <Trash2 className="h-4 w-4" />
+                        </Button>
+                    )}
                 </div>
             </div>
 
-            {/* Presets Rápidos */}
-            <div className="p-2.5 bg-muted/20 border-b border-border flex items-center gap-1.5 overflow-x-auto scrollbar-hide text-xs shrink-0">
-                <span className="text-muted-foreground font-medium shrink-0 px-1">Sugerencias:</span>
-                {PRESET_QUESTIONS.map((pq, idx) => {
-                    const Icon = pq.icon;
-                    return (
-                        <button
-                            key={idx}
-                            disabled={isLoading}
-                            onClick={() => handleSendMessage(pq.prompt)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-background hover:bg-accent border border-border text-foreground hover:text-accent-foreground text-[11px] whitespace-nowrap transition-colors disabled:opacity-50"
-                        >
-                            <Icon className="h-3 w-3 text-primary" />
-                            {pq.label}
-                        </button>
-                    );
-                })}
-            </div>
+            {/* Presets Rápidos (solo visible para docente para realizar consultas rápidas) */}
+            {!readOnly && (
+                <div className="p-2.5 bg-muted/20 border-b border-border flex items-center gap-1.5 overflow-x-auto scrollbar-hide text-xs shrink-0">
+                    <span className="text-muted-foreground font-medium shrink-0 px-1">Sugerencias:</span>
+                    {PRESET_QUESTIONS.map((pq, idx) => {
+                        const Icon = pq.icon;
+                        return (
+                            <button
+                                key={idx}
+                                disabled={isLoading}
+                                onClick={() => handleSendMessage(pq.prompt)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-background hover:bg-accent border border-border text-foreground hover:text-accent-foreground text-[11px] whitespace-nowrap transition-colors disabled:opacity-50 cursor-pointer"
+                            >
+                                <Icon className="h-3 w-3 text-primary" />
+                                {pq.label}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
 
             {/* Área de Mensajes Desplazable */}
             <div className="flex-1 overflow-y-auto min-h-0 p-3 sm:p-4 space-y-4">
                 <div className="space-y-4 max-w-3xl mx-auto">
-                    {messages.map((msg) => {
-                        const isUser = msg.role === "user";
-                        return (
-                            <div
-                                key={msg.id}
-                                className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}
-                            >
-                                {!isUser && (
-                                    <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
-                                        <Bot className="h-4 w-4" />
-                                    </div>
-                                )}
-
-                                <div className={`group relative max-w-[88%] rounded-2xl p-3.5 text-sm shadow-xs ${
-                                    isUser
-                                        ? "bg-primary text-primary-foreground rounded-tr-xs"
-                                        : "bg-muted/60 border border-border text-foreground rounded-tl-xs"
-                                }`}>
-                                    {!isUser && msg.toolCallsCount && msg.toolCallsCount > 0 ? (
-                                        <div className="mb-2 inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-background/50 px-2 py-0.5 rounded border border-border">
-                                            <Sparkles className="h-3 w-3 text-amber-500" />
-                                            Herramientas MCP invocadas: {msg.toolCallsCount}
-                                        </div>
-                                    ) : null}
-
-                                    <div className="prose prose-sm dark:prose-invert max-w-none break-words text-xs sm:text-sm">
-                                        <ReactMarkdown
-                                            remarkPlugins={[remarkGfm]}
-                                            components={{
-                                                table: ({ node, ...props }) => (
-                                                    <div className="my-3 w-full overflow-x-auto rounded-lg border border-border bg-background/50">
-                                                        <table className="w-full text-left text-xs border-collapse" {...props} />
-                                                    </div>
-                                                ),
-                                                thead: ({ node, ...props }) => (
-                                                    <thead className="bg-muted/80 border-b border-border font-bold text-foreground" {...props} />
-                                                ),
-                                                th: ({ node, ...props }) => (
-                                                    <th className="px-3 py-2 border-r last:border-r-0 border-border font-semibold" {...props} />
-                                                ),
-                                                td: ({ node, ...props }) => (
-                                                    <td className="px-3 py-2 border-t border-r last:border-r-0 border-border" {...props} />
-                                                ),
-                                            }}
-                                        >
-                                            {formatMarkdown(msg.content)}
-                                        </ReactMarkdown>
-                                    </div>
-
-                                    <div className="mt-2 flex items-center justify-between gap-2 text-[10px] opacity-70">
-                                        <span>
-                                            {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                        </span>
-                                        <button
-                                            onClick={() => handleCopy(msg.content, msg.id)}
-                                            className="hover:opacity-100 flex items-center gap-1 transition-opacity"
-                                            title="Copiar texto"
-                                        >
-                                            {copiedId === msg.id ? (
-                                                <Check className="h-3 w-3 text-emerald-500" />
-                                            ) : (
-                                                <Copy className="h-3 w-3" />
-                                            )}
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {isUser && (
-                                    <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground shrink-0 border border-border">
-                                        <User className="h-4 w-4" />
-                                    </div>
-                                )}
+                    {/* Si está en modo estudiante y no hay sesiones guardadas */}
+                    {readOnly && sessions.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground space-y-3 bg-muted/20 rounded-xl border border-dashed my-8">
+                            <Bot className="h-10 w-10 text-muted-foreground/40" />
+                            <div className="space-y-1">
+                                <h4 className="font-semibold text-sm text-foreground">Aún no hay inspecciones registradas</h4>
+                                <p className="text-xs max-w-sm">
+                                    Tu docente aún no ha realizado consultas o auditorías con el Inspector GitHub MCP para esta entrega.
+                                </p>
                             </div>
-                        );
-                    })}
+                        </div>
+                    ) : (
+                        messages.map((msg) => {
+                            const isUser = msg.role === "user";
+                            return (
+                                <div
+                                    key={msg.id}
+                                    className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}
+                                >
+                                    {!isUser && (
+                                        <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+                                            <Bot className="h-4 w-4" />
+                                        </div>
+                                    )}
+
+                                    <div className={`group relative max-w-[88%] rounded-2xl p-3.5 text-sm shadow-xs ${
+                                        isUser
+                                            ? "bg-primary text-primary-foreground rounded-tr-xs"
+                                            : "bg-muted/60 border border-border text-foreground rounded-tl-xs"
+                                    }`}>
+                                        {!isUser && msg.toolCallsCount && msg.toolCallsCount > 0 ? (
+                                            <div className="mb-2 inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-background/50 px-2 py-0.5 rounded border border-border">
+                                                <Sparkles className="h-3 w-3 text-amber-500" />
+                                                Herramientas MCP invocadas: {msg.toolCallsCount}
+                                            </div>
+                                        ) : null}
+
+                                        <div className="prose prose-sm dark:prose-invert max-w-none break-words text-xs sm:text-sm">
+                                            <ReactMarkdown
+                                                remarkPlugins={[remarkGfm]}
+                                                components={{
+                                                    table: ({ node, ...props }) => (
+                                                        <div className="my-3 w-full overflow-x-auto rounded-lg border border-border bg-background/50">
+                                                            <table className="w-full text-left text-xs border-collapse" {...props} />
+                                                        </div>
+                                                    ),
+                                                    thead: ({ node, ...props }) => (
+                                                        <thead className="bg-muted/80 border-b border-border font-bold text-foreground" {...props} />
+                                                    ),
+                                                    th: ({ node, ...props }) => (
+                                                        <th className="px-3 py-2 border-r last:border-r-0 border-border font-semibold" {...props} />
+                                                    ),
+                                                    td: ({ node, ...props }) => (
+                                                        <td className="px-3 py-2 border-t border-r last:border-r-0 border-border" {...props} />
+                                                    ),
+                                                }}
+                                            >
+                                                {formatMarkdown(msg.content)}
+                                            </ReactMarkdown>
+                                        </div>
+
+                                        <div className="mt-2 flex items-center justify-between gap-2 text-[10px] opacity-70">
+                                            <span>
+                                                {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </span>
+                                            <button
+                                                onClick={() => handleCopy(msg.content, msg.id)}
+                                                className="hover:opacity-100 flex items-center gap-1 transition-opacity cursor-pointer"
+                                                title="Copiar texto"
+                                            >
+                                                {copiedId === msg.id ? (
+                                                    <Check className="h-3 w-3 text-emerald-500" />
+                                                ) : (
+                                                    <Copy className="h-3 w-3" />
+                                                )}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {isUser && (
+                                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground shrink-0 border border-border">
+                                            <User className="h-4 w-4" />
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })
+                    )}
 
                     {isLoading && (
                         <div className="flex gap-3 justify-start">
@@ -422,7 +604,7 @@ export function GitHubRepoChatInspector({
                             </div>
                             <div className="bg-muted/60 border border-border rounded-2xl rounded-tl-xs p-3.5 text-sm flex items-center gap-2 text-muted-foreground">
                                 <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                                <span>Ejecutando herramientas GitHub MCP y consultando repositorio...</span>
+                                <span>Ejecutando herramientas GitHub MCP y analizando repositorio...</span>
                             </div>
                         </div>
                     )}
@@ -431,32 +613,73 @@ export function GitHubRepoChatInspector({
                 </div>
             </div>
 
-            {/* Formulario de Entrada */}
+            {/* Pie / Entrada */}
             <div className="p-3 bg-background border-t border-border shrink-0">
-                <form
-                    onSubmit={(e) => {
-                        e.preventDefault();
-                        handleSendMessage();
-                    }}
-                    className="flex items-center gap-2 max-w-3xl mx-auto"
-                >
-                    <Input
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        placeholder="Escribe tu pregunta sobre el código o los commits..."
-                        disabled={isLoading}
-                        className="flex-1 bg-muted/30 focus-visible:ring-primary"
-                    />
-                    <Button
-                        type="submit"
-                        disabled={isLoading || !input.trim()}
-                        size="icon"
-                        className="shrink-0"
+                {readOnly ? (
+                    <div className="flex items-center justify-center gap-2 py-1.5 text-xs text-muted-foreground text-center">
+                        <Eye className="h-4 w-4 text-sky-500" />
+                        <span>Visualizando histórico de conversación guardado • Modo solo lectura para el estudiante</span>
+                    </div>
+                ) : (
+                    <form
+                        onSubmit={(e) => {
+                            e.preventDefault();
+                            handleSendMessage();
+                        }}
+                        className="flex items-center gap-2 max-w-3xl mx-auto"
                     >
-                        {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                    </Button>
-                </form>
+                        <Input
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            placeholder="Escribe tu pregunta sobre el código o los commits..."
+                            disabled={isLoading}
+                            className="flex-1 bg-muted/30 focus-visible:ring-primary text-xs sm:text-sm"
+                        />
+                        <Button
+                            type="submit"
+                            disabled={isLoading || !input.trim()}
+                            size="icon"
+                            className="shrink-0"
+                        >
+                            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                        </Button>
+                    </form>
+                )}
             </div>
+
+            {/* Diálogo de Confirmación de Eliminación (exclusivo profesor) */}
+            {!readOnly && (
+                <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>
+                                {deleteTarget?.isAll 
+                                    ? "¿Eliminar todo el historial de conversaciones?"
+                                    : "¿Eliminar conversación guardada?"}
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                                {deleteTarget?.isAll
+                                    ? "Esta acción eliminará permanentemente todas las conversaciones históricas de esta entrega guardadas en la base de datos."
+                                    : `Esta acción eliminará la conversación "${deleteTarget?.title || "seleccionada"}" permanentemente.`}
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel disabled={isDeletingHistory}>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    handleConfirmDelete();
+                                }}
+                                disabled={isDeletingHistory}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                                {isDeletingHistory ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                                Eliminar
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            )}
         </div>
     );
 }

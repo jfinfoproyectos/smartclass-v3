@@ -35,14 +35,13 @@ export async function getPdfChatHistoryAction({
     }
 
     try {
-        const chat = await prisma.mcpInspectorChat.findUnique({
+        const chat = await prisma.mcpInspectorChat.findFirst({
             where: {
-                teacherId_activityId_studentId: {
-                    teacherId: session.user.id,
-                    activityId,
-                    studentId,
-                },
+                teacherId: session.user.id,
+                activityId,
+                studentId,
             },
+            orderBy: { updatedAt: "desc" },
         });
 
         const messages = Array.isArray(chat?.messages) ? (chat.messages as any[]) : [];
@@ -145,37 +144,33 @@ INSTRUCCIONES CLAVE:
                 timestamp: now,
             };
 
-            const existingChat = await prisma.mcpInspectorChat.findUnique({
+            const existingChat = await prisma.mcpInspectorChat.findFirst({
                 where: {
-                    teacherId_activityId_studentId: {
-                        teacherId: session.user.id,
-                        activityId,
-                        studentId,
-                    },
+                    teacherId: session.user.id,
+                    activityId,
+                    studentId,
                 },
+                orderBy: { updatedAt: "desc" },
             });
 
             const currentList = Array.isArray(existingChat?.messages) ? (existingChat.messages as any[]) : [];
             const updatedMessages = [...currentList, userMsg, asstMsg];
 
-            await prisma.mcpInspectorChat.upsert({
-                where: {
-                    teacherId_activityId_studentId: {
+            if (existingChat) {
+                await prisma.mcpInspectorChat.update({
+                    where: { id: existingChat.id },
+                    data: { messages: updatedMessages },
+                });
+            } else {
+                await prisma.mcpInspectorChat.create({
+                    data: {
                         teacherId: session.user.id,
                         activityId,
                         studentId,
+                        messages: updatedMessages,
                     },
-                },
-                update: {
-                    messages: updatedMessages,
-                },
-                create: {
-                    teacherId: session.user.id,
-                    activityId,
-                    studentId,
-                    messages: updatedMessages,
-                },
-            });
+                });
+            }
         }
 
         return { success: true, answer };

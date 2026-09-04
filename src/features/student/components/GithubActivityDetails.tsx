@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
     Github, Sparkles, Loader2, CheckCircle, ExternalLink, Send, Download,
-    AlertCircle, ClipboardList, ChevronLeft, UserCheck, GitCommitVertical
+    AlertCircle, ClipboardList, ChevronLeft, UserCheck, GitCommitVertical, Bot
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -21,6 +21,7 @@ import { ExportFeedbackButtons } from "@/components/ui/export-feedback-buttons";
 import { ActivityReportTemplate } from "./ActivityReportTemplate";
 import { useReactToPrint } from "react-to-print";
 import { GithubRepoAudit } from "@/features/github/components/GithubRepoAudit";
+import { GitHubRepoChatInspector } from "@/features/teacher/components/GitHubRepoChatInspector";
 import {
     Dialog,
     DialogContent,
@@ -75,7 +76,7 @@ export function GithubActivityDetails({ activity, userId, studentName }: GithubA
     const [showConfirmDialog, setShowConfirmDialog] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
 
-    const [activeTab, setActiveTab] = useState<"statement" | "submit" | "ai_report" | "teacher_grade" | "git_audit">(isGraded ? "ai_report" : "statement");
+    const [activeTab, setActiveTab] = useState<"statement" | "submit" | "ai_report" | "teacher_grade" | "mcp_chat" | "git_audit">(isGraded ? "ai_report" : "statement");
     const componentRef = useRef<HTMLDivElement>(null);
 
     const handlePrint = useReactToPrint({
@@ -244,9 +245,9 @@ export function GithubActivityDetails({ activity, userId, studentName }: GithubA
 
             {/* Main Clean 5-Tab Content */}
             <div className="flex-1 min-h-0 overflow-hidden flex flex-col h-full">
-                <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as "statement" | "submit" | "ai_report" | "teacher_grade" | "git_audit")} className="w-full h-full flex flex-col min-h-0 overflow-hidden">
+                <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as "statement" | "submit" | "ai_report" | "teacher_grade" | "mcp_chat" | "git_audit")} className="w-full h-full flex flex-col min-h-0 overflow-hidden">
                     <div className="w-full overflow-x-auto scrollbar-none pb-1 shrink-0 -mx-1 px-1">
-                        <TabsList className="inline-flex w-max min-w-full md:grid md:grid-cols-5 h-auto min-h-10 p-1 gap-1">
+                        <TabsList className="inline-flex w-max min-w-full md:grid md:grid-cols-6 h-auto min-h-10 p-1 gap-1">
                             <TabsTrigger value="statement" className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 shrink-0 whitespace-nowrap">
                                 <ClipboardList className="h-3.5 w-3.5 text-amber-500 shrink-0" />
                                 <span>Enunciado y Rúbrica</span>
@@ -262,6 +263,10 @@ export function GithubActivityDetails({ activity, userId, studentName }: GithubA
                             <TabsTrigger value="teacher_grade" className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 shrink-0 whitespace-nowrap">
                                 <UserCheck className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                                 <span>Observaciones Profesor</span>
+                            </TabsTrigger>
+                            <TabsTrigger value="mcp_chat" className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 shrink-0 whitespace-nowrap">
+                                <Bot className="h-3.5 w-3.5 text-sky-500 shrink-0" />
+                                <span>Inspector</span>
                             </TabsTrigger>
                             <TabsTrigger value="git_audit" className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 shrink-0 whitespace-nowrap">
                                 <GitCommitVertical className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
@@ -538,6 +543,25 @@ export function GithubActivityDetails({ activity, userId, studentName }: GithubA
                                 activityId={activity?.id}
                             />
                         </div>
+                    </TabsContent>
+
+                    {/* Tab 6: Inspector GitHub MCP (Histórico de Conversaciones - Modo Estudiante) */}
+                    <TabsContent value="mcp_chat" className="mt-3 flex-1 min-h-0 overflow-hidden flex flex-col h-full">
+                        {(submission?.url || repoUrlInput) ? (
+                            <GitHubRepoChatInspector
+                                repoUrl={submission?.url || repoUrlInput}
+                                studentName={studentName}
+                                activityId={activity?.id}
+                                studentId={userId}
+                                readOnly={true}
+                            />
+                        ) : (
+                            <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-8 text-center bg-card rounded-xl border">
+                                <Bot className="h-10 w-10 text-muted-foreground/40 mb-2" />
+                                <p className="text-sm font-semibold">No se ha registrado una entrega de GitHub aún.</p>
+                                <p className="text-xs text-muted-foreground mt-1">Realiza tu entrega para visualizar las auditorías y consultas técnicas del docente.</p>
+                            </div>
+                        )}
                     </TabsContent>
                 </Tabs>
             </div>

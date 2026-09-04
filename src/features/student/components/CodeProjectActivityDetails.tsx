@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, AlertCircle, ExternalLink, CheckCircle, Download, Send, Clock, FileText, ClipboardList, RotateCcw } from "lucide-react";
+import { Loader2, AlertCircle, ExternalLink, CheckCircle, Download, Send, Clock, FileText, ClipboardList, RotateCcw, Bot } from "lucide-react";
 import { format } from "date-fns";
 import { FeedbackViewer } from "./FeedbackViewer";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { useReactToPrint } from 'react-to-print';
 import { ActivityReportTemplate } from "./ActivityReportTemplate";
 import { ExportFeedbackButtons } from "@/components/ui/export-feedback-buttons";
+import { GitHubRepoChatInspector } from "@/features/teacher/components/GitHubRepoChatInspector";
 import MDEditor from '@uiw/react-md-editor';
 import '@uiw/react-md-editor/markdown-editor.css';
 import '@uiw/react-markdown-preview/markdown.css';
@@ -274,7 +275,7 @@ export function CodeProjectActivityDetails({ activity, userId, studentName }: Co
 
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                     <div className="w-full overflow-x-auto scrollbar-none pb-1 shrink-0 -mx-1 px-1">
-                        <TabsList className="inline-flex w-max min-w-full sm:grid sm:grid-cols-2 h-auto min-h-9 p-1 gap-1">
+                        <TabsList className="inline-flex w-max min-w-full sm:grid sm:grid-cols-3 h-auto min-h-9 p-1 gap-1">
                             <TabsTrigger value="rubric" className="flex items-center gap-2 shrink-0 px-3 py-1.5 whitespace-nowrap text-xs font-semibold">
                                 <ClipboardList className="h-4 w-4 shrink-0" />
                                 <span>Enunciado</span>
@@ -282,6 +283,10 @@ export function CodeProjectActivityDetails({ activity, userId, studentName }: Co
                             <TabsTrigger value="feedback" className="flex items-center gap-2 shrink-0 px-3 py-1.5 whitespace-nowrap text-xs font-semibold">
                                 <CheckCircle className="h-4 w-4 shrink-0" />
                                 <span>Resultado</span>
+                            </TabsTrigger>
+                            <TabsTrigger value="inspector" className="flex items-center gap-2 shrink-0 px-3 py-1.5 whitespace-nowrap text-xs font-semibold">
+                                <Bot className="h-4 w-4 shrink-0 text-sky-500" />
+                                <span>Inspector MCP</span>
                             </TabsTrigger>
                         </TabsList>
                     </div>
@@ -328,6 +333,28 @@ export function CodeProjectActivityDetails({ activity, userId, studentName }: Co
                                 )}
                             </CardContent>
                         </Card>
+                    </TabsContent>
+
+                    <TabsContent value="inspector" className="mt-4">
+                        <div className="h-[650px]">
+                            {(submission?.url || repoUrl) ? (
+                                <GitHubRepoChatInspector
+                                    repoUrl={submission?.url || repoUrl}
+                                    studentName={studentName}
+                                    activityId={activity?.id}
+                                    studentId={userId}
+                                    readOnly={true}
+                                />
+                            ) : (
+                                <Card>
+                                    <CardContent className="flex flex-col items-center justify-center p-12 text-center text-muted-foreground">
+                                        <Bot className="h-10 w-10 text-muted-foreground/40 mb-2" />
+                                        <p className="font-semibold text-sm text-foreground">No se ha registrado una entrega de repositorio aún.</p>
+                                        <p className="text-xs text-muted-foreground mt-1">Realiza tu entrega para visualizar las auditorías y consultas técnicas del docente.</p>
+                                    </CardContent>
+                                </Card>
+                            )}
+                        </div>
                     </TabsContent>
                 </Tabs>
             </div>
