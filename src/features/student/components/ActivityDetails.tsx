@@ -117,8 +117,10 @@ function GroupActivityBanner({ activity }: { activity: any }) {
 }
 
 export function ActivityDetails({ activity, userId, studentName }: ActivityDetailsProps) {
+    const isFullHeight = activity.type === "GITHUB";
+
     return (
-        <div className="flex flex-col h-full overflow-hidden p-3">
+        <div className={`flex flex-col ${isFullHeight ? "h-full overflow-hidden" : "min-h-full w-full"} p-3`}>
             <GroupActivityBanner activity={activity} />
             <ActivityContent activity={activity} userId={userId} studentName={studentName} />
         </div>

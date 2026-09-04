@@ -56,19 +56,14 @@ export function SubmissionsManager({
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-wrap items-start gap-4 border-b pb-6">
-                <Button variant="outline" size="icon" asChild>
-                    <Link href={`/dashboard/teacher/courses/${courseId}`}>
-                        <ArrowLeft className="h-4 w-4" />
-                    </Link>
-                </Button>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-6">
                 <div className="flex-1 min-w-0">
                     <h2 className="text-2xl font-bold tracking-tight">{attempt.evaluation.title}</h2>
                     <p className="text-sm text-muted-foreground mt-1">
                         {formatDateTime(attempt.startTime)} - {formatDateTime(attempt.endTime)}
                     </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-3 ml-auto">
+                <div className="flex flex-wrap items-center gap-3">
                     {submittedCount > 0 && (
                         <div className="flex flex-col items-end px-4 py-2 bg-blue-500/10 rounded-xl border border-blue-500/20 shadow-sm">
                             <span className="text-[10px] font-bold uppercase tracking-widest text-blue-700 dark:text-blue-400">Nota Promedio</span>
@@ -77,6 +72,12 @@ export function SubmissionsManager({
                             </div>
                         </div>
                     )}
+                    <Button variant="outline" size="sm" asChild className="h-8 gap-1.5 font-semibold shadow-xs">
+                        <Link href={`/dashboard/teacher/courses/${courseId}?tab=evaluations`}>
+                            <ArrowLeft className="h-4 w-4" />
+                            <span>Volver a Evaluaciones</span>
+                        </Link>
+                    </Button>
                 </div>
             </div>
 

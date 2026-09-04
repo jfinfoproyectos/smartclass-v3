@@ -261,15 +261,9 @@ export function PdfReviewActivityDetails({ activity, userId, studentName }: PdfR
                                     obtener la mejor calificación.
                                 </p>
                             </CardHeader>
-                            <CardContent>
-                                <div
-                                    data-color-mode={mode}
-                                    className="w-full max-w-full overflow-hidden [&_pre]:whitespace-pre-wrap! [&_pre]:wrap-break-word! [&_table]:w-full! [&_td]:wrap-break-word! select-none"
-                                >
-                                    <MDEditor.Markdown
-                                        source={activity.statement || "**No hay criterios de evaluación disponibles.**"}
-                                        style={{ background: "transparent" }}
-                                    />
+                            <CardContent className="pt-4">
+                                <div className="bg-card rounded-lg p-2">
+                                    <FeedbackViewer feedback={activity.statement || "**No hay criterios de evaluación disponibles.**"} />
                                 </div>
                             </CardContent>
                         </Card>

@@ -21,7 +21,7 @@ const styles = StyleSheet.create({
         fontSize: 9,
         color: COLORS.text,
         backgroundColor: '#ffffff',
-        paddingBottom: 40,
+        paddingBottom: 55,
     },
     header: {
         flexDirection: 'row',

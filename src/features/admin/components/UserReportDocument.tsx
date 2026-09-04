@@ -7,7 +7,10 @@ const styles = StyleSheet.create({
     page: {
         flexDirection: 'column',
         backgroundColor: '#FFFFFF',
-        padding: 30,
+        paddingTop: 30,
+        paddingLeft: 30,
+        paddingRight: 30,
+        paddingBottom: 55,
         fontFamily: 'Helvetica',
     },
     header: {
@@ -96,6 +99,19 @@ const styles = StyleSheet.create({
     statusAbsent: { color: 'red' },
     statusLate: { color: '#b45309' }, // amber-700
     statusExcused: { color: 'blue' },
+    footer: {
+        position: 'absolute',
+        bottom: 20,
+        left: 30,
+        right: 30,
+        borderTopWidth: 1,
+        borderTopColor: '#EEEEEE',
+        paddingTop: 6,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        fontSize: 8,
+        color: '#888888',
+    },
 });
 
 interface UserReportProps {
@@ -162,13 +178,13 @@ export const UserReportDocument = ({ user, details }: UserReportProps) => (
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Cursos Inscritos</Text>
                     <View style={styles.table}>
-                        <View style={[styles.tableRow, styles.tableHeader]}>
+                        <View style={[styles.tableRow, styles.tableHeader]} wrap={false}>
                             <View style={[styles.tableCol, { width: '50%' }]}><Text style={styles.tableCell}>Curso</Text></View>
                             <View style={styles.tableCol}><Text style={styles.tableCell}>Fecha</Text></View>
                             <View style={styles.tableCol}><Text style={styles.tableCell}>Estado</Text></View>
                         </View>
                         {details.enrollments.map((enrollment: any, index: number) => (
-                            <View key={index} style={styles.tableRow}>
+                            <View key={index} style={styles.tableRow} wrap={false}>
                                 <View style={[styles.tableCol, { width: '50%' }]}><Text style={styles.tableCell}>{enrollment.course.title}</Text></View>
                                 <View style={styles.tableCol}><Text style={styles.tableCell}>{format(new Date(enrollment.createdAt), "dd/MM/yyyy")}</Text></View>
                                 <View style={styles.tableCol}><Text style={styles.tableCell}>{enrollment.status}</Text></View>
@@ -183,13 +199,13 @@ export const UserReportDocument = ({ user, details }: UserReportProps) => (
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Historial de Asistencia</Text>
                     <View style={styles.table}>
-                        <View style={[styles.tableRow, styles.tableHeader]}>
+                        <View style={[styles.tableRow, styles.tableHeader]} wrap={false}>
                             <View style={styles.tableCol}><Text style={styles.tableCell}>Fecha</Text></View>
                             <View style={[styles.tableCol, { width: '40%' }]}><Text style={styles.tableCell}>Curso</Text></View>
                             <View style={styles.tableCol}><Text style={styles.tableCell}>Estado</Text></View>
                         </View>
                         {details.attendances.map((record: any, index: number) => (
-                            <View key={index} style={styles.tableRow}>
+                            <View key={index} style={styles.tableRow} wrap={false}>
                                 <View style={styles.tableCol}><Text style={styles.tableCell}>{format(new Date(record.date), "dd/MM/yyyy HH:mm")}</Text></View>
                                 <View style={[styles.tableCol, { width: '40%' }]}><Text style={styles.tableCell}>{record.course?.title || "N/A"}</Text></View>
                                 <View style={styles.tableCol}>
@@ -213,7 +229,7 @@ export const UserReportDocument = ({ user, details }: UserReportProps) => (
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Observaciones</Text>
                     {details.remarks.map((remark: any, index: number) => (
-                        <View key={index} style={{ marginBottom: 8, padding: 5, borderLeftWidth: 2, borderLeftColor: remark.type === 'COMMENDATION' ? 'green' : 'orange' }}>
+                        <View key={index} wrap={false} style={{ marginBottom: 8, padding: 5, borderLeftWidth: 2, borderLeftColor: remark.type === 'COMMENDATION' ? 'green' : 'orange' }}>
                             <Text style={{ fontSize: 10, fontWeight: 'bold' }}>{remark.title} ({format(new Date(remark.date), "dd/MM/yyyy")})</Text>
                             <Text style={{ fontSize: 9, marginTop: 2 }}>{remark.description}</Text>
                             <Text style={{ fontSize: 8, color: '#666', marginTop: 2 }}>Por: {formatName(remark.teacher.name, remark.teacher.profile)}</Text>
@@ -222,6 +238,11 @@ export const UserReportDocument = ({ user, details }: UserReportProps) => (
                 </View>
             )}
 
+            {/* Footer */}
+            <View style={styles.footer} fixed>
+                <Text>SmartClass • Reporte Individual de Usuario</Text>
+                <Text render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} />
+            </View>
         </Page>
     </Document>
 );

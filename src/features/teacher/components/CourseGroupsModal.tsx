@@ -53,7 +53,7 @@ import {
     Sparkles
 } from "lucide-react";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
+import { exportToExcel } from "@/lib/export-utils";
 import { cn, formatName, getInitials } from "@/lib/utils";
 import {
     getCourseStudentGroupsAction,
@@ -271,7 +271,7 @@ function DroppableContainer({
                                 <span>{groupName}</span>
                             </div>
                         )}
-                        <Badge variant="outline" className="text-[10px] font-mono shrink-0 py-0 px-1.5 bg-background">
+                        <Badge variant="outline" className="text-[10px] font-mono shrink-0 py-0 px-1.5 bg-muted/80 text-foreground border-border/80 font-medium">
                             <Users className="h-2.5 w-2.5 mr-1 text-primary" />
                             {items.length}
                         </Badge>
@@ -551,7 +551,7 @@ export function CourseGroupsModal({
     };
 
     // Exportar a Excel
-    const handleExportExcel = () => {
+    const handleExportExcel = async () => {
         if (groups.length === 0) {
             toast.error("No hay grupos para exportar");
             return;
@@ -571,10 +571,7 @@ export function CourseGroupsModal({
             });
         });
 
-        const worksheet = XLSX.utils.json_to_sheet(rows);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Grupos");
-        XLSX.writeFile(workbook, `Grupos_${courseTitle.replace(/\s+/g, "_")}.xlsx`);
+        await exportToExcel(rows, `Grupos_${courseTitle.replace(/\s+/g, "_")}`, "Grupos");
         toast.success("Archivo Excel exportado exitosamente");
     };
 

@@ -1,15 +1,16 @@
-import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 
 /**
  * Export data to Excel file with styling
  */
 export async function exportToExcel(data: any[], filename: string, sheetName: string = 'Datos') {
-    if (data.length === 0) return;
+    if (!data || data.length === 0) return;
 
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet(sheetName);
+    workbook.creator = 'SmartClass';
+    workbook.created = new Date();
 
+    const worksheet = workbook.addWorksheet(sheetName);
     setupWorksheetComp(worksheet, data);
 
     // Buffer and Download
@@ -511,76 +512,94 @@ export async function exportSingleSubmissionToExcel(
  * Helper to setup worksheet columns and styles
  */
 function setupWorksheetComp(worksheet: ExcelJS.Worksheet, data: any[]) {
-    if (data.length === 0) return;
+    if (!data || data.length === 0) return;
 
     // Get headers
     const headers = Object.keys(data[0]);
-    const columns = headers.map(header => ({
-        header: header,
-        key: header,
-        width: Math.max(header.length + 2, 15)
-    }));
+
+    // Calculate maximum content length per column to ensure no text gets truncated
+    const columns = headers.map(header => {
+        let maxLen = header.length;
+        for (const row of data) {
+            const val = row[header];
+            if (val !== null && val !== undefined) {
+                const len = String(val).length;
+                if (len > maxLen) maxLen = len;
+            }
+        }
+        return {
+            header: header,
+            key: header,
+            width: Math.min(Math.max(maxLen + 4, 15), 60),
+        };
+    });
 
     worksheet.columns = columns;
     worksheet.addRows(data);
 
-    // Styling
+    // Freeze top header row so it stays visible while scrolling
+    worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+
     // 1. Header Row Style
     const headerRow = worksheet.getRow(1);
-    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11, name: 'Calibri' };
     headerRow.fill = {
         type: 'pattern',
         pattern: 'solid',
-        fgColor: { argb: 'FF1F2937' }
+        fgColor: { argb: 'FF1E293B' } // Dark Slate
     };
-    headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
-    headerRow.height = 30;
+    headerRow.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    headerRow.height = 32;
 
     // 2. Data Rows Style
     worksheet.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return;
 
-        row.alignment = { vertical: 'middle', horizontal: 'left' };
+        row.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
 
         row.eachCell((cell, colNumber) => {
-            const columnKey = columns[colNumber - 1].key;
+            const columnKey = columns[colNumber - 1]?.key;
 
-            // Borders
+            // Subtle clean borders
             cell.border = {
-                top: { style: 'thin', color: { argb: 'FFD1D5DB' } },
-                left: { style: 'thin', color: { argb: 'FFD1D5DB' } },
-                bottom: { style: 'thin', color: { argb: 'FFD1D5DB' } },
-                right: { style: 'thin', color: { argb: 'FFD1D5DB' } }
+                top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
             };
 
-            // Grade Coloring
-            const val = cell.value?.toString();
+            const val = cell.value?.toString()?.trim();
 
             if (val) {
-                if (val === '0.0' || val === '0,0') {
-                    cell.font = { color: { argb: 'FFEF4444' }, bold: true };
-                    cell.alignment = { horizontal: 'center' };
-                }
-                else if (/^[0-5][.,]\d$/.test(val) || /^[0-5]$/.test(val)) {
-                    cell.alignment = { horizontal: 'center' };
+                // Grade Styling & Highlight
+                if (val === '0.0' || val === '0,0' || val === '0') {
+                    cell.font = { color: { argb: 'FFDC2626' }, bold: true };
+                    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                } else if (/^[0-5][.,]\d+$/.test(val) || /^[0-5]$/.test(val)) {
+                    cell.alignment = { horizontal: 'center', vertical: 'middle' };
                     const numGrade = parseFloat(val.replace(',', '.'));
                     if (numGrade < 3.0) {
-                        cell.font = { color: { argb: 'FFEF4444' } };
+                        cell.font = { color: { argb: 'FFDC2626' }, bold: true };
                     } else if (numGrade >= 4.5) {
                         cell.font = { color: { argb: 'FF15803D' }, bold: true };
                     }
+                } else if (val === 'PRESENTE' || val === 'Presente') {
+                    cell.font = { color: { argb: 'FF15803D' }, bold: true };
+                    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                } else if (val === 'AUSENTE' || val === 'Ausente') {
+                    cell.font = { color: { argb: 'FFDC2626' }, bold: true };
+                    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                } else if (val === 'TARDANZA' || val === 'Tardanza') {
+                    cell.font = { color: { argb: 'FFD97706' }, bold: true };
+                    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                } else if (val === 'JUSTIFICADO' || val === 'Justificado') {
+                    cell.font = { color: { argb: 'FF2563EB' }, bold: true };
+                    cell.alignment = { horizontal: 'center', vertical: 'middle' };
                 }
             }
 
-            if (columnKey === 'Nota Final' || columnKey === 'Promedio') {
-                cell.font = { bold: true };
-                const val = cell.value?.toString();
-                if (val) {
-                    const numGrade = parseFloat(val.replace(',', '.'));
-                    if (numGrade < 3.0) {
-                        cell.font = { color: { argb: 'FFEF4444' }, bold: true };
-                    }
-                }
+            if (columnKey === 'Nota Final' || columnKey === 'Promedio' || columnKey === 'Nota') {
+                cell.font = { ...cell.font, bold: true };
             }
         });
     });
@@ -593,17 +612,22 @@ function setupWorksheetComp(worksheet: ExcelJS.Worksheet, data: any[]) {
 }
 
 /**
- * Export data to CSV file
+ * Export data to CSV file (clean native RFC 4180 format with UTF-8 BOM)
  */
 export function exportToCSV(data: any[], filename: string) {
-    // Create worksheet from data
-    const ws = XLSX.utils.json_to_sheet(data);
+    if (!data || data.length === 0) return;
 
-    // Convert to CSV
-    const csv = XLSX.utils.sheet_to_csv(ws);
+    const headers = Object.keys(data[0]);
+    const rows = data.map(row =>
+        headers.map(h => {
+            const val = row[h] ?? '';
+            const str = String(val).replace(/"/g, '""');
+            return `"${str}"`;
+        }).join(',')
+    );
 
-    // Create blob and download
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const csvContent = '\uFEFF' + [headers.map(h => `"${h}"`).join(','), ...rows].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
 
@@ -614,6 +638,90 @@ export function exportToCSV(data: any[], filename: string) {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+}
+
+/**
+ * Export detailed multi-table user profile and records to Excel
+ */
+export async function exportUserReportToExcel(
+    selectedUser: any,
+    fullUserDetails: any,
+    filename: string
+) {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'SmartClass';
+    workbook.created = new Date();
+
+    // Sheet 1: General Information
+    const wsInfo = workbook.addWorksheet('Información General');
+    wsInfo.views = [{ state: 'frozen', ySplit: 1 }];
+    wsInfo.columns = [
+        { header: 'Campo', key: 'campo', width: 24 },
+        { header: 'Detalle', key: 'detalle', width: 45 }
+    ];
+
+    const infoRow1 = wsInfo.getRow(1);
+    infoRow1.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    infoRow1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+    infoRow1.height = 30;
+
+    const infoRows = [
+        { campo: 'ID de Usuario', detalle: selectedUser.id },
+        { campo: 'Nombre Completo', detalle: selectedUser.name || 'Sin nombre' },
+        { campo: 'Correo Electrónico', detalle: selectedUser.email },
+        { campo: 'Rol', detalle: selectedUser.role },
+        { campo: 'Fecha de Registro', detalle: selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleDateString('es-ES') : '-' },
+    ];
+    if (selectedUser.profile) {
+        if (selectedUser.profile.identificacion) {
+            infoRows.push({ campo: 'Identificación', detalle: selectedUser.profile.identificacion });
+        }
+        if (selectedUser.profile.telefono) {
+            infoRows.push({ campo: 'Teléfono', detalle: selectedUser.profile.telefono });
+        }
+    }
+    wsInfo.addRows(infoRows);
+    wsInfo.eachRow((row, rIdx) => {
+        if (rIdx > 1) {
+            row.alignment = { vertical: 'middle', wrapText: true };
+            row.getCell(1).font = { bold: true, color: { argb: 'FF334155' } };
+            row.eachCell(cell => {
+                cell.border = {
+                    top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                    left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                    bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                    right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+                };
+            });
+        }
+    });
+
+    // Sheet 2: Cursos
+    if (fullUserDetails?.enrollments?.length > 0) {
+        const wsCourses = workbook.addWorksheet('Cursos');
+        const courseData = fullUserDetails.enrollments.map((e: any) => ({
+            'Curso': e.course?.title || 'Sin título',
+            'Fecha Inscripción': e.createdAt ? new Date(e.createdAt).toLocaleDateString('es-ES') : '-',
+            'Estado': e.status || 'Activo'
+        }));
+        setupWorksheetComp(wsCourses, courseData);
+    }
+
+    // Sheet 3: Asistencia
+    if (fullUserDetails?.attendances?.length > 0) {
+        const wsAttendance = workbook.addWorksheet('Asistencia');
+        const attendanceData = fullUserDetails.attendances.map((a: any) => ({
+            'Fecha': a.date ? new Date(a.date).toLocaleString('es-ES') : '-',
+            'Curso': a.course?.title || 'N/A',
+            'Estado': a.status || '-',
+            'Justificación': a.justification || '-'
+        }));
+        setupWorksheetComp(wsAttendance, attendanceData);
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    triggerDownload(buffer, filename);
 }
 
 

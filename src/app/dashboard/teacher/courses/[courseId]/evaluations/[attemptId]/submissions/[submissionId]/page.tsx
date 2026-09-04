@@ -5,7 +5,7 @@ import { headers } from "next/headers";
 import { evaluationService } from "@/features/teacher/services/evaluationService";
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, CheckCircle2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, AlertCircle } from 'lucide-react';
 import { formatDateTime } from '@/lib/dateUtils';
 import { FeedbackViewer } from "@/features/student/components/FeedbackViewer";
 import { DownloadSubmissionPDFWrapper as DownloadSubmissionPDF } from "@/features/teacher/components/DownloadSubmissionPDFWrapper";
@@ -70,6 +70,8 @@ export default async function SubmissionDetailsPage(
             id: question.id,
             text: question.text,
             type: question.type,
+            language: question.language || undefined,
+            referenceAnswer: question.referenceAnswer || undefined,
             answer: answer ? {
                 answer: answer.answer,
                 score: answer.score,
@@ -79,14 +81,7 @@ export default async function SubmissionDetailsPage(
     });
 
     return (
-        <div className="flex flex-col gap-6 p-4 sm:p-6 md:p-8 max-w-7xl mx-auto w-full">
-            <Button variant="ghost" size="sm" asChild className="w-fit h-8 px-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors group">
-                <Link href={`/dashboard/teacher/courses/${courseId}/evaluations/${attemptId}`} className="flex items-center gap-1.5 font-bold uppercase text-[10px] tracking-widest">
-                    <ChevronLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
-                    Volver a Resultados
-                </Link>
-            </Button>
-
+        <div className="flex flex-col gap-6 p-4 sm:p-6 md:p-8 max-w-7xl mx-auto w-full print:p-0 print:max-w-none">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
                 <div className="flex-1">
                     <h1 className="text-2xl font-bold tracking-tight">Entrega de {user.name}</h1>
@@ -94,22 +89,30 @@ export default async function SubmissionDetailsPage(
                         {user.email} &bull; Evaluación: {evaluation.title}
                     </p>
                 </div>
-                <DownloadSubmissionPDF
-                    appTitle={appTitle}
-                    studentName={user.name}
-                    studentEmail={user.email}
-                    evaluationTitle={evaluation.title}
-                    courseName={courseName}
-                    teacherName={teacherName}
-                    startTime={attempt.startTime}
-                    endTime={attempt.endTime}
-                    submittedAt={submission.submittedAt}
-                    score={submission.score !== undefined ? submission.score : null}
-                    totalQuestions={evaluation.questions.length}
-                    answeredQuestions={answersList.length}
-                    expulsions={submission.expulsions || 0}
-                    questions={questionsForPDF}
-                />
+                <div className="flex items-center gap-2 print:hidden">
+                    <DownloadSubmissionPDF
+                        appTitle={appTitle}
+                        studentName={user.name}
+                        studentEmail={user.email}
+                        evaluationTitle={evaluation.title}
+                        courseName={courseName}
+                        teacherName={teacherName}
+                        startTime={attempt.startTime}
+                        endTime={attempt.endTime}
+                        submittedAt={submission.submittedAt}
+                        score={submission.score !== undefined ? submission.score : null}
+                        totalQuestions={evaluation.questions.length}
+                        answeredQuestions={answersList.length}
+                        expulsions={submission.expulsions || 0}
+                        questions={questionsForPDF}
+                    />
+                    <Button variant="outline" size="sm" asChild className="h-8 gap-1.5 font-semibold shadow-xs">
+                        <Link href={`/dashboard/teacher/courses/${courseId}/evaluations/${attemptId}`}>
+                            <ArrowLeft className="h-4 w-4" />
+                            <span>Volver a Resultados</span>
+                        </Link>
+                    </Button>
+                </div>
             </div>
 
             {/* Resumen de la Entrega */}
@@ -149,7 +152,7 @@ export default async function SubmissionDetailsPage(
                         {evaluation.questions.map((question: any, index: number) => {
                             const answer = answersList.find((a: any) => a.questionId === question.id);
                             return (
-                                <div key={question.id} className="rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                                <div key={question.id} className="rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow print:break-inside-avoid print:shadow-none">
                                     <div className="bg-muted/50 p-4 border-b">
                                         <div className="flex justify-between items-center mb-3">
                                             <h4 className="font-bold text-base">Pregunta {index + 1}</h4>

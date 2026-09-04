@@ -2,7 +2,7 @@ import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 import { formatDateTime } from "@/lib/dateUtils";
 
 const styles = StyleSheet.create({
-    page: { padding: 40, fontSize: 10, fontFamily: "Helvetica", color: "#1e293b", backgroundColor: "#ffffff" },
+    page: { paddingTop: 40, paddingLeft: 40, paddingRight: 40, paddingBottom: 55, fontSize: 10, fontFamily: "Helvetica", color: "#1e293b", backgroundColor: "#ffffff" },
     header: {
         marginBottom: 20, paddingBottom: 12,
         borderBottomWidth: 2, borderBottomColor: "#8b5cf6", borderBottomStyle: "solid",
@@ -139,7 +139,7 @@ export function AIInsightsPDF({
                     <View style={styles.infoItem}><Text><Text style={styles.labelText}>Estudiantes: </Text>{stats.totalStudents}</Text></View>
                 </View>
 
-                <View style={styles.statsContainer}>
+                <View style={styles.statsContainer} wrap={false}>
                     <View style={[styles.statBox, styles.statDivider]}>
                         <Text style={styles.statValue}>{stats.avgScore}</Text>
                         <Text style={styles.statLabel}>Nota Promedio general</Text>
@@ -150,14 +150,14 @@ export function AIInsightsPDF({
                     </View>
                 </View>
 
-                <View style={styles.globalAnalysisBox}>
+                <View style={styles.globalAnalysisBox} wrap={false}>
                     <Text style={[styles.subSectionTitle, { marginTop: 0, color: "#701a75" }]}>Análisis Global (Generado por IA)</Text>
                     <Text style={styles.globalAnalysisText}>{insights.globalAnalysis}</Text>
                 </View>
 
                 <Text style={styles.sectionTitle}>Fortalezas del Grupo</Text>
                 {insights.strengths.length > 0 ? insights.strengths.map((item, i) => (
-                    <View key={i} style={styles.listItem}>
+                    <View key={i} style={styles.listItem} wrap={false}>
                         <Text style={[styles.bulletPoint, { color: "#10b981" }]}>✓</Text>
                         <Text style={styles.listText}>{item}</Text>
                     </View>
@@ -165,7 +165,7 @@ export function AIInsightsPDF({
 
                 <Text style={styles.sectionTitle}>Oportunidades de Mejora</Text>
                 {insights.weaknesses.length > 0 ? insights.weaknesses.map((item, i) => (
-                    <View key={i} style={styles.listItem}>
+                    <View key={i} style={styles.listItem} wrap={false}>
                         <Text style={[styles.bulletPoint, { color: "#f59e0b" }]}>!</Text>
                         <Text style={styles.listText}>{item}</Text>
                     </View>
@@ -173,13 +173,13 @@ export function AIInsightsPDF({
 
                 <Text style={styles.sectionTitle}>Recomendaciones Pedagógicas</Text>
                 {insights.recommendations.length > 0 ? insights.recommendations.map((item, i) => (
-                    <View key={i} style={styles.listItem}>
+                    <View key={i} style={styles.listItem} wrap={false}>
                         <Text style={[styles.bulletPoint, { color: "#3b82f6" }]}>→</Text>
                         <Text style={styles.listText}>{item}</Text>
                     </View>
                 )) : <Text style={styles.listText}>No hay recomendaciones disponibles en este momento.</Text>}
 
-                <Text style={styles.footer}>{footerText}</Text>
+                <Text style={styles.footer} fixed render={({ pageNumber, totalPages }) => `${footerText} • Página ${pageNumber} de ${totalPages}`} />
             </Page>
 
             {/* ─── Page 2: Errors & Plagiarism ─── */}
@@ -192,13 +192,13 @@ export function AIInsightsPDF({
                 <Text style={styles.sectionTitle}>Diagnóstico de Errores Comunes</Text>
                 {insights.commonErrors && insights.commonErrors.length > 0 ? (
                     <View style={styles.tableWrapper}>
-                        <View style={styles.tableHeader}>
+                        <View style={styles.tableHeader} wrap={false}>
                             <Text style={[styles.colConcept, { fontSize: 9 }]}>Concepto</Text>
                             <Text style={[styles.colDesc, { fontSize: 9, fontWeight: "bold" }]}>Descripción del Fallo</Text>
                             <Text style={[styles.colPrev, { fontSize: 9, color: "#1e293b" }]}>Prevalencia</Text>
                         </View>
                         {insights.commonErrors.map((err, i) => (
-                            <View key={i} style={[styles.tableRow, i % 2 === 1 ? styles.tableRowAlt : {}]}>
+                            <View key={i} style={[styles.tableRow, i % 2 === 1 ? styles.tableRowAlt : {}]} wrap={false}>
                                 <Text style={[styles.colConcept, { fontSize: 9 }]}>{err.concept}</Text>
                                 <Text style={[styles.colDesc, { fontSize: 9 }]}>{err.description}</Text>
                                 <Text style={[styles.colPrev, { fontSize: 9 }]}>{err.prevalence}</Text>
@@ -213,7 +213,7 @@ export function AIInsightsPDF({
                 {plagiarismMatches && plagiarismMatches.length > 0 ? (
                     <View>
                         {plagiarismMatches.filter(m => m.similarityScore >= 0.4).map((match, i) => (
-                            <View key={i} style={styles.plagiarismCard}>
+                            <View key={i} style={styles.plagiarismCard} wrap={false}>
                                 <View style={styles.plagHeader}>
                                     <Text style={styles.plagStudents}>{match.studentA.name} ↔ {match.studentB.name}</Text>
                                     <Text style={styles.plagScore}>Similitud: {(match.similarityScore * 100).toFixed(0)}%</Text>
@@ -232,7 +232,7 @@ export function AIInsightsPDF({
                     <Text style={styles.listText}>No se encontraron indicios de plagio en esta evaluación.</Text>
                 )}
 
-                <Text style={styles.footer}>{footerText}</Text>
+                <Text style={styles.footer} fixed render={({ pageNumber, totalPages }) => `${footerText} • Página ${pageNumber} de ${totalPages}`} />
             </Page>
         </Document>
     );

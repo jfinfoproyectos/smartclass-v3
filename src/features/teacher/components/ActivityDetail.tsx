@@ -1067,7 +1067,7 @@ export function ActivityDetail({
                                                                     {group ? group.name : "Estudiantes Sin Grupo Asignado"}
                                                                 </span>
                                                                 {group && (
-                                                                    <Badge variant="outline" className="text-[10px] bg-background font-mono py-0 px-1.5">
+                                                                    <Badge variant="outline" className="text-[10px] bg-muted/80 text-foreground border-border/80 font-mono py-0 px-2 font-medium shadow-2xs">
                                                                         {group.members?.length || 1} integrante{group.members?.length === 1 ? '' : 's'}
                                                                     </Badge>
                                                                 )}
@@ -1075,7 +1075,7 @@ export function ActivityDetail({
                                                             {group && leaderName && (
                                                                 <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                                                                     <Crown className="h-3 w-3 text-amber-500 fill-amber-500" />
-                                                                    <span>Líder del equipo: <strong className="text-amber-700 dark:text-amber-400">{leaderName}</strong></span>
+                                                                    <span>Líder del equipo: <strong className="text-amber-800 dark:text-amber-300">{leaderName}</strong></span>
                                                                 </div>
                                                             )}
                                                         </div>
@@ -1089,17 +1089,17 @@ export function ActivityDetail({
                                                     <span className="font-medium">{formatName(student.name, student.profile)}</span>
                                                     {activity.isGroupActivity && group && (
                                                         isLeader ? (
-                                                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 gap-1 font-bold">
+                                                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 gap-1 font-bold">
                                                                 <Crown className="h-2.5 w-2.5 fill-amber-500" /> Líder: {group.name}
                                                             </Badge>
                                                         ) : (
-                                                            <Badge variant="secondary" className="text-[10px] py-0 px-1.5 text-muted-foreground gap-1">
-                                                                <Users className="h-2.5 w-2.5" /> {group.name}
+                                                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-muted/80 text-foreground/90 border-border/80 gap-1 font-medium shadow-2xs">
+                                                                <Users className="h-2.5 w-2.5 text-muted-foreground" /> {group.name}
                                                             </Badge>
                                                         )
                                                     )}
                                                     {activity.isGroupActivity && !group && (
-                                                        <Badge variant="outline" className="text-[10px] py-0 px-1.5 text-destructive border-destructive/30">
+                                                        <Badge variant="outline" className="text-[10px] py-0 px-1.5 text-destructive border-destructive/30 bg-destructive/10 font-semibold">
                                                             Sin grupo
                                                         </Badge>
                                                     )}
@@ -1109,23 +1109,23 @@ export function ActivityDetail({
                                         </TableCell>
                                         <TableCell>
                                             {isReevaluationRequested ? (
-                                                <Badge className="bg-purple-600 hover:bg-purple-700 text-white border-transparent gap-1 animate-pulse">
+                                                <Badge className="bg-purple-500/15 text-purple-900 dark:bg-purple-500/20 dark:text-purple-300 border border-purple-500/30 gap-1 font-semibold animate-pulse hover:bg-purple-500/20">
                                                     <RotateCcw className="h-3 w-3" /> Reevaluación Solicitada
                                                 </Badge>
                                             ) : status === "pending" ? (
-                                                <Badge variant="outline">Pendiente</Badge>
+                                                <Badge variant="outline" className="bg-muted/50 text-muted-foreground border-border/80 font-medium">Pendiente</Badge>
                                             ) : status === "submitted" ? (
                                                 isRejected ? (
-                                                    <Badge className="bg-rose-600 hover:bg-rose-700 text-white border-transparent">Rechazado</Badge>
-                                                ) : (activity.type === "GITHUB" || activity.type === "PDF_REVIEW" || activity.type === "CODE_PROJECT") ? (
-                                                    <Badge variant="secondary" className="bg-orange-100 text-orange-800 hover:bg-orange-100 border-orange-200">
+                                                    <Badge className="bg-rose-500/15 text-rose-900 dark:bg-rose-500/20 dark:text-rose-300 border border-rose-500/30 font-semibold hover:bg-rose-500/20">Rechazado</Badge>
+                                                ) : (activity.type === "GITHUB" || activity.type === "PDF_REVIEW" || activity.type === "CODE_PROJECT" || activity.type === "MANUAL") ? (
+                                                    <Badge className="bg-amber-500/15 text-amber-900 dark:bg-amber-500/20 dark:text-amber-300 border border-amber-500/30 font-semibold gap-1 hover:bg-amber-500/20 shadow-2xs">
                                                         ⭐ Por Calificar
                                                     </Badge>
                                                 ) : (
-                                                    <Badge variant="secondary">Entregado</Badge>
+                                                    <Badge className="bg-blue-500/15 text-blue-900 dark:bg-blue-500/20 dark:text-blue-300 border border-blue-500/30 font-semibold hover:bg-blue-500/20">Entregado</Badge>
                                                 )
                                             ) : (
-                                                <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Calificado</Badge>
+                                                <Badge className="bg-emerald-500/15 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-300 border border-emerald-500/30 font-semibold hover:bg-emerald-500/20 shadow-2xs">Calificado</Badge>
                                             )}
                                         </TableCell>
                                         {activity.type !== "MANUAL" && (

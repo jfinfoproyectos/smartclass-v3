@@ -292,12 +292,9 @@ export function CodeProjectActivityDetails({ activity, userId, studentName }: Co
                             <CardHeader>
                                 <CardTitle className="text-lg">Enunciado y Criterios</CardTitle>
                             </CardHeader>
-                            <CardContent>
-                                <div data-color-mode={mode} className="w-full max-w-full overflow-hidden select-none">
-                                    <MDEditor.Markdown 
-                                        source={activity.statement || "**No hay enunciado disponible.**"} 
-                                        style={{ background: 'transparent' }} 
-                                    />
+                            <CardContent className="pt-4">
+                                <div className="bg-card rounded-lg p-2">
+                                    <FeedbackViewer feedback={activity.statement || "**No hay enunciado disponible.**"} />
                                 </div>
                             </CardContent>
                         </Card>

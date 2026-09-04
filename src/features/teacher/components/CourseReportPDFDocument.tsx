@@ -43,8 +43,27 @@ const COLORS = {
 const styles = StyleSheet.create({
     page: {
         fontFamily: 'Roboto',
-        padding: 40,
+        paddingTop: 40,
+        paddingLeft: 40,
+        paddingRight: 40,
+        paddingBottom: 55,
         backgroundColor: '#ffffff',
+    },
+    footer: {
+        position: 'absolute',
+        bottom: 20,
+        left: 40,
+        right: 40,
+        borderTopWidth: 1,
+        borderTopColor: COLORS.gray200,
+        paddingTop: 8,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    footerText: {
+        fontSize: 8,
+        color: COLORS.gray500,
     },
     header: {
         flexDirection: 'row',
@@ -603,6 +622,15 @@ export const CourseReportPDFDocument = ({
                         ))}
                     </View>
                 )}
+
+                {/* Footer */}
+                <View style={styles.footer} fixed>
+                    <Text style={styles.footerText}>SmartClass • Reporte del Curso</Text>
+                    <Text
+                        style={styles.footerText}
+                        render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
+                    />
+                </View>
             </Page>
         </Document>
     );

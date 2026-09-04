@@ -7,8 +7,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { RotateCcw, Trophy, Users, ChevronDown, Check, X, Pencil, Volume2, VolumeX, Download } from "lucide-react";
-import * as XLSX from 'xlsx';
 import { cn, formatName } from "@/lib/utils";
+import { exportToExcel } from "@/lib/export-utils";
 import confetti from "canvas-confetti";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
@@ -283,7 +283,7 @@ export function Roulette({ students: initialStudents, courseId }: RouletteProps)
         localStorage.removeItem(`roulette-storage-${courseId}`);
     };
 
-    const handleExport = () => {
+    const handleExport = async () => {
         if (history.length === 0) return;
 
         const data = history.map(item => ({
@@ -293,10 +293,7 @@ export function Roulette({ students: initialStudents, courseId }: RouletteProps)
             Nota: item.grade !== undefined ? item.grade : "N/A"
         }));
 
-        const ws = XLSX.utils.json_to_sheet(data);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Resultados");
-        XLSX.writeFile(wb, `Roulette_Results_${courseId}_${new Date().toISOString().split('T')[0]}.xlsx`);
+        await exportToExcel(data, `Roulette_Results_${courseId}_${new Date().toISOString().split('T')[0]}`, "Resultados");
     };
 
     return (

@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ExternalLink, Link as LinkIcon, AlertCircle, Clock, Send } from "lucide-react";
+import Link from "next/link";
+import { ExternalLink, Link as LinkIcon, AlertCircle, Clock, Send, ChevronLeft } from "lucide-react";
 import { FeedbackViewer } from "./FeedbackViewer";
 import { ExportFeedbackButtons } from "@/components/ui/export-feedback-buttons";
 import MDEditor from '@uiw/react-md-editor';
@@ -63,7 +64,22 @@ export function ManualActivityDetails({ activity, userId, studentName }: ManualA
         <div className="space-y-6 w-full p-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-muted/20 p-4 rounded-xl border">
                 <div className="space-y-1">
-                    <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">{activity.title}</h1>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            asChild
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-2.5 text-xs font-semibold shrink-0 gap-1 rounded-md border-border/80 hover:bg-accent hover:text-accent-foreground shadow-xs cursor-pointer"
+                            title="Volver a la lista de actividades"
+                        >
+                            <Link href={`/dashboard/student?courseId=${activity.courseId}&tab=activities`}>
+                                <ChevronLeft className="h-3.5 w-3.5" />
+                                <span>Volver</span>
+                            </Link>
+                        </Button>
+                        <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">{activity.title}</h1>
+                    </div>
                     <p className="text-muted-foreground font-medium flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-primary" />
                         {activity.course.title}
@@ -230,9 +246,9 @@ export function ManualActivityDetails({ activity, userId, studentName }: ManualA
                             <CardHeader>
                                 <CardTitle>Enunciado / Rúbrica</CardTitle>
                             </CardHeader>
-                            <CardContent>
-                                <div data-color-mode={mode} className="w-full max-w-full overflow-hidden [&_pre]:whitespace-pre-wrap! [&_pre]:wrap-break-word! [&_table]:w-full! [&_td]:wrap-break-word! select-none">
-                                    <MDEditor.Markdown source={activity.statement || "**No hay enunciado disponible.**"} style={{ background: 'transparent' }} />
+                            <CardContent className="pt-4">
+                                <div className="bg-card rounded-lg p-2">
+                                    <FeedbackViewer feedback={activity.statement || "**No hay enunciado disponible.**"} />
                                 </div>
                             </CardContent>
                         </Card>

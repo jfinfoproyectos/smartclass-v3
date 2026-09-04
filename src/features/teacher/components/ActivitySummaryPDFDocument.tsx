@@ -9,7 +9,7 @@ const styles = StyleSheet.create({
         fontFamily: "Helvetica",
         color: "#1e293b",
         backgroundColor: "#ffffff",
-        paddingBottom: 40,
+        paddingBottom: 55,
     },
     header: {
         marginBottom: 12,

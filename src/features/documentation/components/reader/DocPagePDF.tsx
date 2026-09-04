@@ -143,7 +143,7 @@ function tokenizeCodeToLines(code: string, language?: string): { lineNumber: num
 const styles = StyleSheet.create({
     page: {
         paddingTop: 36,
-        paddingBottom: 48,
+        paddingBottom: 55,
         paddingHorizontal: 40,
         fontSize: 9.5,
         fontFamily: "Helvetica",

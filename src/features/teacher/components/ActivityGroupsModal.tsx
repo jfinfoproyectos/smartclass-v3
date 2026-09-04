@@ -55,7 +55,7 @@ import {
     Target
 } from "lucide-react";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
+import { exportToExcel } from "@/lib/export-utils";
 import { cn, formatName, getInitials } from "@/lib/utils";
 import {
     getActivityStudentGroupsAction,
@@ -447,7 +447,7 @@ export function ActivityGroupsModal({
     };
 
     // Exportar a Excel
-    const handleExportExcel = () => {
+    const handleExportExcel = async () => {
         try {
             const rows: any[] = [];
             groups.forEach((g) => {
@@ -476,10 +476,7 @@ export function ActivityGroupsModal({
                 });
             }
 
-            const ws = XLSX.utils.json_to_sheet(rows);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Equipos Actividad");
-            XLSX.writeFile(wb, `equipos_${activityTitle.slice(0, 20).replace(/\s+/g, "_")}.xlsx`);
+            await exportToExcel(rows, `equipos_${activityTitle.slice(0, 20).replace(/\s+/g, "_")}`, "Equipos Actividad");
             toast.success("Listado de equipos exportado a Excel");
         } catch (err: any) {
             toast.error("Error al exportar a Excel: " + err.message);

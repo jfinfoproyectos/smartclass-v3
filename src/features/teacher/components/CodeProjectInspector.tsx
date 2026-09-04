@@ -11,7 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
     Github, Code2, FileCode, FileText, Folder, Search, Sparkles, Bot,
     Loader2, CheckCircle, Eye, Copy, Check, RotateCcw, ExternalLink, Zap, X, Link as LinkIcon, AlertTriangle, ClipboardList,
-    ChevronLeft, ChevronRight, ChevronDown, Maximize2, Minimize2, ListChecks, HelpCircle, CheckCircle2, MinusCircle, XCircle, Info, ZoomIn, ZoomOut
+    ChevronLeft, ChevronRight, ChevronDown, Maximize2, Minimize2, ListChecks, HelpCircle, CheckCircle2, MinusCircle, XCircle, Info, ZoomIn, ZoomOut,
+    GitCommitVertical
 } from "lucide-react";
 import {
     DropdownMenu,
@@ -26,6 +27,7 @@ import { analyzeGitHubFileAction, finalizeGitHubGradingAction, improveFeedbackAc
 import { GradingModeSelector } from "@/features/teacher/components/GradingModeSelector";
 import { FeedbackViewer } from "@/features/student/components/FeedbackViewer";
 import { GitHubRepoChatInspector } from "@/features/teacher/components/GitHubRepoChatInspector";
+import { GithubRepoAudit } from "@/features/github/components/GithubRepoAudit";
 import {
     Dialog,
     DialogContent,
@@ -269,7 +271,7 @@ export function CodeProjectInspector({
     // AI Grading state
     const [isEvaluating, setIsEvaluating] = useState(false);
     const [isAIGradingDialogOpen, setIsAIGradingDialogOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState<"statement" | "preview" | "ai_report" | "teacher_grade" | "mcp_chat">("preview");
+    const [activeTab, setActiveTab] = useState<"statement" | "preview" | "ai_report" | "teacher_grade" | "mcp_chat" | "git_audit">("preview");
     const [gradingLogs, setGradingLogs] = useState<string[]>([]);
     const [gradingResult, setGradingResult] = useState<any>(null);
     const [showLogs, setShowLogs] = useState(false);
@@ -997,9 +999,9 @@ export function CodeProjectInspector({
                         ? "hidden" 
                         : "lg:col-span-8"
                 }`}>
-                    <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as "statement" | "ai_report" | "teacher_grade" | "preview" | "mcp_chat")} className="w-full h-full flex flex-col min-h-0 overflow-hidden">
+                    <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as "statement" | "preview" | "ai_report" | "teacher_grade" | "mcp_chat" | "git_audit")} className="w-full h-full flex flex-col min-h-0 overflow-hidden">
                         <div className="w-full overflow-x-auto scrollbar-none pb-1 shrink-0 -mx-1 px-1">
-                            <TabsList className="inline-flex w-max min-w-full lg:grid lg:grid-cols-5 h-auto min-h-10 p-1 gap-1">
+                            <TabsList className="inline-flex w-max min-w-full lg:grid lg:grid-cols-6 h-auto min-h-10 p-1 gap-1">
                                 <TabsTrigger value="statement" className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 shrink-0 whitespace-nowrap">
                                     <ClipboardList className="h-3.5 w-3.5 text-amber-500 shrink-0" />
                                     <span>Enunciado</span>
@@ -1019,6 +1021,10 @@ export function CodeProjectInspector({
                                 <TabsTrigger value="mcp_chat" className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 shrink-0 whitespace-nowrap">
                                     <Bot className="h-3.5 w-3.5 text-sky-500 shrink-0" />
                                     <span>Inspector</span>
+                                </TabsTrigger>
+                                <TabsTrigger value="git_audit" className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 shrink-0 whitespace-nowrap">
+                                    <GitCommitVertical className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+                                    <span>Auditoría Git</span>
                                 </TabsTrigger>
                             </TabsList>
                         </div>
@@ -1787,6 +1793,25 @@ export function CodeProjectInspector({
                                     isFullscreen={fullscreenSection === "content"}
                                     onToggleFullscreen={() => setFullscreenSection(prev => prev === "content" ? "none" : "content")}
                                 />
+                            ) : (
+                                <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-8 text-center bg-card rounded-xl border">
+                                    <Github className="h-10 w-10 text-muted-foreground/40 mb-2" />
+                                    <p className="text-sm font-semibold">No se encontró una URL de GitHub asociada a esta entrega.</p>
+                                </div>
+                            )}
+                        </TabsContent>
+
+                        {/* Tab 5: GitHub Repo Audit */}
+                        <TabsContent value="git_audit" className="mt-3 flex-1 min-h-0 overflow-hidden flex flex-col h-full">
+                            {submission?.url ? (
+                                <div className="rounded-xl border bg-card text-card-foreground shadow-xs overflow-hidden flex flex-col h-full flex-1 min-h-0">
+                                    <GithubRepoAudit
+                                        repoUrl={submission.url}
+                                        activityId={activity?.id}
+                                        isFullscreen={fullscreenSection === "content"}
+                                        onToggleFullscreen={() => setFullscreenSection(prev => prev === "content" ? "none" : "content")}
+                                    />
+                                </div>
                             ) : (
                                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-8 text-center bg-card rounded-xl border">
                                     <Github className="h-10 w-10 text-muted-foreground/40 mb-2" />

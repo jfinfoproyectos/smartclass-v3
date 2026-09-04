@@ -56,7 +56,7 @@ import {
 import { toast } from "sonner";
 import { updateUserRoleAction, deleteUserAction, createUserAction, toggleUserBanAction, getAllUsersAction, getUserDetailsAction } from "@/app/admin-actions";
 import { pdf } from "@react-pdf/renderer";
-import * as XLSX from "xlsx";
+import { exportUserReportToExcel } from "@/lib/export-utils";
 import { UserReportDocument } from "./UserReportDocument";
 import { format } from "date-fns";
 import { Switch } from "@/components/ui/switch";
@@ -370,53 +370,16 @@ export function UserManagement({ initialUsers, totalCount }: UserManagementProps
         }
     };
 
-    const handleExportExcel = () => {
+    const handleExportExcel = async () => {
         if (!selectedUser || !fullUserDetails) return;
-
-        const wb = XLSX.utils.book_new();
-
-        // Sheet 1: General Info
-        const infoData = [
-            ["ID", selectedUser.id],
-            ["Nombre", formatName(selectedUser.name, selectedUser.profile)],
-            ["Email", selectedUser.email],
-            ["Rol", selectedUser.role],
-            ["Fecha Registro", format(new Date(selectedUser.createdAt), "dd/MM/yyyy")]
-        ];
-        // Add profile info if exists
-        if (selectedUser.profile) {
-            infoData.push(["Identificación", selectedUser.profile.identificacion || "-"]);
-            infoData.push(["Teléfono", selectedUser.profile.telefono || "-"]);
+        try {
+            const fileName = `reporte_${formatName(selectedUser.name, selectedUser.profile).replace(/\s+/g, '_')}`;
+            await exportUserReportToExcel(selectedUser, fullUserDetails, fileName);
+            toast.success("Excel generado correctamente con ExcelJS");
+        } catch (error) {
+            console.error("Error generating Excel:", error);
+            toast.error("Error al generar el archivo Excel");
         }
-
-        const wsInfo = XLSX.utils.aoa_to_sheet(infoData);
-        XLSX.utils.book_append_sheet(wb, wsInfo, "Información General");
-
-        // Sheet 2: Cursos
-        if (fullUserDetails.enrollments?.length > 0) {
-            const courseData = fullUserDetails.enrollments.map((e: any) => ({
-                Curso: e.course.title,
-                FechaInscripcion: format(new Date(e.createdAt), "dd/MM/yyyy"),
-                Estado: e.status
-            }));
-            const wsCourses = XLSX.utils.json_to_sheet(courseData);
-            XLSX.utils.book_append_sheet(wb, wsCourses, "Cursos");
-        }
-
-        // Sheet 3: Asistencia
-        if (fullUserDetails.attendances?.length > 0) {
-            const attendanceData = fullUserDetails.attendances.map((a: any) => ({
-                Fecha: format(new Date(a.date), "dd/MM/yyyy HH:mm"),
-                Curso: a.course?.title || "N/A",
-                Estado: a.status,
-                Justificacion: a.justification || "-"
-            }));
-            const wsAttendance = XLSX.utils.json_to_sheet(attendanceData);
-            XLSX.utils.book_append_sheet(wb, wsAttendance, "Asistencia");
-        }
-
-        XLSX.writeFile(wb, `reporte_${formatName(selectedUser.name, selectedUser.profile).replace(/\s+/g, '_')}.xlsx`);
-        toast.success("Excel generado correctamente");
     };
 
     return (

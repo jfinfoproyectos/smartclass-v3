@@ -43,7 +43,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AttendanceStatistics } from "./AttendanceStatistics";
 import { StudentAttendanceDashboard } from "./StudentAttendanceDashboard";
 import { BarChart3, Download, TrendingDown } from "lucide-react";
-import * as XLSX from 'xlsx';
+import { exportToExcel } from "@/lib/export-utils";
 import { GroupAttendanceAnalytics } from "./GroupAttendanceAnalytics";
 
 interface GroupAttendanceSheetProps {
@@ -114,7 +114,7 @@ export function GroupAttendanceSheet({
         return result;
     }, [data, searchTerm, activeFilter, dateColumns]);
 
-    const handleExportExcel = () => {
+    const handleExportExcel = async () => {
         try {
             const statusMap: Record<string, string> = {
                 'PRESENT': '', 'P': '',
@@ -152,10 +152,7 @@ export function GroupAttendanceSheet({
                 return base;
             });
 
-            const ws = XLSX.utils.json_to_sheet(exportData);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Asistencia");
-            XLSX.writeFile(wb, `Asistencia_${courseTitle}_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+            await exportToExcel(exportData, `Asistencia_${courseTitle}_${format(new Date(), 'yyyy-MM-dd')}`, "Asistencia");
             toast.success("Excel generado correctamente");
         } catch (error) {
             console.error("Export error:", error);

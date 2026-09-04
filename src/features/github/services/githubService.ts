@@ -113,5 +113,78 @@ export const githubService = {
             }
         }
         return [];
+    },
+
+    async getRepoCommits(owner: string, repo: string, branch: string = "HEAD", token?: string, maxPages: number = 2): Promise<any[]> {
+        const headers: HeadersInit = {
+            'Accept': 'application/vnd.github.v3+json'
+        };
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        const allCommits: any[] = [];
+        const effectiveBranch = branch && branch !== "HEAD" ? branch : "";
+
+        for (let page = 1; page <= maxPages; page++) {
+            try {
+                let url = `https://api.github.com/repos/${owner}/${repo}/commits?per_page=100&page=${page}`;
+                if (effectiveBranch) {
+                    url += `&sha=${encodeURIComponent(effectiveBranch)}`;
+                }
+
+                const response = await fetch(url, { headers });
+
+                if (!response.ok) {
+                    if (response.status === 409 || response.status === 404) {
+                        // Empty repo or not found
+                        break;
+                    }
+                    console.error(`[GitHubService] Error al obtener commits (página ${page}): ${response.statusText}`);
+                    break;
+                }
+
+                const data = await response.json();
+                if (!Array.isArray(data) || data.length === 0) {
+                    break;
+                }
+
+                allCommits.push(...data);
+
+                // If less than 100 returned, we reached the end
+                if (data.length < 100) {
+                    break;
+                }
+            } catch (error) {
+                console.error("[GitHubService] Error al solicitar commits:", error);
+                break;
+            }
+        }
+
+        return allCommits;
+    },
+
+    async getRepoStatsContributors(owner: string, repo: string, token?: string): Promise<any[]> {
+        const headers: HeadersInit = {
+            'Accept': 'application/vnd.github.v3+json'
+        };
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        try {
+            const url = `https://api.github.com/repos/${owner}/${repo}/stats/contributors`;
+            const response = await fetch(url, { headers });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (Array.isArray(data)) {
+                    return data;
+                }
+            }
+        } catch (error) {
+            console.warn("[GitHubService] Stats/contributors no disponibles:", error);
+        }
+        return [];
     }
 };

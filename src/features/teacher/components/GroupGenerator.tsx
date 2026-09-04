@@ -32,8 +32,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { GripVertical, Plus, Shuffle, Trash2, RotateCcw, Users, Download, Upload, FileJson } from "lucide-react";
 import { toast } from "sonner";
-import * as XLSX from 'xlsx';
 import { cn, formatName } from "@/lib/utils";
+import { exportToExcel } from "@/lib/export-utils";
 
 interface Student {
     id: string;
@@ -218,7 +218,7 @@ export function GroupGenerator({ students: initialStudents }: GroupGeneratorProp
         setUngrouped([]);
     };
 
-    const handleExportGroups = () => {
+    const handleExportGroups = async () => {
         if (groups.length === 0) return;
 
         // Flatten data: Group Name | Student Name
@@ -239,10 +239,8 @@ export function GroupGenerator({ students: initialStudents }: GroupGeneratorProp
             }
         });
 
-        const ws = XLSX.utils.json_to_sheet(data);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Grupos");
-        XLSX.writeFile(wb, `Grupos_${new Date().toISOString().split('T')[0]}.xlsx`);
+        await exportToExcel(data, `Grupos_${new Date().toISOString().split('T')[0]}`, "Grupos");
+        toast.success("Excel de grupos generado correctamente");
     };
 
     const handleExportJSON = () => {

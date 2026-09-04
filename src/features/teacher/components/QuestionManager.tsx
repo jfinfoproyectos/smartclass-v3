@@ -681,11 +681,6 @@ export function QuestionManager({ evaluation }: { evaluation: any }) {
             {/* --- Main Contents: Table and Header --- */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <Link href="/dashboard/teacher/evaluations">
-                        <Button variant="link" className="p-0 h-auto text-muted-foreground mb-1 text-xs">
-                            <ArrowLeft className="h-3 w-3 mr-1" /> Volver a Evaluaciones
-                        </Button>
-                    </Link>
                     <h2 className="text-xl font-bold tracking-tight">Preguntas de: {evaluation.title}</h2>
                 </div>
 
@@ -732,6 +727,13 @@ export function QuestionManager({ evaluation }: { evaluation: any }) {
                             </div>
                         </SheetContent>
                     </Sheet>
+
+                    <Button variant="outline" asChild className="gap-1.5 font-semibold shadow-xs">
+                        <Link href="/dashboard/teacher/evaluations">
+                            <ArrowLeft className="h-4 w-4" />
+                            <span>Volver a Evaluaciones</span>
+                        </Link>
+                    </Button>
                 </div>
             </div>
 

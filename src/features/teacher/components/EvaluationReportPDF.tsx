@@ -3,7 +3,7 @@ import { formatDateTime } from "@/lib/dateUtils";
 import { formatName } from "@/lib/utils";
 
 const styles = StyleSheet.create({
-    page: { padding: 40, fontSize: 10, fontFamily: "Helvetica", color: "#1e293b" },
+    page: { paddingTop: 40, paddingLeft: 40, paddingRight: 40, paddingBottom: 55, fontSize: 10, fontFamily: "Helvetica", color: "#1e293b" },
     header: {
         marginBottom: 16, paddingBottom: 10,
         borderBottomWidth: 2, borderBottomColor: "#2563eb", borderBottomStyle: "solid",
@@ -165,7 +165,7 @@ export function EvaluationReportPDF({
                     </View>
                 </View>
 
-                <View style={styles.tableHeader}>
+                <View style={styles.tableHeader} wrap={false}>
                     <View style={styles.colStudent}><Text style={styles.tableCellBold}>Estudiante</Text></View>
                     <View style={styles.colStatus}><Text style={styles.tableCellBold}>Estado</Text></View>
                     <View style={styles.colScore}><Text style={styles.tableCellBold}>Nota / 5.0</Text></View>
@@ -173,7 +173,7 @@ export function EvaluationReportPDF({
                 </View>
 
                 {submissions.map((sub, index) => (
-                    <View key={sub.id} style={[styles.tableRow, index % 2 === 1 ? styles.tableRowAlt : {}]}>
+                    <View key={sub.id} style={[styles.tableRow, index % 2 === 1 ? styles.tableRowAlt : {}]} wrap={false}>
                         <View style={styles.colStudent}>
                             <Text style={styles.tableCell}>{formatName(sub.user.name, sub.user.profile)}</Text>
                             <Text style={[styles.tableCell, { fontSize: 7, color: "#64748b" }]}>{sub.user.email}</Text>
@@ -190,7 +190,7 @@ export function EvaluationReportPDF({
                     </View>
                 ))}
 
-                <Text style={styles.footer}>{footerText}</Text>
+                <Text style={styles.footer} fixed render={({ pageNumber, totalPages }) => `${footerText} • Página ${pageNumber} de ${totalPages}`} />
             </Page>
 
             {/* ─── Page 2: Statistics ─── */}
@@ -202,7 +202,7 @@ export function EvaluationReportPDF({
 
                 {/* KPI cards */}
                 <Text style={styles.statsSectionTitle}>Indicadores Clave</Text>
-                <View style={styles.kpiRow}>
+                <View style={styles.kpiRow} wrap={false}>
                     <View style={styles.kpiBox}>
                         <Text style={styles.kpiValue}>{totalStudents}</Text>
                         <Text style={styles.kpiLabel}>Total Estudiantes</Text>
@@ -222,7 +222,7 @@ export function EvaluationReportPDF({
                 </View>
 
                 {/* State summary row */}
-                <View style={styles.kpiRow}>
+                <View style={styles.kpiRow} wrap={false}>
                     <View style={[styles.kpiBox, { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" }]}>
                         <Text style={[styles.kpiValue, { color: "#15803d", fontSize: 16 }]}>{passCount}</Text>
                         <Text style={styles.kpiLabel}>Aprobados (≥3.0)</Text>
@@ -243,7 +243,7 @@ export function EvaluationReportPDF({
 
                 {/* Tasa de aprobación bar */}
                 <Text style={styles.statsSectionTitle}>Tasa de Aprobación</Text>
-                <View style={styles.passRateContainer}>
+                <View style={styles.passRateContainer} wrap={false}>
                     <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                         <Text style={{ fontSize: 9, color: "#475569" }}>
                             {passCount} aprobados de {submittedOnes.length} enviados
@@ -258,7 +258,7 @@ export function EvaluationReportPDF({
 
                 {/* Score distribution bar chart */}
                 <Text style={styles.statsSectionTitle}>Distribución de Notas</Text>
-                <View style={styles.barChartContainer}>
+                <View style={styles.barChartContainer} wrap={false}>
                     {buckets.map((count, i) => (
                         <View key={i} style={styles.barRow}>
                             <Text style={styles.barLabel}>{BUCKET_LABELS[i]}</Text>
@@ -275,14 +275,14 @@ export function EvaluationReportPDF({
 
                 {/* Distribution detail table */}
                 <Text style={styles.statsSectionTitle}>Detalle por Rango</Text>
-                <View style={[styles.tableHeader, { marginBottom: 0 }]}>
+                <View style={[styles.tableHeader, { marginBottom: 0 }]} wrap={false}>
                     <Text style={[styles.tableCellBold, { width: "25%" }]}>Rango</Text>
                     <Text style={[styles.tableCellBold, { width: "25%", textAlign: "center" }]}>Estudiantes</Text>
                     <Text style={[styles.tableCellBold, { width: "25%", textAlign: "center" }]}>Porcentaje</Text>
                     <Text style={[styles.tableCellBold, { width: "25%", textAlign: "center" }]}>Estado</Text>
                 </View>
                 {buckets.map((count, i) => (
-                    <View key={i} style={[styles.tableRow, i % 2 === 1 ? styles.tableRowAlt : {}]}>
+                    <View key={i} style={[styles.tableRow, i % 2 === 1 ? styles.tableRowAlt : {}]} wrap={false}>
                         <Text style={[styles.tableCell, { width: "25%" }]}>{BUCKET_LABELS[i]}</Text>
                         <Text style={[styles.tableCellBold, { width: "25%", textAlign: "center" }]}>{count}</Text>
                         <Text style={[styles.tableCell, { width: "25%", textAlign: "center" }]}>
@@ -294,7 +294,7 @@ export function EvaluationReportPDF({
                     </View>
                 ))}
 
-                <Text style={styles.footer}>{footerText}</Text>
+                <Text style={styles.footer} fixed render={({ pageNumber, totalPages }) => `${footerText} • Página ${pageNumber} de ${totalPages}`} />
             </Page>
 
             {/* ─── Page 3: Per-Student Breakdown ─── */}
@@ -320,7 +320,7 @@ export function EvaluationReportPDF({
                         const bgColor = passed ? "#f0fdf4" : "#fef2f2";
                         const borderColor = passed ? "#bbf7d0" : "#fecaca";
                         return (
-                            <View key={sub.id} style={{
+                            <View key={sub.id} wrap={false} style={{
                                 flexDirection: "row",
                                 alignItems: "center",
                                 marginBottom: 5,
@@ -369,7 +369,7 @@ export function EvaluationReportPDF({
                     })}
 
                     {/* Legend */}
-                    <View style={{ flexDirection: "row", gap: 16, marginTop: 14 }}>
+                    <View style={{ flexDirection: "row", gap: 16, marginTop: 14 }} wrap={false}>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                             <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#22c55e" }} />
                             <Text style={{ fontSize: 8, color: "#475569" }}>Aprobado (≥ 3.0)</Text>
@@ -383,7 +383,7 @@ export function EvaluationReportPDF({
                         </Text>
                     </View>
 
-                    <Text style={styles.footer}>{footerText}</Text>
+                    <Text style={styles.footer} fixed render={({ pageNumber, totalPages }) => `${footerText} • Página ${pageNumber} de ${totalPages}`} />
                 </Page>
             )}
         </Document>
