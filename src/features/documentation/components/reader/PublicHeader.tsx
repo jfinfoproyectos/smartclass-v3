@@ -224,6 +224,8 @@ export function PublicHeader({
         <div className="flex items-center gap-2 sm:gap-3">
           {mounted && (
             <ConfigControls 
+              projectName={projectName}
+              projectId={projectId}
               currentCodeTheme={currentCodeTheme} 
               themes={themes} 
               courseSettings={courseSettings} 

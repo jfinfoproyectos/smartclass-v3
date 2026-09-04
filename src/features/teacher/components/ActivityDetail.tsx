@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useMemo, useRef, useEffect } from "react";
+import { useState, useTransition, useMemo, useRef, useEffect, Fragment } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -49,15 +49,34 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { format, formatDistanceToNow, isAfter } from "date-fns";
 import { es } from "date-fns/locale";
-import { Eye, Github, FileText, ClipboardList, Users, Trash2, Sparkles, Search, AlertTriangle, CheckCircle2, Bot, Loader2, ChevronDown, ChevronUp, CheckCircle, ChevronLeft, ChevronRight, ExternalLink, Settings, Link2 } from "lucide-react";
+import { Eye, Github, FileText, ClipboardList, Users, Trash2, Sparkles, Search, AlertTriangle, CheckCircle2, Bot, Loader2, ChevronDown, ChevronUp, CheckCircle, ChevronLeft, ChevronRight, ExternalLink, Settings, Link2, Download, FileSpreadsheet, RotateCcw, Code2, Link as LinkIcon, Crown, ArrowLeft, Terminal, Video, MessageSquareQuote, Database, Mic, Target } from "lucide-react";
 import { FeedbackViewer } from '../../student/components/FeedbackViewer';
 import { validateUniqueLinksAction, deleteSubmissionAction, analyzeGitHubFileAction, finalizeGitHubGradingAction, gradePdfReviewAction, gradeManualActivityAction, improveFeedbackAction, rejectManualActivityAction } from "../../../features/teacher/actions/gradingActions";
 import { getGitHubSubmissionDetailsAction, getRepoStructureAction, fetchRepoFilesAction } from "../../../features/github/actions/githubActions";
 import { toast } from "sonner";
 import { ExportButton } from "@/components/ui/export-button";
-import { formatDateForExport, formatGradeForExport } from "@/lib/export-utils";
-import { formatName, isValidPdfUrl } from "@/lib/utils";
+import { exportActivityResultsToExcel, formatDateForExport, formatGradeForExport } from "@/lib/export-utils";
+import { formatName, isValidPdfUrl, cn } from "@/lib/utils";
 import Link from "next/link";
+import { CodeProjectInspector } from "./CodeProjectInspector";
+import { ManualActivityInspector } from "./ManualActivityInspector";
+import { PdfReviewActivityInspector } from "./PdfReviewActivityInspector";
+import { CodeChallengeInspector } from "./CodeChallengeInspector";
+import { VideoPitchInspector } from "./VideoPitchInspector";
+import { AiInterviewInspector } from "./AiInterviewInspector";
+import { DbModelingInspector } from "./DbModelingInspector";
+import { AudioDefenseInspector } from "./AudioDefenseInspector";
+import { GradingModeSelector } from "./GradingModeSelector";
+import { ActivityGroupsModal } from "./ActivityGroupsModal";
+import { pdf } from "@react-pdf/renderer";
+import { ActivitySummaryPDFDocument } from "./ActivitySummaryPDFDocument";
+import { ExportFeedbackButtons } from "@/components/ui/export-feedback-buttons";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 import MDEditor from '@uiw/react-md-editor';
 import '@uiw/react-md-editor/markdown-editor.css';
@@ -67,10 +86,12 @@ import { useParams } from "next/navigation";
 
 export function ActivityDetail({
     activity,
-    students
+    students,
+    studentGroups = [],
 }: {
     activity: any,
-    students: any[]
+    students: any[],
+    studentGroups?: any[]
 }) {
     const params = useParams();
     const activityIdFromUrl = params.activityId as string;
@@ -83,6 +104,8 @@ export function ActivityDetail({
     const [isValidating, setIsValidating] = useState(false);
     // Panel de detalle — índice del estudiante seleccionado (null = cerrado)
     const [selectedStudentIndex, setSelectedStudentIndex] = useState<number | null>(null);
+    // Modal dedicado de evaluación — ID del estudiante a evaluar
+    const [evaluatingStudentId, setEvaluatingStudentId] = useState<string | null>(null);
     // Estado para calificación GitHub por IA
     const [gradingStudentId, setGradingStudentId] = useState<string | null>(null);
     const [gradingLogs, setGradingLogs] = useState<string[]>([]);
@@ -96,10 +119,11 @@ export function ActivityDetail({
     const [scannedRepoFiles, setScannedRepoFiles] = useState<string[]>([]);
     const [selectedRepoFiles, setSelectedRepoFiles] = useState<string[]>([]);
     const [isCodeProjectGrading, setIsCodeProjectGrading] = useState<string | null>(null);
-    const [gradingMode, setGradingMode] = useState<"normal" | "moderate" | "strict">("normal");
+    const [gradingMode, setGradingMode] = useState<"normal" | "moderate" | "strict">("moderate");
 
     // Estado para calificación por lote
     const [isBatchGrading, setIsBatchGrading] = useState(false);
+    const [isGroupsModalOpen, setIsGroupsModalOpen] = useState(false);
     const [activeTab, setActiveTab] = useState("results");
     
     // Refs para captura fiable de valores en formularios manuales
@@ -110,12 +134,63 @@ export function ActivityDetail({
     const [batchLogs, setBatchLogs] = useState<string[]>([]);
     const [batchProgress, setBatchProgress] = useState(0);
     const [batchTotal, setBatchTotal] = useState(0);
-    const [batchReport, setBatchReport] = useState<{ name: string, grade?: number, error?: string }[]>([]);
+    const [batchReport, setBatchReport] = useState<{ studentId?: string, name: string, grade?: number, error?: string }[]>([]);
     const [selectedStudentsForBatch, setSelectedStudentsForBatch] = useState<string[]>([]);
 
     // Optimizaciones de Lote
     const [batchSkipGraded, setBatchSkipGraded] = useState(true);
 
+    const hasConfiguredRequiredFiles = useMemo(() => {
+        if (!activity?.filePaths) return false;
+        if (typeof activity.filePaths === "string") {
+            return activity.filePaths.split(',').map((s: string) => s.trim()).filter(Boolean).length > 0;
+        }
+        if (Array.isArray(activity.filePaths)) {
+            return activity.filePaths.map((s: any) => String(s).trim()).filter(Boolean).length > 0;
+        }
+        return false;
+    }, [activity?.filePaths]);
+
+    // Estado para exportación general de actividad
+    const [isExportingActivityPdf, setIsExportingActivityPdf] = useState(false);
+    const [isExportingActivityExcel, setIsExportingActivityExcel] = useState(false);
+
+    const handleExportActivityExcel = async () => {
+        setIsExportingActivityExcel(true);
+        try {
+            await exportActivityResultsToExcel(activity, studentStatus);
+            toast.success("Excel de la actividad descargado correctamente");
+        } catch (e: any) {
+            console.error("Error al exportar Excel de actividad:", e);
+            toast.error("Error al generar el archivo Excel");
+        } finally {
+            setIsExportingActivityExcel(false);
+        }
+    };
+
+    const handleExportActivityPdf = async () => {
+        setIsExportingActivityPdf(true);
+        try {
+            const blob = await pdf(
+                <ActivitySummaryPDFDocument activity={activity} studentStatusList={studentStatus} />
+            ).toBlob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            const safeTitle = (activity.title || "Actividad").replace(/[^a-zA-Z0-9_\-]/g, "_");
+            a.download = `Reporte_Actividad_${safeTitle}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            toast.success("PDF de la actividad descargado correctamente");
+        } catch (e: any) {
+            console.error("Error al exportar PDF de actividad:", e);
+            toast.error("Error al generar el PDF");
+        } finally {
+            setIsExportingActivityPdf(false);
+        }
+    };
 
     const scrollRef = useRef<HTMLDivElement>(null);
     const batchScrollRef = useRef<HTMLDivElement>(null);
@@ -134,19 +209,72 @@ export function ActivityDetail({
     }, [batchLogs]);
 
     const studentStatus = useMemo(() => {
-        return students.map(enrollment => {
+        const mapped = students.map(enrollment => {
             const student = enrollment.user;
             const submission = activity.submissions.find((sub: any) => sub.userId === student.id);
             const isRejected = submission && submission.grade === null && submission.feedback && submission.feedback.includes("[ENTREGA RECHAZADA]");
+            const isReevaluationRequested = submission?.reevaluationRequested ?? false;
+
+            // Identificar grupo y rol de líder
+            const group = studentGroups.find((g: any) => g.members?.some((m: any) => m.userId === student.id));
+            const isLeader = group ? Boolean(group.leaderId === student.id || group.members?.some((m: any) => m.userId === student.id && m.isLeader)) : false;
+            const leaderUser = group?.leader || (group?.members?.find((m: any) => m.isLeader)?.user);
+            const leaderName = leaderUser ? formatName(leaderUser.name, leaderUser.profile) : "el líder";
+
+            // En actividades grupales solo los líderes tienen activo el botón de reevaluar/calificar
+            const canEvaluate = !activity.isGroupActivity || isLeader;
 
             return {
                 student,
                 submission,
                 isRejected,
+                isReevaluationRequested,
+                group,
+                isLeader,
+                leaderName,
+                canEvaluate,
                 status: submission ? (submission.grade !== null ? "graded" : "submitted") : "pending"
             };
         });
-    }, [students, activity.submissions]);
+
+        if (activity.isGroupActivity) {
+            return mapped.sort((a, b) => {
+                // 1. Estudiantes con grupo primero, sin grupo al final
+                if (a.group && !b.group) return -1;
+                if (!a.group && b.group) return 1;
+
+                if (a.group && b.group) {
+                    // Ordenar por nombre de grupo (Grupo 1, Grupo 2, Grupo 3...)
+                    const groupCompare = a.group.name.localeCompare(b.group.name, undefined, { numeric: true, sensitivity: 'base' });
+                    if (groupCompare !== 0) return groupCompare;
+
+                    // 2. Dentro del mismo grupo: El líder primero
+                    if (a.isLeader && !b.isLeader) return -1;
+                    if (!a.isLeader && b.isLeader) return 1;
+                }
+
+                // 3. Por nombre de estudiante
+                const nameA = formatName(a.student.name, a.student.profile);
+                const nameB = formatName(b.student.name, b.student.profile);
+                return nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
+            });
+        }
+
+        return mapped;
+    }, [students, activity.submissions, studentGroups, activity.isGroupActivity]);
+
+    // Entregas elegibles para evaluación masiva (si es grupal, solo líderes de grupo)
+    const batchEligibleStudents = useMemo(() => {
+        let list = studentStatus.filter(s => s.status === "submitted" || s.status === "graded").filter(s => s.submission);
+        if (activity.isGroupActivity) {
+            list = list.filter(s => s.isLeader);
+        }
+        return list;
+    }, [studentStatus, activity.isGroupActivity]);
+
+    const batchPendingCount = useMemo(() => {
+        return batchEligibleStudents.filter(s => s.status === "submitted").length;
+    }, [batchEligibleStudents]);
 
 
 
@@ -455,13 +583,14 @@ export function ActivityDetail({
     };
 
     const handleOpenBatchSelection = () => {
-        const studentsToGrade = studentStatus.filter(s => s.status === "submitted" || s.status === "graded").filter(s => s.submission);
-        if (studentsToGrade.length === 0) {
+        if (batchEligibleStudents.length === 0) {
             toast.info("No hay entregas para evaluar.");
             return;
         }
-        // Pre-seleccionar todos los estudiantes que tienen entregas
-                    setSelectedStudentsForBatch(studentsToGrade.map(s => s.student.id));
+        const toSelect = batchPendingCount > 0
+            ? batchEligibleStudents.filter(s => s.status === "submitted").map(s => s.student.id)
+            : batchEligibleStudents.map(s => s.student.id);
+        setSelectedStudentsForBatch(toSelect);
         setBatchStep("selection");
         setShowBatchSheet(true);
     };
@@ -500,12 +629,11 @@ export function ActivityDetail({
     };
 
     const handleBatchGradeWithAI = async () => {
-        const studentsToGrade = studentStatus
-            .filter(s => s.status === "submitted" || s.status === "graded")
-            .filter(s => s.submission && selectedStudentsForBatch.includes(s.student.id));
+        const studentsToGrade = batchEligibleStudents
+            .filter(s => selectedStudentsForBatch.includes(s.student.id));
 
         if (studentsToGrade.length === 0) {
-            toast.info("No se seleccionaron estudiantes para evaluar.");
+            toast.info("No se seleccionaron entregas para evaluar.");
             setShowBatchSheet(false);
             return;
         }
@@ -518,36 +646,53 @@ export function ActivityDetail({
         setBatchReport([]);
 
         const addLog = (msg: string) => setBatchLogs(prev => [...prev, msg]);
-        const report: { name: string, grade?: number, error?: string }[] = [];
+        const report: { studentId?: string, name: string, grade?: number, error?: string }[] = [];
         const urlCache = new Map<string, { grade: number, feedback: string }>();
 
-        addLog(`🚀 Iniciando evaluación por lote para ${studentsToGrade.length} estudiantes...`);
+        addLog(`🚀 Iniciando evaluación masiva con IA para ${studentsToGrade.length} ${activity.isGroupActivity ? 'grupos / líderes' : 'estudiantes'}...`);
 
         for (let i = 0; i < studentsToGrade.length; i++) {
-            const { student, submission } = studentsToGrade[i];
+            const { student, submission, group, isLeader } = studentsToGrade[i];
             setBatchProgress(i + 1);
-            addLog(`\n--- Evaluando ${i + 1}/${studentsToGrade.length}: ${student.name} ---`);
+            const studentLabel = isLeader && group ? `${student.name} (${group.name} - Líder)` : student.name;
+            addLog(`\n--- Evaluando ${i + 1}/${studentsToGrade.length}: ${studentLabel} ---`);
 
             try {
                 if (!submission.url) {
                     throw new Error("No hay URL de entrega.");
                 }
 
-                // NUEVA PRE-VALIDACIÓN: Si es PDF, verificar que el enlace sea válido antes de procesar o usar caché
+                // Prevalidación para PDFs
                 if (activity.type === "PDF_REVIEW" && !isValidPdfUrl(submission.url)) {
-                    throw new Error("El enlace proporcionado no corresponde a un archivo PDF válido (puede ser una carpeta o un formato no soportado).");
+                    throw new Error("El enlace proporcionado no corresponde a un archivo PDF válido.");
                 }
 
                 const normalizedUrl = normalizeUrl(submission.url);
 
                 // Regla: Depuración de la Cola
                 if (batchSkipGraded && submission.grade !== null && submission.grade !== undefined) {
-                    addLog(`⏭️ ${student.name} ya tiene calificación. Omitiendo según regla de depuración de cola.`);
-                    report.push({ name: student.name, grade: submission.grade });
+                    addLog(`⏭️ ${student.name} ya tiene calificación previa (${submission.grade.toFixed(1)}). Omitiendo.`);
+                    report.push({ studentId: student.id, name: studentLabel, grade: submission.grade });
                     continue;
                 }
 
-
+                // Reutilización inteligente desde caché
+                if (urlCache.has(normalizedUrl)) {
+                    const cached = urlCache.get(normalizedUrl)!;
+                    const formData = new FormData();
+                    formData.append("activityId", activity.id);
+                    formData.append("userId", student.id);
+                    formData.append("grade", String(cached.grade));
+                    formData.append("feedback", cached.feedback);
+                    formData.append("courseId", activity.courseId);
+                    await gradeManualActivityAction(formData);
+                    addLog(`✅ ⭐ Calificación asignada desde caché: ${cached.grade.toFixed(1)} / 5.0`);
+                    if (activity.isGroupActivity && group) {
+                        addLog(`   └─ 👥 Calificación y feedback replicados a todos los integrantes de ${group.name}.`);
+                    }
+                    report.push({ studentId: student.id, name: studentLabel, grade: cached.grade });
+                    continue;
+                }
 
                 let finalResult;
 
@@ -608,8 +753,8 @@ export function ActivityDetail({
                         gradingMode
                     );
                 } else if (activity.type === "PDF_REVIEW") {
-                    // --- LÓGICA PDF ---
-                    addLog(`📄 Procesando PDF de ${student.name}...`);
+                    // --- LÓGICA PDF CON GEMINI ---
+                    addLog(`📄 Descargando y analizando documento PDF de ${student.name} con Gemini...`);
                     finalResult = await gradePdfReviewAction(
                         activity.id,
                         student.id,
@@ -619,12 +764,15 @@ export function ActivityDetail({
                         gradingMode
                     );
                 } else {
-                    throw new Error("Tipo de actividad no soportado para evaluación por lote con IA.");
+                    throw new Error("Tipo de actividad no soportado para evaluación masiva con IA.");
                 }
 
                 if (finalResult) {
                     addLog(`✅ ⭐ Calificación de ${student.name}: ${finalResult.grade.toFixed(1)} / 5.0`);
-                    report.push({ name: student.name, grade: finalResult.grade });
+                    if (activity.isGroupActivity && group) {
+                        addLog(`   └─ 👥 Calificación y feedback replicados a todos los integrantes de ${group.name}.`);
+                    }
+                    report.push({ studentId: student.id, name: studentLabel, grade: finalResult.grade });
                     urlCache.set(normalizedUrl, { grade: finalResult.grade, feedback: finalResult.feedback || "" });
                 }
 
@@ -649,7 +797,7 @@ export function ActivityDetail({
                     }
                 }
                 
-                report.push({ name: student.name, error: error.message });
+                report.push({ studentId: student.id, name: studentLabel, error: error.message });
             }
         }
 
@@ -680,44 +828,99 @@ export function ActivityDetail({
     }, [studentStatus, activity.maxAttempts]);
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
-                <Button variant="ghost" size="sm" asChild className="w-fit h-8 px-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors group">
-                    <Link href={`/dashboard/teacher/courses/${activity.courseId}?tab=activities`} className="flex items-center gap-1.5 font-bold uppercase text-[10px] tracking-widest">
-                        <ChevronLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
-                        Volver a Actividades
-                    </Link>
-                </Button>
-
-                <div className="flex-1">
-                    <div className="flex flex-wrap items-center gap-2 mb-2">
-                        <h2 className="text-xl sm:text-2xl font-bold tracking-tight">{activity.title}</h2>
-                        <Badge variant="outline">{activity.type}</Badge>
-                        <Badge variant="secondary">Peso: {activity.weight.toFixed(1)}%</Badge>
+        <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                        <h2 className="text-lg sm:text-xl font-bold tracking-tight">{activity.title}</h2>
+                        <Badge variant="outline" className="font-bold gap-1 bg-primary/10 text-primary border-primary/30 text-[11px] px-2 py-0.5">
+                            {activity.type === "GITHUB" && <Github className="h-3 w-3 text-primary" />}
+                            {activity.type === "CODE_PROJECT" && <Code2 className="h-3 w-3 text-primary" />}
+                            {activity.type === "CODE_CHALLENGE" && <Terminal className="h-3 w-3 text-primary" />}
+                            {activity.type === "VIDEO_PITCH" && <Video className="h-3 w-3 text-primary" />}
+                            {activity.type === "AI_INTERVIEW" && <MessageSquareQuote className="h-3 w-3 text-primary" />}
+                            {activity.type === "DB_MODELING" && <Database className="h-3 w-3 text-primary" />}
+                            {activity.type === "AUDIO_DEFENSE" && <Mic className="h-3 w-3 text-primary" />}
+                            {activity.type === "PDF_REVIEW" && <FileText className="h-3 w-3 text-primary" />}
+                            {activity.type === "MANUAL" && <LinkIcon className="h-3 w-3 text-primary" />}
+                            <span>
+                                {activity.type === "GITHUB"
+                                    ? "Repositorio GitHub"
+                                    : activity.type === "CODE_PROJECT"
+                                    ? "Proyecto de Código"
+                                    : activity.type === "CODE_CHALLENGE"
+                                    ? "Desafío Sandbox"
+                                    : activity.type === "VIDEO_PITCH"
+                                    ? "Video Pitch"
+                                    : activity.type === "AUDIO_DEFENSE"
+                                    ? "Sustentación en Audio"
+                                    : activity.type === "AI_INTERVIEW"
+                                    ? "Entrevista con IA"
+                                    : activity.type === "DB_MODELING"
+                                    ? "Modelado de BD"
+                                    : activity.type === "PDF_REVIEW"
+                                    ? "Revisión PDF"
+                                    : "Actividad Manual"}
+                            </span>
+                        </Badge>
+                        {activity.isGroupActivity && (
+                            <Badge variant="outline" className="font-bold gap-1 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 text-[11px] px-2 py-0.5 shadow-2xs">
+                                {activity.groupScope === "ACTIVITY" ? (
+                                    <Target className="h-3 w-3 text-amber-500" />
+                                ) : (
+                                    <Users className="h-3 w-3" />
+                                )}
+                                <span>
+                                    {activity.groupScope === "ACTIVITY" ? "Grupos Exclusivos" : "Grupos de Ficha"}
+                                </span>
+                            </Badge>
+                        )}
                     </div>
-                    <div className="text-sm text-muted-foreground">
+                    <div className="text-xs text-muted-foreground">
                         {`Vence: ${format(new Date(activity.deadline), "PP p")}`}
                     </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+                    {activity.isGroupActivity && activity.groupScope === "ACTIVITY" && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            type="button"
+                            onClick={() => setIsGroupsModalOpen(true)}
+                            className="h-8 gap-1.5 font-semibold text-xs border-amber-500/30 hover:bg-amber-500/10 text-amber-700 dark:text-amber-400 shadow-2xs"
+                        >
+                            <Users className="h-3.5 w-3.5" />
+                            <span>Equipos de la Actividad</span>
+                        </Button>
+                    )}
+
+                    <Button variant="outline" size="sm" asChild className="h-8 gap-1.5 font-semibold shadow-xs">
+                        <Link href={`/dashboard/teacher/courses/${activity.courseId}?tab=activities`}>
+                            <ArrowLeft className="h-4 w-4" />
+                            <span>Volver a Actividades</span>
+                        </Link>
+                    </Button>
                 </div>
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-2 md:inline-flex md:w-auto">
-                    <TabsTrigger value="statement" className="flex items-center gap-1 sm:gap-2">
-                        <ClipboardList className="h-4 w-4" />
-                        <span className="hidden sm:inline">Enunciado</span>
-                        <span className="sm:hidden">Enun.</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="results" className="flex items-center gap-1 sm:gap-2">
-                        <Users className="h-4 w-4" />
-                        <span className="hidden sm:inline">Resultados por Estudiantes</span>
-                        <span className="sm:hidden">Result.</span>
-                    </TabsTrigger>
-                </TabsList>
+                <div className="w-full overflow-x-auto scrollbar-none pb-1 shrink-0 -mx-1 px-1">
+                    <TabsList className="inline-flex w-max min-w-full sm:w-auto h-auto min-h-9 p-1 gap-1">
+                        <TabsTrigger value="statement" className="flex items-center gap-1.5 text-xs font-semibold py-1.5 px-3 shrink-0 whitespace-nowrap">
+                            <ClipboardList className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                            <span>Enunciado</span>
+                        </TabsTrigger>
+                        <TabsTrigger value="results" className="flex items-center gap-1.5 text-xs font-semibold py-1.5 px-3 shrink-0 whitespace-nowrap">
+                            <Users className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                            <span>Resultados por Estudiantes</span>
+                        </TabsTrigger>
+                    </TabsList>
+                </div>
 
-                <TabsContent value="statement" className="space-y-4 mt-6">
-                    <div data-color-mode={mode} className="rounded-md border p-6 bg-card w-full max-w-full overflow-x-auto [&_pre]:whitespace-pre-wrap! [&_pre]:wrap-break-word! [&_table]:w-full! [&_td]:wrap-break-word!">
-                        <h3 className="text-lg font-semibold mb-4">Enunciado / Rúbrica de Evaluación</h3>
+                <TabsContent value="statement" className="space-y-4 mt-3">
+                    <div data-color-mode={mode} className="rounded-md border p-4 bg-card w-full max-w-full overflow-x-auto [&_pre]:whitespace-pre-wrap! [&_pre]:wrap-break-word! [&_table]:w-full! [&_td]:wrap-break-word!">
+                        <h3 className="text-base font-semibold mb-3">Enunciado / Rúbrica de Evaluación</h3>
                         <MDEditor.Markdown
                             source={activity.statement || "**No hay enunciado/rúbrica disponible.**"}
                             style={{ background: 'transparent' }}
@@ -725,23 +928,38 @@ export function ActivityDetail({
                     </div>
                 </TabsContent>
 
-                <TabsContent value="results" className="space-y-6 mt-6">
-                    <div className="grid gap-4 md:grid-cols-3">
-                        <div className="rounded-xl border bg-card text-card-foreground shadow p-6">
-                            <div className="text-2xl font-bold">{students.length}</div>
-                            <p className="text-xs text-muted-foreground">Total Estudiantes</p>
-                        </div>
-                        <div className="rounded-xl border bg-card text-card-foreground shadow p-6">
-                            <div className="text-2xl font-bold">
-                                {studentStatus.filter(s => s.status !== "pending").length}
+                <TabsContent value="results" className="space-y-3 mt-3">
+                    <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
+                        <div className="rounded-lg border bg-card/60 backdrop-blur-xs text-card-foreground shadow-2xs px-3.5 py-2 flex items-center justify-between">
+                            <div>
+                                <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Total Estudiantes</p>
+                                <div className="text-lg font-bold leading-tight mt-0.5">{students.length}</div>
                             </div>
-                            <p className="text-xs text-muted-foreground">Entregas Recibidas</p>
-                        </div>
-                        <div className="rounded-xl border bg-card text-card-foreground shadow p-6">
-                            <div className="text-2xl font-bold">
-                                {studentStatus.filter(s => s.status === "graded").length}
+                            <div className="p-1.5 rounded-md bg-primary/10 text-primary">
+                                <Users className="h-4 w-4" />
                             </div>
-                            <p className="text-xs text-muted-foreground">Calificados</p>
+                        </div>
+                        <div className="rounded-lg border bg-card/60 backdrop-blur-xs text-card-foreground shadow-2xs px-3.5 py-2 flex items-center justify-between">
+                            <div>
+                                <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Entregas Recibidas</p>
+                                <div className="text-lg font-bold leading-tight mt-0.5">
+                                    {studentStatus.filter(s => s.status !== "pending").length}
+                                </div>
+                            </div>
+                            <div className="p-1.5 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                                <FileText className="h-4 w-4" />
+                            </div>
+                        </div>
+                        <div className="rounded-lg border bg-card/60 backdrop-blur-xs text-card-foreground shadow-2xs px-3.5 py-2 flex items-center justify-between">
+                            <div>
+                                <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Calificados</p>
+                                <div className="text-lg font-bold leading-tight mt-0.5">
+                                    {studentStatus.filter(s => s.status === "graded").length}
+                                </div>
+                            </div>
+                            <div className="p-1.5 rounded-md bg-green-500/10 text-green-600 dark:text-green-400">
+                                <CheckCircle2 className="h-4 w-4" />
+                            </div>
                         </div>
                     </div>
 
@@ -750,35 +968,70 @@ export function ActivityDetail({
                             onClick={handleValidateLinks}
                             disabled={isValidating || activity.submissions.length === 0}
                             variant="outline"
-                            className="w-full sm:w-auto"
+                            size="sm"
+                            className="h-8 text-xs w-full sm:w-auto"
                         >
-                            <Search className="w-4 h-4 mr-2" />
+                            <Search className="w-3.5 h-3.5 mr-1.5" />
                             {isValidating ? "Validando..." : "Validar Enlaces"}
                         </Button>
-                        {(activity.type === "GITHUB" || activity.type === "PDF_REVIEW") && (
+                        {((activity.type === "GITHUB" && hasConfiguredRequiredFiles) || activity.type === "PDF_REVIEW") && (
                             <Button
                                 onClick={isBatchGrading ? () => setShowBatchSheet(true) : handleOpenBatchSelection}
-                                disabled={!studentStatus.some(s => s.submission)}
-                                className="w-full sm:w-auto bg-purple-600 hover:bg-purple-700 text-white"
+                                disabled={batchEligibleStudents.length === 0}
+                                variant="default"
+                                size="sm"
+                                className={cn(
+                                    "h-8 text-xs w-full sm:w-auto font-bold gap-1.5 shadow-sm transition-all",
+                                    activity.type === "PDF_REVIEW" && batchPendingCount > 0
+                                        ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white"
+                                        : ""
+                                )}
                             >
                                 {isBatchGrading ? (
                                     <>
-                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                        Ver Progreso de Lote
+                                        <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                                        <span>Progreso de Lote ({batchProgress}/{batchTotal})</span>
                                     </>
                                 ) : (
                                     <>
-                                        <Bot className="w-4 h-4 mr-2" />
-                                        Evaluar por Lote con IA
+                                        <Sparkles className="w-3.5 h-3.5 mr-1 text-yellow-300 fill-yellow-300" />
+                                        <span>{activity.type === "PDF_REVIEW" ? "Evaluación Masiva con IA" : "Evaluar por Lote con IA"}</span>
+                                        {batchPendingCount > 0 && (
+                                            <Badge className="bg-white/20 text-white border-0 text-[10px] px-1.5 py-0 font-bold ml-1">
+                                                {batchPendingCount} {activity.isGroupActivity ? "grupos" : "pendientes"}
+                                            </Badge>
+                                        )}
                                     </>
                                 )}
                             </Button>
                         )}
-                        <ExportButton
-                            data={exportData}
-                            filename={`${activity.title.replace(/\s+/g, '_')}_Calificaciones`}
-                            sheetName="Calificaciones"
-                        />
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 text-xs w-full sm:w-auto"
+                                    disabled={isExportingActivityPdf || isExportingActivityExcel}
+                                >
+                                    {isExportingActivityPdf || isExportingActivityExcel ? (
+                                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                                    ) : (
+                                        <Download className="mr-1.5 h-3.5 w-3.5" />
+                                    )}
+                                    Exportar Resultados
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={handleExportActivityExcel} disabled={isExportingActivityExcel}>
+                                    <FileSpreadsheet className="mr-2 h-4 w-4 text-green-600" />
+                                    Exportar a Excel (.xlsx)
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={handleExportActivityPdf} disabled={isExportingActivityPdf}>
+                                    <FileText className="mr-2 h-4 w-4 text-red-600" />
+                                    Exportar a PDF (.pdf)
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
 
                     <div className="w-full overflow-x-auto rounded-md border">
@@ -798,17 +1051,70 @@ export function ActivityDetail({
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {studentStatus.map(({ student, submission, status, isRejected }) => (
-                                    <TableRow key={student.id}>
-                                        <TableCell>
-                                            <div className="flex flex-col">
-                                                <span className="font-medium">{formatName(student.name, student.profile)}</span>
+                                {studentStatus.map(({ student, submission, status, isRejected, isReevaluationRequested, group, isLeader, leaderName, canEvaluate }, index) => {
+                                    const prevStudent = index > 0 ? studentStatus[index - 1] : null;
+                                    const isFirstInGroup = index === 0 || prevStudent?.group?.id !== group?.id;
+
+                                    return (
+                                        <Fragment key={student.id}>
+                                            {activity.isGroupActivity && isFirstInGroup && (
+                                                <TableRow className="bg-muted/40 hover:bg-muted/40 border-y border-border/80">
+                                                    <TableCell colSpan={activity.type !== "MANUAL" ? 6 : 4} className="py-2 px-4">
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-center gap-2">
+                                                                <Users className="h-3.5 w-3.5 text-primary" />
+                                                                <span className="font-bold text-xs text-foreground">
+                                                                    {group ? group.name : "Estudiantes Sin Grupo Asignado"}
+                                                                </span>
+                                                                {group && (
+                                                                    <Badge variant="outline" className="text-[10px] bg-background font-mono py-0 px-1.5">
+                                                                        {group.members?.length || 1} integrante{group.members?.length === 1 ? '' : 's'}
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+                                                            {group && leaderName && (
+                                                                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                                                                    <Crown className="h-3 w-3 text-amber-500 fill-amber-500" />
+                                                                    <span>Líder del equipo: <strong className="text-amber-700 dark:text-amber-400">{leaderName}</strong></span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                            )}
+                                            <TableRow className={isReevaluationRequested ? "bg-purple-50/50 dark:bg-purple-950/20" : undefined}>
+                                                <TableCell>
+                                            <div className="flex flex-col gap-0.5">
+                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                    <span className="font-medium">{formatName(student.name, student.profile)}</span>
+                                                    {activity.isGroupActivity && group && (
+                                                        isLeader ? (
+                                                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 gap-1 font-bold">
+                                                                <Crown className="h-2.5 w-2.5 fill-amber-500" /> Líder: {group.name}
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge variant="secondary" className="text-[10px] py-0 px-1.5 text-muted-foreground gap-1">
+                                                                <Users className="h-2.5 w-2.5" /> {group.name}
+                                                            </Badge>
+                                                        )
+                                                    )}
+                                                    {activity.isGroupActivity && !group && (
+                                                        <Badge variant="outline" className="text-[10px] py-0 px-1.5 text-destructive border-destructive/30">
+                                                            Sin grupo
+                                                        </Badge>
+                                                    )}
+                                                </div>
                                                 <span className="text-xs text-muted-foreground">{student.email}</span>
                                             </div>
                                         </TableCell>
                                         <TableCell>
-                                            {status === "pending" && <Badge variant="outline">Pendiente</Badge>}
-                                            {status === "submitted" && (
+                                            {isReevaluationRequested ? (
+                                                <Badge className="bg-purple-600 hover:bg-purple-700 text-white border-transparent gap-1 animate-pulse">
+                                                    <RotateCcw className="h-3 w-3" /> Reevaluación Solicitada
+                                                </Badge>
+                                            ) : status === "pending" ? (
+                                                <Badge variant="outline">Pendiente</Badge>
+                                            ) : status === "submitted" ? (
                                                 isRejected ? (
                                                     <Badge className="bg-rose-600 hover:bg-rose-700 text-white border-transparent">Rechazado</Badge>
                                                 ) : (activity.type === "GITHUB" || activity.type === "PDF_REVIEW" || activity.type === "CODE_PROJECT") ? (
@@ -818,8 +1124,9 @@ export function ActivityDetail({
                                                 ) : (
                                                     <Badge variant="secondary">Entregado</Badge>
                                                 )
+                                            ) : (
+                                                <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Calificado</Badge>
                                             )}
-                                            {status === "graded" && <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Calificado</Badge>}
                                         </TableCell>
                                         {activity.type !== "MANUAL" && (
                                             <>
@@ -843,30 +1150,51 @@ export function ActivityDetail({
                                             ) : "-"}
                                         </TableCell>
                                         <TableCell className="text-right">
-                                            <div className="flex items-center justify-end gap-2">
+                                            <div className="flex items-center justify-end gap-1.5 w-full">
                                                 <Button
-                                                    variant="ghost"
+                                                    variant={canEvaluate ? "default" : "outline"}
                                                     size="sm"
-                                                    onClick={() => setSelectedStudentIndex(studentStatus.indexOf(studentStatus.find(s => s.student.id === student.id)!))}
+                                                    className={cn(
+                                                        "min-w-[105px] justify-center font-semibold gap-1.5 shadow-sm",
+                                                        !canEvaluate && "opacity-40 cursor-not-allowed bg-muted text-muted-foreground hover:bg-muted"
+                                                    )}
+                                                    onClick={() => {
+                                                        if (!canEvaluate) return;
+                                                        setEvaluatingStudentId(student.id);
+                                                    }}
+                                                    disabled={!canEvaluate}
+                                                    title={
+                                                        !canEvaluate
+                                                            ? (group ? `Actividad grupal: Reevaluación activa únicamente para el líder del equipo (${leaderName})` : "Actividad grupal: estudiante sin líder asignado")
+                                                            : undefined
+                                                    }
                                                 >
-                                                    <Eye className="h-4 w-4 mr-2" />
-                                                    {!submission ? "Calificar" : "Ver Detalle"}
+                                                    <Sparkles className="h-3.5 w-3.5" />
+                                                    {submission?.grade !== null && submission?.grade !== undefined ? "Reevaluar" : "Calificar"}
                                                 </Button>
-                                                {submission && (
+                                                {submission ? (
                                                     <Button
                                                         variant="ghost"
-                                                        size="sm"
-                                                        onClick={() => handleDeleteSubmission(submission)}
-                                                        disabled={isPending}
-                                                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                        size="icon"
+                                                        onClick={() => canEvaluate && handleDeleteSubmission(submission)}
+                                                        disabled={isPending || (!canEvaluate && activity.isGroupActivity)}
+                                                        className={cn(
+                                                            "h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0",
+                                                            (!canEvaluate && activity.isGroupActivity) && "opacity-30 cursor-not-allowed"
+                                                        )}
+                                                        title={(!canEvaluate && activity.isGroupActivity) ? "Solo se eliminan entregas desde el líder de grupo" : "Eliminar entrega"}
                                                     >
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>
+                                                ) : (
+                                                    <div className="w-8 h-8 shrink-0" />
                                                 )}
                                             </div>
                                         </TableCell>
                                     </TableRow>
-                                ))}
+                                </Fragment>
+                            );
+                        })}
                                 {studentStatus.length === 0 && (
                                     <TableRow>
                                         <TableCell colSpan={6} className="h-24 text-center">
@@ -883,7 +1211,7 @@ export function ActivityDetail({
             {/* Panel de detalle controlado — con navegación Anterior / Siguiente */}
             {(() => {
                 if (selectedStudentIndex === null) return null;
-                const { student, submission, isRejected } = studentStatus[selectedStudentIndex];
+                const { student, submission, isRejected, isReevaluationRequested } = studentStatus[selectedStudentIndex];
                 const total = students.length;
 
                 const resetGradingState = () => {
@@ -947,6 +1275,20 @@ export function ActivityDetail({
                             </SheetHeader>
 
                             <div className="overflow-y-auto p-6 space-y-6">
+                                {isReevaluationRequested && (
+                                    <div className="rounded-xl border-2 border-purple-400/50 bg-purple-50 dark:bg-purple-950/30 p-4 text-purple-900 dark:text-purple-300 flex items-start gap-3 shadow-sm">
+                                        <RotateCcw className="h-5 w-5 shrink-0 mt-0.5 text-purple-600 animate-spin-slow" />
+                                        <div className="space-y-1">
+                                            <h4 className="font-bold text-sm uppercase tracking-wide flex items-center gap-2">
+                                                Solicitud de Reevaluación Pendiente
+                                            </h4>
+                                            <p className="text-xs leading-relaxed opacity-90">
+                                                El estudiante ha actualizado su entrega en el repositorio o enlace y solicita una nueva revisión. Evalúa de nuevo utilizando el asistente de IA o actualiza la nota manual.
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Student Info Card */}
                                 <div className="rounded-lg border p-4 bg-muted/50">
                                     <h4 className="font-semibold mb-3">Información del Estudiante</h4>
@@ -1018,12 +1360,41 @@ export function ActivityDetail({
                                 )}
 
                                 {/* Feedback */}
-                                {submission && submission.feedback && (
-                                        <div className="rounded-lg border p-4">
-                                            <h4 className="font-semibold mb-3">Retroalimentación</h4>
-                                            <FeedbackViewer feedback={submission.feedback} />
+                                {submission && (submission.feedback || submission.grade !== null) && (
+                                    <div className="rounded-lg border p-4 space-y-3">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <h4 className="font-semibold">Retroalimentación</h4>
+                                            <ExportFeedbackButtons
+                                                activity={activity}
+                                                submission={submission}
+                                                studentName={formatName(student.name, student.profile)}
+                                                studentEmail={student.email}
+                                                size="sm"
+                                            />
                                         </div>
+                                        {submission.feedback ? (
+                                            <FeedbackViewer feedback={submission.feedback} />
+                                        ) : (
+                                            <p className="text-xs text-muted-foreground italic">Sin texto de retroalimentación registrado.</p>
+                                        )}
+                                    </div>
                                 )}
+
+                                {/* Action button to open dedicated Evaluation Modal */}
+                                <div className="pt-2 flex justify-end">
+                                    <Button
+                                        type="button"
+                                        onClick={() => {
+                                            setSelectedStudentIndex(null);
+                                            setEvaluatingStudentId(student.id);
+                                        }}
+                                        variant="default"
+                                        className="w-full font-bold gap-2 py-5 shadow-sm"
+                                    >
+                                        <Sparkles className="h-4 w-4" />
+                                        {submission?.grade !== null && submission?.grade !== undefined ? "Reevaluar / Modificar Calificación" : "Abrir Evaluador de Código"}
+                                    </Button>
+                                </div>
 
                                 {/* Calificación GitHub — IA y Manual */}
                                 {activity.type === "GITHUB" && (
@@ -1326,198 +1697,7 @@ export function ActivityDetail({
                                     </div>
                                 )}
 
-                                {activity.type === "CODE_PROJECT" && (
-                                    <div className="rounded-lg border p-4 bg-muted/30 space-y-4">
-                                        <h4 className="font-semibold flex items-center gap-2">
-                                            <Github className="h-4 w-4" />
-                                            Revisión de Proyecto de Código
-                                        </h4>
 
-                                        {submission && (
-                                            <div className="space-y-4">
-                                                <div className="flex items-center gap-2">
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="gap-2"
-                                                        disabled={scanningRepoStudentId === student.id}
-                                                        onClick={() => handleScanRepo(student.id, submission.url)}
-                                                    >
-                                                        {scanningRepoStudentId === student.id ? (
-                                                            <><Loader2 className="h-4 w-4 animate-spin" /> Escaneando...</>
-                                                        ) : (
-                                                            <><Search className="h-4 w-4" /> Escanear Repositorio</>
-                                                        )}
-                                                    </Button>
-                                                </div>
-
-                                                {scannedRepoFiles.length > 0 && (
-                                                    <div className="space-y-3">
-                                                        <GradingModeSelector gradingMode={gradingMode} setGradingMode={setGradingMode} />
-                                                        <Label className="text-xs font-medium">Selecciona los archivos para evaluar:</Label>
-                                                        <div className="max-h-60 overflow-y-auto border rounded-md bg-background p-2 space-y-1">
-                                                            {scannedRepoFiles.map((path) => (
-                                                                <div key={path} className="flex items-center space-x-2 p-1 hover:bg-muted/50 rounded transition-colors">
-                                                                    <Checkbox
-                                                                        id={`file-${path}`}
-                                                                        checked={selectedRepoFiles.includes(path)}
-                                                                        onCheckedChange={(checked) => {
-                                                                            if (checked) setSelectedRepoFiles(prev => [...prev, path]);
-                                                                            else setSelectedRepoFiles(prev => prev.filter(p => p !== path));
-                                                                        }}
-                                                                    />
-                                                                    <label
-                                                                        htmlFor={`file-${path}`}
-                                                                        className="text-xs font-mono truncate cursor-pointer flex-1"
-                                                                    >
-                                                                        {path}
-                                                                    </label>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-
-                                                        <div className="flex items-center gap-2 pt-2">
-                                                            <Button
-                                                                type="button"
-                                                                variant="default"
-                                                                size="sm"
-                                                                className="flex-1 gap-2"
-                                                                disabled={isCodeProjectGrading === student.id || selectedRepoFiles.length === 0}
-                                                                onClick={() => handleGradeCodeProjectWithAI(student.id, submission.url)}
-                                                            >
-                                                                {isCodeProjectGrading === student.id ? (
-                                                                    <><Loader2 className="h-4 w-4 animate-spin" /> Evaluando...</>
-                                                                ) : (
-                                                                    <><Sparkles className="h-4 w-4" /> Calificar Selección con IA</>
-                                                                )}
-                                                            </Button>
-                                                            <Button
-                                                                type="button"
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                onClick={() => setShowGradingLogs(v => !v)}
-                                                            >
-                                                                {showGradingLogs ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                                                            </Button>
-                                                        </div>
-
-                                                        {showGradingLogs && gradingLogs.length > 0 && (
-                                                            <div
-                                                                ref={scrollRef}
-                                                                className="space-y-1 max-h-40 overflow-y-auto text-[10px] font-mono bg-background p-2 rounded border"
-                                                            >
-                                                                {gradingLogs.map((log, i) => (
-                                                                    <div key={i} className="border-b border-muted/30 pb-1 last:border-0">
-                                                                        {log}
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
-
-                                                {gradingResult && (
-                                                    <div className="p-2 bg-green-50 dark:bg-green-950/20 border border-green-200 rounded text-xs text-green-700 dark:text-green-400 flex items-center gap-2">
-                                                        <CheckCircle className="h-3.5 w-3.5 shrink-0" />
-                                                        <span>Calificación guardada: <strong>{gradingResult.grade.toFixed(1)} / 5.0</strong></span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-
-                                        <div className="border-t pt-4">
-                                            <h5 className="text-sm font-medium mb-3">Calificación Manual</h5>
-                                                <form id={`form-cp-${student.id}`}>
-                                                    <div className="space-y-3">
-                                                        <div className="space-y-1">
-                                                            <Label htmlFor={`grade-cp-${student.id}`} className="text-xs">Nota (0.0 - 5.0)</Label>
-                                                            <Input
-                                                                id={`grade-cp-${student.id}`}
-                                                                name="grade"
-                                                                type="number"
-                                                                step="0.1"
-                                                                min="0"
-                                                                max="5"
-                                                                defaultValue={gradingResult?.grade ?? submission?.grade ?? (!submission && activity.deadline && new Date(activity.deadline) < new Date() ? "0.0" : "")}
-                                                                placeholder="Ej: 4.5"
-                                                                required
-                                                            />
-                                                        </div>
-                                                        <div className="space-y-1">
-                                                            <div className="flex items-center justify-between">
-                                                                <Label htmlFor={`feedback-cp-${student.id}`} className="text-xs">Retroalimentación</Label>
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="ghost"
-                                                                    size="sm"
-                                                                    className="h-6 text-[10px] text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                                                    onClick={async () => {
-                                                                        const textarea = document.getElementById(`feedback-cp-${student.id}`) as HTMLTextAreaElement;
-                                                                        const text = textarea.value;
-                                                                        if (!text || text.length < 10) { toast.error("Escribe al menos 10 caracteres."); return; }
-                                                                        const toastId = toast.loading("Mejorando redacción con IA...");
-                                                                        try {
-                                                                            const improved = await improveFeedbackAction(text);
-                                                                            textarea.value = improved;
-                                                                            toast.success("Texto mejorado", { id: toastId });
-                                                                        } catch { toast.error("Error al mejorar texto", { id: toastId }); }
-                                                                    }}
-                                                                >
-                                                                    <Sparkles className="w-3 h-3 mr-1" />
-                                                                    Mejorar con IA
-                                                                </Button>
-                                                            </div>
-                                                            <Textarea
-                                                                id={`feedback-cp-${student.id}`}
-                                                                name="feedback"
-                                                                defaultValue={gradingResult?.feedback ?? submission?.feedback?.replace("[ENTREGA RECHAZADA]\n", "")?.replace("[ENTREGA RECHAZADA]", "") ?? (!submission && activity.deadline && new Date(activity.deadline) < new Date() ? "No realizó entrega" : "")}
-                                                                placeholder="Comentarios para el estudiante..."
-                                                                rows={3}
-                                                            />
-                                                        </div>
-                                                        <div className="flex gap-2">
-                                                            <Button 
-                                                                type="button" 
-                                                                size="sm" 
-                                                                className="flex-1"
-                                                                onClick={async () => {
-                                                                    const form = document.getElementById(`form-cp-${student.id}`) as HTMLFormElement;
-                                                                    const formData = new FormData(form);
-                                                                    const grade = formData.get("grade") as string;
-                                                                    const feedback = formData.get("feedback") as string;
-                                                                    await handleGradeManual(grade, feedback, student.id, activity.id);
-                                                                }}
-                                                            >
-                                                                {submission?.grade !== null && submission?.grade !== undefined ? "Actualizar Nota" : "Guardar Nota"}
-                                                            </Button>
-                                                            {submission && (
-                                                                <Button 
-                                                                    type="button"
-                                                                    size="sm"
-                                                                    onClick={async () => {
-                                                                        const { rejectManualActivityAction } = await import("@/features/teacher/actions/gradingActions");
-                                                                        const formData = new FormData();
-                                                                        formData.append("activityId", activity.id);
-                                                                        formData.append("userId", student.id);
-                                                                        formData.append("courseId", activity.courseId);
-                                                                        const feedback = (document.getElementById(`feedback-cp-${student.id}`) as HTMLTextAreaElement)?.value;
-                                                                        if (feedback) formData.append("feedback", feedback);
-                                                                        await rejectManualActivityAction(formData);
-                                                                        toast.success("Entrega rechazada");
-                                                                    }}
-                                                                    variant="outline"
-                                                                    className="text-destructive hover:bg-destructive/10"
-                                                                >
-                                                                    Rechazar
-                                                                </Button>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </form>
-                                        </div>
-                                    </div>
-                                )}
 
                                 {/* Manual Grading Form */}
                                 {activity.type === "MANUAL" && (
@@ -1884,12 +2064,15 @@ export function ActivityDetail({
                     }
                 }}>
                     <SheetHeader className="pb-4 border-b shrink-0">
-                        <SheetTitle>
-                            {batchStep === "selection" ? "Seleccionar Estudiantes para Lote" : "Evaluación por Lote Asistida por IA"}
+                        <SheetTitle className="flex items-center gap-2">
+                            <Sparkles className="h-5 w-5 text-purple-600" />
+                            {activity.type === "PDF_REVIEW" ? "Evaluación Masiva de PDFs con IA" : "Evaluación por Lote con IA"}
                         </SheetTitle>
                         <SheetDescription>
                             {batchStep === "selection"
-                                ? "Selecciona los estudiantes listos para ser evaluados por Gemini."
+                                ? (activity.isGroupActivity 
+                                    ? "Selecciona los líderes de grupo cuyas entregas serán evaluadas por Gemini. Las calificaciones se replicarán a todos los integrantes." 
+                                    : "Selecciona los estudiantes listos para ser evaluados automáticamente por Gemini.")
                                 : "Evaluación en segundo plano. Puedes minimizar este panel y seguir operando."}
                         </SheetDescription>
                     </SheetHeader>
@@ -1898,22 +2081,22 @@ export function ActivityDetail({
                         <div className="flex-1 overflow-y-auto mt-4 px-1 py-1">
                             <div className="flex justify-between items-center mb-4">
                                 <span className="text-sm font-medium">
-                                    {selectedStudentsForBatch.length} de {studentStatus.filter(s => s.status === "submitted" || s.status === "graded").filter(s => s.submission).length} listos
+                                    {selectedStudentsForBatch.length} de {batchEligibleStudents.length} {activity.isGroupActivity ? "líderes listos" : "listos"}
                                 </span>
                                 <div className="flex gap-2">
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        onClick={() => setSelectedStudentsForBatch(studentStatus.filter(s => s.status === "submitted" || s.status === "graded").filter(s => s.submission).map(s => s.student.id))}
+                                        onClick={() => setSelectedStudentsForBatch(batchEligibleStudents.map(s => s.student.id))}
                                     >
                                         Todos
                                     </Button>
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        onClick={() => setSelectedStudentsForBatch(studentStatus.filter(s => s.status === "submitted").filter(s => s.submission).map(s => s.student.id))}
+                                        onClick={() => setSelectedStudentsForBatch(batchEligibleStudents.filter(s => s.status === "submitted").map(s => s.student.id))}
                                     >
-                                        Solo Entregados
+                                        Solo Pendientes
                                     </Button>
                                     <Button
                                         variant="outline"
@@ -1933,63 +2116,84 @@ export function ActivityDetail({
                                                 <Checkbox
                                                     checked={
                                                         selectedStudentsForBatch.length > 0 &&
-                                                        selectedStudentsForBatch.length === studentStatus.filter(s => s.status === "submitted" || s.status === "graded").filter(s => s.submission).length
+                                                        selectedStudentsForBatch.length === batchEligibleStudents.length
                                                     }
                                                     onCheckedChange={(checked) => {
                                                         if (checked) {
-                                                            setSelectedStudentsForBatch(studentStatus.filter(s => s.status === "submitted" || s.status === "graded").filter(s => s.submission).map(s => s.student.id));
+                                                            setSelectedStudentsForBatch(batchEligibleStudents.map(s => s.student.id));
                                                         } else {
                                                             setSelectedStudentsForBatch([]);
                                                         }
                                                     }}
                                                 />
                                             </TableHead>
-                                            <TableHead>Estudiante</TableHead>
-                                            <TableHead>Estado</TableHead>
+                                            <TableHead>{activity.isGroupActivity ? "Líder / Grupo" : "Estudiante"}</TableHead>
+                                            <TableHead className="text-right">Estado</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {studentStatus
-                                            .filter(s => s.status === "submitted" || s.status === "graded")
-                                            .filter(s => s.submission)
-                                            .map((s, index) => {
-                                                const isSelected = selectedStudentsForBatch.includes(s.student.id);
-                                                return (
-                                                    <TableRow key={index} className="cursor-pointer hover:bg-muted/50" onClick={() => {
-                                                        if (isSelected) {
-                                                            setSelectedStudentsForBatch(prev => prev.filter(id => id !== s.student.id));
-                                                        } else {
-                                                            setSelectedStudentsForBatch(prev => [...prev, s.student.id]);
-                                                        }
-                                                    }}>
-                                                        <TableCell onClick={(e) => e.stopPropagation()}>
-                                                            <Checkbox
-                                                                checked={isSelected}
-                                                                onCheckedChange={(checked) => {
-                                                                    if (checked) {
-                                                                        setSelectedStudentsForBatch(prev => [...prev, s.student.id]);
-                                                                    } else {
-                                                                        setSelectedStudentsForBatch(prev => prev.filter(id => id !== s.student.id));
-                                                                    }
-                                                                }}
-                                                            />
-                                                        </TableCell>
-                                                        <TableCell className="font-medium">
-                                                            {formatName(s.student.name, s.student.profile)}
-                                                            <span className="block text-muted-foreground text-xs font-normal mt-0.5">{s.student.email}</span>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <Badge variant={s.status === "graded" ? "default" : "secondary"}>
-                                                                {s.status === "graded" ? "Calificado" : "Entregado"}
+                                        {batchEligibleStudents.map((s, index) => {
+                                            const isSelected = selectedStudentsForBatch.includes(s.student.id);
+                                            return (
+                                                <TableRow key={index} className="cursor-pointer hover:bg-muted/50" onClick={() => {
+                                                    if (isSelected) {
+                                                        setSelectedStudentsForBatch(prev => prev.filter(id => id !== s.student.id));
+                                                    } else {
+                                                        setSelectedStudentsForBatch(prev => [...prev, s.student.id]);
+                                                    }
+                                                }}>
+                                                    <TableCell onClick={(e) => e.stopPropagation()}>
+                                                        <Checkbox
+                                                            checked={isSelected}
+                                                            onCheckedChange={(checked) => {
+                                                                if (checked) {
+                                                                    setSelectedStudentsForBatch(prev => [...prev, s.student.id]);
+                                                                } else {
+                                                                    setSelectedStudentsForBatch(prev => prev.filter(id => id !== s.student.id));
+                                                                }
+                                                            }}
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell className="font-medium">
+                                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                                            <span>{formatName(s.student.name, s.student.profile)}</span>
+                                                            {activity.isGroupActivity && s.group && (
+                                                                <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 gap-1 font-bold">
+                                                                    <Crown className="h-2.5 w-2.5 fill-amber-500" /> Líder: {s.group.name}
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                        <span className="block text-muted-foreground text-xs font-normal mt-0.5">{s.student.email}</span>
+                                                    </TableCell>
+                                                    <TableCell className="text-right">
+                                                        <div className="flex items-center justify-end gap-1.5">
+                                                            {s.submission?.url && (
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-6 w-6 text-muted-foreground hover:text-primary"
+                                                                    title="Ver enlace / documento"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        window.open(s.submission.url, '_blank');
+                                                                    }}
+                                                                >
+                                                                    <ExternalLink className="h-3 w-3" />
+                                                                </Button>
+                                                            )}
+                                                            <Badge variant={s.status === "graded" ? "default" : "secondary"} className={s.status === "graded" ? "bg-green-600 hover:bg-green-700" : ""}>
+                                                                {s.status === "graded" ? `${s.submission.grade?.toFixed(1) ?? ''} Calificado` : "Por Calificar"}
                                                             </Badge>
-                                                        </TableCell>
-                                                    </TableRow>
-                                                );
-                                            })}
-                                        {studentStatus.filter(s => s.status === "submitted" || s.status === "graded").filter(s => s.submission).length === 0 && (
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
+                                        {batchEligibleStudents.length === 0 && (
                                             <TableRow>
                                                 <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
-                                                    No hay estudiantes con entregas pendientes o evaluables.
+                                                    No hay entregas registradas para evaluar.
                                                 </TableCell>
                                             </TableRow>
                                         )}
@@ -2000,7 +2204,7 @@ export function ActivityDetail({
                             <div className="mt-6 p-4 rounded-lg bg-muted/50 border space-y-4">
                                 <h4 className="text-sm font-semibold flex items-center gap-2">
                                     <Settings className="h-4 w-4" />
-                                    Optimización de Lote
+                                    Optimización de Evaluación
                                 </h4>
                                 <div className="space-y-3">
                                     <div className="flex items-start gap-3">
@@ -2012,7 +2216,7 @@ export function ActivityDetail({
                                         />
                                         <div className="grid gap-1.5 leading-none">
                                             <Label htmlFor="batch-skip-graded" className="text-xs font-medium cursor-pointer">Depuración de la Cola</Label>
-                                            <p className="text-[10px] text-muted-foreground">Excluir automáticamente de la evaluación a estudiantes que ya cuentan con una nota previa.</p>
+                                            <p className="text-[10px] text-muted-foreground">Excluir automáticamente de la evaluación a estudiantes/líderes que ya cuentan con una nota previa.</p>
                                         </div>
                                     </div>
 
@@ -2028,12 +2232,12 @@ export function ActivityDetail({
                     {batchStep === "selection" && (
                         <SheetFooter className="mt-6 pt-4 border-t">
                             <Button 
-                                className="w-full bg-purple-600 hover:bg-purple-700 text-white gap-2 h-11"
+                                className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white gap-2 h-11 font-bold shadow-md"
                                 disabled={selectedStudentsForBatch.length === 0}
                                 onClick={handleBatchGradeWithAI}
                             >
                                 <Bot className="h-5 w-5" />
-                                Iniciar Evaluación de {selectedStudentsForBatch.length} Estudiantes
+                                Iniciar Evaluación Masiva ({selectedStudentsForBatch.length} {activity.isGroupActivity ? "Grupos" : "Estudiantes"})
                             </Button>
                         </SheetFooter>
                     )}
@@ -2042,7 +2246,7 @@ export function ActivityDetail({
                         <div className="flex-1 flex flex-col mt-4 py-1 min-h-0">
                             <div className="flex items-center justify-between mb-2">
                                 <span className="text-sm font-medium">Progreso Global</span>
-                                <span className="text-sm font-bold text-primary">
+                                <span className="text-sm font-bold text-primary font-mono">
                                     {batchProgress} / {batchTotal}
                                 </span>
                             </div>
@@ -2084,11 +2288,30 @@ export function ActivityDetail({
                                                         <TableCell className="font-medium whitespace-nowrap pl-0 text-sm max-w-[150px] truncate" title={r.name}>
                                                             {r.name}
                                                         </TableCell>
-                                                        <TableCell className="text-right pr-0">
+                                                        <TableCell className="text-right pr-0 flex items-center justify-end gap-2">
                                                             {r.error ? (
                                                                 <span className="text-red-500 font-medium text-xs break-words max-w-[200px] inline-block text-left" title={r.error}>Fallido: {r.error}</span>
                                                             ) : (
-                                                                <Badge variant="default" className="bg-green-600 hover:bg-green-700">Completado ({r.grade?.toFixed(1)})</Badge>
+                                                                <>
+                                                                    <Badge variant="default" className="bg-green-600 hover:bg-green-700 font-mono">
+                                                                        {r.grade !== undefined && r.grade !== null ? r.grade.toFixed(1) : '-'} / 5.0
+                                                                    </Badge>
+                                                                    {r.studentId && (
+                                                                        <Button
+                                                                            size="sm"
+                                                                            variant="outline"
+                                                                            className="h-7 px-2 text-xs gap-1 font-semibold"
+                                                                            onClick={() => {
+                                                                                setShowBatchSheet(false);
+                                                                                setEvaluatingStudentId(r.studentId!);
+                                                                            }}
+                                                                            title="Abrir inspector para revisar este reporte"
+                                                                        >
+                                                                            <Eye className="h-3 w-3" />
+                                                                            <span className="hidden sm:inline">Inspeccionar</span>
+                                                                        </Button>
+                                                                    )}
+                                                                </>
                                                             )}
                                                         </TableCell>
                                                     </TableRow>
@@ -2125,37 +2348,245 @@ export function ActivityDetail({
 
                 </SheetContent>
             </Sheet>
-        </div>
-    );
-}
 
-function GradingModeSelector({ gradingMode, setGradingMode }: { gradingMode: string, setGradingMode: (m: any) => void }) {
-    return (
-        <div className="flex flex-col gap-1.5 mb-2">
-            <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Nivel de Exigencia IA</Label>
-            <div className="flex gap-1 p-1 bg-muted/50 rounded-lg w-full border border-muted">
-                {(['normal', 'moderate', 'strict'] as const).map((mode) => (
-                    <Button 
-                        key={mode}
-                        type="button"
-                        variant={gradingMode === mode ? "secondary" : "ghost"} 
-                        size="sm" 
-                        className={`flex-1 h-8 text-[11px] capitalize transition-all ${
-                            gradingMode === mode 
-                                ? "bg-white dark:bg-background shadow-sm font-semibold text-primary" 
-                                : "text-muted-foreground hover:text-foreground"
-                        }`} 
-                        onClick={() => setGradingMode(mode)}
-                    >
-                        {mode === 'normal' ? 'Normal' : mode === 'moderate' ? 'Moderado' : 'Estricto'}
-                    </Button>
-                ))}
-            </div>
-            {gradingMode === 'strict' && (
-                <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-1 px-1 flex items-center gap-1 font-medium">
-                    <AlertTriangle className="h-2.5 w-2.5" />
-                    Penaliza redacción, ortografía y normas de documentación.
-                </p>
+            {/* Modal Dedicado de Evaluación — Exclusivo para Calificación */}
+            {(() => {
+                if (!evaluatingStudentId) return null;
+                const evalItem = studentStatus.find(s => s.student.id === evaluatingStudentId);
+                if (!evalItem) return null;
+                const { student: evalStudent, submission: evalSubmission } = evalItem;
+
+                // Si la actividad es grupal, la navegación de evaluación es exclusiva para los líderes de grupo
+                const evaluatableStudents = activity.isGroupActivity
+                    ? studentStatus.filter(s => s.isLeader || s.student.id === evalStudent.id)
+                    : studentStatus;
+
+                return (
+                    <Dialog open={!!evaluatingStudentId} onOpenChange={open => !open && setEvaluatingStudentId(null)}>
+                        <DialogContent showCloseButton={false} className="fixed inset-0 top-0 left-0 z-50 w-screen h-screen max-w-none! sm:max-w-none! max-h-none! border-none rounded-none translate-x-0! translate-y-0! p-0 flex flex-col bg-background overflow-hidden">
+                            <DialogTitle className="sr-only">
+                                Evaluación de Entrega — {formatName(evalStudent.name, evalStudent.profile)}
+                            </DialogTitle>
+
+                            {(activity.type === "CODE_PROJECT" || activity.type === "GITHUB") && (
+                                <CodeProjectInspector
+                                    student={evalStudent}
+                                    submission={evalSubmission}
+                                    activity={activity}
+                                    gradingMode={gradingMode}
+                                    setGradingMode={setGradingMode}
+                                    onClose={() => setEvaluatingStudentId(null)}
+                                    studentsList={evaluatableStudents}
+                                    onSelectStudent={(studentId) => setEvaluatingStudentId(studentId)}
+                                    onGradeManual={async (grade, feedback, studentId, activityId) => {
+                                        await handleGradeManual(grade, feedback, studentId, activityId);
+                                        setEvaluatingStudentId(null);
+                                    }}
+                                    onReject={async (studentId, feedback) => {
+                                        const { rejectManualActivityAction } = await import("@/features/teacher/actions/gradingActions");
+                                        const formData = new FormData();
+                                        formData.append("activityId", activity.id);
+                                        formData.append("userId", studentId);
+                                        formData.append("courseId", activity.courseId);
+                                        if (feedback) formData.append("feedback", feedback);
+                                        await rejectManualActivityAction(formData);
+                                        toast.success("Entrega rechazada");
+                                        setEvaluatingStudentId(null);
+                                    }}
+                                />
+                            )}
+
+                            {activity.type === "MANUAL" && (
+                                <ManualActivityInspector
+                                    student={evalStudent}
+                                    submission={evalSubmission}
+                                    activity={activity}
+                                    evalItem={evalItem}
+                                    onClose={() => setEvaluatingStudentId(null)}
+                                    studentsList={evaluatableStudents}
+                                    onSelectStudent={(studentId) => setEvaluatingStudentId(studentId)}
+                                    onGradeManual={async (grade, feedback, studentId, activityId) => {
+                                        await handleGradeManual(grade, feedback, studentId, activityId);
+                                    }}
+                                    onReject={async (studentId, feedback) => {
+                                        const { rejectManualActivityAction } = await import("@/features/teacher/actions/gradingActions");
+                                        const formData = new FormData();
+                                        formData.append("activityId", activity.id);
+                                        formData.append("userId", studentId);
+                                        formData.append("courseId", activity.courseId);
+                                        if (feedback) formData.append("feedback", feedback);
+                                        await rejectManualActivityAction(formData);
+                                        toast.success("Entrega rechazada");
+                                    }}
+                                />
+                            )}
+
+                            {activity.type === "PDF_REVIEW" && (
+                                <PdfReviewActivityInspector
+                                    student={evalStudent}
+                                    submission={evalSubmission}
+                                    activity={activity}
+                                    evalItem={evalItem}
+                                    onClose={() => setEvaluatingStudentId(null)}
+                                    studentsList={evaluatableStudents}
+                                    onSelectStudent={(studentId) => setEvaluatingStudentId(studentId)}
+                                    onGradeManual={async (grade, feedback, studentId, activityId) => {
+                                        await handleGradeManual(grade, feedback, studentId, activityId);
+                                    }}
+                                    onReject={async (studentId, feedback) => {
+                                        const { rejectManualActivityAction } = await import("@/features/teacher/actions/gradingActions");
+                                        const formData = new FormData();
+                                        formData.append("activityId", activity.id);
+                                        formData.append("userId", studentId);
+                                        formData.append("courseId", activity.courseId);
+                                        if (feedback) formData.append("feedback", feedback);
+                                        await rejectManualActivityAction(formData);
+                                        toast.success("Entrega rechazada");
+                                    }}
+                                />
+                            )}
+
+                            {activity.type === "CODE_CHALLENGE" && (
+                                <CodeChallengeInspector
+                                    student={evalStudent}
+                                    submission={evalSubmission}
+                                    activity={activity}
+                                    evalItem={evalItem}
+                                    onClose={() => setEvaluatingStudentId(null)}
+                                    studentsList={evaluatableStudents}
+                                    onSelectStudent={(studentId) => setEvaluatingStudentId(studentId)}
+                                    onGradeManual={async (grade, feedback, studentId, activityId) => {
+                                        await handleGradeManual(grade, feedback, studentId, activityId);
+                                    }}
+                                    onReject={async (studentId, feedback) => {
+                                        const { rejectManualActivityAction } = await import("@/features/teacher/actions/gradingActions");
+                                        const formData = new FormData();
+                                        formData.append("activityId", activity.id);
+                                        formData.append("userId", studentId);
+                                        formData.append("courseId", activity.courseId);
+                                        if (feedback) formData.append("feedback", feedback);
+                                        await rejectManualActivityAction(formData);
+                                        toast.success("Entrega rechazada");
+                                    }}
+                                />
+                            )}
+
+                            {activity.type === "VIDEO_PITCH" && (
+                                <VideoPitchInspector
+                                    student={evalStudent}
+                                    submission={evalSubmission}
+                                    activity={activity}
+                                    evalItem={evalItem}
+                                    onClose={() => setEvaluatingStudentId(null)}
+                                    studentsList={evaluatableStudents}
+                                    onSelectStudent={(studentId) => setEvaluatingStudentId(studentId)}
+                                    onGradeManual={async (grade, feedback, studentId, activityId) => {
+                                        await handleGradeManual(grade, feedback, studentId, activityId);
+                                    }}
+                                    onReject={async (studentId, feedback) => {
+                                        const { rejectManualActivityAction } = await import("@/features/teacher/actions/gradingActions");
+                                        const formData = new FormData();
+                                        formData.append("activityId", activity.id);
+                                        formData.append("userId", studentId);
+                                        formData.append("courseId", activity.courseId);
+                                        if (feedback) formData.append("feedback", feedback);
+                                        await rejectManualActivityAction(formData);
+                                        toast.success("Entrega rechazada");
+                                    }}
+                                />
+                            )}
+
+                            {activity.type === "AI_INTERVIEW" && (
+                                <AiInterviewInspector
+                                    student={evalStudent}
+                                    submission={evalSubmission}
+                                    activity={activity}
+                                    evalItem={evalItem}
+                                    onClose={() => setEvaluatingStudentId(null)}
+                                    studentsList={evaluatableStudents}
+                                    onSelectStudent={(studentId) => setEvaluatingStudentId(studentId)}
+                                    onGradeManual={async (grade, feedback, studentId, activityId) => {
+                                        await handleGradeManual(grade, feedback, studentId, activityId);
+                                    }}
+                                    onReject={async (studentId, feedback) => {
+                                        const { rejectManualActivityAction } = await import("@/features/teacher/actions/gradingActions");
+                                        const formData = new FormData();
+                                        formData.append("activityId", activity.id);
+                                        formData.append("userId", studentId);
+                                        formData.append("courseId", activity.courseId);
+                                        if (feedback) formData.append("feedback", feedback);
+                                        await rejectManualActivityAction(formData);
+                                        toast.success("Entrega rechazada");
+                                    }}
+                                />
+                            )}
+
+                            {activity.type === "DB_MODELING" && (
+                                <DbModelingInspector
+                                    student={evalStudent}
+                                    submission={evalSubmission}
+                                    activity={activity}
+                                    evalItem={evalItem}
+                                    onClose={() => setEvaluatingStudentId(null)}
+                                    studentsList={evaluatableStudents}
+                                    onSelectStudent={(studentId) => setEvaluatingStudentId(studentId)}
+                                    onGradeManual={async (grade, feedback, studentId, activityId) => {
+                                        await handleGradeManual(grade, feedback, studentId, activityId);
+                                    }}
+                                    onReject={async (studentId, feedback) => {
+                                        const { rejectManualActivityAction } = await import("@/features/teacher/actions/gradingActions");
+                                        const formData = new FormData();
+                                        formData.append("activityId", activity.id);
+                                        formData.append("userId", studentId);
+                                        formData.append("courseId", activity.courseId);
+                                        if (feedback) formData.append("feedback", feedback);
+                                        await rejectManualActivityAction(formData);
+                                        toast.success("Entrega rechazada");
+                                    }}
+                                />
+                            )}
+
+                            {activity.type === "AUDIO_DEFENSE" && (
+                                <AudioDefenseInspector
+                                    student={evalStudent}
+                                    submission={evalSubmission}
+                                    activity={activity}
+                                    evalItem={evalItem}
+                                    onClose={() => setEvaluatingStudentId(null)}
+                                    studentsList={evaluatableStudents}
+                                    onSelectStudent={(studentId) => setEvaluatingStudentId(studentId)}
+                                    onGradeManual={async (grade, feedback, studentId, activityId) => {
+                                        await handleGradeManual(grade, feedback, studentId, activityId);
+                                    }}
+                                    onReject={async (studentId, feedback) => {
+                                        const { rejectManualActivityAction } = await import("@/features/teacher/actions/gradingActions");
+                                        const formData = new FormData();
+                                        formData.append("activityId", activity.id);
+                                        formData.append("userId", studentId);
+                                        formData.append("courseId", activity.courseId);
+                                        if (feedback) formData.append("feedback", feedback);
+                                        await rejectManualActivityAction(formData);
+                                        toast.success("Entrega rechazada");
+                                    }}
+                                />
+                            )}
+                        </DialogContent>
+                    </Dialog>
+                );
+            })()}
+
+            {activity.isGroupActivity && activity.groupScope === "ACTIVITY" && (
+                <ActivityGroupsModal
+                    isOpen={isGroupsModalOpen}
+                    onClose={() => setIsGroupsModalOpen(false)}
+                    courseId={activity.courseId}
+                    activityId={activity.id}
+                    activityTitle={activity.title}
+                    enrolledStudents={students.map((s: any) => ({ user: s }))}
+                    onGroupsUpdated={() => {
+                        window.location.reload();
+                    }}
+                />
             )}
         </div>
     );

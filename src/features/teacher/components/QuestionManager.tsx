@@ -507,14 +507,16 @@ export function QuestionManager({ evaluation }: { evaluation: any }) {
 
                                 <div className="flex-1 flex flex-col pt-1 min-h-0" data-color-mode={mode}>
                                     <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
-                                        <TabsList className="grid w-full grid-cols-2 h-8 flex-shrink-0 mb-1">
-                                            <TabsTrigger value="design" className="text-xs font-bold uppercase gap-2">
-                                                <Edit className="h-3 w-3" /> Diseño y Enunciado
-                                            </TabsTrigger>
-                                            <TabsTrigger value="reference" className="text-xs font-bold uppercase gap-2">
-                                                <CheckCircle2 className="h-3 w-3 text-green-500" /> Respuesta de Referencia
-                                            </TabsTrigger>
-                                        </TabsList>
+                                        <div className="w-full overflow-x-auto scrollbar-none pb-1 shrink-0">
+                                            <TabsList className="inline-flex w-max min-w-full sm:grid sm:grid-cols-2 h-auto min-h-8 flex-shrink-0 mb-1 p-1 gap-1">
+                                                <TabsTrigger value="design" className="text-xs font-bold uppercase gap-2 shrink-0 px-3 py-1 whitespace-nowrap">
+                                                    <Edit className="h-3 w-3 shrink-0" /> <span>Diseño y Enunciado</span>
+                                                </TabsTrigger>
+                                                <TabsTrigger value="reference" className="text-xs font-bold uppercase gap-2 shrink-0 px-3 py-1 whitespace-nowrap">
+                                                    <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" /> <span>Respuesta de Referencia</span>
+                                                </TabsTrigger>
+                                            </TabsList>
+                                        </div>
 
                                         <TabsContent value="design" className="flex-1 flex flex-col overflow-hidden m-0 focus-visible:outline-none focus-visible:ring-0">
                                             <MDEditor
@@ -600,10 +602,12 @@ export function QuestionManager({ evaluation }: { evaluation: any }) {
                                 </div>
 
                                 <Tabs value={activeTestTab} onValueChange={setActiveTestTab} className="flex-1 flex flex-col min-h-0">
-                                    <TabsList className="grid w-full grid-cols-2 h-7 flex-shrink-0 mb-1">
-                                        <TabsTrigger value="test" className="text-[10px] font-bold uppercase">Entrada</TabsTrigger>
-                                        <TabsTrigger value="result" className="text-[10px] font-bold uppercase">Evaluación IA</TabsTrigger>
-                                    </TabsList>
+                                    <div className="w-full overflow-x-auto scrollbar-none pb-1 shrink-0">
+                                        <TabsList className="inline-flex w-max min-w-full sm:grid sm:grid-cols-2 h-auto min-h-7 flex-shrink-0 mb-1 p-0.5 gap-1">
+                                            <TabsTrigger value="test" className="text-[10px] font-bold uppercase shrink-0 px-3 py-1 whitespace-nowrap">Entrada</TabsTrigger>
+                                            <TabsTrigger value="result" className="text-[10px] font-bold uppercase shrink-0 px-3 py-1 whitespace-nowrap">Evaluación IA</TabsTrigger>
+                                        </TabsList>
+                                    </div>
 
                                     <TabsContent value="test" className="flex-1 flex flex-col overflow-hidden m-0 pt-2 pb-0">
                                         <div className="flex flex-col gap-2 flex-1 overflow-hidden">

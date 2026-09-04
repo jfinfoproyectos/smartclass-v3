@@ -6,7 +6,7 @@ import { isValidPdfUrl } from "@/lib/utils";
 const activitiesCache = new Map<string, any>();
 
 export const activityService = {
-    async createActivity(data: { title: string; description?: string; statement?: string; filePaths?: string; deadline: Date; openDate?: Date; courseId: string; type?: "GITHUB" | "MANUAL" | "PDF_REVIEW" | "CODE_PROJECT"; weight?: number; maxAttempts?: number; allowLinkSubmission?: boolean }) {
+    async createActivity(data: { title: string; description?: string; statement?: string; filePaths?: string; deadline: Date; openDate?: Date; courseId: string; type?: "GITHUB" | "MANUAL" | "PDF_REVIEW" | "CODE_PROJECT" | "CODE_CHALLENGE" | "VIDEO_PITCH" | "AI_INTERVIEW" | "DB_MODELING" | "AUDIO_DEFENSE"; weight?: number; maxAttempts?: number; allowLinkSubmission?: boolean; isGroupActivity?: boolean; groupScope?: "COURSE" | "ACTIVITY" }) {
         // Get max order for the course
         const maxOrderActivity = await prisma.activity.findFirst({
             where: { courseId: data.courseId },
@@ -21,11 +21,13 @@ export const activityService = {
                 weight: data.weight || 1.0,
                 maxAttempts: data.maxAttempts || 1,
                 order: newOrder,
+                isGroupActivity: data.isGroupActivity ?? false,
+                groupScope: data.groupScope || "COURSE",
             },
         });
     },
 
-    async updateActivity(id: string, data: { title?: string; description?: string; statement?: string; filePaths?: string; deadline?: Date; openDate?: Date; type?: "GITHUB" | "MANUAL" | "PDF_REVIEW" | "CODE_PROJECT"; weight?: number; maxAttempts?: number; allowLinkSubmission?: boolean }) {
+    async updateActivity(id: string, data: { title?: string; description?: string; statement?: string; filePaths?: string; deadline?: Date; openDate?: Date; type?: "GITHUB" | "MANUAL" | "PDF_REVIEW" | "CODE_PROJECT" | "CODE_CHALLENGE" | "VIDEO_PITCH" | "AI_INTERVIEW" | "DB_MODELING" | "AUDIO_DEFENSE"; weight?: number; maxAttempts?: number; allowLinkSubmission?: boolean; isGroupActivity?: boolean; groupScope?: "COURSE" | "ACTIVITY" }) {
         return await prisma.activity.update({
             where: { id },
             data,
@@ -129,6 +131,51 @@ export const activityService = {
         const isTeacherGrading = data.grade !== undefined || data.feedback !== undefined;
         const isRejected = existingSubmission?.grade === null && (existingSubmission?.feedback?.includes("[ENTREGA RECHAZADA]") ?? false);
 
+        // Validación de actividad grupal (solo el líder puede entregar)
+        let studentGroupInfo: any = null;
+        if (activity.isGroupActivity) {
+            const isActivityScope = (activity as any).groupScope === "ACTIVITY";
+            studentGroupInfo = await prisma.studentGroupMember.findFirst({
+                where: {
+                    userId: data.userId,
+                    group: isActivityScope
+                        ? { activityId: activity.id }
+                        : { courseId: activity.courseId, activityId: null }
+                },
+                include: {
+                    group: {
+                        include: {
+                            leader: {
+                                select: { id: true, name: true }
+                            },
+                            members: true
+                        }
+                    }
+                }
+            });
+
+            if (!isTeacherGrading) {
+                if (!studentGroupInfo) {
+                    throw new Error(
+                        isActivityScope
+                            ? "Esta actividad es grupal con equipos exclusivos. Debes pertenecer a un grupo asignado para esta actividad para realizar la entrega."
+                            : "Esta actividad es grupal. Debes pertenecer a un grupo de trabajo asignado en el curso para realizar la entrega."
+                    );
+                }
+
+                const isLeader = studentGroupInfo.isLeader || studentGroupInfo.group.leaderId === data.userId;
+                if (!isLeader) {
+                    const leaderName = studentGroupInfo.group.leader?.name || "el líder de tu grupo";
+                    throw new Error(`Esta actividad es grupal. Únicamente el líder del grupo (${leaderName}) puede realizar la entrega.`);
+                }
+            }
+        }
+
+        // Check if deadline has passed (for student submissions and re-evaluation requests)
+        if (!isTeacherGrading && activity.deadline && new Date(activity.deadline) < new Date()) {
+            throw new Error("La fecha límite para esta actividad ha pasado. Ya no se aceptan entregas ni solicitudes de reevaluación.");
+        }
+
         // Check max attempts (bypass for MANUAL activities, teacher grading, or rejected activities)
         const currentAttempts = existingSubmission?.attemptCount || 0;
         if (!isTeacherGrading && activity.type !== "MANUAL" && !isRejected && currentAttempts >= activity.maxAttempts) {
@@ -187,15 +234,9 @@ export const activityService = {
         let grade = data.grade !== undefined ? data.grade : null;
         let feedback = data.feedback !== undefined ? data.feedback : null;
 
-        // 3. Upsert submission with grade (if available)
-        // For multiple attempts, keep the highest grade AND the feedback from that best attempt
-        const existingGrade = existingSubmission?.grade ?? null;
-        const bestGradeIsExisting = existingGrade !== null && grade !== null && existingGrade > grade;
-        const finalGrade = existingGrade !== null && grade !== null
-            ? Math.max(existingGrade, grade)
-            : grade;
-        // Preserve feedback from the attempt with the highest grade
-        const finalFeedback = bestGradeIsExisting ? existingSubmission!.feedback : feedback;
+        // 3. Upsert submission with grade and feedback from the latest action (AI or Teacher)
+        const finalGrade = grade !== undefined ? grade : (existingSubmission?.grade ?? null);
+        const finalFeedback = feedback !== undefined ? feedback : (existingSubmission?.feedback ?? null);
 
         // Determine attemptCount update
         let attemptUpdate: any = undefined;
@@ -218,6 +259,10 @@ export const activityService = {
             }
         }
 
+        // Determine if student is requesting a re-evaluation for an already graded submission
+        const isReevaluationRequest = !isTeacherGrading && existingSubmission?.grade !== null && existingSubmission?.grade !== undefined;
+        const reevaluationRequestedValue = isTeacherGrading ? false : (isReevaluationRequest ? true : (existingSubmission?.reevaluationRequested ?? false));
+
         const submission = await prisma.submission.upsert({
             where: {
                 userId_activityId: {
@@ -230,6 +275,7 @@ export const activityService = {
                 grade: finalGrade,
                 feedback: finalFeedback,
                 attemptCount: attemptUpdate,
+                reevaluationRequested: reevaluationRequestedValue,
                 lastSubmittedAt: new Date(),
             },
             create: {
@@ -239,12 +285,97 @@ export const activityService = {
                 grade: grade,
                 feedback: feedback,
                 attemptCount: 1,
+                reevaluationRequested: isReevaluationRequest,
                 lastSubmittedAt: new Date(),
             },
             include: {
                 activity: true,
             },
         });
+
+        // Replicación para actividades grupales
+        if (activity.isGroupActivity) {
+            try {
+                if (!studentGroupInfo) {
+                    const isActivityScope = (activity as any).groupScope === "ACTIVITY";
+                    studentGroupInfo = await prisma.studentGroupMember.findFirst({
+                        where: {
+                            userId: data.userId,
+                            group: isActivityScope
+                                ? { activityId: activity.id }
+                                : { courseId: activity.courseId, activityId: null }
+                        },
+                        include: {
+                            group: {
+                                include: {
+                                    members: true
+                                }
+                            }
+                        }
+                    });
+                }
+
+                if (studentGroupInfo?.group?.members) {
+                    const otherMembers = studentGroupInfo.group.members.filter(
+                        (m: any) => m.userId !== data.userId
+                    );
+
+                    for (const member of otherMembers) {
+                        if (isTeacherGrading) {
+                            // Replicar calificación y feedback al integrante
+                            await prisma.submission.upsert({
+                                where: {
+                                    userId_activityId: {
+                                        userId: member.userId,
+                                        activityId: data.activityId,
+                                    }
+                                },
+                                update: {
+                                    grade: finalGrade,
+                                    feedback: finalFeedback,
+                                    url: data.url || submission.url,
+                                    reevaluationRequested: false,
+                                },
+                                create: {
+                                    url: data.url || submission.url,
+                                    activityId: data.activityId,
+                                    userId: member.userId,
+                                    grade: finalGrade,
+                                    feedback: finalFeedback,
+                                    attemptCount: 1,
+                                    reevaluationRequested: false,
+                                    lastSubmittedAt: new Date(),
+                                }
+                            });
+                        } else {
+                            // Replicar entrega del líder a los integrantes del equipo
+                            await prisma.submission.upsert({
+                                where: {
+                                    userId_activityId: {
+                                        userId: member.userId,
+                                        activityId: data.activityId,
+                                    }
+                                },
+                                update: {
+                                    url: data.url,
+                                    attemptCount: attemptUpdate,
+                                    lastSubmittedAt: new Date(),
+                                },
+                                create: {
+                                    url: data.url,
+                                    activityId: data.activityId,
+                                    userId: member.userId,
+                                    attemptCount: 1,
+                                    lastSubmittedAt: new Date(),
+                                }
+                            });
+                        }
+                    }
+                }
+            } catch (groupRepError) {
+                console.error("Error replicating group submission/grade:", groupRepError);
+            }
+        }
 
         return submission;
     },
@@ -285,9 +416,6 @@ export const activityService = {
             );
 
             let newFeedback = gradingResult.feedback;
-            if (gradingResult.apiRequestsCount) {
-                newFeedback += `\n\n*(Peticiones a la API de Gemini: ${gradingResult.apiRequestsCount})*`;
-            }
 
             return await prisma.submission.update({
                 where: { id: submissionId },

@@ -215,6 +215,17 @@ export const evaluationService = {
         courseId: string;
         startTime: Date;
         endTime: Date;
+        enableSurveillance?: boolean;
+        blockTabSwitch?: boolean;
+        requireFullscreen?: boolean;
+        blockMultipleDisplays?: boolean;
+        blockClipboard?: boolean;
+        maxWarnings?: number;
+        helpUrl?: string | null;
+        maxSupportAttempts?: number;
+        aiSupportDelaySeconds?: number;
+        wildcardAiHints?: number;
+        wildcardSecondChance?: number;
     }) {
         return await prisma.evaluationAttempt.create({
             data: {
@@ -222,6 +233,17 @@ export const evaluationService = {
                 courseId: data.courseId,
                 startTime: data.startTime,
                 endTime: data.endTime,
+                enableSurveillance: data.enableSurveillance ?? true,
+                blockTabSwitch: data.blockTabSwitch ?? true,
+                requireFullscreen: data.requireFullscreen ?? true,
+                blockMultipleDisplays: data.blockMultipleDisplays ?? true,
+                blockClipboard: data.blockClipboard ?? true,
+                maxWarnings: data.maxWarnings ?? 3,
+                helpUrl: data.helpUrl,
+                maxSupportAttempts: data.maxSupportAttempts ?? 3,
+                aiSupportDelaySeconds: data.aiSupportDelaySeconds ?? 60,
+                wildcardAiHints: data.wildcardAiHints ?? 0,
+                wildcardSecondChance: data.wildcardSecondChance ?? 0,
             }
         });
     },
@@ -236,14 +258,66 @@ export const evaluationService = {
         evaluationId?: string;
         startTime?: Date;
         endTime?: Date;
+        enableSurveillance?: boolean;
+        blockTabSwitch?: boolean;
+        requireFullscreen?: boolean;
+        blockMultipleDisplays?: boolean;
+        blockClipboard?: boolean;
+        maxWarnings?: number;
+        helpUrl?: string | null;
+        maxSupportAttempts?: number;
+        aiSupportDelaySeconds?: number;
+        wildcardAiHints?: number;
+        wildcardSecondChance?: number;
     }) {
+        const updateData: any = {};
+
+        if (data.evaluationId) {
+            updateData.evaluation = { connect: { id: data.evaluationId } };
+        }
+        if (data.startTime && !isNaN(data.startTime.getTime())) {
+            updateData.startTime = data.startTime;
+        }
+        if (data.endTime && !isNaN(data.endTime.getTime())) {
+            updateData.endTime = data.endTime;
+        }
+        if (data.enableSurveillance !== undefined) {
+            updateData.enableSurveillance = data.enableSurveillance;
+        }
+        if (data.blockTabSwitch !== undefined) {
+            updateData.blockTabSwitch = data.blockTabSwitch;
+        }
+        if (data.requireFullscreen !== undefined) {
+            updateData.requireFullscreen = data.requireFullscreen;
+        }
+        if (data.blockMultipleDisplays !== undefined) {
+            updateData.blockMultipleDisplays = data.blockMultipleDisplays;
+        }
+        if (data.blockClipboard !== undefined) {
+            updateData.blockClipboard = data.blockClipboard;
+        }
+        if (data.maxWarnings !== undefined) {
+            updateData.maxWarnings = data.maxWarnings;
+        }
+        if (data.helpUrl !== undefined) {
+            updateData.helpUrl = data.helpUrl;
+        }
+        if (data.maxSupportAttempts !== undefined) {
+            updateData.maxSupportAttempts = data.maxSupportAttempts;
+        }
+        if (data.aiSupportDelaySeconds !== undefined) {
+            updateData.aiSupportDelaySeconds = data.aiSupportDelaySeconds;
+        }
+        if (data.wildcardAiHints !== undefined) {
+            updateData.wildcardAiHints = data.wildcardAiHints;
+        }
+        if (data.wildcardSecondChance !== undefined) {
+            updateData.wildcardSecondChance = data.wildcardSecondChance;
+        }
+
         return await prisma.evaluationAttempt.update({
             where: { id: attemptId },
-            data: {
-                evaluationId: data.evaluationId,
-                startTime: data.startTime,
-                endTime: data.endTime,
-            },
+            data: updateData,
             include: {
                 evaluation: {
                     select: { title: true }

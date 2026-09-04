@@ -48,6 +48,7 @@ interface StudentAttendanceSummaryProps {
     courseId: string;
     userId: string;
     readonly?: boolean;
+    hideHeader?: boolean;
 }
 
 interface AttendanceRecord {
@@ -60,7 +61,7 @@ interface AttendanceRecord {
     departureTime?: string | Date | null;
 }
 
-export function StudentAttendanceSummary({ courseId, userId, readonly = false }: StudentAttendanceSummaryProps) {
+export function StudentAttendanceSummary({ courseId, userId, readonly = false, hideHeader = false }: StudentAttendanceSummaryProps) {
     const [stats, setStats] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -182,12 +183,14 @@ export function StudentAttendanceSummary({ courseId, userId, readonly = false }:
 
     return (
         <div className="space-y-4">
-            <div className="flex justify-between items-center mb-4">
-                <h3 className="text-2xl font-bold flex items-center gap-2">
-                    <Clock className="h-4 w-4" />
-                    Historial de Inasistencias
-                </h3>
-            </div>
+            {!hideHeader && (
+                <div className="flex justify-between items-center mb-4 border-b border-border/40 pb-2">
+                    <h3 className="text-xl font-semibold flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-primary" />
+                        Historial de Inasistencias
+                    </h3>
+                </div>
+            )}
 
             <div className="rounded-xl border border-border/50 overflow-x-auto shadow-sm">
                 <Table className="min-w-[600px]">

@@ -45,7 +45,7 @@ export async function gradeGoogleColabAction(activityId: string, colabUrl: strin
         activityId,
         userId: session.user.id,
         grade: result.grade,
-        feedback: result.feedback + (result.apiRequestsCount ? `\n\n*(Peticiones a la API de Gemini: ${result.apiRequestsCount})*` : "")
+        feedback: result.feedback
     });
 
     revalidatePath("/dashboard/student");

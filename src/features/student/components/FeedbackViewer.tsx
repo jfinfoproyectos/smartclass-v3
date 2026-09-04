@@ -23,14 +23,29 @@ export function FeedbackViewer({ feedback }: FeedbackViewerProps) {
     // Replace literal escaped newlines with actual newlines
     let formattedFeedback = typeof feedback === 'string' ? feedback.replace(/\\n/g, '\n') : feedback;
 
-    // Fix AI SDK / Gemini artifacts where newlines were completely stripped into spaces (Invalid JSON generation bug)
     if (typeof formattedFeedback === 'string') {
+        // Fix URLs containing newlines/spaces inside markdown link parentheses: `[label](https://foo \n\n bar)` -> `[label](https://foobar)`
+        formattedFeedback = formattedFeedback.replace(/(\]\()([\s\S]*?)(\))/g, (match, p1, p2, p3) => {
+            if (p2.includes('http://') || p2.includes('https://') || p2.includes('/')) {
+                const cleanedUrl = p2.replace(/[\r\n\s]+/g, '');
+                return `${p1}${cleanedUrl}${p3}`;
+            }
+            return match;
+        });
+
+        // Strip legacy API request count strings: `*(Calificado por IA - Peticiones API: N)*` or `*(Peticiones a la API de Gemini: N)*`
         formattedFeedback = formattedFeedback
-            // Fix tables where newlines became spaces: `| |` -> `|\n|`
-            .replace(/\|\s+\|/g, '|\n|')
+            .replace(/\n\s*\*\((?:Calificado por IA - )?Peticiones (?:a la API de Gemini|API):?\s*\d+\)\*/gi, '')
+            .replace(/\*\((?:Calificado por IA - )?Peticiones (?:a la API de Gemini|API):?\s*\d+\)\*/gi, '');
+
+        formattedFeedback = formattedFeedback
+            // Fix double pipes between table rows: `| |` or `||` -> `|\n|`
+            .replace(/\|[ \t]*\|/g, '|\n|')
+            // Fix glued pipe table rows without newlines: `| ... | [File]` -> `| ... |\n| [File]`
+            .replace(/(\|\s*(?:Aprobado|Requiere mejoras|Rechazado|[0-5]\.[0-9]|-\s*))\s+(\|\s*\[)/gi, '$1\n$2')
             // Fix headers attached to table ends
-            .replace(/\|\s+(#{1,4}\s)/g, '|\n\n$1')
-            .replace(/Evaluado\s+\|\s+(#{1,4}\s)/g, 'Evaluado |\n\n$1')
+            .replace(/\|\s*(#{1,4}\s)/g, '|\n\n$1')
+            .replace(/Evaluado\s+\|\s*(#{1,4}\s)/g, 'Evaluado |\n\n$1')
             // Fix inline headers
             .replace(/([^\n])\s+(#{2,4}\s)/g, '$1\n\n$2')
             // Separate keywords from the headers so they aren't fully bolded
@@ -44,22 +59,47 @@ export function FeedbackViewer({ feedback }: FeedbackViewerProps) {
     }
 
     return (
-        <div data-color-mode={mode} className="w-full max-w-full overflow-hidden [&_pre]:whitespace-pre-wrap! [&_pre]:wrap-break-word! [&_table]:w-full! [&_td]:wrap-break-word!">
+        <div data-color-mode={mode} className="w-full max-w-full overflow-x-auto [&_pre]:whitespace-pre-wrap! [&_pre]:wrap-break-word!">
             <MDEditor.Markdown source={formattedFeedback} style={{ background: 'transparent' }} />
             <style jsx global>{`
-                /* Tables - responsive handling */
+                /* Clean, responsive Markdown Table Styling */
                 .wmde-markdown table {
-                    display: block;
-                    width: 100%;
-                    overflow-x: auto;
-                    -webkit-overflow-scrolling: touch;
+                    display: table !important;
+                    width: 100% !important;
+                    border-collapse: collapse !important;
+                    table-layout: auto !important;
+                    margin-top: 1rem !important;
+                    margin-bottom: 1rem !important;
+                    font-size: 0.825rem !important;
                 }
-                .wmde-markdown table thead,
-                .wmde-markdown table tbody,
+                .wmde-markdown table thead {
+                    display: table-header-group !important;
+                }
+                .wmde-markdown table tbody {
+                    display: table-row-group !important;
+                }
                 .wmde-markdown table tr {
-                    display: table;
-                    width: 100%;
-                    table-layout: fixed;
+                    display: table-row !important;
+                    border-bottom: 1px solid var(--border, rgba(120,120,120,0.2)) !important;
+                }
+                .wmde-markdown table th,
+                .wmde-markdown table td {
+                    display: table-cell !important;
+                    padding: 0.5rem 0.75rem !important;
+                    text-align: left !important;
+                    word-break: break-word !important;
+                    overflow-wrap: anywhere !important;
+                    vertical-align: top !important;
+                    border: 1px solid var(--border, rgba(120,120,120,0.2)) !important;
+                }
+                .wmde-markdown table th {
+                    font-weight: 700 !important;
+                    background-color: var(--muted, rgba(120,120,120,0.1)) !important;
+                }
+                .wmde-markdown table a {
+                    word-break: break-all !important;
+                    overflow-wrap: anywhere !important;
+                    color: var(--primary, #3b82f6) !important;
                 }
                 
                 /* Inline code - using primary color from theme */

@@ -100,17 +100,15 @@ export function TeacherCourseHeader({
                     </div>
                 </div>
 
-                {/* Row 2: Content Navigation */}
-                <div className="border-b border-border/40 bg-muted/30">
-                    <div className="overflow-x-auto scrollbar-none w-full flex items-center justify-start lg:justify-center px-3 py-1.5">
-                        <TabsList className="flex w-max lg:w-full lg:grid lg:grid-cols-9 h-10 p-1 bg-muted/60 dark:bg-muted/30 rounded-xl gap-1 border border-border/40 shadow-none min-w-full">
+                {/* Row 2: Content Navigation (Pestañas Reales) */}
+                <div className="bg-background border-b border-border/60">
+                    <div className="overflow-x-auto scrollbar-none w-full flex items-center justify-start lg:justify-center px-4">
+                        <TabsList className="!flex h-11 w-max lg:w-full lg:max-w-6xl lg:grid lg:grid-cols-7 !bg-transparent !p-0 !border-0 !rounded-none !shadow-none gap-0 sm:gap-1">
                             <NavTab value="activities" icon={<ClipboardCheck className="h-4 w-4" />} label="Actividades" />
                             <NavTab value="students" icon={<Users className="h-4 w-4" />} label="Estudiantes" />
                             <NavTab value="evaluations" icon={<FileCheck className="h-4 w-4" />} label="Evaluaciones" />
                             <NavTab value="grades" icon={<LayoutDashboard className="h-4 w-4" />} label="Calificaciones" />
                             <NavTab value="stats" icon={<BarChart3 className="h-4 w-4" />} label="Estadísticas" />
-                            <NavTab value="roulette" icon={<Dices className="h-4 w-4" />} label="Ruleta" />
-                            <NavTab value="groups" icon={<Settings2 className="h-4 w-4" />} label="Grupos" />
                             <NavTab value="share" icon={<Share2 className="h-4 w-4" />} label="Compartir" />
                             <NavTab value="docs" icon={<BookOpenText className="h-4 w-4" />} label="Documentación" />
                         </TabsList>
@@ -150,13 +148,18 @@ function NavTab({ value, icon, label }: { value: string, icon: React.ReactNode, 
             value={value} 
             onClick={handleClick}
             disabled={isPending}
-            className="group relative flex items-center justify-center gap-2 h-8 px-3 text-xs font-semibold rounded-lg transition-all hover:bg-background/40 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm disabled:opacity-40 whitespace-nowrap shrink-0"
+            className="group relative flex items-center justify-center gap-2 h-11 px-4 text-xs font-semibold !rounded-none !border-0 !border-b-2 !border-transparent transition-all text-muted-foreground hover:text-foreground hover:!border-border/80 data-[state=active]:!border-primary data-[state=active]:!text-primary data-[state=active]:font-bold data-[state=active]:!bg-transparent data-[state=active]:!shadow-none disabled:opacity-40 whitespace-nowrap shrink-0 cursor-pointer"
         >
-            <span className="group-data-[state=active]:text-primary transition-colors">
-                {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : icon}
+            <span className="transition-colors group-data-[state=active]:text-primary">
+                {isPending ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : icon}
             </span>
-            <span className="hidden sm:inline group-data-[state=active]:text-primary transition-colors">{label}</span>
-            {isPending && <span className="absolute -top-1 -right-1 flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span></span>}
+            <span className="transition-colors group-data-[state=active]:text-primary">{label}</span>
+            {isPending && (
+                <span className="absolute top-2 right-1 flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+                </span>
+            )}
         </TabsTrigger>
     );
 }

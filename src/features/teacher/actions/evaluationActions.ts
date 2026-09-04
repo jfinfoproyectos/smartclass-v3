@@ -243,8 +243,27 @@ export async function assignEvaluationAction(formData: FormData) {
     const startTimeStr = formData.get("startTime") as string;
     const endTimeStr = formData.get("endTime") as string;
 
+    const enableSurveillance = formData.has("enableSurveillance") ? formData.get("enableSurveillance") === "true" : true;
+    const blockTabSwitch = formData.has("blockTabSwitch") ? formData.get("blockTabSwitch") === "true" : true;
+    const requireFullscreen = formData.has("requireFullscreen") ? formData.get("requireFullscreen") === "true" : true;
+    const blockMultipleDisplays = formData.has("blockMultipleDisplays") ? formData.get("blockMultipleDisplays") === "true" : true;
+    const blockClipboard = formData.has("blockClipboard") ? formData.get("blockClipboard") === "true" : true;
+    const maxWarningsStr = formData.get("maxWarnings") as string;
+    const maxWarnings = maxWarningsStr ? parseInt(maxWarningsStr, 10) : 3;
+
+    const helpUrl = (formData.get("helpUrl") as string) || null;
+    const maxSupportAttemptsStr = formData.get("maxSupportAttempts") as string;
+    const aiSupportDelaySecondsStr = formData.get("aiSupportDelaySeconds") as string;
+    const wildcardAiHintsStr = formData.get("wildcardAiHints") as string;
+    const wildcardSecondChanceStr = formData.get("wildcardSecondChance") as string;
+
+    const maxSupportAttempts = maxSupportAttemptsStr ? parseInt(maxSupportAttemptsStr, 10) : 3;
+    const aiSupportDelaySeconds = aiSupportDelaySecondsStr ? parseInt(aiSupportDelaySecondsStr, 10) : 60;
+    const wildcardAiHints = wildcardAiHintsStr ? parseInt(wildcardAiHintsStr, 10) : 0;
+    const wildcardSecondChance = wildcardSecondChanceStr ? parseInt(wildcardSecondChanceStr, 10) : 0;
+
     if (!evaluationId || !courseId || !startTimeStr || !endTimeStr) {
-        throw new Error("Faltan datos requeridos");
+        throw new Error("Faltan datos requeridos: debes seleccionar una evaluación y definir el horario de inicio y fin.");
     }
 
     const { evaluationService } = await import("../services/evaluationService");
@@ -254,6 +273,17 @@ export async function assignEvaluationAction(formData: FormData) {
         courseId,
         startTime: new Date(startTimeStr),
         endTime: new Date(endTimeStr),
+        enableSurveillance,
+        blockTabSwitch,
+        requireFullscreen,
+        blockMultipleDisplays,
+        blockClipboard,
+        maxWarnings,
+        helpUrl,
+        maxSupportAttempts,
+        aiSupportDelaySeconds,
+        wildcardAiHints,
+        wildcardSecondChance,
     });
 
     // 🎯 AUDIT LOG
@@ -471,16 +501,48 @@ export async function updateEvaluationAssignmentAction(formData: FormData) {
     if (!session || session.user.role !== "teacher") throw new Error("Unauthorized");
 
     const attemptId = formData.get("attemptId") as string;
-    const evaluationId = formData.get("evaluationId") as string;
-    const startTime = new Date(formData.get("startTime") as string);
-    const endTime = new Date(formData.get("endTime") as string);
+    const evaluationId = (formData.get("evaluationId") as string) || undefined;
+    const startTimeRaw = formData.get("startTime") as string;
+    const endTimeRaw = formData.get("endTime") as string;
+    const startTime = startTimeRaw ? new Date(startTimeRaw) : undefined;
+    const endTime = endTimeRaw ? new Date(endTimeRaw) : undefined;
     const courseId = formData.get("courseId") as string;
+
+    const enableSurveillance = formData.has("enableSurveillance") ? formData.get("enableSurveillance") === "true" : true;
+    const blockTabSwitch = formData.has("blockTabSwitch") ? formData.get("blockTabSwitch") === "true" : true;
+    const requireFullscreen = formData.has("requireFullscreen") ? formData.get("requireFullscreen") === "true" : true;
+    const blockMultipleDisplays = formData.has("blockMultipleDisplays") ? formData.get("blockMultipleDisplays") === "true" : true;
+    const blockClipboard = formData.has("blockClipboard") ? formData.get("blockClipboard") === "true" : true;
+    const maxWarningsStr = formData.get("maxWarnings") as string;
+    const maxWarnings = maxWarningsStr ? parseInt(maxWarningsStr, 10) : 3;
+
+    const helpUrl = formData.has("helpUrl") ? ((formData.get("helpUrl") as string) || null) : undefined;
+    const maxSupportAttemptsStr = formData.get("maxSupportAttempts") as string;
+    const aiSupportDelaySecondsStr = formData.get("aiSupportDelaySeconds") as string;
+    const wildcardAiHintsStr = formData.get("wildcardAiHints") as string;
+    const wildcardSecondChanceStr = formData.get("wildcardSecondChance") as string;
+
+    const maxSupportAttempts = maxSupportAttemptsStr ? parseInt(maxSupportAttemptsStr, 10) : undefined;
+    const aiSupportDelaySeconds = aiSupportDelaySecondsStr ? parseInt(aiSupportDelaySecondsStr, 10) : undefined;
+    const wildcardAiHints = wildcardAiHintsStr ? parseInt(wildcardAiHintsStr, 10) : undefined;
+    const wildcardSecondChance = wildcardSecondChanceStr ? parseInt(wildcardSecondChanceStr, 10) : undefined;
 
     const { evaluationService } = await import("../services/evaluationService");
     const attempt = await evaluationService.updateEvaluationAssignment(attemptId, {
         evaluationId,
         startTime,
-        endTime
+        endTime,
+        enableSurveillance,
+        blockTabSwitch,
+        requireFullscreen,
+        blockMultipleDisplays,
+        blockClipboard,
+        maxWarnings,
+        helpUrl,
+        maxSupportAttempts,
+        aiSupportDelaySeconds,
+        wildcardAiHints,
+        wildcardSecondChance,
     });
 
     // 🎯 AUDIT LOG

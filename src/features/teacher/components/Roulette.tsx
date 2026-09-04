@@ -300,40 +300,40 @@ export function Roulette({ students: initialStudents, courseId }: RouletteProps)
     };
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-200px)] min-h-[600px]">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 h-[calc(100svh-185px)] max-h-[calc(100svh-185px)] min-h-0">
             {/* Main Stage */}
-            <div className="lg:col-span-2 flex flex-col gap-4">
-                <Card className="flex-1 flex flex-col items-center justify-center p-6 relative overflow-hidden border-2 shadow-lg bg-linear-to-b from-background to-muted/20">
-                    <div className="absolute top-4 left-4 z-10">
-                        <Badge variant="outline" className="text-sm px-3 py-1 bg-background/50 backdrop-blur">
-                            <Users className="w-3 h-3 mr-2" />
+            <div className="lg:col-span-2 flex flex-col min-h-0">
+                <Card className="flex-1 min-h-0 flex flex-col items-center justify-center p-3 sm:p-4 relative overflow-hidden border-2 shadow-lg bg-linear-to-b from-background to-muted/20">
+                    <div className="absolute top-3 left-3 z-10">
+                        <Badge variant="outline" className="text-xs px-2.5 py-0.5 bg-background/50 backdrop-blur">
+                            <Users className="w-3 h-3 mr-1.5" />
                             Disponibles: {candidates.length}
                         </Badge>
                     </div>
 
-                    <div className="absolute top-4 right-4 z-10 flex gap-2">
+                    <div className="absolute top-3 right-3 z-10 flex gap-1.5">
                         <Button
                             size="icon"
                             variant="outline"
-                            className="h-10 w-10 rounded-full bg-background/50 backdrop-blur"
+                            className="h-8 w-8 rounded-full bg-background/50 backdrop-blur"
                             onClick={() => setSoundEnabled(!soundEnabled)}
                             title={soundEnabled ? "Silenciar" : "Activar sonido"}
                         >
-                            {soundEnabled ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
+                            {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
                         </Button>
                         <Button
                             size="icon"
                             variant="outline"
-                            className="h-10 w-10 rounded-full bg-background/50 backdrop-blur"
+                            className="h-8 w-8 rounded-full bg-background/50 backdrop-blur"
                             onClick={handleReset}
                             disabled={isSpinning || (candidates.length === initialStudents.length)}
                             title="Reiniciar Ruleta"
                         >
-                            <RotateCcw className="h-5 w-5" />
+                            <RotateCcw className="h-4 w-4" />
                         </Button>
                     </div>
 
-                    <div className="relative w-full max-w-[500px] aspect-square flex items-center justify-center">
+                    <div className="relative w-full max-w-[min(440px,calc(100svh-280px))] aspect-square flex items-center justify-center my-auto">
                         <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-4 z-20 text-foreground drop-shadow-md">
                             <ChevronDown className="w-12 h-12 fill-current stroke-[4px]" />
                         </div>
@@ -418,8 +418,8 @@ export function Roulette({ students: initialStudents, courseId }: RouletteProps)
                 </Card>
             </div >
 
-            <div className="flex flex-col gap-4">
-                <Card className="flex-1 flex flex-col max-h-[calc(100vh-200px)]">
+            <div className="flex flex-col min-h-0">
+                <Card className="flex-1 min-h-0 flex flex-col h-full border-2 shadow-lg">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <Trophy className="w-5 h-5 text-yellow-500" />

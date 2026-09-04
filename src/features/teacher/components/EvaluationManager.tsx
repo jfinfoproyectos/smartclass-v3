@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
     Table,
     TableBody,
@@ -47,16 +48,13 @@ import {
 } from "@/components/ui/dialog";
 import { useTheme } from "next-themes";
 import Link from "next/link";
-import MDEditor from "@uiw/react-md-editor";
-import "@uiw/react-md-editor/markdown-editor.css";
-import "@uiw/react-markdown-preview/markdown.css";
 import { createEvaluationAction, deleteEvaluationAction, updateEvaluationAction, exportEvaluationAction, importEvaluationAction } from "@/features/teacher/actions/evaluationActions";
 import { toast } from "sonner";
 
 export function EvaluationManager({ evaluations }: { evaluations: any[] }) {
     const [isOpen, setIsOpen] = useState(false);
     const [editingEvaluation, setEditingEvaluation] = useState<any>(null);
-    const [description, setDescription] = useState("**Descripción de la evaluación**\n\n...");
+    const [description, setDescription] = useState("");
     const [searchTerm, setSearchTerm] = useState("");
     const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
     const [isImporting, setIsImporting] = useState(false);
@@ -72,13 +70,13 @@ export function EvaluationManager({ evaluations }: { evaluations: any[] }) {
 
     const handleOpenEdit = (evaluation: any) => {
         setEditingEvaluation(evaluation);
-        setDescription(evaluation.description || "**Descripción de la evaluación**\n\n...");
+        setDescription(evaluation.description || "");
         setIsOpen(true);
     };
 
     const handleOpenCreate = () => {
         setEditingEvaluation(null);
-        setDescription("**Descripción de la evaluación**\n\n...");
+        setDescription("");
         setIsOpen(true);
     };
 
@@ -169,7 +167,7 @@ export function EvaluationManager({ evaluations }: { evaluations: any[] }) {
                                     }
                                     setIsOpen(false);
                                     setEditingEvaluation(null);
-                                    setDescription("**Descripción de la evaluación**\n\n...");
+                                    setDescription("");
                                 }}
                                 className="flex flex-col h-full"
                             >
@@ -182,8 +180,8 @@ export function EvaluationManager({ evaluations }: { evaluations: any[] }) {
                                     <SheetTitle>{editingEvaluation ? "Editar Evaluación" : "Crear Nueva Evaluación"}</SheetTitle>
                                     <SheetDescription>
                                         {editingEvaluation
-                                            ? "Modifica la configuración de esta evaluación."
-                                            : "Configura los detalles básicos de la nueva evaluación. Podrás añadir preguntas una vez creada."}
+                                            ? "Modifica el título y la descripción de esta evaluación."
+                                            : "Define el título y la descripción de la evaluación. La programación, comodines y reglas se configuran al asignarla a un grupo."}
                                     </SheetDescription>
                                 </SheetHeader>
 
@@ -200,140 +198,21 @@ export function EvaluationManager({ evaluations }: { evaluations: any[] }) {
                                     </div>
 
                                     <div className="space-y-2">
-                                        <Label htmlFor="helpUrl">URL de Ayuda / Recursos (Opcional)</Label>
-                                        <Input
-                                            id="helpUrl"
-                                            name="helpUrl"
-                                            type="url"
-                                            placeholder="https://..."
-                                            defaultValue={editingEvaluation?.helpUrl || ""}
+                                        <Label htmlFor="description">Descripción</Label>
+                                        <Textarea
+                                            id="description"
+                                            name="description"
+                                            value={description}
+                                            onChange={(e) => setDescription(e.target.value)}
+                                            placeholder="Descripción del alcance, temas o propósito de esta evaluación..."
+                                            rows={6}
+                                            className="bg-background text-sm resize-y"
                                         />
-                                        <p className="text-xs text-muted-foreground">
-                                            Enlace a documentación o recursos adicionales permitidos durante la evaluación.
-                                        </p>
                                     </div>
-
-                                    <div className="space-y-2">
-                                        <Label htmlFor="descriptionEditor">Instrucciones / Descripción (Markdown)</Label>
-                                        <div className="border rounded-md overflow-hidden" data-color-mode={mode}>
-                                            <MDEditor
-                                                value={description}
-                                                onChange={(val) => setDescription(val || "")}
-                                                preview="edit"
-                                                height={200}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="duration">Duración (Minutos)</Label>
-                                            <Input
-                                                id="duration"
-                                                name="duration"
-                                                type="number"
-                                                min={1}
-                                                required
-                                                placeholder="Ej: 60"
-                                                defaultValue={editingEvaluation?.duration || 60}
-                                            />
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="maxAttempts">Intentos Permitidos</Label>
-                                            <Input
-                                                id="maxAttempts"
-                                                name="maxAttempts"
-                                                type="number"
-                                                min={1}
-                                                required
-                                                placeholder="Ej: 1"
-                                                defaultValue={editingEvaluation?.maxAttempts || 1}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <Label htmlFor="maxSupportAttempts">Intentos de Soporte (IA) por Pregunta</Label>
-                                        <Input
-                                            id="maxSupportAttempts"
-                                            name="maxSupportAttempts"
-                                            type="number"
-                                            min="0"
-                                            max="10"
-                                            defaultValue={editingEvaluation?.maxSupportAttempts ?? "3"}
-                                            required
-                                        />
-                                        <p className="text-xs text-muted-foreground">
-                                            Número de veces que el estudiante puede pedir evaluación a la IA por pregunta.
-                                        </p>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <Label htmlFor="aiSupportDelaySeconds">Tiempo de Espera entre Evaluaciones IA (Segundos)</Label>
-                                        <Input
-                                            id="aiSupportDelaySeconds"
-                                            name="aiSupportDelaySeconds"
-                                            type="number"
-                                            min="0"
-                                            defaultValue={editingEvaluation?.aiSupportDelaySeconds ?? "60"}
-                                            required
-                                        />
-                                        <p className="text-xs text-muted-foreground">
-                                            Tiempo que el estudiante debe esperar tras evaluar su respuesta antes de poder volver a evaluarla.
-                                        </p>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <Label htmlFor="expulsionPenalty">Penalidad por Expulsión (puntos a restar)</Label>
-                                        <Input
-                                            id="expulsionPenalty"
-                                            name="expulsionPenalty"
-                                            type="number"
-                                            min="0"
-                                            max="1"
-                                            step="0.05"
-                                            defaultValue={editingEvaluation?.expulsionPenalty ?? "0"}
-                                        />
-                                        <p className="text-xs text-muted-foreground">
-                                            Puntos a restar por cada expulsión (rango: <strong>0.00 – 1.00</strong>). Si es <strong>0</strong>, las expulsiones solo se registran sin afectar la nota.
-                                        </p>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <Label htmlFor="wildcardAiHints">🃏 Comodines: Pista de IA</Label>
-                                        <Input
-                                            id="wildcardAiHints"
-                                            name="wildcardAiHints"
-                                            type="number"
-                                            min="0"
-                                            max="10"
-                                            defaultValue={editingEvaluation?.wildcardAiHints ?? "0"}
-                                        />
-                                        <p className="text-xs text-muted-foreground">
-                                            Cantidad de pistas de IA disponibles para el estudiante durante toda la evaluación. La IA dará una pista orientativa sin revelar la respuesta. <strong>0 = deshabilitado</strong>.
-                                        </p>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <Label htmlFor="wildcardSecondChance">🃏 Comodines: Segunda Oportunidad</Label>
-                                        <Input
-                                            id="wildcardSecondChance"
-                                            name="wildcardSecondChance"
-                                            type="number"
-                                            min="0"
-                                            max="10"
-                                            defaultValue={editingEvaluation?.wildcardSecondChance ?? "0"}
-                                        />
-                                        <p className="text-xs text-muted-foreground">
-                                            Permite al estudiante reiniciar completamente una pregunta (borra respuesta, nota y feedback IA). <strong>0 = deshabilitado</strong>.
-                                        </p>
-                                    </div>
-
                                 </div>
 
                                 <SheetFooter className="px-6 py-4 border-t bg-muted/50">
-                                    <Button type="submit" size="lg" className="w-full sm:w-auto">
+                                    <Button type="submit" size="lg" className="w-full sm:w-auto font-bold">
                                         {editingEvaluation ? "Guardar Cambios" : "Guardar Evaluación"}
                                     </Button>
                                 </SheetFooter>

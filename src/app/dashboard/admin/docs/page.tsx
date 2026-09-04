@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { DeleteProjectDialog } from "@/features/documentation/components/admin/DeleteProjectDialog";
-import { Toaster } from "@/components/ui/sonner";
+
 import { formatName } from "@/lib/utils";
 import { DashboardContainer } from "@/components/ui/dashboard-container";
 
@@ -56,7 +56,6 @@ export default async function AdminDocsPage() {
 
   return (
     <DashboardContainer>
-      <Toaster />
       
       {/* Header Banner AI Canvas */}
       <div className="relative overflow-hidden rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-slate-900/90 text-white p-6 sm:p-8 shadow-xl">

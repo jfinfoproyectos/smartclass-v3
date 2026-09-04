@@ -31,7 +31,7 @@ import {
     SheetTrigger,
     SheetFooter,
 } from "@/components/ui/sheet";
-import { Plus, Search, UserPlus, Trash2, UserCheck, Eye, Calendar, MoreHorizontal, ShieldAlert, ShieldCheck, FileSpreadsheet, ClipboardX, Clock, ChevronDown, Users, UserMinus, Upload, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
+import { Plus, Search, UserPlus, Trash2, UserCheck, Eye, Calendar, MoreHorizontal, ShieldAlert, ShieldCheck, FileSpreadsheet, ClipboardX, Clock, ChevronDown, Users, UserMinus, Upload, CheckCircle2, XCircle, AlertCircle, FolderKanban } from "lucide-react";
 import {
     Tooltip,
     TooltipContent,
@@ -50,6 +50,7 @@ import { Badge } from "@/components/ui/badge";
 import { StudentActivityDetails } from './StudentActivityDetails';
 import { AttendanceManagementSheet } from './AttendanceManagementSheet';
 import { GroupAttendanceSheet } from './GroupAttendanceSheet';
+import { CourseGroupsModal } from './CourseGroupsModal';
 import { CourseReportPDFDocument } from './CourseReportPDFDocument';
 import { toast } from "sonner";
 import { pdf } from "@react-pdf/renderer";
@@ -90,6 +91,7 @@ export function StudentManager({
     // Attendance Management Sheet State
     const [isAttendanceSheetOpen, setIsAttendanceSheetOpen] = useState(false);
     const [isGroupAttendanceOpen, setIsGroupAttendanceOpen] = useState(false);
+    const [isGroupsModalOpen, setIsGroupsModalOpen] = useState(false);
     const [studentForAttendance, setStudentForAttendance] = useState<any | null>(null);
 
     // Add-student modal tab
@@ -729,6 +731,10 @@ export function StudentManager({
                             <Users className="mr-2 h-4 w-4 text-primary" />
                             Resumen de Asistencia
                         </Button>
+                        <Button variant="outline" onClick={() => setIsGroupsModalOpen(true)}>
+                            <FolderKanban className="mr-2 h-4 w-4 text-primary" />
+                            Grupos de Trabajo
+                        </Button>
                     </div>
 
                     <DropdownMenu>
@@ -943,6 +949,15 @@ export function StudentManager({
                     </TableBody>
                 </Table>
             </div>
+
+            {/* Modal de Gestión de Grupos de Estudiantes con Líder */}
+            <CourseGroupsModal
+                isOpen={isGroupsModalOpen}
+                onClose={() => setIsGroupsModalOpen(false)}
+                courseId={courseId}
+                courseTitle={courseTitle}
+                enrolledStudents={initialStudents}
+            />
         </div >
     );
 }

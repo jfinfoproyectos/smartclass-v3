@@ -23,12 +23,14 @@ export async function createActivityAction(formData: FormData) {
     const deadlineStr = formData.get("deadline") as string;
     const openDateStr = formData.get("openDate") as string;
     const courseId = formData.get("courseId") as string;
-    const type = formData.get("type") as "GITHUB" | "MANUAL" | "PDF_REVIEW" | "CODE_PROJECT";
+    const type = formData.get("type") as "GITHUB" | "MANUAL" | "PDF_REVIEW" | "CODE_PROJECT" | "CODE_CHALLENGE" | "VIDEO_PITCH" | "AI_INTERVIEW" | "DB_MODELING" | "AUDIO_DEFENSE";
     const weightStr = formData.get("weight") as string;
     const maxAttemptsStr = formData.get("maxAttempts") as string;
     const allowLinkSubmissionStr = formData.get("allowLinkSubmission") as string;
+    const isGroupActivityStr = formData.get("isGroupActivity") as string | null;
+    const groupScope = formData.get("groupScope") as string | null;
 
-    console.log("SERVER ACTION: createActivityAction received:", { title, courseId, type });
+    console.log("SERVER ACTION: createActivityAction received:", { title, courseId, type, isGroupActivity: isGroupActivityStr === "true", groupScope });
 
     const activity = await activityService.createActivity({
         title,
@@ -42,6 +44,8 @@ export async function createActivityAction(formData: FormData) {
         weight: weightStr ? parseFloat(weightStr) : 1.0,
         maxAttempts: maxAttemptsStr ? parseInt(maxAttemptsStr) : 1,
         allowLinkSubmission: allowLinkSubmissionStr === "true",
+        isGroupActivity: isGroupActivityStr === "true",
+        groupScope: (groupScope === "ACTIVITY" ? "ACTIVITY" : "COURSE") as "COURSE" | "ACTIVITY",
     });
 
     // 🎯 AUDIT LOG
@@ -94,10 +98,12 @@ export async function updateActivityAction(formData: FormData) {
     const deadlineStr = formData.get("deadline") as string | null;
     const openDateStr = formData.get("openDate") as string | null;
     const courseId = formData.get("courseId") as string;
-    const type = formData.get("type") as "GITHUB" | "MANUAL" | "PDF_REVIEW" | "CODE_PROJECT" | null;
+    const type = formData.get("type") as "GITHUB" | "MANUAL" | "PDF_REVIEW" | "CODE_PROJECT" | "CODE_CHALLENGE" | "VIDEO_PITCH" | "AI_INTERVIEW" | "DB_MODELING" | "AUDIO_DEFENSE" | null;
     const weightStr = formData.get("weight") as string | null;
     const maxAttemptsStr = formData.get("maxAttempts") as string | null;
     const allowLinkSubmissionStr = formData.get("allowLinkSubmission") as string | null;
+    const isGroupActivityStr = formData.get("isGroupActivity") as string | null;
+    const groupScope = formData.get("groupScope") as string | null;
 
     await activityService.updateActivity(id, {
         title: title || undefined,
@@ -110,6 +116,8 @@ export async function updateActivityAction(formData: FormData) {
         weight: weightStr ? parseFloat(weightStr) : undefined,
         maxAttempts: maxAttemptsStr ? parseInt(maxAttemptsStr) : undefined,
         allowLinkSubmission: allowLinkSubmissionStr ? allowLinkSubmissionStr === "true" : undefined,
+        isGroupActivity: isGroupActivityStr ? isGroupActivityStr === "true" : undefined,
+        groupScope: groupScope ? (groupScope as "COURSE" | "ACTIVITY") : undefined,
     });
 
     // 🎯 AUDIT LOG
@@ -174,4 +182,59 @@ export async function reorderActivitiesAction(courseId: string, activityIds: str
 
     await activityService.reorderActivities(courseId, activityIds);
     revalidatePath(`/dashboard/teacher/courses/${courseId}`);
+}
+
+export async function generateChecklistCriteriaAction(
+    statement: string, 
+    aiModelName?: string,
+    options?: {
+        isAlternative?: boolean;
+        existingCriteria?: Array<{ name: string; question?: string; expectedAnswer?: string }>;
+    }
+) {
+    const session = await getSession();
+    if (!session || session.user.role !== "teacher") {
+        throw new Error("Unauthorized");
+    }
+
+    const { generateChecklistCriteria } = await import("../services/ai/activityContentService");
+    return await generateChecklistCriteria(statement, session.user.id, aiModelName, options);
+}
+
+export async function verifyCriterionRelationAction(
+    statement: string,
+    criterion: {
+        name: string;
+        question?: string;
+        expectedAnswer?: string;
+        description?: string;
+    },
+    aiModelName?: string
+) {
+    const session = await getSession();
+    if (!session || session.user.role !== "teacher") {
+        throw new Error("Unauthorized");
+    }
+
+    const { verifyCriterionRelation } = await import("../services/ai/activityContentService");
+    return await verifyCriterionRelation(statement, criterion, session.user.id, aiModelName);
+}
+
+export async function balanceCriteriaPercentagesAction(
+    statement: string,
+    criteria: Array<{
+        id: string;
+        name: string;
+        question?: string;
+        description?: string;
+    }>,
+    aiModelName?: string
+) {
+    const session = await getSession();
+    if (!session || session.user.role !== "teacher") {
+        throw new Error("Unauthorized");
+    }
+
+    const { balanceCriteriaPercentagesWithAI } = await import("../services/ai/activityContentService");
+    return await balanceCriteriaPercentagesWithAI(statement, criteria, session.user.id, aiModelName);
 }

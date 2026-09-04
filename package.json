@@ -25,6 +25,7 @@
     "@google/genai": "^1.30.0",
     "@google/generative-ai": "^0.24.1",
     "@iconify/react": "^6.0.2",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@monaco-editor/react": "^4.7.0",
     "@orama/orama": "^3.1.18",
     "@prisma/adapter-pg": "^7.0.0",

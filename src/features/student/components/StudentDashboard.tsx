@@ -74,6 +74,8 @@ export function StudentDashboard({
                     enrollments={myEnrollments}
                     selectedCourse={selectedCourse}
                     onSelectCourse={handleSelectCourse}
+                    activeTab={activeTab}
+                    onTabChange={handleTabChange}
                     themes={themes}
                 />
             </div>
@@ -103,8 +105,8 @@ export function StudentDashboard({
                 </div>
             </div>
 
-            {/* Quick Student Bento Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            {/* Quick Student Bento Cards (Compact & Organized) */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
                 <AICanvasCard
                     title="Mis Cursos"
                     description="Asignaturas inscritas en este período"
@@ -114,11 +116,17 @@ export function StudentDashboard({
                     accentColor="from-primary/30 via-primary/15 to-transparent"
                     iconBgColor="bg-primary/10"
                     iconTextColor="text-primary"
+                    compact={true}
+                    actionLabel="Explorar módulo"
+                    actionText="Acceder →"
                 >
-                    <div className="pt-2">
-                        <div className="text-3xl font-black tracking-tight text-foreground">
+                    <div className="flex items-baseline gap-1.5 pt-0.5">
+                        <span className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
                             {activeEnrollmentsCount}
-                        </div>
+                        </span>
+                        <span className="text-xs font-semibold text-muted-foreground">
+                            {activeEnrollmentsCount === 1 ? "curso activo" : "cursos activos"}
+                        </span>
                     </div>
                 </AICanvasCard>
 
@@ -131,11 +139,17 @@ export function StudentDashboard({
                     accentColor="from-primary/30 via-primary/15 to-transparent"
                     iconBgColor="bg-primary/10"
                     iconTextColor="text-primary"
+                    compact={true}
+                    actionLabel="Explorar módulo"
+                    actionText="Acceder →"
                 >
-                    <div className="pt-2">
-                        <div className="text-3xl font-black tracking-tight text-foreground">
-                            {totalAttendanceCount} {totalAttendanceCount === 1 ? "Clase" : "Clases"}
-                        </div>
+                    <div className="flex items-baseline gap-1.5 pt-0.5">
+                        <span className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
+                            {totalAttendanceCount}
+                        </span>
+                        <span className="text-xs font-semibold text-muted-foreground">
+                            {totalAttendanceCount === 1 ? "clase registrada" : "clases registradas"}
+                        </span>
                     </div>
                 </AICanvasCard>
 
@@ -148,11 +162,17 @@ export function StudentDashboard({
                     accentColor="from-primary/30 via-primary/15 to-transparent"
                     iconBgColor="bg-primary/10"
                     iconTextColor="text-primary"
+                    compact={true}
+                    actionLabel="Explorar módulo"
+                    actionText="Acceder →"
                 >
-                    <div className="pt-2">
-                        <div className="text-3xl font-black tracking-tight text-foreground">
-                            {totalPendingActivities} {totalPendingActivities === 1 ? "Pendiente" : "Pendientes"}
-                        </div>
+                    <div className="flex items-baseline gap-1.5 pt-0.5">
+                        <span className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
+                            {totalPendingActivities}
+                        </span>
+                        <span className="text-xs font-semibold text-muted-foreground">
+                            {totalPendingActivities === 1 ? "pendiente" : "pendientes"}
+                        </span>
                     </div>
                 </AICanvasCard>
             </div>

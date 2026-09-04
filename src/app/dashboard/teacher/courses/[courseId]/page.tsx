@@ -37,6 +37,11 @@ export default async function Page({
     const { tab } = await searchParams;
     const activeTab = tab || "activities";
 
+    // Grupos y Ruleta se gestionan centralizadamente en Herramientas
+    if (activeTab === "groups" || activeTab === "roulette") {
+        redirect(`/dashboard/teacher/tools?courseId=${courseId}&tab=${activeTab}`);
+    }
+
     const course = await courseService.getCourseById(courseId);
 
     if (!course) {
@@ -56,7 +61,8 @@ export default async function Page({
         teacherEvaluationsResult, 
         gradesDataResult, 
         attendanceReportResult, 
-        availableProjectsResult
+        availableProjectsResult,
+        courseDocLinksResult
     ] = await Promise.allSettled([
         activityService.getCourseActivities(courseId),
         courseService.getCourseStudents(courseId),
@@ -65,7 +71,8 @@ export default async function Page({
         evaluationService.getTeacherEvaluations(session.user.id),
         gradeService.getCourseGradesData(courseId),
         getCourseAttendanceReportAction(courseId),
-        getTeacherDocProjectsAction()
+        getTeacherDocProjectsAction(),
+        courseService.getCourseDocLinks(courseId)
     ]);
 
     // Handle results with fallbacks
@@ -77,6 +84,22 @@ export default async function Page({
     const gradesData = gradesDataResult.status === 'fulfilled' ? gradesDataResult.value : { students: [], activities: [], evaluations: [], categories: [] };
     const attendanceReport = attendanceReportResult.status === 'fulfilled' ? attendanceReportResult.value : [];
     const availableProjects = availableProjectsResult.status === 'fulfilled' ? availableProjectsResult.value : [];
+    const courseDocLinks = courseDocLinksResult.status === 'fulfilled' ? courseDocLinksResult.value : [];
+
+    const courseHelpOptions = [
+        ...courseDocLinks.map((l: any) => ({
+            id: l.docProject?.id || l.id,
+            title: l.docProject?.name || "Documentación",
+            url: `/docs/${l.docProject?.slug || l.docProject?.id}`,
+            type: 'doc' as const,
+        })),
+        ...sharedContents.flatMap((sc: any) => ((sc.links as any[]) || []).map((link: any, idx: number) => ({
+            id: `${sc.id}-link-${idx}`,
+            title: link.title || link.url,
+            url: link.url,
+            type: 'link' as const,
+        })))
+    ];
 
     if (activitiesResult.status === 'rejected') console.error("Error loading activities:", activitiesResult.reason);
     if (gradesDataResult.status === 'rejected') console.error("Error loading grades:", gradesDataResult.reason);
@@ -86,9 +109,9 @@ export default async function Page({
         : [];
 
     return (
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar flex flex-col min-h-0">
+        <div className="flex-1 overflow-y-auto p-1 sm:p-2 custom-scrollbar flex flex-col min-h-0">
             <TabsContent value="activities" className="mt-0 outline-none">
-                <ActivityManager courseId={courseId} activities={activities} />
+                <ActivityManager courseId={courseId} activities={activities} enrolledStudents={students} />
             </TabsContent>
             <TabsContent value="students" className="mt-0 outline-none">
                 <StudentManager 
@@ -108,6 +131,7 @@ export default async function Page({
                     courseId={courseId}
                     attempts={evaluationAssignments}
                     teacherEvaluations={teacherEvaluations}
+                    courseHelpOptions={courseHelpOptions}
                 />
             </TabsContent>
             <TabsContent value="grades" className="mt-0 outline-none">

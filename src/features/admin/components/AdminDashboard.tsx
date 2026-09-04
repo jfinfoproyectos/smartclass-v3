@@ -142,8 +142,8 @@ export function AdminDashboard({ stats, recentActivity }: AdminDashboardProps) {
                 </div>
             </div>
 
-            {/* KPI Bento Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* KPI Bento Grid (Compact & Low Height) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 {kpis.map((kpi, idx) => (
                     <Link href={kpi.link} key={idx} className="block group h-full">
                         <AICanvasCard
@@ -155,10 +155,11 @@ export function AdminDashboard({ stats, recentActivity }: AdminDashboardProps) {
                             accentColor={kpi.accentColor}
                             iconBgColor={kpi.iconBgColor}
                             iconTextColor={kpi.iconTextColor}
+                            compact={true}
                             className="h-full"
                         >
-                            <div className="pt-2">
-                                <div className="text-3xl font-black tracking-tight text-foreground">
+                            <div className="pt-0.5">
+                                <div className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
                                     {kpi.value}
                                 </div>
                             </div>

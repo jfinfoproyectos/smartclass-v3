@@ -7,7 +7,7 @@ import { z } from "zod";
  * Attempts to fetch a PDF from a URL and return its text content.
  * Supports Google Drive share links.
  */
-async function fetchPdfContent(url: string): Promise<{ data: Uint8Array; mimeType: string } | null> {
+export async function fetchPdfContent(url: string): Promise<{ data: Uint8Array; mimeType: string } | null> {
     let fetchUrl = url;
 
     // Convert Google Drive share links to a direct download URL
@@ -62,7 +62,7 @@ export async function gradePdfReviewSubmission(
     criteria: string,
     pdfUrl: string,
     teacherId?: string,
-    gradingMode: string = "normal"
+    gradingMode: string = "moderate"
 ): Promise<GradingResult> {
     const model = await getAIModel(teacherId);
 

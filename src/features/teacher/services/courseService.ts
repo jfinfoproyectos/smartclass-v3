@@ -175,6 +175,24 @@ export const courseService = {
         });
     },
 
+    async getCourseDocLinks(courseId: string) {
+        return await prisma.courseDocProject.findMany({
+            where: { courseId },
+            include: {
+                docProject: {
+                    select: {
+                        id: true,
+                        name: true,
+                        slug: true,
+                        icon: true,
+                        description: true,
+                    }
+                }
+            },
+            orderBy: { order: 'asc' }
+        });
+    },
+
     async deleteCourse(courseId: string) {
         return await prisma.course.delete({
             where: { id: courseId },
@@ -429,7 +447,7 @@ export const courseService = {
             return null;
         }
 
-        return await prisma.activity.findUnique({
+        const activityData = await prisma.activity.findUnique({
             where: { id: activityId },
             include: {
                 course: {
@@ -444,6 +462,44 @@ export const courseService = {
                 },
             },
         });
+
+        if (activityData && activityData.isGroupActivity) {
+            const isActivityScope = (activityData as any).groupScope === "ACTIVITY";
+            const membership = await prisma.studentGroupMember.findFirst({
+                where: {
+                    userId,
+                    group: isActivityScope
+                        ? { activityId: activityData.id }
+                        : { courseId: activityData.courseId, activityId: null }
+                },
+                include: {
+                    group: {
+                        include: {
+                            leader: {
+                                select: { id: true, name: true, image: true, profile: true }
+                            },
+                            members: {
+                                include: {
+                                    user: {
+                                        select: { id: true, name: true, image: true, profile: true }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            const isLeader = Boolean(membership?.isLeader || (membership?.group && membership.group.leaderId === userId));
+
+            return {
+                ...activityData,
+                studentGroup: membership?.group || null,
+                isLeader,
+            };
+        }
+
+        return activityData;
     },
 
     async getCourseStudents(courseId: string) {

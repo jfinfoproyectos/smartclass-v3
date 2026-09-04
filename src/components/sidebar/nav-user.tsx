@@ -169,26 +169,26 @@ export function NavUser({
 
   return (
     <>
-      <SidebarMenu className="p-2">
+      <SidebarMenu className="p-2 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center">
         <SidebarMenuItem>
           <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
             <DropdownMenuTrigger asChild>
               <SidebarMenuButton
                 size="lg"
-                className="h-14 rounded-2xl border border-sidebar-border bg-sidebar-accent/50 hover:bg-sidebar-accent transition-all p-2.5 shadow-sm"
+                className="h-14 group-data-[collapsible=icon]:h-9 group-data-[collapsible=icon]:w-9 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center rounded-2xl border border-sidebar-border bg-sidebar-accent/50 hover:bg-sidebar-accent transition-all p-2.5 shadow-sm"
               >
-                <div className="relative">
-                  <Avatar className="h-9 w-9 rounded-xl border border-primary/20">
+                <div className="relative flex items-center justify-center shrink-0">
+                  <Avatar className="h-9 w-9 group-data-[collapsible=icon]:h-7 group-data-[collapsible=icon]:w-7 rounded-xl border border-primary/20">
                     <AvatarImage src={displayedUser.avatar} alt={displayedUser.name ?? ""} />
-                    <AvatarFallback className="rounded-xl bg-primary/10 text-primary font-bold text-xs">{getInitials(displayedUser.name)}</AvatarFallback>
+                    <AvatarFallback className="rounded-xl bg-primary/10 text-primary font-bold text-[10px]">{getInitials(displayedUser.name)}</AvatarFallback>
                   </Avatar>
-                  <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-primary ring-2 ring-background" />
+                  <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-primary ring-2 ring-background group-data-[collapsible=icon]:hidden" />
                 </div>
-                <div className="grid flex-1 text-left text-xs leading-tight ml-2">
+                <div className="grid flex-1 text-left text-xs leading-tight ml-2 group-data-[collapsible=icon]:hidden">
                   <span className="truncate font-bold text-foreground">{formatName(displayedUser.name)}</span>
                   <span className="truncate text-[10px] text-muted-foreground">{displayedUser.email}</span>
                 </div>
-                <ChevronsUpDown className="ml-auto size-4 text-muted-foreground" />
+                <ChevronsUpDown className="ml-auto size-4 text-muted-foreground group-data-[collapsible=icon]:hidden" />
               </SidebarMenuButton>
             </DropdownMenuTrigger>
             <DropdownMenuContent

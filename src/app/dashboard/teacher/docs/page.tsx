@@ -21,7 +21,7 @@ import Link from "next/link";
 import { CreateProjectDialog } from "@/features/documentation/components/admin/CreateProjectDialog";
 import { CreateAiProjectDialog } from "@/features/documentation/components/admin/CreateAiProjectDialog";
 import { ProjectRowActions } from "@/features/documentation/components/admin/ProjectRowActions";
-import { Toaster } from "@/components/ui/sonner";
+
 import {
   TooltipProvider,
 } from "@/components/ui/tooltip";
@@ -58,7 +58,6 @@ export default async function DocsScannerPage() {
 
   return (
     <DashboardContainer>
-      <Toaster />
       
       {/* Header Banner AI Canvas */}
       <div className="relative overflow-hidden rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-slate-900/90 text-white p-6 sm:p-8 shadow-xl">

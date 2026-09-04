@@ -47,11 +47,11 @@ export function NavMain({
   }
 
   return (
-    <SidebarGroup className="px-3 py-4">
-      <SidebarGroupLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 px-2 mb-2">
+    <SidebarGroup className="px-3 py-4 group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:py-2">
+      <SidebarGroupLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 px-2 mb-2 group-data-[collapsible=icon]:hidden">
         Navegación Principal
       </SidebarGroupLabel>
-      <SidebarMenu className="space-y-1.5">
+      <SidebarMenu className="space-y-1.5 group-data-[collapsible=icon]:space-y-2 group-data-[collapsible=icon]:items-center">
         {items.map((item) => {
           const isDashboard = item.url === "/dashboard"
           const active = item.isActive || 
@@ -67,17 +67,17 @@ export function NavMain({
                   asChild
                   isActive={active}
                   className={cn(
-                    "h-11 rounded-xl transition-all duration-300 px-3 relative overflow-hidden group",
+                    "h-11 rounded-xl transition-all duration-300 px-3 group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:justify-center relative overflow-hidden group",
                     active
-                      ? "bg-gradient-to-r from-primary/15 via-primary/5 to-transparent text-primary font-bold border-l-4 border-primary shadow-sm shadow-primary/10"
+                      ? "bg-gradient-to-r from-primary/15 via-primary/5 to-transparent text-primary font-bold border-l-4 group-data-[collapsible=icon]:border-l-0 border-primary shadow-sm shadow-primary/10"
                       : "text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-sidebar-accent"
                   )}
                 >
                   <Link href={item.url} onClick={handleLinkClick}>
                     {item.icon && (
-                      <item.icon className={cn("h-5 w-5 transition-transform duration-300 group-hover:scale-110", active ? "text-primary" : "text-muted-foreground")} />
+                      <item.icon className={cn("h-5 w-5 transition-transform duration-300 group-hover:scale-110 shrink-0", active ? "text-primary" : "text-muted-foreground")} />
                     )}
-                    <span className="ml-2 text-sm">{item.title}</span>
+                    <span className="ml-2 text-sm group-data-[collapsible=icon]:hidden">{item.title}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

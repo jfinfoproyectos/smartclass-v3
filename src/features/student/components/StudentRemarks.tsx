@@ -18,13 +18,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { TabEmptyState } from "@/components/ui/tab-empty-state";
 
 interface StudentRemarksProps {
     courseId: string;
     userId: string;
+    hideHeader?: boolean;
 }
 
-export function StudentRemarks({ courseId, userId }: StudentRemarksProps) {
+export function StudentRemarks({ courseId, userId, hideHeader = false }: StudentRemarksProps) {
     const [remarks, setRemarks] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [viewingRemark, setViewingRemark] = useState<any | null>(null);
@@ -51,28 +53,32 @@ export function StudentRemarks({ courseId, userId }: StudentRemarksProps) {
     };
 
     if (loading) {
-        return <div className="text-sm text-muted-foreground">Cargando observaciones...</div>;
+        return <div className="text-sm text-muted-foreground py-8 text-center">Cargando observaciones...</div>;
     }
 
     if (remarks.length === 0) {
         return (
-            <div className="text-center py-8 text-muted-foreground text-sm">
-                No tienes observaciones registradas en este curso.
-            </div>
+            <TabEmptyState
+                icon={MessageSquareWarning}
+                title="Sin observaciones registradas"
+                description="No tienes anotaciones disciplinarias o felicitaciones registradas en este curso."
+            />
         );
     }
 
     return (
         <div className="space-y-4">
-            <div className="flex justify-between items-center mb-4">
-                <h3 className="text-2xl font-bold flex items-center gap-2">
-                    <MessageSquareWarning className="h-4 w-4" />
-                    Observaciones del Profesor
-                </h3>
-                <div className="text-xs text-muted-foreground">
-                    {remarks.filter(r => r.type === "ATTENTION").length} atenciones, {remarks.filter(r => r.type === "COMMENDATION").length} felicitaciones
+            {!hideHeader && (
+                <div className="flex justify-between items-center mb-4 border-b border-border/40 pb-2">
+                    <h3 className="text-xl font-semibold flex items-center gap-2">
+                        <MessageSquareWarning className="h-4 w-4 text-primary" />
+                        Observaciones del Profesor
+                    </h3>
+                    <div className="text-xs font-semibold text-muted-foreground">
+                        {remarks.filter(r => r.type === "ATTENTION").length} atenciones, {remarks.filter(r => r.type === "COMMENDATION").length} felicitaciones
+                    </div>
                 </div>
-            </div>
+            )}
 
             <div className="rounded-xl border border-border/50 overflow-x-auto shadow-sm">
                 <Table className="min-w-[600px]">

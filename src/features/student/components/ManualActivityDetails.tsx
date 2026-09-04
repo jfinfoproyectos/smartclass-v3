@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ExternalLink, Link as LinkIcon, AlertCircle, Clock, Send } from "lucide-react";
 import { FeedbackViewer } from "./FeedbackViewer";
+import { ExportFeedbackButtons } from "@/components/ui/export-feedback-buttons";
 import MDEditor from '@uiw/react-md-editor';
 import '@uiw/react-md-editor/markdown-editor.css';
 import '@uiw/react-markdown-preview/markdown.css';
@@ -171,16 +172,16 @@ export function ManualActivityDetails({ activity, userId, studentName }: ManualA
                                                 placeholder="https://drive.google.com/..."
                                                 defaultValue={submission?.url || ""}
                                                 required
-                                                disabled={isCooldownActive}
+                                                disabled={isCooldownActive || Boolean(activity.isGroupActivity && !activity.isLeader)}
                                                 className="bg-background border-primary/20 focus-visible:ring-primary"
                                             />
                                             <p className="text-[10px] text-muted-foreground italic">
                                                 * Asegúrate de que el enlace sea accesible para el profesor.
                                             </p>
                                         </div>
-                                        <Button type="submit" className="w-full shadow-md hover:shadow-lg transition-all font-bold gap-2" disabled={isCooldownActive}>
+                                        <Button type="submit" className="w-full shadow-md hover:shadow-lg transition-all font-bold gap-2" disabled={isCooldownActive || Boolean(activity.isGroupActivity && !activity.isLeader)}>
                                             <Send className="h-4 w-4" />
-                                            {submission ? "Actualizar Entrega" : "Enviar Entrega"}
+                                            {activity.isGroupActivity && !activity.isLeader ? "Solo el Líder puede Entregar" : (submission ? "Actualizar Entrega" : "Enviar Entrega")}
                                         </Button>
                                         {isCooldownActive && (
                                             <div className="mt-2 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md text-sm text-amber-700 dark:text-amber-300 flex items-start gap-2">
@@ -217,10 +218,12 @@ export function ManualActivityDetails({ activity, userId, studentName }: ManualA
                 </Card>
 
                 <Tabs defaultValue="statement" className="w-full">
-                    <TabsList className="grid w-full grid-cols-2">
-                        <TabsTrigger value="statement">Enunciado / Rúbrica</TabsTrigger>
-                        <TabsTrigger value="feedback">Retroalimentación</TabsTrigger>
-                    </TabsList>
+                    <div className="w-full overflow-x-auto scrollbar-none pb-1 shrink-0 -mx-1 px-1">
+                        <TabsList className="inline-flex w-max min-w-full sm:grid sm:grid-cols-2 h-auto min-h-9 p-1 gap-1">
+                            <TabsTrigger value="statement" className="shrink-0 px-3 py-1.5 whitespace-nowrap text-xs font-semibold">Enunciado / Rúbrica</TabsTrigger>
+                            <TabsTrigger value="feedback" className="shrink-0 px-3 py-1.5 whitespace-nowrap text-xs font-semibold">Retroalimentación</TabsTrigger>
+                        </TabsList>
+                    </div>
 
                     <TabsContent value="statement" className="mt-4">
                         <Card>
@@ -237,11 +240,19 @@ export function ManualActivityDetails({ activity, userId, studentName }: ManualA
 
                     <TabsContent value="feedback" className="mt-4">
                         <Card className="w-full border-primary/20 shadow-sm">
-                            <CardHeader className="bg-primary/5 border-b py-4">
+                            <CardHeader className="bg-primary/5 border-b py-4 flex flex-row items-center justify-between">
                                 <CardTitle className="text-lg flex items-center gap-2">
                                     <AlertCircle className="h-5 w-5 text-primary" />
                                     Retroalimentación del Profesor
                                 </CardTitle>
+                                {(isGraded || isRejected || !!submission) && submission?.feedback && (
+                                    <ExportFeedbackButtons
+                                        activity={activity}
+                                        submission={submission}
+                                        studentName={studentName}
+                                        size="sm"
+                                    />
+                                )}
                             </CardHeader>
                             <CardContent className="pt-6">
                                 {(isGraded || isRejected) && submission?.feedback ? (

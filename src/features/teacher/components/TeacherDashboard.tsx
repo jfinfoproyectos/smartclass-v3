@@ -251,8 +251,8 @@ export function TeacherDashboard({ courses, pendingEnrollments, stats, currentDa
                 </div>
             </div>
 
-            {/* Quick KPI Bento Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Quick KPI Bento Cards (Compact & Low Height) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 {teacherKpis.map((kpi, idx) => (
                     <AICanvasCard
                         key={idx}
@@ -265,10 +265,11 @@ export function TeacherDashboard({ courses, pendingEnrollments, stats, currentDa
                         iconBgColor={kpi.iconBgColor}
                         iconTextColor={kpi.iconTextColor}
                         hideFooter={true}
+                        compact={true}
                         className="h-full"
                     >
-                        <div className="pt-2">
-                            <div className="text-3xl font-black tracking-tight text-foreground">
+                        <div className="pt-0.5">
+                            <div className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
                                 {kpi.value}
                             </div>
                         </div>

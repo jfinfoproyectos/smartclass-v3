@@ -313,9 +313,6 @@ export function StudentActivityDetails({ enrollment }: StudentActivityDetailsPro
                                         <TableCell>{index + 1}</TableCell>
                                         <TableCell>
                                             <div className="font-medium">{activity.title}</div>
-                                            <div className="text-xs text-muted-foreground">
-                                                Peso: {activity.weight.toFixed(1)}%
-                                            </div>
                                         </TableCell>
                                         <TableCell>
                                             {isGraded ? (

@@ -20,20 +20,17 @@ export interface FileAnalysis {
  */
 function buildGitHubFileUrl(repoUrl: string, filename: string): string {
     try {
-        const repoInfo = githubService.parseGitHubUrl(repoUrl);
+        const cleanRepoUrl = repoUrl.replace(/[\r\n\s]+/g, '');
+        const cleanFilename = filename.replace(/[\r\n\s]+/g, '');
+        const repoInfo = githubService.parseGitHubUrl(cleanRepoUrl);
         if (repoInfo) {
             const { owner, repo, branch } = repoInfo;
-            // Use 'main' as a safer default for web links if HEAD is returned, 
-            // but if a specific branch was detected, use it.
             const targetBranch = branch === "HEAD" ? "main" : branch;
-
-            // Encode filename parts but keep slashes
-            const encodedFile = filename.split('/').map(part => encodeURIComponent(part)).join('/');
-
+            const encodedFile = cleanFilename.split('/').map(part => encodeURIComponent(part)).join('/');
             return `https://github.com/${owner}/${repo}/blob/${targetBranch}/${encodedFile}`;
         }
     } catch { }
-    return repoUrl;
+    return repoUrl.replace(/[\r\n\s]+/g, '');
 }
 
 /**
@@ -46,7 +43,7 @@ export async function analyzeFile(
     repoUrl: string,
     userId?: string,
     previousContextText?: string,
-    gradingMode: string = "normal",
+    gradingMode: string = "moderate",
     maxRetries = 3
 ): Promise<FileAnalysis> {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {

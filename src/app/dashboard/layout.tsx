@@ -33,13 +33,11 @@ export default async function DashboardLayout({
     getVisualSettingsAction()
   ]);
 
-  const role = session ? getRoleFromUser(session.user) : null;
-  const isStaff = role === "teacher" || role === "admin";
-  const showModeToggle = visualSettings.themeMode === "STUDENT" || isStaff;
-  const showThemeSelector = visualSettings.allowThemeColorChange || isStaff;
+  const showModeToggle = true;
+  const showThemeSelector = true;
 
   return (
-    <SidebarProvider defaultOpen={true}>
+    <SidebarProvider defaultOpen={false}>
       <PWARegister />
       <ThemeEnforcer 
         themeMode={visualSettings.themeMode} 

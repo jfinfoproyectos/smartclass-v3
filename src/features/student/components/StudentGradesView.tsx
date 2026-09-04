@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Progress } from "@/components/ui/progress";
+import { TabEmptyState } from "@/components/ui/tab-empty-state";
 
 interface StudentGradesViewProps {
     enrollment: any;
@@ -93,42 +94,40 @@ export function StudentGradesView({ enrollment }: StudentGradesViewProps) {
 
     if (!gradeCategories || gradeCategories.length === 0) {
         return (
-            <div className="flex flex-col items-center justify-center py-12 text-center border-2 border-dashed rounded-xl bg-muted/5">
-                <FolderTree className="h-12 w-12 text-muted-foreground/30 mb-4" />
-                <h3 className="text-lg font-semibold">Sin estructura de notas</h3>
-                <p className="text-muted-foreground max-w-md mx-auto">
-                    El profesor aún no ha configurado las categorías de calificación para este curso.
-                </p>
-            </div>
+            <TabEmptyState
+                icon={FolderTree}
+                title="Sin estructura de notas configurada"
+                description="El profesor aún no ha configurado las categorías ni ponderaciones de calificación para este curso."
+            />
         );
     }
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
             {/* Header / Summary Card */}
-            <Card className="overflow-hidden border-none shadow-lg bg-gradient-to-br from-primary/10 via-background to-background ring-1 ring-primary/5">
-                <CardContent className="p-8">
-                    <div className="flex flex-col md:flex-row items-center justify-between gap-8">
-                        <div className="space-y-3 text-center md:text-left">
-                            <h3 className="text-4xl font-black tracking-tight text-primary/90">Tu Nota Final</h3>
-                            <p className="text-muted-foreground text-lg">
-                                Promedio ponderado basado en <span className="font-bold text-foreground">{gradeCategories.length} categorías</span> principales.
+            <Card className="overflow-hidden border border-border/60 shadow-md bg-gradient-to-br from-primary/10 via-background to-background">
+                <CardContent className="p-6 sm:p-7">
+                    <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                        <div className="space-y-2 text-center md:text-left">
+                            <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Tu Nota Final</h3>
+                            <p className="text-xs sm:text-sm text-muted-foreground max-w-md">
+                                Promedio ponderado acumulado basado en <span className="font-semibold text-foreground">{gradeCategories.length} categorías</span> principales.
                             </p>
-                            <div className="flex items-center gap-2 justify-center md:justify-start mt-6">
-                                <Badge variant="secondary" className="px-4 py-1.5 text-xs font-bold bg-primary/10 text-primary border-primary/20">
+                            <div className="flex items-center gap-2 justify-center md:justify-start pt-2">
+                                <Badge variant="secondary" className="px-2.5 py-0.5 text-xs font-semibold bg-primary/10 text-primary border-primary/20 rounded-full">
                                     Escala 0.0 - 5.0
                                 </Badge>
                             </div>
                         </div>
                         
-                        <div className="relative flex items-center justify-center h-40 w-40 rounded-full border-[12px] border-primary/5 shadow-2xl bg-card">
+                        <div className="relative flex items-center justify-center h-28 w-28 sm:h-32 sm:w-32 rounded-full border-8 border-primary/10 shadow-lg bg-card shrink-0">
                             <div className="text-center">
-                                <span className={`text-5xl font-black ${getGradeColor(finalGrade)} tabular-nums`}>
+                                <span className={`text-3xl sm:text-4xl font-black ${getGradeColor(finalGrade)} tabular-nums font-mono`}>
                                     {finalGrade.toFixed(2)}
                                 </span>
                             </div>
-                            <div className="absolute -bottom-4">
-                                <Badge className={`${getGradeBadgeVariant(finalGrade)} px-6 py-1.5 text-sm font-black shadow-lg uppercase tracking-wider`}>
+                            <div className="absolute -bottom-3">
+                                <Badge className={`${getGradeBadgeVariant(finalGrade)} px-3 py-0.5 text-xs font-bold shadow-md rounded-full tracking-wide`}>
                                     {finalGrade >= 3.0 ? "Aprobando" : finalGrade > 0 ? "Reprobando" : "Sin Notas"}
                                 </Badge>
                             </div>
@@ -138,46 +137,46 @@ export function StudentGradesView({ enrollment }: StudentGradesViewProps) {
             </Card>
 
             {/* Quick Summary Grid - Adaptive Layout */}
-            <div className="flex flex-wrap gap-4">
+            <div className="flex flex-wrap gap-3.5">
                 {gradeCategories.map((cat: any) => {
                     const catGrade = calculateGradeInCategory(cat);
                     return (
-                        <Card key={`summary-${cat.id}`} className="flex-1 min-w-[280px] border-none shadow-sm bg-card/60 backdrop-blur-md ring-1 ring-primary/5 hover:shadow-md transition-all duration-300 group overflow-hidden">
-                            <CardContent className="p-4 space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2.5">
-                                        <div className="bg-primary/10 p-1.5 rounded-lg shrink-0">
-                                            <FolderTree className="h-4 w-4 text-primary" />
+                        <Card key={`summary-${cat.id}`} className="flex-1 min-w-[240px] border border-border/60 shadow-2xs bg-card hover:border-primary/40 transition-all duration-200 group overflow-hidden rounded-2xl">
+                            <CardContent className="p-4 space-y-2.5">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                        <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                                            <FolderTree className="h-4 w-4" />
                                         </div>
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest leading-none mb-1">
+                                        <div className="flex flex-col min-w-0">
+                                            <span className="text-xs font-bold text-foreground truncate">
                                                 {cat.name}
                                             </span>
-                                            <span className="text-[9px] text-primary font-bold opacity-60">
+                                            <span className="text-[11px] text-muted-foreground font-medium">
                                                 Peso: {cat.weight}%
                                             </span>
                                         </div>
                                     </div>
-                                    <div className={`text-2xl font-black tabular-nums ${getGradeColor(catGrade)}`}>
+                                    <div className={`text-lg sm:text-xl font-bold font-mono tabular-nums shrink-0 ${getGradeColor(catGrade)}`}>
                                         {catGrade.toFixed(2)}
                                     </div>
                                 </div>
 
-                                <div className="grid gap-1.5 pt-1 border-t border-primary/5">
+                                <div className="grid gap-1 pt-1.5 border-t border-border/40">
                                     {cat.groups.map((group: any) => {
                                         const groupGrade = calculateGradeInGroup(group);
                                         return (
-                                            <div key={`sum-group-${group.id}`} className="flex items-center justify-between">
+                                            <div key={`sum-group-${group.id}`} className="flex items-center justify-between text-xs">
                                                 <div className="flex items-center gap-1.5 min-w-0">
-                                                    <div className="h-1 w-1 rounded-full bg-primary/30" />
-                                                    <span className="text-[10px] font-bold text-foreground/70 truncate uppercase">
+                                                    <div className="h-1.5 w-1.5 rounded-full bg-primary/40 shrink-0" />
+                                                    <span className="text-xs font-medium text-foreground/80 truncate">
                                                         {group.name}
                                                     </span>
-                                                    <span className="text-[8px] text-muted-foreground font-medium">
+                                                    <span className="text-[10px] text-muted-foreground">
                                                         ({group.weight}%)
                                                     </span>
                                                 </div>
-                                                <div className={`text-[10px] font-black tabular-nums ${getGradeColor(groupGrade)}`}>
+                                                <div className={`text-xs font-bold font-mono tabular-nums shrink-0 ${getGradeColor(groupGrade)}`}>
                                                     {groupGrade.toFixed(2)}
                                                 </div>
                                             </div>
@@ -185,8 +184,8 @@ export function StudentGradesView({ enrollment }: StudentGradesViewProps) {
                                     })}
                                 </div>
                             </CardContent>
-                            <div className="h-0.5 w-full bg-primary/5">
-                                <Progress value={(catGrade / 5) * 100} className="h-full rounded-none opacity-20" />
+                            <div className="h-1 w-full bg-muted">
+                                <Progress value={(catGrade / 5) * 100} className="h-full rounded-none" />
                             </div>
                         </Card>
                     );
@@ -194,35 +193,35 @@ export function StudentGradesView({ enrollment }: StudentGradesViewProps) {
             </div>
 
             {/* Categories Breakdown */}
-            <div className="space-y-6">
-                <h3 className="text-2xl font-bold flex items-center gap-2">
+            <div className="space-y-4 pt-2">
+                <h4 className="text-base sm:text-lg font-semibold flex items-center gap-2 text-foreground">
                     <Layers className="h-4 w-4 text-primary" />
-                    Desglose de Categorías
-                </h3>
+                    <span>Desglose de Categorías</span>
+                </h4>
                 
-                <div className="grid gap-6">
+                <div className="grid gap-4">
                     {gradeCategories.map((cat: any) => {
                         const catGrade = calculateGradeInCategory(cat);
                         return (
-                            <Card key={cat.id} className="border-none shadow-md overflow-hidden bg-card/50 backdrop-blur-sm">
-                                <CardHeader className="bg-muted/30 border-b pb-4">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="bg-primary/10 p-2 rounded-lg">
-                                                <FolderTree className="h-5 w-5 text-primary" />
+                            <Card key={cat.id} className="border border-border/60 shadow-sm overflow-hidden bg-card rounded-2xl">
+                                <CardHeader className="bg-muted/30 border-b border-border/40 py-3.5 px-4 sm:px-6">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                                                <FolderTree className="h-4 w-4" />
                                             </div>
-                                            <div>
-                                                <CardTitle className="text-xl font-bold">{cat.name}</CardTitle>
-                                                <CardDescription className="text-xs font-bold text-primary/70 uppercase tracking-tighter">
+                                            <div className="min-w-0">
+                                                <CardTitle className="text-sm sm:text-base font-bold text-foreground truncate">{cat.name}</CardTitle>
+                                                <CardDescription className="text-xs font-medium text-muted-foreground">
                                                     Peso en Curso: {cat.weight}%
                                                 </CardDescription>
                                             </div>
                                         </div>
-                                        <div className="text-right">
-                                            <div className={`text-2xl font-black ${getGradeColor(catGrade)}`}>
+                                        <div className="text-right shrink-0">
+                                            <div className={`text-lg sm:text-xl font-bold font-mono tabular-nums ${getGradeColor(catGrade)}`}>
                                                 {catGrade.toFixed(2)}
                                             </div>
-                                            <div className="text-[10px] text-muted-foreground uppercase font-bold">Nota de Categoría</div>
+                                            <div className="text-[11px] text-muted-foreground font-medium">Nota Categoría</div>
                                         </div>
                                     </div>
                                 </CardHeader>
@@ -231,38 +230,38 @@ export function StudentGradesView({ enrollment }: StudentGradesViewProps) {
                                         {cat.groups.map((group: any) => {
                                             const groupGrade = calculateGradeInGroup(group);
                                             return (
-                                                <AccordionItem key={group.id} value={group.id} className="border-b last:border-0 px-6">
-                                                    <AccordionTrigger className="hover:no-underline py-5 group">
-                                                        <div className="flex items-center justify-between w-full pr-4">
-                                                            <div className="flex items-center gap-4">
-                                                                <div className="flex flex-col items-start gap-1">
-                                                                    <span className="font-bold text-base group-hover:text-primary transition-colors">{group.name}</span>
-                                                                    <Badge variant="outline" className="text-[9px] font-bold opacity-70">
+                                                <AccordionItem key={group.id} value={group.id} className="border-b last:border-0 px-4 sm:px-6">
+                                                    <AccordionTrigger className="hover:no-underline py-3.5 group">
+                                                        <div className="flex items-center justify-between w-full pr-3 gap-3">
+                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                <div className="flex flex-col items-start gap-0.5 min-w-0">
+                                                                    <span className="font-semibold text-xs sm:text-sm text-foreground group-hover:text-primary transition-colors truncate">{group.name}</span>
+                                                                    <Badge variant="outline" className="text-[10px] font-medium px-2 py-0">
                                                                         Peso en {cat.name}: {group.weight}%
                                                                     </Badge>
                                                                 </div>
                                                             </div>
-                                                            <div className="flex items-center gap-6">
-                                                                <div className="hidden sm:flex flex-col items-end gap-1.5 min-w-[120px]">
-                                                                    <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
+                                                            <div className="flex items-center gap-4 shrink-0">
+                                                                <div className="hidden sm:flex flex-col items-end gap-1 min-w-[100px]">
+                                                                    <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
                                                                         <Progress value={(groupGrade / 5) * 100} className="h-full" />
                                                                     </div>
-                                                                    <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest">
+                                                                    <span className="text-[11px] text-muted-foreground font-medium">
                                                                         Progreso: {((groupGrade / 5) * 100).toFixed(0)}%
                                                                     </span>
                                                                 </div>
-                                                                <span className={`font-black text-xl tabular-nums ${getGradeColor(groupGrade)}`}>
+                                                                <span className={`font-bold text-sm sm:text-base font-mono tabular-nums ${getGradeColor(groupGrade)}`}>
                                                                     {groupGrade.toFixed(2)}
                                                                 </span>
                                                             </div>
                                                         </div>
                                                     </AccordionTrigger>
-                                                    <AccordionContent className="pb-6 pt-2">
-                                                        <div className="space-y-4 bg-muted/20 rounded-2xl p-4 border border-muted">
-                                                            <div className="text-[10px] uppercase font-black text-muted-foreground tracking-widest flex items-center gap-2 mb-2">
-                                                                <div className="h-px flex-1 bg-muted-foreground/20" />
-                                                                Items ({group.items?.length || 0})
-                                                                <div className="h-px flex-1 bg-muted-foreground/20" />
+                                                    <AccordionContent className="pb-4 pt-1">
+                                                        <div className="space-y-3 bg-muted/20 rounded-xl p-3.5 border border-border/40">
+                                                            <div className="text-xs font-semibold text-muted-foreground flex items-center gap-2 mb-1.5">
+                                                                <div className="h-px flex-1 bg-border/40" />
+                                                                <span>Items ({group.items?.length || 0})</span>
+                                                                <div className="h-px flex-1 bg-border/40" />
                                                             </div>
                                                             
                                                             <div className="grid gap-2">
@@ -286,28 +285,28 @@ export function StudentGradesView({ enrollment }: StudentGradesViewProps) {
                                                                     }
 
                                                                     return (
-                                                                        <div key={item.id} className="flex items-center justify-between p-3 rounded-xl bg-background border border-muted hover:border-primary/30 hover:shadow-sm transition-all">
-                                                                            <div className="flex items-center gap-3">
-                                                                                <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${isCompleted ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-muted/50 text-muted-foreground border border-muted'}`}>
-                                                                                    {item.activityId ? <FileText className="h-4 w-4" /> : <GraduationCap className="h-4 w-4" />}
+                                                                        <div key={item.id} className="flex items-center justify-between p-2.5 rounded-xl bg-card border border-border/50 hover:border-primary/30 transition-all gap-3">
+                                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                                <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${isCompleted ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'bg-muted text-muted-foreground border border-border/40'}`}>
+                                                                                    {item.activityId ? <FileText className="h-3.5 w-3.5" /> : <GraduationCap className="h-3.5 w-3.5" />}
                                                                                 </div>
-                                                                                <div className="flex flex-col">
-                                                                                    <span className="text-sm font-bold">{itemTitle}</span>
-                                                                                    <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-tighter">
+                                                                                <div className="flex flex-col min-w-0">
+                                                                                    <span className="text-xs sm:text-sm font-semibold text-foreground truncate">{itemTitle}</span>
+                                                                                    <span className="text-[11px] text-muted-foreground font-medium">
                                                                                         Peso en Grupo: {item.weight}%
                                                                                     </span>
                                                                                 </div>
                                                                             </div>
-                                                                            <div className="flex flex-col items-end gap-0.5">
-                                                                                <span className={`font-black text-sm tabular-nums ${getGradeColor(itemGrade)}`}>
+                                                                            <div className="flex flex-col items-end gap-1 shrink-0">
+                                                                                <span className={`font-bold font-mono text-xs sm:text-sm tabular-nums ${getGradeColor(itemGrade)}`}>
                                                                                     {isCompleted ? itemGrade.toFixed(2) : "--"}
                                                                                 </span>
                                                                                 {isCompleted ? (
-                                                                                    <Badge variant="outline" className="h-4 text-[8px] bg-emerald-50 text-emerald-700 border-emerald-200 uppercase font-black px-1.5">
+                                                                                    <Badge className="text-[10px] font-semibold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 px-2 py-0">
                                                                                         Calificado
                                                                                     </Badge>
                                                                                 ) : (
-                                                                                    <Badge variant="outline" className="h-4 text-[8px] bg-muted text-muted-foreground uppercase font-black px-1.5">
+                                                                                    <Badge variant="secondary" className="text-[10px] font-semibold px-2 py-0">
                                                                                         Pendiente
                                                                                     </Badge>
                                                                                 )}

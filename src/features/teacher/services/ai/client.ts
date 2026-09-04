@@ -10,7 +10,7 @@ import prisma from "@/lib/prisma";
  * @param userId - Optional user ID for fetching user-specific API key
  * @returns A configured LanguageModel instance from the Vercel AI SDK
  */
-export async function getAIModel(userId?: string): Promise<any> {
+export async function getAIModel(userId?: string, customModel?: string): Promise<any> {
     let apiKey: string | null = null;
     let provider = process.env.AI_PROVIDER || "google";
     let activeModel = process.env.AI_MODEL || "";
@@ -38,6 +38,21 @@ export async function getAIModel(userId?: string): Promise<any> {
             } catch (error) {
                 console.error("Error decrypting user API key:", error);
             }
+        }
+    }
+
+    if (customModel) {
+        activeModel = customModel;
+        if (customModel.startsWith("gemini-")) {
+            provider = "google";
+        } else if (customModel.includes("minimax")) {
+            provider = "minimax";
+        } else if (customModel.includes("deepseek")) {
+            provider = "deepseek";
+        } else if (customModel.includes("claude")) {
+            provider = "anthropic";
+        } else if (customModel.includes("gpt")) {
+            provider = "openai";
         }
     }
 

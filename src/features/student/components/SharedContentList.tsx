@@ -36,28 +36,25 @@ import {
 import { Eye, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+import { TabEmptyState } from "@/components/ui/tab-empty-state";
+
 interface SharedContentProps {
     contents: any[];
+    hideHeader?: boolean;
 }
 
-export function SharedContentList({ contents }: SharedContentProps) {
+export function SharedContentList({ contents, hideHeader = false }: SharedContentProps) {
     const { resolvedTheme } = useTheme();
     const [selectedContent, setSelectedContent] = useState<any | null>(null);
     const [isViewOpen, setIsViewOpen] = useState(false);
 
     if (contents.length === 0) {
         return (
-            <div className="flex flex-col items-center justify-center py-20 text-center space-y-4 rounded-xl border-2 border-dashed">
-                <div className="p-4 bg-muted rounded-full">
-                    <Code className="h-8 w-8 text-muted-foreground" />
-                </div>
-                <div className="space-y-1">
-                    <p className="text-lg font-medium">No hay contenido compartido</p>
-                    <p className="text-sm text-muted-foreground max-w-xs">
-                        Tu profesor todavía no ha compartido recursos o código en este curso.
-                    </p>
-                </div>
-            </div>
+            <TabEmptyState
+                icon={BookOpen}
+                title="No hay contenido compartido"
+                description="Tu profesor todavía no ha compartido recursos, archivos o código en este curso."
+            />
         );
     }
 
@@ -67,16 +64,18 @@ export function SharedContentList({ contents }: SharedContentProps) {
     };
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between border-b pb-4">
-                <h3 className="text-2xl font-bold flex items-center gap-2">
-                    <BookOpen className="h-4 w-4 text-primary" />
-                    Recursos Compartidos
-                </h3>
-                <Badge variant="secondary" className="px-3 py-1">
-                    {contents.length} {contents.length === 1 ? 'elemento' : 'elementos'}
-                </Badge>
-            </div>
+        <div className="space-y-4">
+            {!hideHeader && (
+                <div className="flex items-center justify-between border-b border-border/40 pb-2">
+                    <h3 className="text-xl font-semibold flex items-center gap-2">
+                        <BookOpen className="h-4 w-4 text-primary" />
+                        Recursos Compartidos
+                    </h3>
+                    <Badge variant="secondary" className="font-semibold text-xs px-2.5 py-0.5 rounded-full">
+                        {contents.length} {contents.length === 1 ? 'recurso' : 'recursos'}
+                    </Badge>
+                </div>
+            )}
             
             <div className="rounded-xl border border-border/50 overflow-x-auto shadow-sm">
                 <Table className="min-w-[600px]">

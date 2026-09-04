@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, AlertCircle, CheckCircle, Download, FileText, ExternalLink, Info, Send } from "lucide-react";
+import { Loader2, AlertCircle, CheckCircle, Download, FileText, ExternalLink, Info, Send, RotateCcw } from "lucide-react";
 import { format } from "date-fns";
 import { FeedbackViewer } from "./FeedbackViewer";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +16,7 @@ import { useRouter } from "next/navigation";
 import { submitPdfActivityAction } from "@/features/student/actions/submissionActions";
 import { useReactToPrint } from "react-to-print";
 import { ActivityReportTemplate } from "./ActivityReportTemplate";
+import { ExportFeedbackButtons } from "@/components/ui/export-feedback-buttons";
 import MDEditor from "@uiw/react-md-editor";
 import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
@@ -35,6 +36,7 @@ export function PdfReviewActivityDetails({ activity, userId, studentName }: PdfR
 
     const isSubmitted = !!submission;
     const isGraded = submission && submission.grade !== null;
+    const isReevaluationRequested = submission?.reevaluationRequested ?? false;
     const isRejected = submission && submission.grade === null && submission.feedback && submission.feedback.includes("[ENTREGA RECHAZADA]");
     const { resolvedTheme } = useTheme();
     const [mounted, setMounted] = useState(false);
@@ -57,8 +59,9 @@ export function PdfReviewActivityDetails({ activity, userId, studentName }: PdfR
             : "auto"
         : "light";
 
-    // Un nuevo intento solo está disponible si ya se calificó el intento anterior o si fue rechazada
-    const canAttemptAgain = isGraded;
+    const isDeadlinePassed = activity.deadline && new Date(activity.deadline) < new Date();
+    // Un nuevo intento o reevaluación solo está disponible si ya se calificó el intento anterior o si fue rechazada, y no ha vencido la actividad
+    const canAttemptAgain = isGraded && !isDeadlinePassed;
 
     return (
         <div className="space-y-6 w-full p-6">
@@ -92,7 +95,11 @@ export function PdfReviewActivityDetails({ activity, userId, studentName }: PdfR
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                             <div className="flex items-center gap-2">
                                 <span className="text-sm font-semibold">Tu Estado:</span>
-                                {isGraded ? (
+                                {isReevaluationRequested ? (
+                                    <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-100 border-none px-3 py-1 font-bold gap-1">
+                                        <RotateCcw className="h-3.5 w-3.5" /> Reevaluación Solicitada
+                                    </Badge>
+                                ) : isGraded ? (
                                     <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-none px-3 py-1 font-bold">
                                         Completado
                                     </Badge>
@@ -216,6 +223,7 @@ export function PdfReviewActivityDetails({ activity, userId, studentName }: PdfR
                                         <PdfSubmissionForm
                                             activityId={activity.id}
                                             lastSubmittedAt={submission.lastSubmittedAt}
+                                            isLeaderDisabled={Boolean(activity.isGroupActivity && !activity.isLeader)}
                                         />
                                     </div>
                                 )}
@@ -224,6 +232,7 @@ export function PdfReviewActivityDetails({ activity, userId, studentName }: PdfR
                             <PdfSubmissionForm
                                 activityId={activity.id}
                                 lastSubmittedAt={null}
+                                isLeaderDisabled={Boolean(activity.isGroupActivity && !activity.isLeader)}
                             />
                         )}
                     </CardContent>
@@ -231,18 +240,16 @@ export function PdfReviewActivityDetails({ activity, userId, studentName }: PdfR
 
                 {/* Tabs */}
                 <Tabs defaultValue="rubric" className="w-full">
-                    <TabsList className="grid w-full grid-cols-2 h-auto">
-                        <TabsTrigger value="rubric" className="text-xs sm:text-sm py-2 whitespace-normal">
-                            <div className="flex flex-col items-center">
+                    <div className="w-full overflow-x-auto scrollbar-none pb-1 shrink-0 -mx-1 px-1">
+                        <TabsList className="inline-flex w-max min-w-full sm:grid sm:grid-cols-2 h-auto min-h-9 p-1 gap-1">
+                            <TabsTrigger value="rubric" className="shrink-0 px-3 py-1.5 whitespace-nowrap text-xs font-semibold">
                                 <span>Criterios de Evaluación</span>
-                            </div>
-                        </TabsTrigger>
-                        <TabsTrigger value="feedback" className="text-xs sm:text-sm py-2 whitespace-normal">
-                            <div className="flex flex-col items-center">
+                            </TabsTrigger>
+                            <TabsTrigger value="feedback" className="shrink-0 px-3 py-1.5 whitespace-nowrap text-xs font-semibold">
                                 <span>Resultado</span>
-                            </div>
-                        </TabsTrigger>
-                    </TabsList>
+                            </TabsTrigger>
+                        </TabsList>
+                    </div>
 
 
                     <TabsContent value="rubric" className="mt-4">
@@ -270,11 +277,19 @@ export function PdfReviewActivityDetails({ activity, userId, studentName }: PdfR
 
                     <TabsContent value="feedback" className="mt-4">
                         <Card className="w-full border-primary/20 shadow-sm">
-                            <CardHeader className="bg-primary/5 border-b py-4">
+                            <CardHeader className="bg-primary/5 border-b py-4 flex flex-row items-center justify-between">
                                 <CardTitle className="text-lg flex items-center gap-2">
                                     <AlertCircle className="h-5 w-5 text-primary" />
                                     Resultado de la Evaluación
                                 </CardTitle>
+                                {isSubmitted && submission?.feedback && (
+                                    <ExportFeedbackButtons
+                                        activity={activity}
+                                        submission={submission}
+                                        studentName={studentName}
+                                        size="sm"
+                                    />
+                                )}
                             </CardHeader>
                             <CardContent className="pt-6">
                                 {isSubmitted && submission.feedback ? (
@@ -310,21 +325,19 @@ export function PdfReviewActivityDetails({ activity, userId, studentName }: PdfR
 
 // ─── Submission Form ───────────────────────────────────────────────────────────
 
-function PdfSubmissionForm({
-    activityId,
-    lastSubmittedAt,
-}: {
-    activityId: string;
-    lastSubmittedAt?: string | Date | null;
-}) {
+function PdfSubmissionForm({ activityId, lastSubmittedAt, isLeaderDisabled = false }: { activityId: string; lastSubmittedAt: string | Date | null; isLeaderDisabled?: boolean }) {
+    const router = useRouter();
     const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
     const [progress, setProgress] = useState<string>("");
     const [error, setError] = useState<string | null>(null);
     const [apiRequests, setApiRequests] = useState<number | null>(null);
-    const router = useRouter();
 
     async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
+        if (isLeaderDisabled) {
+            setError("Esta actividad es grupal. Únicamente el líder de tu grupo puede realizar la entrega.");
+            return;
+        }
         const formData = new FormData(event.currentTarget);
         const url = formData.get("url") as string;
         if (!url) return;
@@ -366,12 +379,12 @@ function PdfSubmissionForm({
                         name="url"
                         placeholder="https://drive.google.com/file/d/..."
                         required
-                        disabled={status === "submitting"}
+                        disabled={status === "submitting" || isLeaderDisabled}
                         className="flex-1 bg-background border-primary/20 focus-visible:ring-primary"
                     />
                     <Button 
                         type="submit" 
-                        disabled={status === "submitting"}
+                        disabled={status === "submitting" || isLeaderDisabled}
                         className="shadow-md hover:shadow-lg transition-all gap-2"
                     >
                         {status === "submitting" ? (
@@ -382,7 +395,7 @@ function PdfSubmissionForm({
                         ) : (
                             <>
                                 <Send className="h-4 w-4" />
-                                Entregar Tarea
+                                {isLeaderDisabled ? "Solo el Líder puede Entregar" : "Entregar Tarea"}
                             </>
                         )}
                     </Button>

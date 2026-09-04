@@ -37,7 +37,7 @@ export default async function RootLayout({
         <link rel="manifest" href="/manifest.json" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&family=Chakra+Petch:wght@400;600;700&family=Cinzel:wght@400;700&family=Comfortaa:wght@400;700&family=DM+Sans:wght@400;500;700&family=Fira+Code:wght@400;600&family=Inter:wght@400;500;600;700&family=Lato:wght@400;700&family=Lora:wght@400;600;700&family=Montserrat:wght@400;600;700&family=Nunito:wght@400;600;700&family=Orbitron:wght@400;700;900&family=Outfit:wght@300;400;500;600;700;800;900&family=Oxanium:wght@400;600;700&family=Patrick+Hand&family=Plus+Jakarta+Sans:wght@400;600;700&family=Poppins:wght@400;600;700&family=Quicksand:wght@400;600;700&family=Rajdhani:wght@400;600;700&family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet" />
         {isForced && forcedTheme ? (
           <style 
             id="smartclass-dynamic-theme" 

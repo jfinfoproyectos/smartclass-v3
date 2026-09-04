@@ -46,7 +46,7 @@ export default async function CourseLayout({
                     themeMode={visualSettings.themeMode}
                     allowThemeColorChange={visualSettings.allowThemeColorChange}
                 />
-                <div className="flex-1 w-full overflow-y-auto relative flex flex-col min-h-0 p-4 sm:p-6 pb-16">
+                <div className="flex-1 w-full overflow-y-auto relative flex flex-col min-h-0 p-2 sm:p-3 pb-4">
                     {children}
                 </div>
             </CourseTabsWrapper>

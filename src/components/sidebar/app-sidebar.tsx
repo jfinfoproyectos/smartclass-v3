@@ -86,6 +86,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           isActive: false,
         },
         {
+          title: "Herramientas",
+          url: "/dashboard/teacher/tools",
+          icon: Wrench,
+          isActive: false,
+        },
+        {
           title: "Configuración",
           url: "/dashboard/admin/settings",
           icon: Settings2,
@@ -116,6 +122,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             title: "Evaluaciones",
             url: "/dashboard/teacher/evaluations",
             icon: FileCheck,
+            isActive: false,
+          },
+          {
+            title: "Herramientas",
+            url: "/dashboard/teacher/tools",
+            icon: Wrench,
             isActive: false,
           },
           {

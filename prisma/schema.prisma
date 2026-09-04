@@ -52,6 +52,10 @@ model User {
   docProgress           DocProgress[]
   docViewLogs           DocViewLog[]
   docAiChats            DocAiChat[]
+  teacherMcpChats       McpInspectorChat[]    @relation("TeacherMcpChats")
+  studentMcpChats       McpInspectorChat[]    @relation("StudentMcpChats")
+  ledStudentGroups      StudentGroup[]        @relation("StudentGroupLeader")
+  studentGroupMemberships StudentGroupMember[]
 
   // Teacher Global Application Appearance & Policies
   appThemeMode                String            @default("STUDENT") // "STUDENT", "LIGHT", "DARK"
@@ -165,6 +169,7 @@ model Course {
   evaluationAttempts EvaluationAttempt[] @relation("CourseEvaluationAttempts")
   gradeCategories    GradeCategory[]
   gradeGroups        GradeGroup[]
+  studentGroups      StudentGroup[]
 
   @@map("course")
 }
@@ -193,6 +198,11 @@ enum ActivityType {
   MANUAL
   PDF_REVIEW
   CODE_PROJECT
+  CODE_CHALLENGE
+  VIDEO_PITCH
+  AI_INTERVIEW
+  DB_MODELING
+  AUDIO_DEFENSE
 }
 
 model Activity {
@@ -208,13 +218,17 @@ model Activity {
   order               Int          @default(0)
   openDate            DateTime?
   allowLinkSubmission Boolean      @default(false) // For MANUAL activities - allows students to submit links
+  isGroupActivity     Boolean      @default(false) // For group activities where only the team leader submits
+  groupScope          String?      @default("COURSE") // "COURSE" | "ACTIVITY"
   courseId            String
   course              Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 
-  submissions     Submission[]
-  gradeGroupItems GradeGroupItem[]
+  submissions       Submission[]
+  gradeGroupItems   GradeGroupItem[]
+  mcpInspectorChats McpInspectorChat[]
+  studentGroups     StudentGroup[]
 
   @@map("activity")
 }
@@ -226,8 +240,9 @@ model Submission {
   feedback         String?
   apiRequestsCount Int?     @default(0)
   attemptCount     Int      @default(1)
-  lastSubmittedAt  DateTime @default(now())
-  activityId       String
+  lastSubmittedAt       DateTime @default(now())
+  reevaluationRequested Boolean  @default(false)
+  activityId            String
   activity         Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
   userId           String
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -415,6 +430,14 @@ model Evaluation {
   wildcardAiHints       Int                 @default(0) // Cantidad de comodines "Pista de IA" disponibles (0 = deshabilitado)
   wildcardSecondChance  Int                 @default(0) // Cantidad de comodines "Segunda Oportunidad" disponibles (0 = deshabilitado)
 
+  // Configuración de vigilancia por defecto
+  enableSurveillance    Boolean             @default(true)
+  blockTabSwitch        Boolean             @default(true)
+  requireFullscreen     Boolean             @default(true)
+  blockMultipleDisplays Boolean             @default(true)
+  blockClipboard        Boolean             @default(true)
+  maxWarnings           Int                 @default(3)
+
   @@map("evaluation")
 }
 
@@ -437,17 +460,32 @@ model Question {
 
 // Modelo para Intento (EvaluationAttempt)
 model EvaluationAttempt {
-  id           String                 @id @default(cuid())
-  evaluationId String
-  evaluation   Evaluation             @relation("EvaluationAttempts", fields: [evaluationId], references: [id], onDelete: Cascade)
-  startTime    DateTime
-  endTime      DateTime
-  courseId     String? // Relación opcional para asignar a un grupo específico
-  course       Course?                @relation("CourseEvaluationAttempts", fields: [courseId], references: [id], onDelete: Cascade)
-  createdAt    DateTime               @default(now())
-  updatedAt    DateTime               @updatedAt
-  submissions  EvaluationSubmission[] @relation("AttemptSubmissions")
-  gradeGroupItems GradeGroupItem[]
+  id                    String                 @id @default(cuid())
+  evaluationId          String
+  evaluation            Evaluation             @relation("EvaluationAttempts", fields: [evaluationId], references: [id], onDelete: Cascade)
+  startTime             DateTime
+  endTime               DateTime
+  courseId              String? // Relación opcional para asignar a un grupo específico
+  course                Course?                @relation("CourseEvaluationAttempts", fields: [courseId], references: [id], onDelete: Cascade)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  submissions           EvaluationSubmission[] @relation("AttemptSubmissions")
+  gradeGroupItems       GradeGroupItem[]
+
+  // Configuración de vigilancia y restricciones (Proctoring)
+  enableSurveillance    Boolean                @default(true)
+  blockTabSwitch        Boolean                @default(true)
+  requireFullscreen     Boolean                @default(true)
+  blockMultipleDisplays Boolean                @default(true)
+  blockClipboard        Boolean                @default(true)
+  maxWarnings           Int                    @default(3)
+
+  // Configuración de soporte IA, comodines y recursos por grupo
+  helpUrl               String?
+  maxSupportAttempts    Int                    @default(3)
+  aiSupportDelaySeconds Int                    @default(60)
+  wildcardAiHints       Int                    @default(0)
+  wildcardSecondChance  Int                    @default(0)
 
   @@map("evaluation_attempt")
 }
@@ -661,5 +699,51 @@ model PushSubscription {
   updatedAt DateTime @updatedAt
 
   @@map("push_subscription")
+}
+
+model McpInspectorChat {
+  id          String   @id @default(cuid())
+  teacherId   String
+  teacher     User     @relation("TeacherMcpChats", fields: [teacherId], references: [id], onDelete: Cascade)
+  activityId  String
+  activity    Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  studentId   String
+  student     User     @relation("StudentMcpChats", fields: [studentId], references: [id], onDelete: Cascade)
+  messages    Json     @default("[]")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([teacherId, activityId, studentId])
+  @@map("mcp_inspector_chat")
+}
+
+model StudentGroup {
+  id          String               @id @default(cuid())
+  name        String
+  description String?
+  courseId    String
+  course      Course               @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  activityId  String?
+  activity    Activity?            @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  leaderId    String?
+  leader      User?                @relation("StudentGroupLeader", fields: [leaderId], references: [id], onDelete: SetNull)
+  members     StudentGroupMember[]
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@map("student_group")
+}
+
+model StudentGroupMember {
+  id        String       @id @default(cuid())
+  groupId   String
+  group     StudentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isLeader  Boolean      @default(false)
+  createdAt DateTime     @default(now())
+
+  @@unique([groupId, userId])
+  @@map("student_group_member")
 }
 

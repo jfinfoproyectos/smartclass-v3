@@ -25,6 +25,16 @@ export function ThemeInitializer() {
             if (!finalCss.includes('!important')) {
               finalCss = finalCss.replace(/(--[a-zA-Z0-9-]+:\s*[^;!]+)(;)/g, "$1 !important$2");
             }
+            if (!finalCss.includes('font-family: var(--font-sans)')) {
+              finalCss += `
+html, body, button, input, select, textarea {
+  font-family: var(--font-sans) !important;
+}
+h1, h2, h3, h4, h5, h6, .prose h1, .prose h2, .prose h3, .prose h4 {
+  font-family: var(--font-heading, var(--font-sans)) !important;
+}
+`;
+            }
             cssContent = finalCss;
             localStorage.setItem("smartclass-theme-css-v2", finalCss);
           }
@@ -47,23 +57,27 @@ export function ThemeInitializer() {
     };
 
     const handleFontLoading = (css: string) => {
-      const fontVars = ['--font-sans', '--font-serif', '--font-mono'];
+      const fontVars = ['--font-sans', '--font-heading', '--font-serif', '--font-mono'];
       const foundFonts = new Set<string>();
 
       fontVars.forEach(v => {
         const reg = new RegExp(`${v}:\\s*([^;]+);`);
         const match = css.match(reg);
         if (match && match[1]) {
-          const firstFont = match[1].split(',')[0].trim().replace(/['"]/g, '');
-          if (firstFont && !isSystemFont(firstFont)) {
-            foundFonts.add(firstFont);
+          const cleanVal = match[1].replace(/!important/g, '').trim();
+          const fonts = cleanVal.split(',').map(f => f.trim().replace(/['"]/g, ''));
+          for (const font of fonts) {
+            if (font && !isSystemFont(font)) {
+              foundFonts.add(font);
+              break;
+            }
           }
         }
       });
 
       if (foundFonts.size > 0) {
         const fontQuery = Array.from(foundFonts)
-          .map(f => `family=${f.replace(/\s+/g, '+')}:wght@300;400;500;600;700;800;900`)
+          .map(f => `family=${f.replace(/\s+/g, '+')}:wght@400;600;700`)
           .join('&');
         
         const linkId = "smartclass-dynamic-fonts";
@@ -81,7 +95,7 @@ export function ThemeInitializer() {
 
     const isSystemFont = (font: string) => {
       const systemFonts = [
-        'inter', 'roboto', 'geist', 'sans-serif', 'serif', 'monospace', 
+        'sans-serif', 'serif', 'monospace', 'cursive',
         'ui-sans-serif', 'system-ui', '-apple-system', 'blinkmacsystemfont',
         'segoe ui', 'helvetica neue', 'arial', 'noto sans', 'apple color emoji',
         'segoe ui emoji', 'segoe ui symbol', 'noto color emoji', 'georgia',

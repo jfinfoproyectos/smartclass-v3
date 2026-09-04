@@ -55,7 +55,7 @@ export function AppIdentity() {
         <div
           className={cn(
             "flex items-center h-16 w-full border-b border-sidebar-border/80 bg-sidebar/80 backdrop-blur-xl transition-all",
-            isCollapsed ? "justify-center px-2" : "px-4"
+            isCollapsed ? "justify-center px-0" : "px-4"
           )}
         >
           <div className={cn("flex items-center gap-3 w-full", isCollapsed && "justify-center")}>

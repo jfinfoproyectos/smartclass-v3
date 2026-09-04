@@ -11,7 +11,7 @@ async function getSession() {
     return await auth.api.getSession({ headers: await headers() });
 }
 
-async function notifyTeacherOfSubmission(activityId: string, studentName: string) {
+async function notifyTeacherOfSubmission(activityId: string, studentName: string, isReevaluation: boolean = false) {
     try {
         const activity = await prisma.activity.findUnique({
             where: { id: activityId },
@@ -28,8 +28,10 @@ async function notifyTeacherOfSubmission(activityId: string, studentName: string
         if (activity?.course?.teacherId) {
             const { sendPushNotification } = await import("@/lib/push-notifications");
             await sendPushNotification(activity.course.teacherId, {
-                title: "Nueva entrega de estudiante 📥",
-                body: `${studentName} entregó la actividad "${activity.title}".`,
+                title: isReevaluation ? "Solicitud de Reevaluación 🔄" : "Nueva entrega de estudiante 📥",
+                body: isReevaluation
+                    ? `${studentName} ha actualizado su entrega en "${activity.title}" y solicita reevaluación.`
+                    : `${studentName} entregó la actividad "${activity.title}".`,
                 url: `/dashboard/teacher/courses/${activity.courseId}/activities/${activityId}`
             });
         }
@@ -72,10 +74,13 @@ export async function submitActivityAction(prevState: any, formData: FormData) {
         );
 
         // 🔔 PUSH NOTIFICATION
-        await notifyTeacherOfSubmission(activityId, session.user.name || "Estudiante");
+        await notifyTeacherOfSubmission(activityId, session.user.name || "Estudiante", submission.reevaluationRequested);
 
         revalidatePath("/dashboard/student");
-        return { message: "Entrega exitosa", error: false };
+        return { 
+            message: submission.reevaluationRequested ? "Solicitud de reevaluación enviada con éxito" : "Entrega exitosa", 
+            error: false 
+        };
     } catch (error: any) {
         console.error("Submission error:", error);
 
@@ -123,7 +128,7 @@ export async function submitGithubActivityAction(activityId: string, repoUrl: st
     );
 
     // 🔔 PUSH NOTIFICATION
-    await notifyTeacherOfSubmission(activityId, session.user.name || "Estudiante");
+    await notifyTeacherOfSubmission(activityId, session.user.name || "Estudiante", submission.reevaluationRequested);
 
     revalidatePath("/dashboard/student");
 }
@@ -161,7 +166,7 @@ export async function submitPdfActivityAction(activityId: string, url: string) {
     );
 
     // 🔔 PUSH NOTIFICATION
-    await notifyTeacherOfSubmission(activityId, session.user.name || "Estudiante");
+    await notifyTeacherOfSubmission(activityId, session.user.name || "Estudiante", submission.reevaluationRequested);
 
     revalidatePath("/dashboard/student");
 }

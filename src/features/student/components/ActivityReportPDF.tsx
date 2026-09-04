@@ -1,25 +1,6 @@
-import { Page, Text, View, Document, StyleSheet, Font } from '@react-pdf/renderer';
+import { Page, Text, View, Document, StyleSheet, Link } from '@react-pdf/renderer';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-
-// Registrar fuentes
-Font.register({
-    family: 'Roboto',
-    fonts: [
-        { src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-light-webfont.ttf', fontWeight: 300 },
-        { src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-regular-webfont.ttf', fontWeight: 400 },
-        { src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-italic-webfont.ttf', fontWeight: 400, fontStyle: 'italic' },
-        { src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-medium-webfont.ttf', fontWeight: 500 },
-        { src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-mediumitalic-webfont.ttf', fontWeight: 500, fontStyle: 'italic' },
-        { src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-bold-webfont.ttf', fontWeight: 700 },
-        { src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-bolditalic-webfont.ttf', fontWeight: 700, fontStyle: 'italic' },
-    ]
-});
-
-Font.register({
-    family: 'Courier',
-    src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Droid_Sans_Mono/DroidSansMono.ttf'
-});
 
 // Colores de la marca
 const COLORS = {
@@ -36,16 +17,16 @@ const COLORS = {
 
 const styles = StyleSheet.create({
     page: {
-        fontFamily: 'Roboto',
-        fontSize: 10,
+        fontFamily: 'Helvetica',
+        fontSize: 9,
         color: COLORS.text,
         backgroundColor: '#ffffff',
-        paddingBottom: 60,
+        paddingBottom: 40,
     },
     header: {
         flexDirection: 'row',
         backgroundColor: COLORS.primary,
-        padding: 25,
+        padding: 18,
         color: '#ffffff',
         alignItems: 'center',
     },
@@ -53,35 +34,34 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     universityName: {
-        fontSize: 9,
+        fontSize: 8,
         opacity: 0.9,
-        marginBottom: 4,
+        marginBottom: 3,
         textTransform: 'uppercase',
-        letterSpacing: 1,
     },
     title: {
-        fontSize: 20,
-        fontWeight: 700,
-        marginBottom: 6,
+        fontSize: 15,
+        fontFamily: 'Helvetica-Bold',
+        marginBottom: 3,
+        lineHeight: 1.2,
     },
     courseTitle: {
-        fontSize: 12,
-        fontWeight: 400,
+        fontSize: 9.5,
         opacity: 0.9,
     },
     gradeBadge: {
         backgroundColor: '#ffffff',
-        paddingVertical: 8,
-        paddingHorizontal: 16,
+        paddingVertical: 6,
+        paddingHorizontal: 12,
         borderRadius: 6,
         alignItems: 'center',
         justifyContent: 'center',
-        marginLeft: 20,
-        minWidth: 80,
+        marginLeft: 15,
+        minWidth: 70,
     },
     gradeValue: {
-        fontSize: 20,
-        fontWeight: 700,
+        fontSize: 18,
+        fontFamily: 'Helvetica-Bold',
         color: COLORS.primary,
     },
     gradeLabel: {
@@ -92,7 +72,7 @@ const styles = StyleSheet.create({
     },
     metaSection: {
         flexDirection: 'row',
-        padding: 15,
+        padding: 10,
         backgroundColor: COLORS.background,
         borderBottomWidth: 1,
         borderBottomColor: COLORS.border,
@@ -101,334 +81,175 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     metaLabel: {
-        fontSize: 8,
+        fontSize: 7,
         color: COLORS.textLight,
         marginBottom: 2,
         textTransform: 'uppercase',
-        fontWeight: 500,
+        fontFamily: 'Helvetica-Bold',
     },
     metaValue: {
-        fontSize: 10,
-        fontWeight: 500,
+        fontSize: 8.5,
         color: COLORS.text,
     },
     content: {
-        padding: 30,
+        paddingHorizontal: 18,
+        paddingTop: 12,
+        paddingBottom: 40,
     },
     section: {
-        marginBottom: 20,
+        marginBottom: 14,
     },
     sectionHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 10,
+        marginBottom: 6,
         borderBottomWidth: 1,
         borderBottomColor: COLORS.border,
-        paddingBottom: 5,
+        paddingBottom: 3,
     },
     sectionTitle: {
-        fontSize: 12,
-        fontWeight: 700,
+        fontSize: 10.5,
+        fontFamily: 'Helvetica-Bold',
         color: COLORS.secondary,
         textTransform: 'uppercase',
-        letterSpacing: 0.5,
     },
-    // Markdown Styles
-    mdParagraph: {
-        fontSize: 10,
-        lineHeight: 1.5,
-        marginBottom: 8,
-        textAlign: 'justify',
-    },
-    mdH1: {
-        fontSize: 16,
-        fontWeight: 700,
-        color: COLORS.primary,
-        marginTop: 12,
-        marginBottom: 6,
-    },
-    mdH2: {
-        fontSize: 14,
-        fontWeight: 700,
-        color: COLORS.secondary,
-        marginTop: 10,
+    paragraph: {
+        fontSize: 8.5,
+        lineHeight: 1.4,
         marginBottom: 5,
-    },
-    mdH3: {
-        fontSize: 12,
-        fontWeight: 700,
         color: COLORS.text,
-        marginTop: 8,
-        marginBottom: 4,
     },
-    mdCodeBlock: {
-        fontFamily: 'Courier',
-        backgroundColor: COLORS.codeBg,
-        padding: 10,
-        borderRadius: 4,
-        borderWidth: 1,
-        borderColor: COLORS.codeBorder,
-        marginBottom: 10,
-        fontSize: 9,
+    heading: {
+        fontSize: 9.5,
+        fontFamily: 'Helvetica-Bold',
+        color: COLORS.primary,
+        marginTop: 6,
+        marginBottom: 3,
     },
-    mdInlineCode: {
-        fontFamily: 'Courier',
-        backgroundColor: COLORS.codeBg,
-        paddingHorizontal: 3,
-        paddingVertical: 1,
-        borderRadius: 2,
-        fontSize: 9,
-        color: '#d63384', // pink-600 style
-    },
-    mdList: {
-        marginLeft: 10,
-        marginBottom: 8,
-    },
-    mdListItem: {
+    bulletItem: {
         flexDirection: 'row',
-        marginBottom: 4,
+        marginBottom: 3,
+        paddingRight: 10,
     },
-    mdBullet: {
-        width: 15,
-        fontSize: 14,
+    bulletDot: {
+        width: 10,
+        fontSize: 9,
         color: COLORS.accent,
-        lineHeight: 1,
     },
-    mdBold: {
-        fontWeight: 700,
+    bulletText: {
+        flex: 1,
+        fontSize: 8.5,
+        lineHeight: 1.4,
+        color: COLORS.text,
     },
-    mdItalic: {
+    blockquote: {
+        borderLeftWidth: 3,
+        borderLeftColor: COLORS.primary,
+        paddingLeft: 8,
+        paddingVertical: 4,
+        marginVertical: 5,
+        backgroundColor: COLORS.background,
+        borderRadius: 2,
+    },
+    blockquoteText: {
+        fontSize: 8.5,
         fontStyle: 'italic',
+        color: COLORS.textLight,
+        lineHeight: 1.4,
+    },
+    // PDF Table Styles
+    pdfTable: {
+        width: '100%',
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        borderRadius: 4,
+        marginVertical: 6,
+        overflow: 'hidden',
+    },
+    pdfTableHeader: {
+        flexDirection: 'row',
+        backgroundColor: COLORS.primary,
+        paddingVertical: 5,
+        paddingHorizontal: 6,
+    },
+    pdfTableHeaderCell: {
+        fontSize: 8,
+        fontFamily: 'Helvetica-Bold',
+        color: '#ffffff',
+        flex: 1,
+    },
+    pdfTableRow: {
+        flexDirection: 'row',
+        borderBottomWidth: 1,
+        borderBottomColor: COLORS.border,
+        paddingVertical: 5,
+        paddingHorizontal: 6,
+        backgroundColor: '#ffffff',
+    },
+    pdfTableCell: {
+        fontSize: 8,
+        color: COLORS.text,
+        flex: 1,
     },
     // Required Files Styles
     reqFilesContainer: {
-        marginTop: 10,
-        padding: 10,
+        marginTop: 4,
+        padding: 6,
         backgroundColor: COLORS.background,
         borderRadius: 4,
         borderWidth: 1,
         borderColor: COLORS.border,
     },
     reqFilesTitle: {
-        fontSize: 10,
-        fontWeight: 700,
-        marginBottom: 5,
+        fontSize: 8.5,
+        fontFamily: 'Helvetica-Bold',
+        marginBottom: 3,
         color: COLORS.text,
     },
     reqFileBadge: {
-        fontSize: 9,
+        fontSize: 8,
         fontFamily: 'Courier',
         backgroundColor: '#ffffff',
-        paddingHorizontal: 6,
+        paddingHorizontal: 4,
         paddingVertical: 2,
         borderRadius: 3,
         borderWidth: 1,
         borderColor: COLORS.border,
-        marginRight: 5,
-        marginBottom: 5,
-        alignSelf: 'flex-start',
+        marginRight: 4,
+        marginBottom: 4,
     },
     footer: {
         position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
-        height: 40,
+        height: 30,
         backgroundColor: COLORS.background,
         borderTopWidth: 1,
         borderTopColor: COLORS.border,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 30,
+        paddingHorizontal: 20,
     },
     footerText: {
-        fontSize: 8,
+        fontSize: 7.5,
         color: COLORS.textLight,
     },
 });
 
-// --- Advanced Block-Aware Markdown Parser ---
-
-type BlockType = 'paragraph' | 'h1' | 'h2' | 'h3' | 'code-block' | 'list';
-
-interface MarkdownBlock {
-    type: BlockType;
-    content: string | string[]; // string for most, string[] for lists
+// Helper to clean raw Markdown text into pure clean strings
+function cleanText(text: string): string {
+    if (!text) return '';
+    return text
+        .replace(/\\n/g, '\n')
+        .replace(/^#{1,6}\s*/, '')
+        .replace(/^=>\s*/, '')
+        .replace(/^>\s*/, '')
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+        .replace(/[*`#]/g, '')
+        .trim();
 }
-
-const parseMarkdown = (text: string): MarkdownBlock[] => {
-    if (!text) return [];
-
-    const blocks: MarkdownBlock[] = [];
-    const lines = text.split('\n');
-
-    let currentBlock: MarkdownBlock | null = null;
-    let inCodeBlock = false;
-
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        const trimmedLine = line.trim();
-
-        // 1. Handle Code Blocks
-        if (trimmedLine.startsWith('```')) {
-            if (inCodeBlock) {
-                // End of code block
-                if (currentBlock && currentBlock.type === 'code-block') {
-                    blocks.push(currentBlock);
-                    currentBlock = null;
-                }
-                inCodeBlock = false;
-            } else {
-                // Start of code block
-                // If we were building a paragraph, push it first
-                if (currentBlock && currentBlock.type === 'paragraph') {
-                    blocks.push(currentBlock);
-                }
-                currentBlock = { type: 'code-block', content: '' };
-                inCodeBlock = true;
-            }
-            continue;
-        }
-
-        if (inCodeBlock) {
-            if (currentBlock && currentBlock.type === 'code-block') {
-                currentBlock.content = (currentBlock.content as string) + line + '\n';
-            }
-            continue;
-        }
-
-        // 2. Handle Headers
-        if (trimmedLine.startsWith('#')) {
-            // Push previous block if exists
-            if (currentBlock) {
-                blocks.push(currentBlock);
-                currentBlock = null;
-            }
-
-            if (trimmedLine.startsWith('# ')) {
-                blocks.push({ type: 'h1', content: trimmedLine.substring(2) });
-            } else if (trimmedLine.startsWith('## ')) {
-                blocks.push({ type: 'h2', content: trimmedLine.substring(3) });
-            } else if (trimmedLine.startsWith('### ')) {
-                blocks.push({ type: 'h3', content: trimmedLine.substring(4) });
-            }
-            continue;
-        }
-
-        // 3. Handle Lists
-        const isListItem = trimmedLine.startsWith('- ') || trimmedLine.startsWith('* ') || /^\d+\.\s/.test(trimmedLine);
-
-        if (isListItem) {
-            const itemContent = trimmedLine.replace(/^[-*]\s|^\d+\.\s/, '');
-
-            if (currentBlock && currentBlock.type === 'list') {
-                (currentBlock.content as string[]).push(itemContent);
-            } else {
-                // Push previous block if it wasn't a list
-                if (currentBlock) {
-                    blocks.push(currentBlock);
-                }
-                currentBlock = { type: 'list', content: [itemContent] };
-            }
-            continue;
-        }
-
-        // 4. Handle Paragraphs & Empty Lines
-        if (trimmedLine.length === 0) {
-            // Empty line means end of current block (paragraph or list)
-            if (currentBlock) {
-                blocks.push(currentBlock);
-                currentBlock = null;
-            }
-            continue;
-        }
-
-        // It's a normal text line
-        if (currentBlock && currentBlock.type === 'paragraph') {
-            // Append to current paragraph
-            currentBlock.content = (currentBlock.content as string) + ' ' + trimmedLine;
-        } else {
-            // If we were in a list, close it
-            if (currentBlock && currentBlock.type === 'list') {
-                blocks.push(currentBlock);
-                currentBlock = null;
-            }
-
-            // Start new paragraph
-            currentBlock = { type: 'paragraph', content: trimmedLine };
-        }
-    }
-
-    // Push remaining block
-    if (currentBlock) {
-        blocks.push(currentBlock);
-    }
-
-    return blocks;
-};
-
-// Helper to render inline formatting (bold, italic, code)
-const renderInlineMarkdown = (text: string) => {
-    // Split by formatting tokens: **bold**, *italic*, `code`
-    const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g);
-
-    return parts.map((part, index) => {
-        if (part.startsWith('`') && part.endsWith('`')) {
-            return <Text key={index} style={styles.mdInlineCode}>{part.slice(1, -1)}</Text>;
-        }
-        if (part.startsWith('**') && part.endsWith('**')) {
-            return <Text key={index} style={styles.mdBold}>{part.slice(2, -2)}</Text>;
-        }
-        if (part.startsWith('*') && part.endsWith('*')) {
-            return <Text key={index} style={styles.mdItalic}>{part.slice(1, -1)}</Text>;
-        }
-        return <Text key={index}>{part}</Text>;
-    });
-};
-
-const MarkdownPDF = ({ content }: { content: string }) => {
-    const blocks = parseMarkdown(content);
-
-    return (
-        <View>
-            {blocks.map((block, index) => {
-                switch (block.type) {
-                    case 'h1':
-                        return <Text key={index} style={styles.mdH1}>{block.content as string}</Text>;
-                    case 'h2':
-                        return <Text key={index} style={styles.mdH2}>{block.content as string}</Text>;
-                    case 'h3':
-                        return <Text key={index} style={styles.mdH3}>{block.content as string}</Text>;
-                    case 'code-block':
-                        return (
-                            <View key={index} style={styles.mdCodeBlock}>
-                                <Text>{block.content as string}</Text>
-                            </View>
-                        );
-                    case 'list':
-                        return (
-                            <View key={index} style={styles.mdList}>
-                                {(block.content as string[]).map((item, i) => (
-                                    <View key={i} style={styles.mdListItem}>
-                                        <Text style={styles.mdBullet}>•</Text>
-                                        <Text style={{ flex: 1, fontSize: 10 }}>{renderInlineMarkdown(item)}</Text>
-                                    </View>
-                                ))}
-                            </View>
-                        );
-                    case 'paragraph':
-                    default:
-                        return (
-                            <Text key={index} style={styles.mdParagraph}>
-                                {renderInlineMarkdown(block.content as string)}
-                            </Text>
-                        );
-                }
-            })}
-        </View>
-    );
-};
 
 interface ActivityReportPDFProps {
     activity: any;
@@ -437,23 +258,70 @@ interface ActivityReportPDFProps {
 }
 
 export const ActivityReportPDF = ({ activity, submission, studentName }: ActivityReportPDFProps) => {
-    const feedbackText = submission?.feedback || "Sin comentarios adicionales.";
-    const instructions = activity.description || "Sin instrucciones disponibles.";
-    const statement = activity.statement || "Sin enunciado disponible.";
-    const filePaths = activity.filePaths ? activity.filePaths.split(',') : [];
+    const rawFeedback = submission?.feedback || "Sin comentarios adicionales.";
+    const rawStatement = activity?.statement || "Sin enunciado disponible.";
+    const filePaths = activity?.filePaths ? activity.filePaths.split(',') : [];
+
+    // Parse statement into clean lines
+    const statementLines = rawStatement
+        .replace(/\\n/g, '\n')
+        .split('\n')
+        .map((l: string) => l.trim())
+        .filter(Boolean);
+
+    // Parse feedback into clean lines and table rows
+    const feedbackLines = rawFeedback
+        .replace(/\\n/g, '\n')
+        .split('\n')
+        .map((l: string) => l.trim())
+        .filter(Boolean);
+
+    // Extract Markdown Table from feedback if present
+    const tableHeaders: string[] = [];
+    const tableRows: string[][] = [];
+    const regularFeedbackLines: Array<{ text: string; isHeader: boolean; isBullet: boolean; isQuote: boolean }> = [];
+
+    let inTable = false;
+
+    feedbackLines.forEach((line: string) => {
+        if (line.startsWith('|')) {
+            const cells = line.split('|').map((c: string) => cleanText(c)).filter(Boolean);
+            if (line.includes('---')) {
+                inTable = true;
+                return;
+            }
+            if (!inTable) {
+                tableHeaders.push(...cells);
+                inTable = true;
+            } else {
+                tableRows.push(cells);
+            }
+        } else {
+            inTable = false;
+            const cleaned = cleanText(line);
+            if (cleaned) {
+                const isHeader = line.startsWith('#') || line.startsWith('**') || line.startsWith('=>');
+                const isBullet = line.startsWith('-') || line.startsWith('*') || /^\d+\./.test(line);
+                const isQuote = line.startsWith('>');
+                regularFeedbackLines.push({ text: cleaned, isHeader, isBullet, isQuote });
+            }
+        }
+    });
 
     return (
         <Document>
             <Page size="A4" style={styles.page}>
-                {/* Header */}
+                {/* Header Banner */}
                 <View style={styles.header}>
                     <View style={styles.headerContent}>
                         <Text style={styles.universityName}>Escuela de Ingeniería de Antioquia</Text>
-                        <Text style={styles.title}>{activity.title}</Text>
-                        <Text style={styles.courseTitle}>{activity.course.title}</Text>
+                        <Text style={styles.title}>{cleanText(activity?.title || 'Actividad')}</Text>
+                        <Text style={styles.courseTitle}>{cleanText(activity?.course?.title || activity?.courseTitle || 'Curso')}</Text>
                     </View>
                     <View style={styles.gradeBadge}>
-                        <Text style={styles.gradeValue}>{submission?.grade?.toFixed(1) || '-'}</Text>
+                        <Text style={styles.gradeValue}>
+                            {submission?.grade !== null && submission?.grade !== undefined ? Number(submission.grade).toFixed(1) : '-'}
+                        </Text>
                         <Text style={styles.gradeLabel}>Nota Final</Text>
                     </View>
                 </View>
@@ -467,22 +335,25 @@ export const ActivityReportPDF = ({ activity, submission, studentName }: Activit
                     <View style={styles.metaItem}>
                         <Text style={styles.metaLabel}>Fecha de Entrega</Text>
                         <Text style={styles.metaValue}>
-                            {submission?.submittedAt ? format(new Date(submission.submittedAt), "PP p", { locale: es }) : 'N/A'}
+                            {submission?.submittedAt || submission?.createdAt ? format(new Date(submission.submittedAt || submission.createdAt), "PP p", { locale: es }) : 'N/A'}
                         </Text>
                     </View>
                     <View style={styles.metaItem}>
-                        <Text style={styles.metaLabel}>Repositorio</Text>
-                        <Text style={[styles.metaValue, { color: COLORS.primary, fontSize: 9 }]}>
-                            {submission?.url || 'N/A'}
-                        </Text>
+                        <Text style={styles.metaLabel}>Repositorio / URL</Text>
+                        {submission?.url ? (
+                            <Link src={submission.url} style={[styles.metaValue, { color: COLORS.primary, fontSize: 8 }]}>
+                                {submission.url}
+                            </Link>
+                        ) : (
+                            <Text style={styles.metaValue}>N/A</Text>
+                        )}
                     </View>
                 </View>
 
                 <View style={styles.content}>
-
                     {/* Archivos Requeridos */}
                     {filePaths.length > 0 && (
-                        <View style={styles.section}>
+                        <View style={styles.section} wrap={false}>
                             <View style={styles.sectionHeader}>
                                 <Text style={styles.sectionTitle}>Archivos Requeridos</Text>
                             </View>
@@ -499,18 +370,99 @@ export const ActivityReportPDF = ({ activity, submission, studentName }: Activit
 
                     {/* 2. Enunciado / Rúbrica */}
                     <View style={styles.section}>
-                        <View style={styles.sectionHeader}>
+                        <View style={styles.sectionHeader} wrap={false}>
                             <Text style={styles.sectionTitle}>Enunciado / Rúbrica de Evaluación</Text>
                         </View>
-                        <MarkdownPDF content={statement} />
+                        {statementLines.map((line: string, idx: number) => {
+                            const cleaned = cleanText(line);
+                            if (!cleaned) return null;
+                            const isHeader = line.startsWith('#') || line.startsWith('**') || line.startsWith('=>');
+                            const isQuote = line.startsWith('>');
+                            const isBullet = line.startsWith('-') || line.startsWith('*') || /^\d+\./.test(line);
+
+                            if (isHeader) {
+                                return (
+                                    <View key={idx} style={{ marginTop: 6, marginBottom: 2 }} wrap={false}>
+                                        <Text style={styles.heading}>{cleaned}</Text>
+                                    </View>
+                                );
+                            }
+                            if (isQuote) {
+                                return (
+                                    <View key={idx} style={styles.blockquote} wrap={false}>
+                                        <Text style={styles.blockquoteText}>{cleaned}</Text>
+                                    </View>
+                                );
+                            }
+                            if (isBullet) {
+                                return (
+                                    <View key={idx} style={styles.bulletItem} wrap={false}>
+                                        <Text style={styles.bulletDot}>•</Text>
+                                        <Text style={styles.bulletText}>{cleaned}</Text>
+                                    </View>
+                                );
+                            }
+                            return (
+                                <Text key={idx} style={styles.paragraph}>{cleaned}</Text>
+                            );
+                        })}
                     </View>
 
-                    {/* 3. Retroalimentación */}
-                    <View style={styles.section} break>
-                        <View style={styles.sectionHeader}>
-                            <Text style={styles.sectionTitle}>Retroalimentación</Text>
+                    {/* 3. Tabla de Archivos Evaluados (Si existe) */}
+                    {tableHeaders.length > 0 && tableRows.length > 0 && (
+                        <View style={styles.section} wrap={false}>
+                            <View style={styles.sectionHeader}>
+                                <Text style={styles.sectionTitle}>Entregables Evaluados</Text>
+                            </View>
+                            <View style={styles.pdfTable}>
+                                <View style={styles.pdfTableHeader}>
+                                    {tableHeaders.map((h, i) => (
+                                        <Text key={i} style={styles.pdfTableHeaderCell}>{h}</Text>
+                                    ))}
+                                </View>
+                                {tableRows.map((row, rIdx) => (
+                                    <View key={rIdx} style={styles.pdfTableRow}>
+                                        {row.map((cell, cIdx) => (
+                                            <Text key={cIdx} style={styles.pdfTableCell}>{cell}</Text>
+                                        ))}
+                                    </View>
+                                ))}
+                            </View>
                         </View>
-                        <MarkdownPDF content={feedbackText} />
+                    )}
+
+                    {/* 4. Retroalimentación */}
+                    <View style={styles.section}>
+                        <View style={styles.sectionHeader} wrap={false}>
+                            <Text style={styles.sectionTitle}>Retroalimentación de la Entrega</Text>
+                        </View>
+                        {regularFeedbackLines.map((item, idx) => {
+                            if (item.isHeader) {
+                                return (
+                                    <View key={idx} style={{ marginTop: 6, marginBottom: 2 }} wrap={false}>
+                                        <Text style={styles.heading}>{item.text}</Text>
+                                    </View>
+                                );
+                            }
+                            if (item.isQuote) {
+                                return (
+                                    <View key={idx} style={styles.blockquote} wrap={false}>
+                                        <Text style={styles.blockquoteText}>{item.text}</Text>
+                                    </View>
+                                );
+                            }
+                            if (item.isBullet) {
+                                return (
+                                    <View key={idx} style={styles.bulletItem} wrap={false}>
+                                        <Text style={styles.bulletDot}>•</Text>
+                                        <Text style={styles.bulletText}>{item.text}</Text>
+                                    </View>
+                                );
+                            }
+                            return (
+                                <Text key={idx} style={styles.paragraph}>{item.text}</Text>
+                            );
+                        })}
                     </View>
                 </View>
 

@@ -393,7 +393,7 @@ export function GroupGenerator({ students: initialStudents }: GroupGeneratorProp
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
         >
-            <div className="h-[calc(100vh-200px)] min-h-[600px] flex gap-6">
+            <div className="h-[calc(100svh-185px)] max-h-[calc(100svh-185px)] min-h-0 flex gap-3">
 
                 {/* Left Panel: Ungrouped */}
                 <div className="w-1/4 min-w-[300px] flex flex-col gap-4">

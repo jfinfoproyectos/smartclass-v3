@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { evaluationService } from "@/features/teacher/services/evaluationService";
 import { TakeEvaluationLayout } from "@/features/student/components/TakeEvaluationLayout";
+import { getAvailableThemes } from "@/app/actions/themes";
 
 export default async function EvaluationPage({ params }: { params: Promise<{ attemptId: string }> }) {
     const session = await auth.api.getSession({ headers: await headers() });
@@ -11,7 +12,10 @@ export default async function EvaluationPage({ params }: { params: Promise<{ att
     }
 
     const { attemptId } = await params;
-    const attempt = await evaluationService.getAttemptWithQuestions(attemptId);
+    const [attempt, themes] = await Promise.all([
+        evaluationService.getAttemptWithQuestions(attemptId),
+        getAvailableThemes()
+    ]);
 
     if (!attempt) {
         redirect("/dashboard/student");
@@ -34,6 +38,7 @@ export default async function EvaluationPage({ params }: { params: Promise<{ att
             attempt={attempt}
             submission={submission}
             studentId={session.user.id}
+            themes={themes}
         />
     );
 }

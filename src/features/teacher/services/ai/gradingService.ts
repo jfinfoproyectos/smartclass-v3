@@ -24,7 +24,7 @@ export async function finalizeSubmission(
     missingFiles: string[],
     userId?: string,
     totalExpectedFiles?: number,  // total files expected (found + missing)
-    gradingMode: string = "normal",
+    gradingMode: string = "moderate",
     maxRetries = 3
 ): Promise<GradingResult> {
 
@@ -162,7 +162,7 @@ export async function gradeSubmission(
     repoUrl: string,
     filePaths?: string,
     userId?: string,
-    gradingMode: string = "normal"
+    gradingMode: string = "moderate"
 ): Promise<GradingResult> {
     try {
         const repoInfo = githubService.parseGitHubUrl(repoUrl);
@@ -292,7 +292,7 @@ export async function gradeGoogleColabSubmission(
     description: string,
     colabUrl: string,
     userId?: string,
-    gradingMode: string = "normal"
+    gradingMode: string = "moderate"
 ): Promise<GradingResult> {
     try {
         console.log(`[GradingService] Grading Colab: ${colabUrl}`);

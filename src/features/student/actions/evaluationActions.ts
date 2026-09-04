@@ -32,18 +32,11 @@ export async function registerExpulsionAction(submissionId: string) {
     }
 
     const newExpulsions = (submission.expulsions || 0) + 1;
-    const expulsionPenalty = submission.attempt.evaluation.expulsionPenalty || 0;
-    const totalQuestionsCount = submission.attempt.evaluation.questions.length || 1;
-    const totalScoreSum = submission.answersList.reduce((acc, curr) => acc + (curr.score || 0), 0);
-    const rawScore = totalScoreSum / totalQuestionsCount;
-    const penaltyTotal = newExpulsions * expulsionPenalty;
-    const finalScore = Math.max(0, rawScore - penaltyTotal);
 
     await prisma.evaluationSubmission.update({
         where: { id: submissionId },
         data: {
             expulsions: newExpulsions,
-            ...(submission.score !== null ? { score: Number(finalScore.toFixed(2)) } : {})
         }
     });
 

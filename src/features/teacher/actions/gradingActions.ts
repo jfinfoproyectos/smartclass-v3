@@ -146,7 +146,7 @@ export async function analyzeGitHubFileAction(
     statement: string,
     repoUrl: string,
     accumulatedContext?: string,
-    gradingMode: string = "normal"
+    gradingMode: string = "moderate"
 ) {
     const session = await getSession();
     if (!session || session.user.role !== "teacher") throw new Error("Unauthorized");
@@ -165,7 +165,7 @@ export async function finalizeGitHubGradingAction(
     missingFiles: string[],
     totalExpectedFiles: number,
     courseId: string,
-    gradingMode: string = "normal"
+    gradingMode: string = "moderate"
 ) {
     const session = await getSession();
     if (!session || session.user.role !== "teacher") throw new Error("Unauthorized");
@@ -173,8 +173,7 @@ export async function finalizeGitHubGradingAction(
     const { finalizeSubmission } = await import("../services/ai/gradingService");
     const result = await finalizeSubmission(analyses, statement, missingFiles, session.user.id, totalExpectedFiles, gradingMode);
 
-    const apiRequestsCount = analyses.length + 1;
-    const feedbackText = result.feedback + `\n\n*(Calificado por IA - Peticiones API: ${apiRequestsCount})*`;
+    const feedbackText = result.feedback;
 
     await activityService.submitActivity({
         url: repoUrl,
@@ -360,7 +359,7 @@ export async function gradePdfReviewAction(
     pdfUrl: string,
     criteria: string,
     courseId: string,
-    gradingMode: string = "normal"
+    gradingMode: string = "moderate"
 ) {
     const session = await getSession();
     if (!session || session.user.role !== "teacher") throw new Error("Unauthorized");
@@ -374,7 +373,7 @@ export async function gradePdfReviewAction(
         activityId,
         userId: studentUserId,
         grade: result.grade,
-        feedback: result.feedback + (result.apiRequestsCount ? `\n\n*(Peticiones a la API de Gemini: ${result.apiRequestsCount})*` : "")
+        feedback: result.feedback
     });
 
     // Auditoría
@@ -394,5 +393,186 @@ export async function gradePdfReviewAction(
     );
 
     revalidatePath(`/dashboard/teacher/courses/${courseId}/activities/${activityId}`);
+    return result;
+}
+
+export async function gradeCodeChallengeAction(
+    activityId: string,
+    studentUserId: string,
+    studentCode: string,
+    language: string,
+    statement: string,
+    courseId: string,
+    testCases?: Array<{ input: string; expectedOutput: string; isSecret?: boolean }>,
+    testExecutionSummary?: { passed: number; total: number; details?: string },
+    gradingMode: "normal" | "moderate" | "strict" = "moderate",
+    files?: Array<{ name: string; content: string }>
+) {
+    const session = await getSession();
+    if (!session || session.user.role !== "teacher") throw new Error("Unauthorized");
+
+    const { gradeCodeChallenge } = await import("../services/ai/codeChallengeService");
+    const result = await gradeCodeChallenge({
+        studentCode,
+        files,
+        language,
+        statement,
+        testCases,
+        testExecutionSummary,
+        gradingMode,
+        teacherId: session.user.id,
+    });
+
+    return result;
+}
+
+export async function gradeVideoPitchAction(
+    activityId: string,
+    studentUserId: string,
+    videoUrl: string,
+    statement: string,
+    courseId: string,
+    studentNotes?: string,
+    pitchConfig?: {
+        maxDurationMinutes?: number;
+        requiredTopics?: string[];
+        keyQuestions?: string[];
+    },
+    gradingMode: "normal" | "moderate" | "strict" = "moderate"
+) {
+    const session = await getSession();
+    if (!session || session.user.role !== "teacher") throw new Error("Unauthorized");
+
+    const { gradeVideoPitch } = await import("../services/ai/videoPitchService");
+    const result = await gradeVideoPitch({
+        videoUrl,
+        studentNotes,
+        statement,
+        pitchConfig,
+        gradingMode,
+        teacherId: session.user.id,
+    });
+
+    return result;
+}
+
+export async function gradeAudioDefenseAction(
+    activityId: string,
+    studentUserId: string,
+    audioUrl: string,
+    statement: string,
+    courseId: string,
+    studentNotes?: string,
+    audioConfig?: {
+        maxDurationMinutes?: number;
+        requiredTopics?: string[];
+        keyQuestions?: string[];
+    },
+    gradingMode: "normal" | "moderate" | "strict" = "moderate"
+) {
+    const session = await getSession();
+    if (!session || session.user.role !== "teacher") throw new Error("Unauthorized");
+
+    const { gradeAudioDefense } = await import("../services/ai/audioDefenseService");
+    const result = await gradeAudioDefense({
+        audioUrl,
+        studentNotes,
+        statement,
+        audioConfig,
+        gradingMode,
+        teacherId: session.user.id,
+    });
+
+    return result;
+}
+
+export async function getNextInterviewQuestionAction(
+    activityId: string,
+    history: Array<{ role: "interviewer" | "student"; content: string }>,
+    questionNumber: number,
+    totalQuestions: number,
+    targetRole: string = "Junior"
+) {
+    const session = await getSession();
+    if (!session) throw new Error("Unauthorized");
+
+    const activity = await prisma.activity.findUnique({
+        where: { id: activityId },
+        include: { course: { select: { teacherId: true } } }
+    });
+
+    if (!activity) throw new Error("Actividad no encontrada");
+    const teacherId = activity.course.teacherId;
+
+    const { getNextInterviewQuestion } = await import("../services/ai/interviewService");
+    return await getNextInterviewQuestion({
+        statement: activity.statement || "",
+        targetRole,
+        history,
+        questionNumber,
+        totalQuestions,
+        teacherId,
+    });
+}
+
+export async function gradeInterviewAction(
+    activityId: string,
+    studentUserId: string,
+    history: Array<{ role: "interviewer" | "student"; content: string }>,
+    statement: string,
+    courseId: string,
+    targetRole: string = "Junior",
+    gradingMode: "normal" | "moderate" | "strict" = "moderate"
+) {
+    const session = await getSession();
+    if (!session) throw new Error("Unauthorized");
+
+    const activity = await prisma.activity.findUnique({
+        where: { id: activityId },
+        include: { course: { select: { teacherId: true } } }
+    });
+
+    if (!activity) throw new Error("Actividad no encontrada");
+    const teacherId = activity.course.teacherId;
+
+    const { gradeInterview } = await import("../services/ai/interviewService");
+    const result = await gradeInterview({
+        statement,
+        targetRole,
+        history,
+        gradingMode,
+        teacherId,
+    });
+
+    return result;
+}
+
+export async function gradeDbModelingAction(
+    activityId: string,
+    studentUserId: string,
+    diagramCode: string,
+    sqlScript: string,
+    statement: string,
+    courseId: string,
+    dbConfig?: {
+        targetEngine?: string;
+        requiredEntities?: string[];
+        requiredNormalization?: string;
+    },
+    gradingMode: "normal" | "moderate" | "strict" = "moderate"
+) {
+    const session = await getSession();
+    if (!session || session.user.role !== "teacher") throw new Error("Unauthorized");
+
+    const { gradeDbModeling } = await import("../services/ai/dbModelingService");
+    const result = await gradeDbModeling({
+        diagramCode,
+        sqlScript,
+        statement,
+        dbConfig,
+        gradingMode,
+        teacherId: session.user.id,
+    });
+
     return result;
 }

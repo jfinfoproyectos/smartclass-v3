@@ -61,6 +61,16 @@ export async function getAvailableThemes(): Promise<ThemeInfo[]> {
       // Inject !important to guarantee custom themes win against Tailwind's default variables
       processedCss = processedCss.replace(/(--[a-zA-Z0-9-]+:\s*[^;!]+)(;)/g, "$1 !important$2");
 
+      // Ensure that the theme font-family applies directly to all text elements and headings
+      processedCss += `
+html, body, button, input, select, textarea {
+  font-family: var(--font-sans) !important;
+}
+h1, h2, h3, h4, h5, h6, .prose h1, .prose h2, .prose h3, .prose h4 {
+  font-family: var(--font-heading, var(--font-sans)) !important;
+}
+`;
+
       themes.push({
         id,
         name,
