@@ -12,7 +12,7 @@ import {
     Github, Code2, FileCode, FileText, Folder, Search, Sparkles, Bot,
     Loader2, CheckCircle, Eye, Copy, Check, RotateCcw, ExternalLink, Zap, X, Link as LinkIcon, AlertTriangle, ClipboardList,
     ChevronLeft, ChevronRight, ChevronDown, Maximize2, Minimize2, ListChecks, HelpCircle, CheckCircle2, MinusCircle, XCircle, Info, ZoomIn, ZoomOut,
-    GitCommitVertical
+    GitCommitVertical, ArrowUp, ArrowDown, GripVertical, ListOrdered, ArrowUpDown
 } from "lucide-react";
 import {
     DropdownMenu,
@@ -39,6 +39,23 @@ import {
 import Editor, { loader } from "@monaco-editor/react";
 import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    DragEndEvent,
+} from "@dnd-kit/core";
+import {
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    verticalListSortingStrategy,
+    useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 loader.config({ paths: { vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs" } });
 
@@ -167,6 +184,148 @@ function parseInitialFeedback(rawFeedback: string | null | undefined) {
     return { aiFeedback: cleanRaw, teacherNotes: "" };
 }
 
+function SortableEvaluationFileItem({
+    id,
+    path,
+    index,
+    total,
+    onMoveUp,
+    onMoveDown,
+    onRemove,
+    onPreview,
+    isPreviewing,
+}: {
+    id: string;
+    path: string;
+    index: number;
+    total: number;
+    onMoveUp: (index: number) => void;
+    onMoveDown: (index: number) => void;
+    onRemove: (path: string) => void;
+    onPreview: (path: string) => void;
+    isPreviewing: boolean;
+}) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging
+    } = useSortable({ id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        zIndex: isDragging ? 50 : 1,
+        opacity: isDragging ? 0.7 : 1,
+    };
+
+    const isPrimaryCode = PRIMARY_CODE_EXTENSIONS.some(ext => path.toLowerCase().endsWith(ext));
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={style}
+            className={cn(
+                "flex items-center gap-1.5 p-1.5 rounded-lg border bg-background/95 text-xs font-mono group transition-colors select-none",
+                isDragging ? "ring-2 ring-primary border-transparent shadow-lg" : "hover:border-primary/40",
+                isPreviewing && "border-primary/50 bg-primary/5"
+            )}
+        >
+            <div 
+                {...attributes} 
+                {...listeners} 
+                className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground shrink-0"
+                title="Arrastra para reordenar prioridad"
+            >
+                <GripVertical className="h-3.5 w-3.5" />
+            </div>
+
+            <Badge 
+                variant="secondary" 
+                className="h-5 min-w-5 px-1 flex items-center justify-center font-bold text-[10px] shrink-0 bg-primary/10 text-primary border border-primary/20 font-mono"
+            >
+                #{index + 1}
+            </Badge>
+
+            {isPrimaryCode ? (
+                <FileCode className="h-3.5 w-3.5 text-primary shrink-0" />
+            ) : (
+                <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            )}
+
+            <span 
+                onClick={() => onPreview(path)} 
+                className={cn(
+                    "flex-1 truncate cursor-pointer text-[11px] transition-colors",
+                    isPreviewing ? "font-bold text-primary" : "text-foreground hover:text-primary"
+                )}
+                title={path}
+            >
+                {path}
+            </span>
+
+            <div className="flex items-center gap-0.5 shrink-0 opacity-80 group-hover:opacity-100 transition-opacity">
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={index === 0}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onMoveUp(index);
+                    }}
+                    className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground disabled:opacity-20"
+                    title="Subir prioridad"
+                >
+                    <ArrowUp className="h-3 w-3" />
+                </Button>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={index === total - 1}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onMoveDown(index);
+                    }}
+                    className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground disabled:opacity-20"
+                    title="Bajar prioridad"
+                >
+                    <ArrowDown className="h-3 w-3" />
+                </Button>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onPreview(path);
+                    }}
+                    className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                    title="Ver código"
+                >
+                    <Eye className="h-3 w-3" />
+                </Button>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onRemove(path);
+                    }}
+                    className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                    title="Quitar de la evaluación"
+                >
+                    <X className="h-3 w-3" />
+                </Button>
+            </div>
+        </div>
+    );
+}
+
 export function CodeProjectInspector({
     student,
     submission,
@@ -186,8 +345,54 @@ export function CodeProjectInspector({
     const [repoFiles, setRepoFiles] = useState<string[]>([]);
     const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
-    const [showAllRepoFiles, setShowAllRepoFiles] = useState(false);
+    const [fileViewMode, setFileViewMode] = useState<"required" | "explorer" | "order">(
+        activity?.filePaths ? "required" : "explorer"
+    );
+    const showAllRepoFiles = fileViewMode === "explorer";
+    const setShowAllRepoFiles = (show: boolean) => setFileViewMode(show ? "explorer" : "required");
     const [fullscreenSection, setFullscreenSection] = useState<"none" | "explorer" | "content">("none");
+
+    const dndSensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    );
+
+    const handleMoveUp = (index: number) => {
+        if (index <= 0) return;
+        setSelectedFiles(prev => {
+            const next = [...prev];
+            const temp = next[index - 1];
+            next[index - 1] = next[index];
+            next[index] = temp;
+            return next;
+        });
+    };
+
+    const handleMoveDown = (index: number) => {
+        setSelectedFiles(prev => {
+            if (index >= prev.length - 1) return prev;
+            const next = [...prev];
+            const temp = next[index + 1];
+            next[index + 1] = next[index];
+            next[index] = temp;
+            return next;
+        });
+    };
+
+    const handleDragEndOrder = (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (over && active.id !== over.id) {
+            setSelectedFiles((items) => {
+                const oldIndex = items.indexOf(active.id.toString());
+                const newIndex = items.indexOf(over.id.toString());
+                return arrayMove(items, oldIndex, newIndex);
+            });
+        }
+    };
+
+    const handleRemoveSelectedFile = (path: string) => {
+        setSelectedFiles(prev => prev.filter(p => p !== path));
+    };
 
     useEffect(() => {
         setMounted(true);
@@ -339,10 +544,20 @@ export function CodeProjectInspector({
                 ? activity.filePaths.map((s: any) => String(s).trim()).filter(Boolean)
                 : [];
 
-            // In "Requeridos" mode, auto-select required files found in repo
+            // In "Requeridos" mode, auto-select required files found in repo, strictly preserving configured order
             let initialSelection: string[] = [];
             if (configuredList.length > 0) {
-                initialSelection = files.filter(rf => configuredList.some(cp => isPathMatch(rf, cp)));
+                const matches: string[] = [];
+                const seen = new Set<string>();
+                for (const cp of configuredList) {
+                    for (const rf of files) {
+                        if (isPathMatch(rf, cp) && !seen.has(rf)) {
+                            seen.add(rf);
+                            matches.push(rf);
+                        }
+                    }
+                }
+                initialSelection = matches;
             }
 
             setSelectedFiles(initialSelection);
@@ -560,15 +775,23 @@ export function CodeProjectInspector({
         return [];
     }, [activity?.filePaths]);
 
-    // Matching files found in repo using smart path/basename matching
+    // Matching files found in repo using smart path/basename matching, strictly preserving configured order
     const foundConfiguredFiles = useMemo(() => {
         if (configuredPathsList.length === 0) return repoFiles;
-        return repoFiles.filter(rf => {
-            return configuredPathsList.some(cp => isPathMatch(rf, cp));
-        });
+        const matches: string[] = [];
+        const seen = new Set<string>();
+        for (const cp of configuredPathsList) {
+            for (const rf of repoFiles) {
+                if (isPathMatch(rf, cp) && !seen.has(rf)) {
+                    seen.add(rf);
+                    matches.push(rf);
+                }
+            }
+        }
+        return matches;
     }, [repoFiles, configuredPathsList]);
 
-    // Missing files required for the activity
+    // Missing files required for the activity, preserving configured order
     const missingConfiguredFiles = useMemo(() => {
         if (configuredPathsList.length === 0) return [];
         return configuredPathsList.filter(cp => {
@@ -576,7 +799,7 @@ export function CodeProjectInspector({
         });
     }, [repoFiles, configuredPathsList]);
 
-    const targetFilesList = (showAllRepoFiles || configuredPathsList.length === 0)
+    const targetFilesList = (fileViewMode === "explorer" || configuredPathsList.length === 0)
         ? repoFiles
         : foundConfiguredFiles;
 
@@ -825,171 +1048,308 @@ export function CodeProjectInspector({
                             </div>
                         </div>
 
-                        {/* Mode Switcher & Search Bar */}
-                        {configuredPathsList.length > 0 && (
+                        {/* Mode Switcher */}
+                        {configuredPathsList.length > 0 ? (
                             <div className="flex items-center rounded-lg border bg-muted/60 p-0.5 text-[10px] w-full">
                                 <button
                                     type="button"
-                                    onClick={() => {
-                                        setShowAllRepoFiles(false);
-                                        if (foundConfiguredFiles.length > 0) {
-                                            setSelectedFiles(foundConfiguredFiles);
-                                            handleLoadFilePreview(foundConfiguredFiles[0]);
-                                        }
-                                    }}
+                                    onClick={() => setFileViewMode("required")}
                                     className={`flex-1 py-1 rounded-md font-medium transition-all text-center ${
-                                        !showAllRepoFiles 
+                                        fileViewMode === "required"
                                             ? "bg-background text-foreground shadow-xs font-bold border border-border/50" 
                                             : "text-muted-foreground hover:text-foreground"
                                     }`}
-                                    title="Mostrar y seleccionar archivos requeridos por la actividad"
+                                    title="Mostrar archivos requeridos por la actividad"
                                 >
                                     🎯 Requeridos ({foundConfiguredFiles.length})
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => {
-                                        setShowAllRepoFiles(true);
-                                        setSelectedFiles([]);
-                                    }}
+                                    onClick={() => setFileViewMode("explorer")}
                                     className={`flex-1 py-1 rounded-md font-medium transition-all text-center ${
-                                        showAllRepoFiles 
+                                        fileViewMode === "explorer" 
                                             ? "bg-background text-foreground shadow-xs font-bold border border-border/50" 
                                             : "text-muted-foreground hover:text-foreground"
                                     }`}
-                                    title="Explorar todos los archivos del repositorio (sin selección previa)"
+                                    title="Explorar todos los archivos del repositorio"
+                                >
+                                    📂 Explorar ({repoFiles.length})
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setFileViewMode("order")}
+                                    className={`flex-1 py-1 rounded-md font-medium transition-all text-center ${
+                                        fileViewMode === "order" 
+                                            ? "bg-background text-foreground shadow-xs font-bold border border-border/50" 
+                                            : "text-muted-foreground hover:text-foreground"
+                                    }`}
+                                    title="Definir y priorizar el orden de evaluación para la IA"
+                                >
+                                    🔢 Orden ({selectedFiles.length})
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="flex items-center rounded-lg border bg-muted/60 p-0.5 text-[10px] w-full">
+                                <button
+                                    type="button"
+                                    onClick={() => setFileViewMode("explorer")}
+                                    className={`flex-1 py-1 rounded-md font-medium transition-all text-center ${
+                                        fileViewMode === "explorer" 
+                                            ? "bg-background text-foreground shadow-xs font-bold border border-border/50" 
+                                            : "text-muted-foreground hover:text-foreground"
+                                    }`}
+                                    title="Explorar todos los archivos del repositorio"
                                 >
                                     📂 Explorar Repositorio ({repoFiles.length})
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setFileViewMode("order")}
+                                    className={`flex-1 py-1 rounded-md font-medium transition-all text-center ${
+                                        fileViewMode === "order" 
+                                            ? "bg-background text-foreground shadow-xs font-bold border border-border/50" 
+                                            : "text-muted-foreground hover:text-foreground"
+                                    }`}
+                                    title="Definir y priorizar el orden de evaluación para la IA"
+                                >
+                                    🔢 Orden Eval. ({selectedFiles.length})
                                 </button>
                             </div>
                         )}
 
-                        {/* Search Input & Re-scan Button */}
-                        <div className="flex items-center gap-1.5">
-                            <div className="relative flex-1">
-                                <Search className="h-[14px] w-[14px] absolute left-2.5 top-2.5 text-muted-foreground" />
-                                <Input
-                                    placeholder={showAllRepoFiles ? "Buscar en todo el repositorio..." : "Buscar archivo requerido..."}
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="h-8 text-xs pl-8 bg-background"
-                                />
+                        {fileViewMode !== "order" && (
+                            /* Search Input & Re-scan Button */
+                            <div className="flex items-center gap-1.5">
+                                <div className="relative flex-1">
+                                    <Search className="h-[14px] w-[14px] absolute left-2.5 top-2.5 text-muted-foreground" />
+                                    <Input
+                                        placeholder={fileViewMode === "explorer" ? "Buscar en todo el repositorio..." : "Buscar archivo requerido..."}
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className="h-8 text-xs pl-8 bg-background"
+                                    />
+                                </div>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={isScanning || isEvaluating}
+                                    onClick={handleScanRepo}
+                                    className="h-8 px-2.5 text-xs gap-1.5 shrink-0"
+                                    title="Volver a escanear archivos del repositorio"
+                                >
+                                    {isScanning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 text-muted-foreground" />}
+                                    <span>Re-escanear</span>
+                                </Button>
                             </div>
-                            <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                disabled={isScanning || isEvaluating}
-                                onClick={handleScanRepo}
-                                className="h-8 px-2.5 text-xs gap-1.5 shrink-0"
-                                title="Volver a escanear archivos del repositorio"
-                            >
-                                {isScanning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 text-muted-foreground" />}
-                                <span>Re-escanear</span>
-                            </Button>
-                        </div>
+                        )}
                     </div>
 
-                    {/* File List / Tree */}
-                    <div className="flex-1 overflow-y-auto p-2 space-y-0.5 font-mono text-xs min-h-0">
-                        {isScanning ? (
-                            <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-2">
-                                <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                                <p className="text-xs">Cargando árbol de archivos...</p>
+                    {/* Left Column Body: Order View OR File List / Tree */}
+                    {fileViewMode === "order" ? (
+                        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                            <div className="p-2.5 border-b bg-muted/20 text-[11px] text-muted-foreground flex items-center justify-between shrink-0">
+                                <span className="flex items-center gap-1.5 font-semibold text-foreground">
+                                    <Sparkles className="h-3.5 w-3.5 text-purple-600" />
+                                    Orden de Evaluación IA
+                                </span>
+                                <span className="font-mono font-bold text-xs text-primary">
+                                    {selectedFiles.length} {selectedFiles.length === 1 ? 'archivo' : 'archivos'}
+                                </span>
                             </div>
-                        ) : filteredFiles.length === 0 ? (
-                            <div className="text-center py-12 text-muted-foreground text-xs">
-                                No se encontraron archivos.
-                            </div>
-                        ) : (
-                            filteredFiles.map((path) => {
-                                const isSelected = selectedFiles.includes(path);
-                                const isPreviewing = previewFile === path;
-                                const isPrimaryCode = PRIMARY_CODE_EXTENSIONS.some(ext => path.toLowerCase().endsWith(ext));
-
-                                return (
-                                    <div
-                                        key={path}
-                                        className={`flex items-center justify-between p-1.5 rounded-lg border transition-all cursor-pointer group ${
-                                            isPreviewing 
-                                                ? "bg-primary/10 border-primary/40" 
-                                                : "hover:bg-muted/60 border-transparent"
-                                        }`}
-                                    >
-                                        <div className="flex items-center space-x-2 min-w-0 flex-1">
-                                            <Checkbox
-                                                id={`check-${path}`}
-                                                checked={isSelected}
-                                                onCheckedChange={(checked) => {
-                                                    if (checked) setSelectedFiles(prev => [...prev, path]);
-                                                    else setSelectedFiles(prev => prev.filter(p => p !== path));
+                            
+                            <div className="flex-1 overflow-y-auto p-2 space-y-1.5 min-h-0 scrollbar-thin">
+                                {selectedFiles.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center h-48 text-center p-4 text-muted-foreground space-y-2">
+                                        <ListOrdered className="h-8 w-8 text-muted-foreground/40" />
+                                        <p className="font-semibold text-xs text-foreground">Sin archivos seleccionados</p>
+                                        <p className="text-[11px] max-w-xs leading-relaxed">
+                                            Selecciona archivos desde <strong>{configuredPathsList.length > 0 ? "Requeridos o Explorar" : "Explorar"}</strong> para definir el orden secuencial en que la IA los evaluará.
+                                        </p>
+                                        {foundConfiguredFiles.length > 0 && (
+                                            <Button 
+                                                type="button" 
+                                                variant="outline" 
+                                                size="sm" 
+                                                className="text-xs h-7 gap-1 mt-1 font-semibold"
+                                                onClick={() => {
+                                                    setSelectedFiles(foundConfiguredFiles);
                                                 }}
-                                                onClick={(e) => e.stopPropagation()}
-                                            />
-                                            {isPrimaryCode ? (
-                                                <FileCode className="h-3.5 w-3.5 text-primary shrink-0" />
-                                            ) : (
-                                                <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                            )}
-                                            <span 
-                                                onClick={() => handleLoadFilePreview(path)}
-                                                className={`truncate select-none text-[11px] ${
-                                                    isPreviewing ? "font-bold text-primary" : "text-foreground"
-                                                }`}
-                                                title={path}
                                             >
-                                                {path}
-                                            </span>
-                                        </div>
-
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => handleLoadFilePreview(path)}
-                                            className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
-                                            title="Ver código"
-                                        >
-                                            <Eye className="h-3 w-3" />
-                                        </Button>
+                                                Cargar requeridos ({foundConfiguredFiles.length})
+                                            </Button>
+                                        )}
                                     </div>
-                                );
-                            })
-                        )}
+                                ) : (
+                                    <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEndOrder}>
+                                        <SortableContext items={selectedFiles} strategy={verticalListSortingStrategy}>
+                                            <div className="flex flex-col gap-1.5 w-full">
+                                                {selectedFiles.map((filePath, index) => (
+                                                    <SortableEvaluationFileItem
+                                                        key={filePath}
+                                                        id={filePath}
+                                                        path={filePath}
+                                                        index={index}
+                                                        total={selectedFiles.length}
+                                                        onMoveUp={handleMoveUp}
+                                                        onMoveDown={handleMoveDown}
+                                                        onRemove={handleRemoveSelectedFile}
+                                                        onPreview={handleLoadFilePreview}
+                                                        isPreviewing={previewFile === filePath}
+                                                    />
+                                                ))}
+                                            </div>
+                                        </SortableContext>
+                                    </DndContext>
+                                )}
+                            </div>
 
-                        {/* Missing Required Files Warning Box */}
-                        {missingConfiguredFiles.length > 0 && (
-                            <div className="mt-2 p-2.5 rounded-xl border border-destructive/30 bg-destructive/10 space-y-1.5 animate-in fade-in shrink-0">
-                                <div className="flex items-center gap-1.5 text-destructive font-bold text-[11px]">
-                                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                                    <span>{missingConfiguredFiles.length} Archivo(s) Faltante(s) Requerido(s):</span>
-                                </div>
-                                <div className="space-y-1">
-                                    {missingConfiguredFiles.map((path) => (
-                                        <div key={path} className="flex items-center justify-between text-[10px] text-destructive font-mono bg-background/60 p-1.5 rounded border border-destructive/20">
-                                            <span className="truncate font-semibold" title={path}>{path}</span>
-                                            <Badge variant="outline" className="text-[9px] text-destructive border-destructive/40 bg-destructive/10 shrink-0 ml-1 font-sans font-bold">
-                                                No encontrado
-                                            </Badge>
+                            <div className="p-2.5 border-t bg-muted/20 text-[10px] text-muted-foreground flex justify-between items-center shrink-0">
+                                <span className="truncate">Arrastra o usa flechas para priorizar</span>
+                                <Button 
+                                    type="button" 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    disabled={selectedFiles.length === 0}
+                                    onClick={() => setSelectedFiles([])}
+                                    className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-destructive shrink-0 disabled:opacity-30"
+                                >
+                                    Limpiar orden
+                                </Button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                            {/* File List / Tree */}
+                            <div className="flex-1 overflow-y-auto p-2 space-y-0.5 font-mono text-xs min-h-0 scrollbar-thin">
+                                {isScanning ? (
+                                    <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-2">
+                                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                                        <p className="text-xs">Cargando árbol de archivos...</p>
+                                    </div>
+                                ) : filteredFiles.length === 0 ? (
+                                    <div className="text-center py-12 text-muted-foreground text-xs">
+                                        No se encontraron archivos.
+                                    </div>
+                                ) : (
+                                    filteredFiles.map((path) => {
+                                        const orderIndex = selectedFiles.indexOf(path);
+                                        const isSelected = orderIndex !== -1;
+                                        const isPreviewing = previewFile === path;
+                                        const isPrimaryCode = PRIMARY_CODE_EXTENSIONS.some(ext => path.toLowerCase().endsWith(ext));
+
+                                        return (
+                                            <div
+                                                key={path}
+                                                className={`flex items-center justify-between p-1.5 rounded-lg border transition-all cursor-pointer group ${
+                                                    isPreviewing 
+                                                        ? "bg-primary/10 border-primary/40" 
+                                                        : "hover:bg-muted/60 border-transparent"
+                                                }`}
+                                            >
+                                                <div className="flex items-center space-x-2 min-w-0 flex-1">
+                                                    <Checkbox
+                                                        id={`check-${path}`}
+                                                        checked={isSelected}
+                                                        onCheckedChange={(checked) => {
+                                                            if (checked) setSelectedFiles(prev => [...prev, path]);
+                                                            else setSelectedFiles(prev => prev.filter(p => p !== path));
+                                                        }}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    />
+                                                    {isSelected && (
+                                                        <Badge 
+                                                            variant="outline" 
+                                                            className="h-4 min-w-4 px-1 text-[9px] font-mono font-bold bg-primary/10 text-primary border-primary/30 flex items-center justify-center shrink-0"
+                                                            title={`Orden de evaluación: #${orderIndex + 1}`}
+                                                        >
+                                                            #{orderIndex + 1}
+                                                        </Badge>
+                                                    )}
+                                                    {isPrimaryCode ? (
+                                                        <FileCode className="h-3.5 w-3.5 text-primary shrink-0" />
+                                                    ) : (
+                                                        <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                                    )}
+                                                    <span 
+                                                        onClick={() => handleLoadFilePreview(path)}
+                                                        className={`truncate select-none text-[11px] ${
+                                                            isPreviewing ? "font-bold text-primary" : "text-foreground"
+                                                        }`}
+                                                        title={path}
+                                                    >
+                                                        {path}
+                                                    </span>
+                                                </div>
+
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleLoadFilePreview(path)}
+                                                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                                                    title="Ver código"
+                                                >
+                                                    <Eye className="h-3 w-3" />
+                                                </Button>
+                                            </div>
+                                        );
+                                    })
+                                )}
+
+                                {/* Missing Required Files Warning Box */}
+                                {missingConfiguredFiles.length > 0 && fileViewMode === "required" && (
+                                    <div className="mt-2 p-2.5 rounded-xl border border-destructive/30 bg-destructive/10 space-y-1.5 animate-in fade-in shrink-0">
+                                        <div className="flex items-center gap-1.5 text-destructive font-bold text-[11px]">
+                                            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                                            <span>{missingConfiguredFiles.length} Archivo(s) Faltante(s) Requerido(s):</span>
                                         </div>
-                                    ))}
+                                        <div className="space-y-1">
+                                            {missingConfiguredFiles.map((path) => (
+                                                <div key={path} className="flex items-center justify-between text-[10px] text-destructive font-mono bg-background/60 p-1.5 rounded border border-destructive/20">
+                                                    <span className="truncate font-semibold" title={path}>{path}</span>
+                                                    <Badge variant="outline" className="text-[9px] text-destructive border-destructive/40 bg-destructive/10 shrink-0 ml-1 font-sans font-bold">
+                                                        No encontrado
+                                                    </Badge>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="p-2.5 border-t bg-muted/20 text-[10px] text-muted-foreground flex justify-between items-center shrink-0">
+                                <div className="flex items-center gap-1.5">
+                                    <span className="font-bold text-foreground font-mono">{selectedFiles.length}</span>
+                                    <span>para IA</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                    {selectedFiles.length > 0 && (
+                                        <Button 
+                                            type="button" 
+                                            variant="outline" 
+                                            size="sm" 
+                                            onClick={() => setFileViewMode("order")}
+                                            className="h-6 px-2 text-[10px] gap-1 font-semibold border-primary/30 text-primary hover:bg-primary/10"
+                                            title="Ajustar y definir orden de evaluación"
+                                        >
+                                            <ArrowUpDown className="h-3 w-3" />
+                                            Ordenar ({selectedFiles.length})
+                                        </Button>
+                                    )}
+                                    <Button 
+                                        type="button" 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        onClick={() => setSelectedFiles([])}
+                                        className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
+                                    >
+                                        Desmarcar
+                                    </Button>
                                 </div>
                             </div>
-                        )}
-                    </div>
-
-                    <div className="p-2.5 border-t bg-muted/20 text-[10px] text-muted-foreground flex justify-between items-center shrink-0">
-                        <span>{selectedFiles.length} seleccionados para IA</span>
-                        <Button 
-                            type="button" 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => setSelectedFiles([])}
-                            className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
-                        >
-                            Desmarcar todos
-                        </Button>
-                    </div>
+                        </div>
+                    )}
                 </div>
 
                 <div className={`flex flex-col h-full min-h-0 overflow-hidden transition-all ${
@@ -1840,6 +2200,44 @@ export function CodeProjectInspector({
                         <div className="space-y-2">
                             <Label className="text-xs font-semibold">Nivel de Exigencia</Label>
                             <GradingModeSelector gradingMode={gradingMode} setGradingMode={setGradingMode} />
+                        </div>
+
+                        {/* Ordered Evaluation Files List */}
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <Label className="text-xs font-semibold flex items-center gap-1.5">
+                                    <ListOrdered className="h-3.5 w-3.5 text-primary" />
+                                    Archivos y Orden de Evaluación ({selectedFiles.length})
+                                </Label>
+                                <span className="text-[10px] text-muted-foreground">
+                                    Arrastra o usa flechas
+                                </span>
+                            </div>
+                            <div className="max-h-44 overflow-y-auto rounded-xl border p-1.5 bg-muted/20 space-y-1 scrollbar-thin">
+                                <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEndOrder}>
+                                    <SortableContext items={selectedFiles} strategy={verticalListSortingStrategy}>
+                                        <div className="flex flex-col gap-1 w-full">
+                                            {selectedFiles.map((filePath, index) => (
+                                                <SortableEvaluationFileItem
+                                                    key={filePath}
+                                                    id={filePath}
+                                                    path={filePath}
+                                                    index={index}
+                                                    total={selectedFiles.length}
+                                                    onMoveUp={handleMoveUp}
+                                                    onMoveDown={handleMoveDown}
+                                                    onRemove={handleRemoveSelectedFile}
+                                                    onPreview={handleLoadFilePreview}
+                                                    isPreviewing={previewFile === filePath}
+                                                />
+                                            ))}
+                                        </div>
+                                    </SortableContext>
+                                </DndContext>
+                            </div>
+                            <p className="text-[10.5px] text-muted-foreground leading-relaxed">
+                                La IA evaluará los archivos en este orden secuencial, acumulando el análisis de cada uno para aplicar la rúbrica.
+                            </p>
                         </div>
 
                         {/* Progress logs stream console */}
