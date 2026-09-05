@@ -1,4 +1,4 @@
-import { generateObject } from "ai";
+import { generateObject, generateText } from "ai";
 import { z } from "zod";
 import { getAIModel } from "./client";
 
@@ -45,58 +45,313 @@ Genera instrucciones para: ${prompt}`;
 }
 
 /**
- * Generate activity statement/rubric using Vercel AI SDK
+ * Generate activity statement/rubric using Vercel AI SDK, customized per activity type and model
  */
 export async function generateActivityStatement(
     prompt: string,
+    activityType: string,
+    userId: string,
+    aiModelName?: string,
+    options?: {
+        level?: string;
+    }
+): Promise<string> {
+    const model = await getAIModel(userId, aiModelName);
+
+    const levelText = options?.level ? `Nivel de dificultad / complejidad académica: ${options.level}.` : "";
+
+    let activityTypeGuidance = "";
+    switch (activityType) {
+        case "GITHUB":
+            activityTypeGuidance = `
+TIPO DE ACTIVIDAD: Evaluación Automática con IA (Repositorio GitHub).
+Los estudiantes entregarán un repositorio de código GitHub. La IA inspecciona los archivos y evalúa la arquitectura y ejecución.
+ESTRUCTURA OBLIGATORIA DEL ENUNCIADO:
+# [Título del Taller / Proyecto]
+
+## Descripción del Proyecto
+[Explicación contextual del problema, objetivo formativo y alcance del sistema]
+
+## Requerimientos Técnicos
+1. **[Módulo/Componente 1]**: [Detalles específicos, funciones esperadas, patrones]
+2. **[Módulo/Componente 2]**: [Validaciones, tipos de datos, casos especiales]
+3. **[Buenas Prácticas]**: [Clean Code, modularidad, separación de responsabilidades]
+
+## Rúbrica de Evaluación
+* **Funcionalidad y Lógica (40%)**: [Descripción clara del cumplimiento funcional esperado]
+* **Arquitectura y Calidad de Código (30%)**: [Modularidad, legibilidad y estándares]
+* **Manejo de Errores y Casos Límite (20%)**: [Control de excepciones y robustez]
+* **Pruebas y Documentación (10%)**: [Comentarios técnicos o pruebas unitarias]
+
+## Formato de Entrega (Opcional - Ignorado por la IA)
+- Repositorio GitHub con los archivos solicitados en la raíz o rutas correspondientes.`;
+            break;
+
+        case "CODE_CHALLENGE":
+            activityTypeGuidance = `
+TIPO DE ACTIVIDAD: Desafío de Código / Algoritmos en Vivo (Monaco Editor integrado).
+El estudiante resuelve el ejercicio directamente en la plataforma escribiendo código en archivos específicos.
+ESTRUCTURA OBLIGATORIA DEL ENUNCIADO:
+# [Título del Taller de Programación en Vivo]
+
+## Enunciado y Objetivos
+[Descripción clara y rigurosa del problema a resolver, entradas y salidas esperadas]
+
+## Requerimientos Técnicos
+1. **Lógica Principal**: [Explicación de la función o algoritmo central a implementar]
+2. **Casos Especiales y Validaciones**: [Manejo de valores extremos, nulos o vacíos]
+3. **Eficiencia y Complejidad**: [Restricciones de tiempo/espacio si aplica]
+
+## Archivos a Resolver
+- Revisa los archivos de código asignados en el editor para implementar la solución.
+
+## Criterios de Evaluación
+* **Lógica y Corrección (40%)**: [Cumplimiento riguroso de las especificaciones del problema]
+* **Estructura y Calidad de Código (35%)**: [Legibilidad, buenas prácticas y modularidad]
+* **Control de Errores y Eficiencia (25%)**: [Manejo de casos límite y rendimiento de la solución]`;
+            break;
+
+        case "DB_MODELING":
+            activityTypeGuidance = `
+TIPO DE ACTIVIDAD: Base de Datos Relacional y Programación SQL.
+El estudiante debe entregar scripts SQL estructurados (DDL, DML, DQL) y justificar el diseño relacional.
+ESTRUCTURA OBLIGATORIA DEL ENUNCIADO:
+# [Título del Taller de Modelado y Programación SQL]
+
+## Enunciado y Requerimientos del Negocio
+[Contexto del negocio real o caso de estudio, descripción de las entidades principales]
+
+## Reglas del Negocio
+1. [Regla de cardinalidad o integridad 1, ej: Claves primarias únicas y obligatorias]
+2. [Regla 2, ej: Normalización hasta 3FN eliminando dependencias transitivas]
+3. [Regla 3, ej: Restricciones de integridad referencial con ON DELETE CASCADE / RESTRICT]
+
+## Entregables Solicitados en el Script SQL (.sql)
+1. **Definición de Estructura (DDL)**: Sentencias CREATE TABLE con tipos de datos correctos, PKs y FKs.
+2. **Datos de Prueba (DML)**: Sentencias INSERT con registros coherentes para poblar las tablas.
+3. **Consultas de Negocio (DQL)**: Consultas SELECT que involucren JOINs, filtros y funciones de agregación.
+
+## Criterios de Evaluación
+* **Estructura e Integridad DDL (40%)**: [Correcta definición de esquemas, PKs, FKs y restricciones]
+* **Manipulación de Datos DML (30%)**: [Coherencia de datos de prueba y operaciones de inserción]
+* **Normalización 3FN (20%)**: [Eliminación de redundancias y dependencias parciales/transitivas]
+* **Consultas DQL (10%)**: [Precisión técnica y optimización de las consultas SQL solicitadas]`;
+            break;
+
+        case "PDF_REVIEW":
+            activityTypeGuidance = `
+TIPO DE ACTIVIDAD: Revisión de Documento e Informe Técnico (PDF con IA).
+El estudiante redacta y entrega un informe o ensayo en PDF que la IA analizará en estructura y contenido.
+ESTRUCTURA OBLIGATORIA DEL ENUNCIADO:
+# [Título del Informe / Documento Técnico]
+
+## Descripción del Documento
+[Contexto temático, objetivo de la investigación o reporte técnico escrito]
+
+## Estructura Esperada del Documento
+1. **Introducción y Objetivos**: [Definición del tema y alcance]
+2. **Desarrollo y Fundamentación Técnica**: [Análisis en profundidad de los conceptos]
+3. **Casos Prácticos o Resultados**: [Evidencias, diagramas o métricas]
+4. **Conclusiones y Referencias Bibliográficas**: [Síntesis final y fuentes consultadas]
+
+## Rúbrica de Calificación
+* **Calidad y Profundidad del Contenido (50%)**: [Rigor conceptual, argumentos y cobertura de temas]
+* **Estructura y Coherencia (30%)**: [Organización lógica, fluidez y claridad en la redacción]
+* **Normas y Presentación Académica (20%)**: [Uso de citas bibliográficas, ortografía y formato]
+
+## Formato de Entrega (Opcional - Ignorado por la IA)
+- Documento en formato PDF compartido mediante enlace de acceso público.`;
+            break;
+
+        case "VIDEO_PITCH":
+            activityTypeGuidance = `
+TIPO DE ACTIVIDAD: Sustentación en Video / Pitch del Proyecto.
+El estudiante graba un video breve (3 a 5 minutos) exponiendo oralmente y demostrando el sistema desarrollado.
+ESTRUCTURA OBLIGATORIA DEL ENUNCIADO:
+# [Título de la Sustentación en Video / Pitch]
+
+## Objetivo
+[Propósito de la sustentación oral, tiempo máximo sugerido de 3 a 5 minutos]
+
+## Estructura Recomendada del Pitch
+1. **Introducción y Problema (1 min)**: [Definición clara del problema y propuesta de valor]
+2. **Arquitectura y Stack Tecnológico (1.5 min)**: [Justificación de herramientas y diseño de software]
+3. **Demostración en Vivo del Producto (1.5 min)**: [Recorrido funcional evidenciando los requerimientos]
+4. **Retos y Aprendizajes (1 min)**: [Principales desafíos técnicos superados y conclusiones]
+
+## Criterios de Evaluación
+* **Dominio Técnico (40%)**: [Solvencia conceptual y argumentación de las decisiones de ingeniería]
+* **Estructura y Claridad Oral (30%)**: [Capacidad de síntesis, fluidez y comunicación asertiva]
+* **Demostración Práctica (30%)**: [Evidencia tangible del funcionamiento correcto del software]`;
+            break;
+
+        case "AUDIO_DEFENSE":
+            activityTypeGuidance = `
+TIPO DE ACTIVIDAD: Sustentación en Audio / Podcast Técnico.
+El estudiante entrega una pista de audio técnica (3 a 5 minutos) defendiendo su solución con rigor conceptual.
+ESTRUCTURA OBLIGATORIA DEL ENUNCIADO:
+# [Título del Podcast / Sustentación en Audio]
+
+## Objetivo
+[Propósito de la defensa oral en formato podcast, tiempo máximo sugerido de 3 a 5 minutos]
+
+## Estructura Recomendada del Audio
+1. **Introducción y Contexto (1 min)**: [Presentación y justificación del problema resuelto]
+2. **Decisiones Técnicas y Arquitectura (2 min)**: [Argumentación profunda del diseño y patrones]
+3. **Retos Técnicos y Conclusiones (2 min)**: [Dificultades encontradas y lecciones aprendidas]
+
+## Criterios de Evaluación
+* **Argumentación y Coherencia (40%)**: [Solidez para defender técnicamente las decisiones tomadas]
+* **Profundidad y Vocabulario Técnico (35%)**: [Uso preciso de terminología de ingeniería de software]
+* **Estructura y Síntesis (25%)**: [Organización lógica y apego al tiempo asignado]`;
+            break;
+
+        case "AI_INTERVIEW":
+            activityTypeGuidance = `
+TIPO DE ACTIVIDAD: Entrevista Técnica Simulada con Asistente IA.
+El estudiante interactúa en una sesión de preguntas y respuestas en vivo con la IA sobre temas técnicos clave.
+ESTRUCTURA OBLIGATORIA DEL ENUNCIADO:
+# [Título de la Entrevista Técnica con IA]
+
+## Objetivo de la Evaluación
+[Propósito del examen oral interactivo y simulación de entrevista profesional]
+
+## Temas a Evaluar
+- **Conceptos Fundamentales**: [Puntos clave teóricos y de arquitectura que formulará la IA]
+- **Toma de Decisiones**: [Justificación técnica de patrones, librerías y estructuras]
+- **Resolución de Escenarios**: [Respuestas ante casos prácticos y solución de problemas]
+
+## Criterios de Evaluación
+* **Dominio Técnico (40%)**: [Precisión teórica y vocabulario técnico especializado]
+* **Resolución de Problemas (35%)**: [Criterio ingenieril ante preguntas situacionales]
+* **Claridad y Comunicación (25%)**: [Estructura en las respuestas y poder de síntesis]`;
+            break;
+
+        case "MANUAL":
+        default:
+            activityTypeGuidance = `
+TIPO DE ACTIVIDAD: Entrega Libre / Calificación Manual Docente.
+Actividad académica evaluada directamente por el profesor sin procesamiento automático de IA.
+ESTRUCTURA OBLIGATORIA DEL ENUNCIADO:
+# [Título de la Actividad / Taller]
+
+## Descripción de la Actividad
+[Explicación clara del contexto, metas y entregables solicitados al estudiante]
+
+## Instrucciones y Requerimientos
+1. [Requerimiento 1 detallado]
+2. [Requerimiento 2 detallado]
+3. [Requerimiento 3 detallado]
+
+## Criterios de Calificación
+* **[Criterio Principal] (50%)**: [Descripción del cumplimiento esperado]
+* **[Criterio Secundario] (30%)**: [Descripción de calidad y metodología]
+* **[Puntualidad y Presentación] (20%)**: [Normas de presentación y rigor formal]`;
+            break;
+    }
+
+    const systemPrompt = `Eres un diseñador instruccional y docente universitario experto en ingeniería de software y ciencias de la computación.
+Tu misión es redactar un enunciado académico completo, motivador y profesional con su respectiva rúbrica de evaluación en formato Markdown para una actividad académica de tipo "${activityType}".
+${levelText}
+
+${activityTypeGuidance}
+
+REGLAS CRÍTICAS Y OBLIGATORIAS:
+1. La sección de criterios de evaluación (Rúbrica) DEBE OBLIGATORIAMENTE usar viñetas con el formato exacto:
+   * **Nombre del Criterio (Porcentaje%)**: Descripción detallada de lo evaluado.
+   Ejemplo:
+   * **Funcionalidad y Lógica (40%)**: Cumple con todos los requisitos pedidos.
+   * **Arquitectura de Software (35%)**: Modularidad y buenas prácticas.
+   * **Manejo de Errores (25%)**: Tratamiento de excepciones.
+
+2. La suma exacta de los porcentajes de todos los criterios DEBE SER EXACTAMENTE 100%. NUNCA generes una rúbrica que sume más o menos de 100%.
+
+3. Adapta todo el contenido específicamente al prompt del docente, personalizando nombres de componentes, casos de uso, tecnologías y requerimientos técnicos relevantes.
+
+4. Responde ÚNICAMENTE con el documento Markdown generado. NO incluyas introducciones como "Aquí tienes el enunciado..." ni bloques de código envolventes markdown de nivel raíz (\`\`\`markdown ... \`\`\`). Devuelve el Markdown puro comenzando en el encabezado #.`;
+
+    const result = await generateText({
+        model,
+        system: systemPrompt,
+        prompt: `Tema o requerimientos dados por el profesor para la actividad:
+"${prompt}"
+
+Genera el enunciado completo con su rúbrica siguiendo estrictamente la estructura y reglas indicadas.`,
+    });
+
+    let content = result.text.trim();
+
+    // Eliminar envoltorios de bloques de código markdown si el LLM los colocó
+    if (content.startsWith("```markdown")) {
+        content = content.replace(/^```markdown\s*/i, "");
+        content = content.replace(/\s*```$/i, "");
+    } else if (content.startsWith("```")) {
+        content = content.replace(/^```[a-z]*\s*/i, "");
+        content = content.replace(/\s*```$/i, "");
+    }
+
+    if (!content) {
+        throw new Error("El modelo de IA no devolvió contenido.");
+    }
+
+    return content.trim();
+}
+
+/**
+ * Refines or adapts an existing activity statement based on teacher's follow-up chat prompts/instructions
+ */
+export async function refineActivityStatement(
+    currentStatement: string,
+    instruction: string,
     activityType: string,
     userId: string
 ): Promise<string> {
     const model = await getAIModel(userId);
 
-    const systemPrompt = `Eres un asistente educativo experto en crear enunciados y rúbricas de evaluación para actividades académicas.
-Tu tarea es generar un enunciado detallado con rúbrica de evaluación para una actividad de tipo ${activityType}.
+    const systemPrompt = `Eres un diseñador instruccional y docente universitario experto en ingeniería de software.
+Tu labor es modificar, adaptar o refinar un enunciado de actividad académica y su rúbrica según las instrucciones específicas que te dé el profesor (por ejemplo: simplificar, resumir, aumentar nivel, cambiar lenguaje, agregar o quitar requerimientos, etc.).
 
-El enunciado debe incluir:
-- Descripción clara de lo que se debe entregar
-- Requisitos específicos y detallados
-- Rúbrica de evaluación con criterios y porcentajes
-- Formato de entrega esperado
-- Ejemplos si es apropiado
-- Estar en formato Markdown con tablas para la rúbrica
+TIPO DE ACTIVIDAD: "${activityType}".
 
-Estructura sugerida:
-# Enunciado
-[Descripción de la actividad]
+DOCUMENTO ACTUAL (ENUNCIADO Y RÚBRICA EXISTENTE):
+"""markdown
+${currentStatement}
+"""
 
-## Requisitos
-- Requisito 1
-- Requisito 2
-...
+REGLAS CRÍTICAS Y ESTRICTAS:
+1. Aplica con precisión los cambios solicitados por el profesor en la instrucción dada, preservando lo que no se pidió cambiar.
+2. Si la rúbrica de evaluación cambia, DEBE OBLIGATORIAMENTE mantener el formato de viñetas:
+   * **Nombre del Criterio (Porcentaje%)**: Descripción detallada.
+   Y la suma de todos los porcentajes DEBE TOTALIZAR EXACTAMENTE 100%.
+3. Mantén un formato Markdown limpio, profesional y consistente con la estructura de la actividad.
+4. Devuelve ÚNICAMENTE el documento Markdown completo actualizado. NO agregues saludos, explicaciones, ni envuelvas todo en bloques de código markdown (\`\`\`markdown ... \`\`\`). Empieza directamente con el encabezado #.`;
 
-## Rúbrica de Evaluación
-| Criterio | Descripción | Porcentaje |
-|----------|-------------|------------|
-| ... | ... | ... |
+    const userPrompt = `Instrucción del profesor para adaptar el enunciado:
+"${instruction}"
 
-## Formato de Entrega
-[Especificaciones del formato]
+Genera el documento Markdown completo actualizado aplicando los cambios solicitados.`;
 
-Genera un enunciado completo con rúbrica para: ${prompt}`;
-
-    const { object } = await generateObject({
+    const result = await generateText({
         model,
-        schema: z.object({
-            content: z.string()
-        }),
-        prompt: systemPrompt
+        system: systemPrompt,
+        prompt: userPrompt,
     });
 
-    if (!object?.content) {
-        throw new Error("No se pudo generar contenido");
+    let content = result.text.trim();
+
+    if (content.startsWith("```markdown")) {
+        content = content.replace(/^```markdown\s*/i, "");
+        content = content.replace(/\s*```$/i, "");
+    } else if (content.startsWith("```")) {
+        content = content.replace(/^```[a-z]*\s*/i, "");
+        content = content.replace(/\s*```$/i, "");
     }
 
-    return object.content;
+    if (!content) {
+        throw new Error("El modelo de IA no devolvió contenido.");
+    }
+
+    return content.trim();
 }
 
 export interface ChecklistCriterion {
@@ -329,5 +584,334 @@ CRITERIOS DE PONDERACIÓN PEDAGÓGICA:
     }
 
     return weights;
+}
+
+/**
+ * Genera el código inicial / plantilla pedagógica para un archivo de código a partir de un prompt del docente.
+ */
+export async function generateCodeFileTemplate(
+    prompt: string,
+    fileName: string,
+    language: string,
+    userId: string,
+    context?: {
+        activityTitle?: string;
+        activityStatement?: string;
+        otherFiles?: { name: string }[];
+        currentCode?: string;
+    },
+    aiModelName?: string
+): Promise<string> {
+    const model = await getAIModel(userId, aiModelName);
+
+    const systemPrompt = `Eres un docente universitario experto en ingeniería de software y programación.
+Tu misión es generar el código inicial / plantilla para el archivo "${fileName}" en el lenguaje "${language}".
+Esta plantilla será la que vea el estudiante para resolver el ejercicio en su editor de código.
+
+DIRECTRICES ESTRICTAS:
+1. Devuelve ÚNICAMENTE el código fuente válido para el archivo "${fileName}".
+2. NO incluyas explicaciones en lenguaje natural antes ni después del código.
+3. NO utilices bloques de formato markdown (\`\`\` o \`\`\`${language}). Devuelve exclusivamente el texto plano del código.
+4. Escribe una estructura limpia, idiomática y pedagógica:
+   - Clases, interfaces, funciones o métodos requeridos con firmas y tipos adecuados.
+   - Comentarios explicativos y directrices // TODO: indicando claramente al estudiante qué lógica o método debe implementar.
+   - Si se trata de una clase base con métodos abstractos, decláralos abstractos o lanza excepciones/valores por defecto adecuados (ej. throw new UnsupportedOperationException("TODO: Implementar"); o pass).
+   - Incluye importaciones necesarias según el lenguaje.`;
+
+    let userPrompt = `ARCHIVO A GENERAR: ${fileName}\nLENGUAJE: ${language}\n\n`;
+    if (context?.activityTitle) {
+        userPrompt += `TÍTULO DE LA ACTIVIDAD: ${context.activityTitle}\n`;
+    }
+    if (context?.otherFiles && context.otherFiles.length > 0) {
+        userPrompt += `OTROS ARCHIVOS DEL PROYECTO: ${context.otherFiles.map(f => f.name).join(", ")}\n`;
+    }
+    if (context?.activityStatement) {
+        userPrompt += `CONTEXTO DEL ENUNCIADO GENERAL:\n${context.activityStatement.slice(0, 1800)}\n\n`;
+    }
+    if (context?.currentCode && context.currentCode.trim().length > 0 && !context.currentCode.includes("Código inicial para este archivo")) {
+        userPrompt += `CÓDIGO ACTUAL DEL ARCHIVO (Referencia):\n${context.currentCode.slice(0, 1000)}\n\n`;
+    }
+    userPrompt += `INSTRUCCIÓN DEL DOCENTE (PROMPT):\n${prompt}`;
+
+    const result = await generateText({
+        model,
+        system: systemPrompt,
+        prompt: userPrompt,
+        temperature: 0.2,
+    });
+
+    let code = result.text.trim();
+    return formatSourceCode(code, language);
+}
+
+/**
+ * Normaliza y formatea código fuente para asegurar que tenga saltos de línea y sangría limpia.
+ * Previene que el código generado por IA aparezca en una sola línea minificada.
+ */
+export function formatSourceCode(rawCode: string, language: string = "java"): string {
+    if (!rawCode) return "";
+
+    let code = rawCode.trim();
+
+    // Eliminar posibles bloques envolventes de markdown
+    if (code.startsWith("```")) {
+        code = code.replace(/^```[a-zA-Z0-9_\-#]*\n?/, "").replace(/\n?```$/, "").trim();
+    }
+
+    // Si tiene secuencias literales de escape "\n" o "\r\n" sin saltos de línea reales
+    if (!code.includes("\n") && code.includes("\\n")) {
+        code = code.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/\\t/g, "    ");
+    }
+
+    const lines = code.split("\n");
+
+    // Verificar si el código está comprimido en una sola línea o muy pocas líneas largas
+    const isSingleLine = lines.length <= 4 && code.length > 80 && (code.includes("{") || code.includes(";"));
+    const lang = language.toLowerCase();
+    const isCStyle = !["python", "yaml", "yml"].includes(lang);
+
+    if (isSingleLine && isCStyle) {
+        return beautifyCStyleCode(code);
+    }
+
+    return lines
+        .map(l => l.trimEnd())
+        .join("\n")
+        .trim();
+}
+
+/**
+ * Beautifier de respaldo para lenguajes con llaves (Java, C#, C++, JS, TS, PHP, etc.)
+ * si el modelo devolviera código condensado en una o pocas líneas.
+ */
+function beautifyCStyleCode(code: string): string {
+    let result = "";
+    let indentLevel = 0;
+    const indentStr = "    ";
+    let inString: string | null = null;
+    let inSingleLineComment = false;
+    let inMultiLineComment = false;
+    let inForParen = 0;
+    let isEscaped = false;
+
+    for (let i = 0; i < code.length; i++) {
+        const char = code[i];
+        const nextChar = code[i + 1] || "";
+
+        if (isEscaped) {
+            result += char;
+            isEscaped = false;
+            continue;
+        }
+
+        if (char === "\\" && inString) {
+            result += char;
+            isEscaped = true;
+            continue;
+        }
+
+        if (inString) {
+            result += char;
+            if (char === inString) {
+                inString = null;
+            }
+            continue;
+        }
+
+        if (inSingleLineComment) {
+            result += char;
+            if (char === "\n") {
+                inSingleLineComment = false;
+            }
+            continue;
+        }
+
+        if (inMultiLineComment) {
+            result += char;
+            if (char === "*" && nextChar === "/") {
+                result += "/";
+                i++;
+                inMultiLineComment = false;
+            }
+            continue;
+        }
+
+        if (char === '"' || char === "'" || char === "`") {
+            inString = char;
+            result += char;
+            continue;
+        }
+
+        if (char === "/" && nextChar === "/") {
+            inSingleLineComment = true;
+            result += "//";
+            i++;
+            continue;
+        }
+
+        if (char === "/" && nextChar === "*") {
+            inMultiLineComment = true;
+            result += "/*";
+            i++;
+            continue;
+        }
+
+        // Detección de bucles for (...) para no romper líneas en ';'
+        if (char === "(") {
+            const precedingText = code.slice(Math.max(0, i - 10), i).trim();
+            if (precedingText.endsWith("for") || inForParen > 0) {
+                inForParen++;
+            }
+            result += char;
+            continue;
+        }
+
+        if (char === ")") {
+            if (inForParen > 0) {
+                inForParen--;
+            }
+            result += char;
+            continue;
+        }
+
+        // Apertura de bloque {
+        if (char === "{") {
+            result = result.trimEnd();
+            result += " {\n";
+            indentLevel++;
+            result += indentStr.repeat(indentLevel);
+            while (code[i + 1] === " " || code[i + 1] === "\t") {
+                i++;
+            }
+            continue;
+        }
+
+        // Cierre de bloque }
+        if (char === "}") {
+            result = result.trimEnd();
+            indentLevel = Math.max(0, indentLevel - 1);
+            result += "\n" + indentStr.repeat(indentLevel) + "}\n";
+            result += indentStr.repeat(indentLevel);
+            while (code[i + 1] === " " || code[i + 1] === "\t") {
+                i++;
+            }
+            continue;
+        }
+
+        // Fin de sentencia ;
+        if (char === ";") {
+            result += ";";
+            if (inForParen === 0) {
+                result += "\n" + indentStr.repeat(indentLevel);
+                while (code[i + 1] === " " || code[i + 1] === "\t") {
+                    i++;
+                }
+            } else {
+                result += " ";
+            }
+            continue;
+        }
+
+        if (char === "\n") {
+            result = result.trimEnd() + "\n" + indentStr.repeat(indentLevel);
+            continue;
+        }
+
+        result += char;
+    }
+
+    return result
+        .split("\n")
+        .map(l => l.trimEnd())
+        .filter((line, idx, arr) => {
+            if (line.trim() === "" && (arr[idx - 1]?.trim() === "" || idx === 0 || idx === arr.length - 1)) {
+                return false;
+            }
+            return true;
+        })
+        .join("\n")
+        .trim();
+}
+
+/**
+ * Genera la solución completa y funcional para TODOS los archivos de un taller de código (Code Challenge).
+ * Diseñado para que el docente pueda simular y probar la actividad en el "Modo Estudiante".
+ */
+export async function generateAllCodeChallengeSolutions(
+    files: Array<{ id: string; name: string; content: string }>,
+    language: string,
+    statement: string,
+    activityTitle: string,
+    userId: string,
+    aiModelName?: string
+): Promise<Array<{ id: string; name: string; content: string }>> {
+    const model = await getAIModel(userId, aiModelName);
+
+    const systemPrompt = `Eres un arquitecto de software senior y docente universitario experto en ${language}.
+Tu misión es resolver y escribir la solución COMPLETA, FUNCIONAL, DE MÁXIMA CALIDAD ACADÉMICA y PERFECTAMENTE FORMATEADA para TODOS los archivos de un taller práctico de programación.
+
+DIRECTRICES OBLIGATORIAS DE FORMATO Y CONTENIDO:
+1. FORMATO Y LEGIBILIDAD (MÁXIMA PRIORIDAD):
+   - ESTÁ ESTRICTAMENTE PROHIBIDO generar código en una sola línea o minificado.
+   - Cada clase, interfaz, método, bloque (if, for, while, switch, try-catch), llave de apertura '{' y llave de cierre '}' DEBE estar en su propia línea con saltos de línea '\\n'.
+   - Usa sangría/indentación estándar de exactamente 4 espacios por cada nivel de anidamiento.
+   - Deja exactamente una línea en blanco entre métodos y constructores.
+   - Incluye comentarios Javadoc o comentarios explicativos breves antes de cada clase, método y constructor.
+
+2. SOLUCIÓN COMPLETA Y FUNCIONAL (100% CUMPLIMIENTO):
+   - Resuelve TODOS los requerimientos y reglas de negocio del enunciado sin omitir ningún método ni validación.
+   - Implementa constructores completos, getters, setters, métodos abstractos o sobreescritos (@Override), validaciones de parámetros (lanzando excepciones pertinentes como IllegalArgumentException, etc.).
+   - PROHIBIDO dejar stubs vacíos, comentarios "// TODO" o métodos sin implementar. Todo el código debe ser funcional, compilable y de nivel profesional.
+
+3. CONSISTENCIA ENTRE ARCHIVOS:
+   - Respeta estrictamente los nombres de archivos, paquetes, imports y relaciones de herencia e interfaces entre los archivos del taller.
+
+4. FORMATO DE SALIDA:
+   - Devuelve para cada archivo el código fuente limpio y listo para guardar, sin bloques envolventes de markdown (\`\`\`).`;
+
+    const filesContext = files.map((f, i) => `--- ARCHIVO #${i + 1}: ${f.name} ---\nPlantilla actual:\n${f.content || "// Vacío"}`).join("\n\n");
+
+    const userPrompt = `TÍTULO DE LA ACTIVIDAD: ${activityTitle}
+LENGUAJE: ${language}
+
+ENUNCIADO Y REQUERIMIENTOS:
+${statement}
+
+ARCHIVOS DEL TALLER QUE DEBES RESOLVER:
+${filesContext}
+
+RECUERDA: Genera la solución COMPLETA para cada archivo, con código limpio, ordenado, indentado a 4 espacios y con saltos de línea '\\n' entre cada instrucción. NUNCA generes código en una sola línea.`;
+
+    const SolutionSchema = z.object({
+        solutions: z.array(
+            z.object({
+                name: z.string().describe("Nombre exacto del archivo con su extensión"),
+                content: z.string().describe("Código fuente COMPLETO y EXTENSO con saltos de línea '\\n' e indentación de 4 espacios. NUNCA minificado ni en una sola línea.")
+            })
+        ).describe("Lista de soluciones completas y formateadas para cada archivo")
+    });
+
+    const { object } = await generateObject({
+        model,
+        schema: SolutionSchema,
+        system: systemPrompt,
+        prompt: userPrompt,
+        temperature: 0.1,
+    });
+
+    // Mapear soluciones generadas respetando IDs originales y aplicando formateador estricto
+    const updatedFiles = files.map(file => {
+        const found = object.solutions.find(s => s.name.trim().toLowerCase() === file.name.trim().toLowerCase());
+        if (found) {
+            const formattedCode = formatSourceCode(found.content, language);
+            return {
+                ...file,
+                content: formattedCode
+            };
+        }
+        return file;
+    });
+
+    return updatedFiles;
 }
 

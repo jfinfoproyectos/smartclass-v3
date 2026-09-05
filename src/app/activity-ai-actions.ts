@@ -21,7 +21,12 @@ export async function generateActivityDescriptionAction(prompt: string, activity
     }
 }
 
-export async function generateActivityStatementAction(prompt: string, activityType: string) {
+export async function generateActivityStatementAction(
+    prompt: string, 
+    activityType: string,
+    aiModelName?: string,
+    academicLevel?: string
+) {
     try {
         const session = await auth.api.getSession({ headers: await headers() })
 
@@ -29,7 +34,13 @@ export async function generateActivityStatementAction(prompt: string, activityTy
             return { error: "No autorizado" }
         }
 
-        const content = await generateActivityStatement(prompt, activityType, session.user.id)
+        const content = await generateActivityStatement(
+            prompt, 
+            activityType, 
+            session.user.id,
+            aiModelName,
+            academicLevel ? { level: academicLevel } : undefined
+        )
 
         return { content }
     } catch (error: unknown) {
@@ -37,3 +48,31 @@ export async function generateActivityStatementAction(prompt: string, activityTy
         return { error: error instanceof Error ? error.message : "Error al generar contenido" }
     }
 }
+
+export async function refineActivityStatementAction(
+    currentStatement: string,
+    instruction: string,
+    activityType: string
+) {
+    try {
+        const session = await auth.api.getSession({ headers: await headers() })
+
+        if (!session?.user || session.user.role !== "teacher") {
+            return { error: "No autorizado" }
+        }
+
+        const { refineActivityStatement } = await import("@/features/teacher/services/ai/activityContentService")
+        const content = await refineActivityStatement(
+            currentStatement,
+            instruction,
+            activityType,
+            session.user.id
+        )
+
+        return { content }
+    } catch (error: unknown) {
+        console.error("Error refining statement:", error)
+        return { error: error instanceof Error ? error.message : "Error al adaptar el enunciado" }
+    }
+}
+

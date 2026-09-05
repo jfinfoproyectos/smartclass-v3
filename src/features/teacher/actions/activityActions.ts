@@ -134,6 +134,12 @@ export async function updateActivityAction(formData: FormData) {
     });
 
     revalidatePath(`/dashboard/teacher/courses/${courseId}`);
+    if (id) {
+        revalidatePath(`/dashboard/student/activities/${id}`);
+        revalidatePath(`/dashboard/teacher/activities/${id}`);
+    }
+    revalidatePath(`/dashboard/student`);
+    revalidatePath(`/dashboard/teacher`);
 }
 
 export async function deleteActivityAction(formData: FormData) {
@@ -238,3 +244,76 @@ export async function balanceCriteriaPercentagesAction(
     const { balanceCriteriaPercentagesWithAI } = await import("../services/ai/activityContentService");
     return await balanceCriteriaPercentagesWithAI(statement, criteria, session.user.id, aiModelName);
 }
+
+export async function generateActivityStatementAction(
+    prompt: string,
+    activityType: string,
+    aiModelName?: string,
+    academicLevel?: string
+) {
+    const session = await getSession();
+    if (!session || session.user.role !== "teacher") {
+        throw new Error("Unauthorized");
+    }
+
+    const { generateActivityStatement } = await import("../services/ai/activityContentService");
+    return await generateActivityStatement(
+        prompt,
+        activityType,
+        session.user.id,
+        aiModelName,
+        academicLevel ? { level: academicLevel } : undefined
+    );
+}
+
+export async function generateCodeFileTemplateAction(
+    prompt: string,
+    fileName: string,
+    language: string,
+    context?: {
+        activityTitle?: string;
+        activityStatement?: string;
+        otherFiles?: { name: string }[];
+        currentCode?: string;
+    },
+    aiModelName?: string
+) {
+    const session = await getSession();
+    if (!session || session.user.role !== "teacher") {
+        throw new Error("Unauthorized");
+    }
+
+    const { generateCodeFileTemplate } = await import("../services/ai/activityContentService");
+    return await generateCodeFileTemplate(
+        prompt,
+        fileName,
+        language,
+        session.user.id,
+        context,
+        aiModelName
+    );
+}
+
+export async function generateAllCodeChallengeSolutionsAction(
+    files: Array<{ id: string; name: string; content: string }>,
+    language: string,
+    statement: string,
+    activityTitle: string,
+    aiModelName?: string
+) {
+    const session = await getSession();
+    if (!session || session.user.role !== "teacher") {
+        throw new Error("Unauthorized");
+    }
+
+    const { generateAllCodeChallengeSolutions } = await import("../services/ai/activityContentService");
+    return await generateAllCodeChallengeSolutions(
+        files,
+        language,
+        statement,
+        activityTitle,
+        session.user.id,
+        aiModelName
+    );
+}
+

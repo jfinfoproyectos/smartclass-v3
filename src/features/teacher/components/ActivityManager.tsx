@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useTransition, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,7 +22,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { createActivityAction, updateActivityAction, deleteActivityAction, generateChecklistCriteriaAction, verifyCriterionRelationAction, balanceCriteriaPercentagesAction } from "@/features/teacher/actions/activityActions";
+import { createActivityAction, updateActivityAction, deleteActivityAction, generateChecklistCriteriaAction, verifyCriterionRelationAction, balanceCriteriaPercentagesAction, generateCodeFileTemplateAction } from "@/features/teacher/actions/activityActions";
 import { scanRepositoryAction } from "@/features/github/actions/githubActions";
 import { getMissingSubmissionsAction } from "@/features/teacher/actions/studentActions";
 import { Plus, Calendar, FileText, MessageSquare, Pencil, Trash2, Eye, X, ChevronUp, ChevronDown, AlertCircle, Sparkles, Upload, Download, Loader2, Search, UserX, GripVertical, LayoutGrid, List, Save, Settings2, Code2, FolderGit2, CheckCircle2, Clock, SlidersHorizontal, Info, ListChecks, CheckSquare, RefreshCw, Bot, Cpu, HelpCircle, MessageSquareQuote, Shuffle, Scale, Crown, Users, Terminal, Video, Database, Mic, Headphones, FileCode, Target } from "lucide-react";
@@ -31,6 +32,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { AICanvasCard } from "@/components/ui/ai-canvas-card";
 import { toast } from "sonner";
 import { ActivityGroupsModal } from "./ActivityGroupsModal";
+import { AIGenerateDialog } from "./AIGenerateDialog";
 import Editor from "@monaco-editor/react";
 import {
     Tooltip,
@@ -72,6 +74,7 @@ import MDEditor from '@uiw/react-md-editor';
 import '@uiw/react-md-editor/markdown-editor.css';
 import '@uiw/react-markdown-preview/markdown.css';
 import { useTheme } from "next-themes";
+import { CodeChallengeActivityDetails } from "@/features/student/components/CodeChallengeActivityDetails";
 
 const TEMPLATE_GITHUB = `# Evaluación Automática con IA (GitHub)
 
@@ -173,14 +176,14 @@ Diseñar e implementar el esquema relacional de base de datos para el sistema, a
    - Sentencias \`UPDATE\` o \`DELETE\` si aplican para casos prácticos.
 3. **Consultas de Verificación (DQL)**:
    - Consultas \`SELECT\` con \`JOIN\`, ordenamiento y funciones de agregación.
-4. **Diagrama Entidad-Relación (Opcional)**:
-   - Diagrama Mermaid (\`erDiagram\`) representativo.
+4. **Restricciones e Integridad**:
+   - Restricciones \`CHECK\`, \`UNIQUE\`, \`NOT NULL\` y acciones de clave foránea.
 
 ## Criterios de Evaluación
-* **Estructura e Integridad DDL (35%)**: Definición correcta de tablas, PKs, FKs y restricciones.
+* **Estructura e Integridad DDL (40%)**: Definición correcta de tablas, PKs, FKs y restricciones.
 * **Manipulación de Datos DML (30%)**: Inserción coherente de datos de prueba y lógica de manipulación.
 * **Normalización 3FN (20%)**: Eliminación de dependencias parciales y transitivas.
-* **Modelo Conceptual / Consultas (15%)**: Calidad de las consultas y correspondencia con el modelo.`;
+* **Consultas DQL (10%)**: Calidad y precisión de las consultas SQL.`;
 
 const TEMPLATE_CODE_PROJECT = `# Proyecto de Código (Evaluación con Apoyo de IA)
 
@@ -773,6 +776,14 @@ function getDefaultStarterCodeForLanguage(lang: string): string {
             return `<!DOCTYPE html>\n<html lang="es">\n<head>\n    <meta charset="UTF-8">\n    <title>Solución</title>\n</head>\n<body>\n    <h1>Hola Mundo</h1>\n</body>\n</html>\n`;
         case "css":
             return `/* Estilos de la solución */\nbody {\n    font-family: sans-serif;\n    margin: 0;\n}\n`;
+        case "csharp":
+            return `// Implementa tu solución aquí según las instrucciones del enunciado\nusing System;\n\npublic class Solucion {\n    public static object Resolver(object entrada) {\n        return entrada;\n    }\n}\n`;
+        case "php":
+            return `<?php\n// Implementa tu solución aquí según las instrucciones del enunciado\nfunction solucion($entrada) {\n    return $entrada;\n}\n`;
+        case "go":
+            return `package main\n\n// Implementa tu solución aquí según las instrucciones del enunciado\nfunc Solucion(entrada interface{}) interface{} {\n    return entrada\n}\n`;
+        case "rust":
+            return `// Implementa tu solución aquí según las instrucciones del enunciado\npub fn solucion<T>(entrada: T) -> T {\n    entrada\n}\n`;
         case "javascript":
         default:
             return `// Implementa tu solución aquí según las instrucciones del enunciado\nfunction solucion(entrada) {\n    return entrada;\n}\n`;
@@ -860,6 +871,52 @@ function getLanguageFromFileName(filename: string): string {
     }
 }
 
+function extractCodeChallengeFilesFromMarkdown(markdown: string): Array<{ id: string; name: string; content: string }> {
+    if (!markdown) return [];
+    const files: Array<{ id: string; name: string; content: string }> = [];
+    const seen = new Set<string>();
+
+    // 1. Bloques de código que declaran el archivo en comentario en la primera línea
+    // Ej: ```java // Producto.java \n ... ```
+    const codeBlockRegex = /```(?:[a-zA-Z0-9_-]+)?\s*\n(?:\/\/|#|--|\/\*)\s*([a-zA-Z0-9_\-]+\.(?:java|py|js|ts|tsx|jsx|cpp|c|h|hpp|cs|kt|php|go|rs|sql|html|css|json|yaml|yml|md|txt))[\s*\/]*\n([\s\S]*?)```/gi;
+    let match;
+    while ((match = codeBlockRegex.exec(markdown)) !== null) {
+        const rawFileName = match[1].trim();
+        const baseName = rawFileName.split(/[\/\\]/).pop() || rawFileName;
+        if (baseName && !seen.has(baseName.toLowerCase()) && baseName.includes('.')) {
+            seen.add(baseName.toLowerCase());
+            files.push({
+                id: String(Date.now() + files.length),
+                name: baseName,
+                content: match[2].trim() || getDefaultStarterCodeForLanguage(getLanguageFromFileName(baseName))
+            });
+        }
+    }
+
+    // 2. Viñetas o listas numeradas que especifican archivos para resolver
+    // Ej: - `Producto.java`: Clase base ... o * ProductoPerecedero.java - Subclase
+    const fileListRegex = /(?:^|\n)\s*(?:[-*•]|\d+[.)])\s*(?:\*\*)?`?([a-zA-Z0-9_\-]+\.(?:java|py|js|ts|tsx|jsx|cpp|c|h|hpp|cs|kt|php|go|rs|sql|html|css|json|yaml|yml|md|txt))`?(?:\*\*)?(?:\s*[:\-–—]\s*(.*?))?(?=\n|$)/gi;
+    let fileMatch;
+    while ((fileMatch = fileListRegex.exec(markdown)) !== null) {
+        const fileName = fileMatch[1].trim();
+        const desc = fileMatch[2]?.trim() || "";
+        if (!seen.has(fileName.toLowerCase())) {
+            seen.add(fileName.toLowerCase());
+            const lang = getLanguageFromFileName(fileName);
+            const starter = desc 
+                ? `// ${fileName}\n// ${desc}\n\n${getDefaultStarterCodeForLanguage(lang)}`
+                : getDefaultStarterCodeForLanguage(lang);
+            files.push({
+                id: String(Date.now() + files.length),
+                name: fileName,
+                content: starter
+            });
+        }
+    }
+
+    return files;
+}
+
 // Modal Dialog para Crear y Editar Actividades
 function ActivityFormDialog({
     isOpen,
@@ -875,6 +932,7 @@ function ActivityFormDialog({
     onOpenActivityGroups?: (activity: any) => void;
 }) {
     const isEdit = Boolean(activity);
+    const router = useRouter();
     const [activeTab, setActiveTab] = useState<string>("config");
     const [selectedType, setSelectedType] = useState<string>(activity?.type || "GITHUB");
     const [description, setDescription] = useState(activity?.description || "**Instrucciones de la actividad**\n\n...");
@@ -899,6 +957,49 @@ function ActivityFormDialog({
         }
     ]);
     const [selectedChallengeFileId, setSelectedChallengeFileId] = useState<string>("1");
+    const [isGeneratingFileCode, setIsGeneratingFileCode] = useState<boolean>(false);
+    const [showFileCodePrompt, setShowFileCodePrompt] = useState<boolean>(false);
+    const [fileCodePrompt, setFileCodePrompt] = useState<string>("");
+
+    const handleGenerateFileCode = async (file: { id: string; name: string; content: string }, customPrompt?: string) => {
+        const promptToUse = (customPrompt || fileCodePrompt).trim();
+        if (!promptToUse) {
+            toast.warning("Ingresa una instrucción o prompt para la IA");
+            return;
+        }
+
+        try {
+            setIsGeneratingFileCode(true);
+            const fileLang = getLanguageFromFileName(file.name);
+            const titleInput = document.querySelector('input[name="title"]') as HTMLInputElement;
+            const generatedCode = await generateCodeFileTemplateAction(
+                promptToUse,
+                file.name,
+                fileLang,
+                {
+                    activityTitle: titleInput?.value || "Taller de Código",
+                    activityStatement: statement,
+                    otherFiles: challengeFiles.filter(f => f.id !== file.id).map(f => ({ name: f.name })),
+                    currentCode: file.content
+                }
+            );
+
+            if (generatedCode) {
+                const updated = challengeFiles.map(f => f.id === file.id ? { ...f, content: generatedCode } : f);
+                setChallengeFiles(updated);
+                toast.success(`Plantilla generada con IA para ${file.name}`);
+                setShowFileCodePrompt(false);
+                setFileCodePrompt("");
+            }
+        } catch (error: any) {
+            console.error("Error al generar código con IA:", error);
+            toast.error("Error al generar código con IA", {
+                description: error.message || "Por favor intenta de nuevo con otro prompt."
+            });
+        } finally {
+            setIsGeneratingFileCode(false);
+        }
+    };
     const [pitchMaxMinutes, setPitchMaxMinutes] = useState<number>(5);
     const [pitchRequiredTopics, setPitchRequiredTopics] = useState<string[]>([
         "Problema y Solución",
@@ -919,6 +1020,7 @@ function ActivityFormDialog({
         "Patrones de Diseño y Buenas Prácticas",
         "Resolución de Problemas y Casos Borde",
     ]);
+    const [dbDeliveryMode, setDbDeliveryMode] = useState<"sandbox" | "cloud">("sandbox");
     const [dbTargetEngine, setDbTargetEngine] = useState<string>("PostgreSQL");
     const [dbRequiredNormalization, setDbRequiredNormalization] = useState<string>("3FN");
     const [dbRequiredEntities, setDbRequiredEntities] = useState<string[]>([
@@ -934,6 +1036,31 @@ function ActivityFormDialog({
     const [isGroupActivity, setIsGroupActivity] = useState<boolean>(activity?.isGroupActivity || false);
     const [groupScope, setGroupScope] = useState<"COURSE" | "ACTIVITY">((activity as any)?.groupScope === "ACTIVITY" ? "ACTIVITY" : "COURSE");
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isAIGeneratorOpen, setIsAIGeneratorOpen] = useState(false);
+    const [aiInitialContent, setAiInitialContent] = useState<string | undefined>(undefined);
+    const [showStudentPreview, setShowStudentPreview] = useState(false);
+
+    const previewActivity = useMemo(() => {
+        const titleVal = typeof document !== "undefined" ? (document.querySelector('input[name="title"]') as HTMLInputElement)?.value : "";
+        const deadlineVal = typeof document !== "undefined" ? (document.querySelector('input[name="deadlineLocal"]') as HTMLInputElement)?.value : "";
+        return {
+            id: activity?.id || "preview-code-challenge",
+            title: titleVal || activity?.title || "Taller de Código (Vista Previa)",
+            statement: statement || activity?.statement || "",
+            deadline: deadlineVal ? new Date(deadlineVal).toISOString() : (activity?.deadline || new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString()),
+            courseId: courseId,
+            course: { title: "Curso Actual" },
+            type: "CODE_CHALLENGE",
+            description: JSON.stringify({
+                challengeConfig: {
+                    language: challengeLanguage,
+                    template: challengeFiles[0]?.content || "",
+                    files: challengeFiles
+                }
+            }),
+            submissions: []
+        };
+    }, [activity, statement, courseId, challengeLanguage, challengeFiles, showStudentPreview]);
 
     const formRef = useRef<HTMLFormElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -955,6 +1082,13 @@ function ActivityFormDialog({
         setChecklistWeight(clamped);
         setAiWeight(100 - clamped);
     };
+
+    const defaultDeadline = useMemo(() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 7);
+        d.setHours(23, 59, 0, 0);
+        return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    }, [formKey]);
 
     const setQuickDeadline = (days: number) => {
         const target = new Date();
@@ -990,22 +1124,33 @@ function ActivityFormDialog({
             setImportedData(null);
             setFormKey(k => k + 1);
 
-            // Cargar Checklist si existe en activity.description
-            let loadedChecklist = false;
+            // Cargar configuración específica según activity.description
             if (activity?.description) {
                 try {
                     const parsedDesc = JSON.parse(activity.description);
-                    if (parsedDesc && parsedDesc.audioConfig) {
-                        if (typeof parsedDesc.audioConfig.maxDurationMinutes === "number") {
-                            setAudioMaxMinutes(parsedDesc.audioConfig.maxDurationMinutes);
+                    if (parsedDesc && typeof parsedDesc === "object") {
+                        // 1. Audio Defense
+                        if (parsedDesc.audioConfig) {
+                            if (typeof parsedDesc.audioConfig.maxDurationMinutes === "number") {
+                                setAudioMaxMinutes(parsedDesc.audioConfig.maxDurationMinutes);
+                            }
+                            if (Array.isArray(parsedDesc.audioConfig.requiredTopics)) {
+                                setAudioRequiredTopics(parsedDesc.audioConfig.requiredTopics);
+                            }
                         }
-                        if (Array.isArray(parsedDesc.audioConfig.requiredTopics)) {
-                            setAudioRequiredTopics(parsedDesc.audioConfig.requiredTopics);
+
+                        // 2. Video Pitch
+                        if (parsedDesc.pitchConfig) {
+                            if (typeof parsedDesc.pitchConfig.maxDurationMinutes === "number") {
+                                setPitchMaxMinutes(parsedDesc.pitchConfig.maxDurationMinutes);
+                            }
+                            if (Array.isArray(parsedDesc.pitchConfig.requiredTopics)) {
+                                setPitchRequiredTopics(parsedDesc.pitchConfig.requiredTopics);
+                            }
                         }
-                    }
-                    if (parsedDesc && parsedDesc.hasChecklist) {
-                        setHasChecklist(true);
-                        if (parsedDesc && parsedDesc.interviewConfig) {
+
+                        // 3. AI Interview
+                        if (parsedDesc.interviewConfig) {
                             if (typeof parsedDesc.interviewConfig.questionsCount === "number") {
                                 setInterviewQuestionsCount(parsedDesc.interviewConfig.questionsCount);
                             }
@@ -1016,7 +1161,12 @@ function ActivityFormDialog({
                                 setInterviewFocusAreas(parsedDesc.interviewConfig.focusAreas);
                             }
                         }
-                        if (parsedDesc && parsedDesc.dbConfig) {
+
+                        // 4. DB Modeling
+                        if (parsedDesc.dbConfig) {
+                            if (parsedDesc.dbConfig.deliveryMode) {
+                                setDbDeliveryMode(parsedDesc.dbConfig.deliveryMode);
+                            }
                             if (parsedDesc.dbConfig.targetEngine) {
                                 setDbTargetEngine(parsedDesc.dbConfig.targetEngine);
                             }
@@ -1034,7 +1184,8 @@ function ActivityFormDialog({
                             }
                         }
 
-                        if (parsedDesc && parsedDesc.challengeConfig) {
+                        // 5. Code Challenge (Archivos y Lenguaje)
+                        if (parsedDesc.challengeConfig) {
                             if (parsedDesc.challengeConfig.language) {
                                 setChallengeLanguage(parsedDesc.challengeConfig.language);
                             }
@@ -1042,7 +1193,7 @@ function ActivityFormDialog({
                                 setChallengeFiles(parsedDesc.challengeConfig.files);
                                 setSelectedChallengeFileId(parsedDesc.challengeConfig.files[0].id || "1");
                             } else if (parsedDesc.challengeConfig.starterCode) {
-                                const ext = parsedDesc.challengeConfig.language === "python" ? "py" : parsedDesc.challengeConfig.language === "typescript" ? "ts" : "js";
+                                const ext = getExtensionFromLanguage(parsedDesc.challengeConfig.language || "javascript");
                                 setChallengeFiles([
                                     { id: "1", name: `solucion.${ext}`, content: parsedDesc.challengeConfig.starterCode }
                                 ]);
@@ -1050,30 +1201,67 @@ function ActivityFormDialog({
                             }
                         }
 
-                        if (Array.isArray(parsedDesc.criteria)) {
-                            setCriteria(parsedDesc.criteria);
+                        // Auto-recuperación si solo quedó solucion.js o no había archivos pero el enunciado sí los tiene
+                        if (
+                            activity?.type === "CODE_CHALLENGE" &&
+                            (!parsedDesc.challengeConfig?.files || (parsedDesc.challengeConfig.files.length === 1 && parsedDesc.challengeConfig.files[0].name === "solucion.js")) &&
+                            activity?.statement
+                        ) {
+                            const recovered = extractCodeChallengeFilesFromMarkdown(activity.statement);
+                            if (recovered.length > 0) {
+                                setChallengeFiles(recovered);
+                                setSelectedChallengeFileId(recovered[0].id);
+                                setChallengeLanguage(getLanguageFromFileName(recovered[0].name));
+                            }
                         }
-                        if (typeof parsedDesc.aiWeight === "number") {
-                            setAiWeight(parsedDesc.aiWeight);
-                            setChecklistWeight(typeof parsedDesc.checklistWeight === "number" ? parsedDesc.checklistWeight : 100 - parsedDesc.aiWeight);
-                        } else if (typeof parsedDesc.checklistWeight === "number") {
-                            setChecklistWeight(parsedDesc.checklistWeight);
-                            setAiWeight(100 - parsedDesc.checklistWeight);
+
+                        // 6. Checklist y criterios
+                        if (parsedDesc.hasChecklist) {
+                            setHasChecklist(true);
+                            if (Array.isArray(parsedDesc.criteria)) {
+                                setCriteria(parsedDesc.criteria);
+                            }
+                            if (typeof parsedDesc.aiWeight === "number") {
+                                setAiWeight(parsedDesc.aiWeight);
+                                setChecklistWeight(typeof parsedDesc.checklistWeight === "number" ? parsedDesc.checklistWeight : 100 - parsedDesc.aiWeight);
+                            } else if (typeof parsedDesc.checklistWeight === "number") {
+                                setChecklistWeight(parsedDesc.checklistWeight);
+                                setAiWeight(100 - parsedDesc.checklistWeight);
+                            } else {
+                                setAiWeight(30);
+                                setChecklistWeight(70);
+                            }
                         } else {
-                            setAiWeight(30);
-                            setChecklistWeight(70);
+                            setHasChecklist(false);
+                            if (Array.isArray(parsedDesc.criteria)) {
+                                setCriteria(parsedDesc.criteria);
+                            }
                         }
-                        loadedChecklist = true;
                     }
                 } catch {
-                    // Texto normal
+                    // Si hubo error de parseo o era texto plano, recuperar archivos de código del enunciado si aplica
+                    if (activity?.type === "CODE_CHALLENGE" && activity?.statement) {
+                        const recovered = extractCodeChallengeFilesFromMarkdown(activity.statement);
+                        if (recovered.length > 0) {
+                            setChallengeFiles(recovered);
+                            setSelectedChallengeFileId(recovered[0].id);
+                            setChallengeLanguage(getLanguageFromFileName(recovered[0].name));
+                        }
+                    }
                 }
-            }
-            if (!loadedChecklist) {
+            } else {
                 setHasChecklist(false);
                 setCriteria([]);
                 setAiWeight(30);
                 setChecklistWeight(70);
+                if (activity?.type === "CODE_CHALLENGE" && activity?.statement) {
+                    const recovered = extractCodeChallengeFilesFromMarkdown(activity.statement);
+                    if (recovered.length > 0) {
+                        setChallengeFiles(recovered);
+                        setSelectedChallengeFileId(recovered[0].id);
+                        setChallengeLanguage(getLanguageFromFileName(recovered[0].name));
+                    }
+                }
             }
         }
     }, [isOpen, activity]);
@@ -1327,6 +1515,20 @@ function ActivityFormDialog({
         setIsSubmitting(true);
         try {
             const form = formRef.current;
+
+            // Validar título de la actividad
+            const title = (formData.get("title") as string)?.trim();
+            if (!title) {
+                setIsSubmitting(false);
+                setActiveTab("config");
+                toast.error("Por favor ingresa un título para la actividad en la pestaña 'Configuración'.");
+                setTimeout(() => {
+                    const titleInput = document.getElementById("title") as HTMLInputElement;
+                    titleInput?.focus();
+                }, 150);
+                return;
+            }
+
             if (form) {
                 const openDateLocal = (form.querySelector('[name="openDateLocal"]') as HTMLInputElement)?.value;
                 const deadlineLocal = (form.querySelector('[name="deadlineLocal"]') as HTMLInputElement)?.value;
@@ -1337,11 +1539,22 @@ function ActivityFormDialog({
                 }
                 if (deadlineLocal) {
                     formData.set("deadline", new Date(deadlineLocal).toISOString());
+                } else if (!isEdit && !activity?.deadline) {
+                    setIsSubmitting(false);
+                    setActiveTab("config");
+                    toast.error("Por favor define la fecha límite en la pestaña 'Configuración'.");
+                    setTimeout(() => {
+                        const deadlineInput = document.getElementById("deadlineLocal") as HTMLInputElement;
+                        deadlineInput?.focus();
+                    }, 150);
+                    return;
                 } else {
                     formData.delete("deadline");
                 }
             }
 
+            formData.set("statement", statement);
+            formData.set("type", selectedType);
             formData.set("isGroupActivity", String(isGroupActivity));
             formData.set("groupScope", groupScope);
 
@@ -1353,11 +1566,11 @@ function ActivityFormDialog({
                     checklistWeight: checklistWeight,
                     criteria: criteria,
                     dbConfig: {
+                        deliveryMode: dbDeliveryMode,
                         targetEngine: dbTargetEngine,
                         requiredNormalization: dbRequiredNormalization,
                         requiredEntities: dbRequiredEntities,
                         scopeOptions: {
-                            includeDiagram: dbIncludeDiagram,
                             includeDdl: dbIncludeDdl,
                             includeDml: dbIncludeDml,
                             includeQueries: dbIncludeQueries,
@@ -1399,13 +1612,16 @@ function ActivityFormDialog({
                     }
                 }));
             } else if (selectedType === "CODE_CHALLENGE") {
+                const detectedLanguage = challengeFiles.length > 0 && challengeFiles[0].name.includes(".")
+                    ? getLanguageFromFileName(challengeFiles[0].name)
+                    : challengeLanguage;
                 formData.set("description", JSON.stringify({
                     hasChecklist: hasChecklist,
                     aiWeight: aiWeight,
                     checklistWeight: checklistWeight,
                     criteria: criteria,
                     challengeConfig: {
-                        language: challengeLanguage,
+                        language: detectedLanguage || challengeLanguage,
                         files: challengeFiles,
                     }
                 }));
@@ -1420,12 +1636,20 @@ function ActivityFormDialog({
                 formData.set("description", description);
             }
 
+            if (isEdit && activity?.id) {
+                formData.set("activityId", activity.id);
+            }
+            formData.set("courseId", courseId);
+
             if (isEdit) {
                 await updateActivityAction(formData);
                 toast.success("✓ Actividad actualizada exitosamente. Los cambios han sido guardados.");
+                router.refresh();
+                onClose();
             } else {
                 await createActivityAction(formData);
                 toast.success("Actividad creada exitosamente");
+                router.refresh();
                 onClose();
             }
         } catch (err: any) {
@@ -1436,8 +1660,17 @@ function ActivityFormDialog({
         }
     };
 
+    const onFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        if (isSubmitting) return;
+        const form = formRef.current || e.currentTarget;
+        const formData = new FormData(form);
+        await handleSubmit(formData);
+    };
+
     return (
-        <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+        <>
+            <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
             <DialogContent 
                 showCloseButton={false}
                 onPointerDownOutside={(e) => e.preventDefault()}
@@ -1451,7 +1684,7 @@ function ActivityFormDialog({
                 </DialogHeader>
 
                 {/* Formulario Principal con Tabs Shadcn */}
-                <form key={formKey} ref={formRef} action={handleSubmit} className="flex flex-col h-full min-h-0 overflow-hidden flex-1">
+                <form key={formKey} ref={formRef} onSubmit={onFormSubmit} noValidate className="flex flex-col h-full min-h-0 overflow-hidden flex-1">
                     {isEdit && <input type="hidden" name="activityId" value={activity.id} />}
                     <input type="hidden" name="courseId" value={courseId} />
                     <input type="hidden" name="description" value={description} />
@@ -1506,6 +1739,19 @@ function ActivityFormDialog({
                             </TabsList>
 
                             <div className="flex items-center gap-2">
+                                {selectedType === "CODE_CHALLENGE" && (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setShowStudentPreview(true)}
+                                        className="text-xs h-8 border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 font-bold gap-1.5 shadow-2xs cursor-pointer"
+                                        title="Abrir vista interactiva de prueba idéntica a la que ve el estudiante"
+                                    >
+                                        <Eye className="h-3.5 w-3.5 text-amber-500" />
+                                        <span>Modo Estudiante</span>
+                                    </Button>
+                                )}
                                 <input type="file" accept=".json" className="hidden" ref={fileInputRef} onChange={handleImport} />
                                 <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="text-xs h-8">
                                     <Upload className="h-3.5 w-3.5 mr-1.5" />
@@ -1565,7 +1811,6 @@ function ActivityFormDialog({
                                             <Input 
                                                 id="title" 
                                                 name="title" 
-                                                required 
                                                 placeholder="Ej: Actividad 1 - Fundamentos de Programación" 
                                                 defaultValue={importedData?.title || activity?.title || ""} 
                                                 className="h-10 text-sm font-medium"
@@ -1697,8 +1942,7 @@ function ActivityFormDialog({
                                                     id="deadlineLocal"
                                                     name="deadlineLocal"
                                                     type="datetime-local"
-                                                    required
-                                                    defaultValue={importedData?.deadlineLocal || (activity?.deadline ? new Date(new Date(activity.deadline).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "")}
+                                                    defaultValue={importedData?.deadlineLocal || (activity?.deadline ? new Date(new Date(activity.deadline).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : defaultDeadline)}
                                                     className="h-9 font-mono text-xs"
                                                 />
                                             </div>
@@ -2288,11 +2532,15 @@ function ActivityFormDialog({
                                                             variant="outline"
                                                             onClick={() => {
                                                                 const newId = Date.now().toString();
-                                                                const ext = challengeLanguage === "python" ? "py" : challengeLanguage === "typescript" ? "ts" : "js";
+                                                                const currentFile = challengeFiles.find(f => f.id === selectedChallengeFileId) || challengeFiles[challengeFiles.length - 1];
+                                                                const currentExt = currentFile?.name?.includes('.') ? currentFile.name.split('.').pop()?.toLowerCase() : null;
+                                                                const ext = currentExt || getExtensionFromLanguage(challengeLanguage);
+                                                                const newFileName = `archivo_${challengeFiles.length + 1}.${ext}`;
+                                                                const newLang = getLanguageFromFileName(newFileName);
                                                                 const newFile = {
                                                                     id: newId,
-                                                                    name: `archivo_${challengeFiles.length + 1}.${ext}`,
-                                                                    content: `// Código inicial para este archivo\n`,
+                                                                    name: newFileName,
+                                                                    content: getDefaultStarterCodeForLanguage(newLang),
                                                                 };
                                                                 setChallengeFiles([...challengeFiles, newFile]);
                                                                 setSelectedChallengeFileId(newId);
@@ -2303,19 +2551,20 @@ function ActivityFormDialog({
                                                         </Button>
                                                     </div>
 
-                                                    {/* Pestañas de Archivos */}
-                                                    <div className="flex items-center gap-1 overflow-x-auto pb-1 border-b">
+                                                    {/* Pestañas de Archivos (multilínea sin scroll) */}
+                                                    <div className="flex flex-wrap items-center gap-1.5 pb-2 border-b border-border/60">
                                                         {challengeFiles.map((file) => (
                                                             <div
                                                                 key={file.id}
                                                                 onClick={() => setSelectedChallengeFileId(file.id)}
                                                                 className={cn(
-                                                                    "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono font-medium cursor-pointer border transition-all",
+                                                                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-medium cursor-pointer border transition-all whitespace-nowrap shrink-0 select-none shadow-2xs",
                                                                     selectedChallengeFileId === file.id
-                                                                        ? "bg-primary text-primary-foreground border-primary shadow-2xs"
-                                                                        : "bg-background hover:bg-muted text-muted-foreground"
+                                                                        ? "bg-primary text-primary-foreground border-primary font-bold shadow-xs"
+                                                                        : "bg-background hover:bg-muted text-muted-foreground border-border/60"
                                                                 )}
                                                             >
+                                                                <FileCode className="h-3.5 w-3.5 shrink-0 text-blue-500" />
                                                                 <span>{file.name}</span>
                                                                 {challengeFiles.length > 1 && (
                                                                     <button
@@ -2328,7 +2577,7 @@ function ActivityFormDialog({
                                                                                 setSelectedChallengeFileId(filtered[0]?.id || "1");
                                                                             }
                                                                         }}
-                                                                        className="h-3.5 w-3.5 rounded hover:bg-black/20 flex items-center justify-center text-[10px]"
+                                                                        className="h-4 w-4 rounded hover:bg-black/20 flex items-center justify-center text-[10px] ml-0.5"
                                                                     >
                                                                         ×
                                                                     </button>
@@ -2418,15 +2667,123 @@ function ActivityFormDialog({
                                                                 </div>
 
                                                                 <div className="space-y-1.5">
-                                                                    <div className="flex items-center justify-between">
+                                                                    <div className="flex items-center justify-between flex-wrap gap-2">
                                                                         <span className="text-[10px] text-muted-foreground font-semibold">Código inicial / Plantilla que verá el estudiante:</span>
-                                                                        <div className="flex items-center gap-2">
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            <Button
+                                                                                type="button"
+                                                                                size="sm"
+                                                                                variant="outline"
+                                                                                onClick={() => setShowFileCodePrompt(!showFileCodePrompt)}
+                                                                                className="h-6 text-[10px] gap-1 px-2 border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 hover:text-purple-700 dark:hover:text-purple-300 font-semibold shadow-2xs cursor-pointer"
+                                                                                title="Generar código inicial o plantilla para este archivo con IA"
+                                                                            >
+                                                                                <Sparkles className="h-3 w-3 text-purple-600 dark:text-purple-400" />
+                                                                                <span>Generar con IA</span>
+                                                                            </Button>
                                                                             <Badge variant="outline" className="text-[9px] font-mono capitalize">
                                                                                 {currentLang}
                                                                             </Badge>
                                                                             <span className="text-[10px] text-muted-foreground font-mono">{currentFile.content.length} caracteres</span>
                                                                         </div>
                                                                     </div>
+
+                                                                    {/* Panel interactivo de Prompt de IA para el archivo */}
+                                                                    {showFileCodePrompt && (
+                                                                        <div className="p-2.5 rounded-xl border border-purple-500/30 bg-purple-500/5 space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                                                                            <div className="flex items-center justify-between">
+                                                                                <div className="flex items-center gap-1.5 text-xs font-bold text-purple-700 dark:text-purple-300">
+                                                                                    <Sparkles className="h-3.5 w-3.5" />
+                                                                                    <span>Generar Plantilla de Código con IA para {currentFile.name}</span>
+                                                                                </div>
+                                                                                <Button
+                                                                                    type="button"
+                                                                                    variant="ghost"
+                                                                                    size="sm"
+                                                                                    onClick={() => setShowFileCodePrompt(false)}
+                                                                                    className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground cursor-pointer"
+                                                                                >
+                                                                                    <X className="h-3.5 w-3.5" />
+                                                                                </Button>
+                                                                            </div>
+
+                                                                            <div className="flex gap-2">
+                                                                                <Input
+                                                                                    value={fileCodePrompt}
+                                                                                    onChange={(e) => setFileCodePrompt(e.target.value)}
+                                                                                    onKeyDown={(e) => {
+                                                                                        if (e.key === "Enter" && !e.shiftKey) {
+                                                                                            e.preventDefault();
+                                                                                            handleGenerateFileCode(currentFile);
+                                                                                        }
+                                                                                    }}
+                                                                                    placeholder={`ej. Crea la clase ${currentFile.name.replace(/\.[^.]+$/, '')} con atributos base y comentarios TODO`}
+                                                                                    className="h-8 text-xs font-sans bg-background"
+                                                                                    disabled={isGeneratingFileCode}
+                                                                                />
+                                                                                <Button
+                                                                                    type="button"
+                                                                                    size="sm"
+                                                                                    disabled={isGeneratingFileCode || !fileCodePrompt.trim()}
+                                                                                    onClick={() => handleGenerateFileCode(currentFile)}
+                                                                                    className="h-8 px-3 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white gap-1.5 shrink-0 cursor-pointer"
+                                                                                >
+                                                                                    {isGeneratingFileCode ? (
+                                                                                        <>
+                                                                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                                                            <span>Generando...</span>
+                                                                                        </>
+                                                                                    ) : (
+                                                                                        <>
+                                                                                            <Sparkles className="h-3.5 w-3.5" />
+                                                                                            <span>Generar</span>
+                                                                                        </>
+                                                                                    )}
+                                                                                </Button>
+                                                                            </div>
+
+                                                                            {/* Sugerencias Rápidas */}
+                                                                            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                                                                                <span className="text-[10px] font-medium text-muted-foreground">Sugerencias:</span>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    disabled={isGeneratingFileCode}
+                                                                                    onClick={() => {
+                                                                                        const p = `Genera la plantilla inicial para el archivo ${currentFile.name} acorde a los requerimientos del enunciado general, incluyendo firmas de métodos y comentarios // TODO: para el alumno`;
+                                                                                        setFileCodePrompt(p);
+                                                                                        handleGenerateFileCode(currentFile, p);
+                                                                                    }}
+                                                                                    className="text-[10px] px-2 py-0.5 rounded-md bg-background border border-purple-500/20 text-purple-700 dark:text-purple-300 hover:bg-purple-500/10 cursor-pointer font-medium transition-colors"
+                                                                                >
+                                                                                    ✨ Estructura según Enunciado
+                                                                                </button>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    disabled={isGeneratingFileCode}
+                                                                                    onClick={() => {
+                                                                                        const p = `Crea la clase o módulo ${currentFile.name.replace(/\.[^.]+$/, '')} con atributos, constructor y métodos abstractos o vacíos con TODOs`;
+                                                                                        setFileCodePrompt(p);
+                                                                                        handleGenerateFileCode(currentFile, p);
+                                                                                    }}
+                                                                                    className="text-[10px] px-2 py-0.5 rounded-md bg-background border border-purple-500/20 text-purple-700 dark:text-purple-300 hover:bg-purple-500/10 cursor-pointer font-medium transition-colors"
+                                                                                >
+                                                                                    🏷️ Clase Base con TODOs
+                                                                                </button>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    disabled={isGeneratingFileCode}
+                                                                                    onClick={() => {
+                                                                                        const p = `Genera la implementación de la subclase ${currentFile.name.replace(/\.[^.]+$/, '')} que herede de la clase principal, con constructor super y métodos a sobreescribir`;
+                                                                                        setFileCodePrompt(p);
+                                                                                        handleGenerateFileCode(currentFile, p);
+                                                                                    }}
+                                                                                    className="text-[10px] px-2 py-0.5 rounded-md bg-background border border-purple-500/20 text-purple-700 dark:text-purple-300 hover:bg-purple-500/10 cursor-pointer font-medium transition-colors"
+                                                                                >
+                                                                                    🔄 Subclase con Herencia
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
                                                                     <div className="rounded-xl border border-border/80 overflow-hidden bg-background">
                                                                         <Editor
                                                                             key={`${currentFile.id}_${currentLang}`}
@@ -3195,6 +3552,46 @@ function ActivityFormDialog({
                                                     </p>
                                                 </div>
 
+                                                {/* Modalidad de Evaluación: Sandbox vs Cloud PostgreSQL */}
+                                                <div className="space-y-1.5">
+                                                    <Label className="text-xs font-semibold">Modalidad de Evaluación</Label>
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setDbDeliveryMode("sandbox")}
+                                                            className={cn(
+                                                                "flex items-start gap-2.5 p-2.5 rounded-xl border text-left transition-all",
+                                                                dbDeliveryMode === "sandbox"
+                                                                    ? "border-indigo-500 bg-indigo-500/10 text-foreground font-semibold"
+                                                                    : "border-border/60 bg-background text-muted-foreground hover:bg-muted/20"
+                                                            )}
+                                                        >
+                                                            <CheckCircle2 className={cn("h-4 w-4 shrink-0 mt-0.5", dbDeliveryMode === "sandbox" ? "text-indigo-600" : "text-muted-foreground/40")} />
+                                                            <div>
+                                                                <p className="text-xs font-bold leading-tight">📦 Sandbox Local (PGlite)</p>
+                                                                <p className="text-[10px] text-muted-foreground font-normal mt-0.5">El estudiante redacta y entrega su script SQL. Se ejecuta efímeramente en RAM.</p>
+                                                            </div>
+                                                        </button>
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setDbDeliveryMode("cloud")}
+                                                            className={cn(
+                                                                "flex items-start gap-2.5 p-2.5 rounded-xl border text-left transition-all",
+                                                                dbDeliveryMode === "cloud"
+                                                                    ? "border-blue-500 bg-blue-500/10 text-foreground font-semibold"
+                                                                    : "border-border/60 bg-background text-muted-foreground hover:bg-muted/20"
+                                                            )}
+                                                        >
+                                                            <CheckCircle2 className={cn("h-4 w-4 shrink-0 mt-0.5", dbDeliveryMode === "cloud" ? "text-blue-600" : "text-muted-foreground/40")} />
+                                                            <div>
+                                                                <p className="text-xs font-bold leading-tight">☁️ Nube / Cloud (PostgreSQL MCP)</p>
+                                                                <p className="text-[10px] text-muted-foreground font-normal mt-0.5">Para proyectos finales. El alumno entrega la URI de su base de datos real (Supabase, Neon, Render).</p>
+                                                            </div>
+                                                        </button>
+                                                    </div>
+                                                </div>
+
                                                 {/* Alcance del Script SQL y Modelo */}
                                                 <div className="p-3 bg-muted/15 rounded-xl border border-border/60 space-y-2.5">
                                                     <div className="flex items-center justify-between">
@@ -3204,7 +3601,7 @@ function ActivityFormDialog({
                                                         </Label>
                                                         <span className="text-[10px] text-muted-foreground">Componentes a auditar</span>
                                                     </div>
-                                                    <div className="grid grid-cols-2 gap-2 text-xs">
+                                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                                                         <button
                                                             type="button"
                                                             onClick={() => setDbIncludeDdl(!dbIncludeDdl)}
@@ -3247,21 +3644,6 @@ function ActivityFormDialog({
                                                             <div>
                                                                 <p className="text-[11px] leading-tight">Consultas DQL</p>
                                                                 <p className="text-[9px] text-muted-foreground font-normal">SELECT con JOIN, agregación</p>
-                                                            </div>
-                                                        </button>
-
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setDbIncludeDiagram(!dbIncludeDiagram)}
-                                                            className={cn(
-                                                                "flex items-center gap-2 p-2 rounded-lg border text-left transition-all",
-                                                                dbIncludeDiagram ? "border-purple-500/50 bg-purple-500/10 text-foreground font-semibold" : "border-border/60 bg-background text-muted-foreground"
-                                                            )}
-                                                        >
-                                                            <CheckCircle2 className={cn("h-3.5 w-3.5 shrink-0", dbIncludeDiagram ? "text-purple-600" : "text-muted-foreground/40")} />
-                                                            <div>
-                                                                <p className="text-[11px] leading-tight">Diagrama ER</p>
-                                                                <p className="text-[9px] text-muted-foreground font-normal">Mermaid erDiagram</p>
                                                             </div>
                                                         </button>
                                                     </div>
@@ -3482,7 +3864,7 @@ function ActivityFormDialog({
                             )}
                         >
                             <div className="flex flex-col h-full min-h-0 overflow-hidden space-y-2">
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 shrink-0 px-1">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 shrink-0 px-1">
                                     <div>
                                         <Label className="text-xs sm:text-sm font-bold">
                                             Enunciado / Rúbrica de Evaluación (Markdown)
@@ -3496,9 +3878,38 @@ function ActivityFormDialog({
                                             )}
                                         </p>
                                     </div>
-                                    <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 shrink-0 hidden sm:flex">
-                                        <Sparkles className="h-3.5 w-3.5 text-primary" />
-                                        <span>Markdown con vista previa en vivo</span>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            onClick={() => {
+                                                setAiInitialContent(undefined);
+                                                setIsAIGeneratorOpen(true);
+                                            }}
+                                            className="h-8 text-xs font-semibold gap-1.5 bg-gradient-to-r from-primary to-primary/85 hover:from-primary/95 hover:to-primary text-primary-foreground shadow-xs transition-all cursor-pointer"
+                                        >
+                                            <Sparkles className="h-3.5 w-3.5" />
+                                            Generar Enunciado con IA
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => {
+                                                setAiInitialContent(statement);
+                                                setIsAIGeneratorOpen(true);
+                                            }}
+                                            disabled={!statement || statement.trim().length < 10}
+                                            className="h-8 text-xs font-semibold gap-1.5 border-primary/40 text-primary hover:bg-primary/10 hover:text-primary transition-all cursor-pointer shadow-2xs"
+                                            title="Toma el enunciado actual del editor y abre el chat de IA para modificarlo, adaptarlo o mejorarlo interactivamente"
+                                        >
+                                            <MessageSquare className="h-3.5 w-3.5 text-primary" />
+                                            Modificar con Chat IA
+                                        </Button>
+                                        <div className="text-[11px] text-muted-foreground items-center gap-1.5 hidden md:flex pl-2 border-l border-border/60">
+                                            <Sparkles className="h-3.5 w-3.5 text-primary" />
+                                            <span>Markdown con vista previa en vivo</span>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -3806,8 +4217,72 @@ function ActivityFormDialog({
                         )}
                     </Tabs>
                 </form>
+
+                {/* Modal para Generar Enunciado con IA */}
+                <AIGenerateDialog
+                    isOpen={isAIGeneratorOpen}
+                    onClose={() => {
+                        setIsAIGeneratorOpen(false);
+                        setAiInitialContent(undefined);
+                    }}
+                    type="statement"
+                    activityType={selectedType}
+                    initialContent={aiInitialContent}
+                    onUseContent={(content) => {
+                        setStatement(content);
+
+                        // Si el título está vacío, sugerir título extraído del enunciado
+                        const titleInput = document.getElementById("title") as HTMLInputElement;
+                        if (titleInput && !titleInput.value.trim()) {
+                            const lines = content.split("\n");
+                            const heading = lines.find((l) => l.trim().startsWith("#") || (l.trim().length > 5 && !l.trim().startsWith("-") && !l.trim().startsWith("*")));
+                            if (heading) {
+                                const cleanTitle = heading.replace(/^[#*\s-]+/, "").replace(/[*_`]/g, "").trim();
+                                if (cleanTitle.length >= 4 && cleanTitle.length <= 80) {
+                                    titleInput.value = cleanTitle;
+                                }
+                            }
+                        }
+
+                        // Sincronizar archivos automáticamente si es CODE_CHALLENGE
+                        if (selectedType === "CODE_CHALLENGE") {
+                            const extractedFiles = extractCodeChallengeFilesFromMarkdown(content);
+                            if (extractedFiles.length > 0) {
+                                setChallengeFiles(extractedFiles);
+                                setSelectedChallengeFileId(extractedFiles[0].id);
+                                const detectedLang = getLanguageFromFileName(extractedFiles[0].name);
+                                setChallengeLanguage(detectedLang);
+                                toast.info(`Se sincronizaron automáticamente ${extractedFiles.length} archivo(s) para el taller: ${extractedFiles.map(f => f.name).join(", ")}`);
+                            }
+                        }
+
+                        if (hasChecklist) {
+                            const extracted = parseCriteriaFromMarkdown(content);
+                            if (extracted.length > 0) {
+                                setCriteria(extracted);
+                                toast.success("Enunciado generado e insertado. Criterios sincronizados con la Lista de Chequeo.");
+                            }
+                        }
+                    }}
+                />
             </DialogContent>
         </Dialog>
+
+        {showStudentPreview && (
+            <Dialog open={showStudentPreview} onOpenChange={setShowStudentPreview}>
+                <DialogContent showCloseButton={false} className="fixed inset-0 top-0 left-0 z-[100] w-screen h-screen max-w-none! sm:max-w-none! max-h-none! border-none rounded-none translate-x-0! translate-y-0! p-0 flex flex-col bg-background overflow-hidden">
+                    <DialogTitle className="sr-only">Modo Estudiante - Vista Previa</DialogTitle>
+                    <CodeChallengeActivityDetails
+                        activity={previewActivity}
+                        userId="teacher-preview-id"
+                        studentName="Profesor (Modo Estudiante)"
+                        isTeacherPreview={true}
+                        onClosePreview={() => setShowStudentPreview(false)}
+                    />
+                </DialogContent>
+            </Dialog>
+        )}
+        </>
     );
 }
 

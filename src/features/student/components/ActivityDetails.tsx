@@ -117,10 +117,10 @@ function GroupActivityBanner({ activity }: { activity: any }) {
 }
 
 export function ActivityDetails({ activity, userId, studentName }: ActivityDetailsProps) {
-    const isFullHeight = activity.type === "GITHUB";
+    const isFullHeight = activity.type === "GITHUB" || activity.type === "CODE_CHALLENGE";
 
     return (
-        <div className={`flex flex-col ${isFullHeight ? "h-full overflow-hidden" : "min-h-full w-full"} p-3`}>
+        <div className={`flex flex-col ${isFullHeight ? "h-full min-h-0 overflow-hidden flex-1" : "min-h-full w-full"} p-1 sm:p-2`}>
             <GroupActivityBanner activity={activity} />
             <ActivityContent activity={activity} userId={userId} studentName={studentName} />
         </div>
@@ -137,7 +137,14 @@ function ActivityContent({ activity, userId, studentName }: ActivityDetailsProps
         case "PDF_REVIEW":
             return <PdfReviewActivityDetails activity={activity} userId={userId} studentName={studentName} />;
         case "CODE_CHALLENGE":
-            return <CodeChallengeActivityDetails activity={activity} userId={userId} studentName={studentName} />;
+            return (
+                <CodeChallengeActivityDetails
+                    key={`${activity.id}_${activity.updatedAt ? new Date(activity.updatedAt).getTime() : ''}_${activity.description ? activity.description.length : 0}`}
+                    activity={activity}
+                    userId={userId}
+                    studentName={studentName}
+                />
+            );
         case "VIDEO_PITCH":
             return <VideoPitchActivityDetails activity={activity} userId={userId} studentName={studentName} />;
         case "AI_INTERVIEW":

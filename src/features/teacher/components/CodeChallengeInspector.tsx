@@ -359,21 +359,21 @@ export function CodeChallengeInspector({
                             {leftTab === "code" ? (
                                 files.length > 0 ? (
                                     <div className="flex-1 flex flex-col min-h-0">
-                                        {/* Pestañas de archivos */}
-                                        <div className="flex items-center gap-1 p-2 border-b bg-muted/30 overflow-x-auto">
+                                        {/* Pestañas de archivos (multilínea sin scroll) */}
+                                        <div className="flex flex-wrap items-center gap-1.5 p-2.5 border-b bg-muted/30">
                                             {files.map((file) => (
                                                 <div
                                                     key={file.id}
                                                     onClick={() => setActiveFileId(file.id)}
                                                     className={cn(
-                                                        "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono font-medium cursor-pointer border transition-all select-none",
+                                                        "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono font-medium cursor-pointer border transition-all select-none whitespace-nowrap shrink-0",
                                                         activeFileId === file.id
-                                                            ? "bg-background text-foreground border-border shadow-2xs font-bold"
-                                                            : "bg-muted/40 hover:bg-muted text-muted-foreground border-transparent"
+                                                            ? "bg-background text-foreground border-border shadow-2xs font-bold ring-1 ring-primary/30"
+                                                            : "bg-muted/40 hover:bg-muted text-muted-foreground border-border/40"
                                                     )}
                                                 >
                                                     <FileCode className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                                                    <span className="truncate max-w-[140px]">{file.name}</span>
+                                                    <span>{file.name}</span>
                                                 </div>
                                             ))}
                                         </div>

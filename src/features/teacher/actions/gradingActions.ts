@@ -426,6 +426,30 @@ export async function gradeCodeChallengeAction(
     return result;
 }
 
+export async function testGradeCodeChallengeAction(
+    files: Array<{ name: string; content: string }>,
+    language: string,
+    statement: string,
+    gradingMode: "normal" | "moderate" | "strict" = "moderate",
+    testCases?: Array<{ input: string; expectedOutput: string; isSecret?: boolean }>
+) {
+    const session = await getSession();
+    if (!session || session.user.role !== "teacher") throw new Error("Unauthorized");
+
+    const { gradeCodeChallenge } = await import("../services/ai/codeChallengeService");
+    const result = await gradeCodeChallenge({
+        studentCode: files[0]?.content || "",
+        files,
+        language,
+        statement,
+        testCases,
+        gradingMode,
+        teacherId: session.user.id,
+    });
+
+    return result;
+}
+
 export async function gradeVideoPitchAction(
     activityId: string,
     studentUserId: string,
@@ -555,11 +579,13 @@ export async function gradeDbModelingAction(
     statement: string,
     courseId: string,
     dbConfig?: {
+        deliveryMode?: "sandbox" | "cloud";
         targetEngine?: string;
         requiredEntities?: string[];
         requiredNormalization?: string;
     },
-    gradingMode: "normal" | "moderate" | "strict" = "moderate"
+    gradingMode: "normal" | "moderate" | "strict" = "moderate",
+    connectionString?: string
 ) {
     const session = await getSession();
     if (!session || session.user.role !== "teacher") throw new Error("Unauthorized");
@@ -568,6 +594,7 @@ export async function gradeDbModelingAction(
     const result = await gradeDbModeling({
         diagramCode,
         sqlScript,
+        connectionString,
         statement,
         dbConfig,
         gradingMode,

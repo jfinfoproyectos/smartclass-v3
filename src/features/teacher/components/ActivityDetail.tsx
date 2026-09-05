@@ -71,6 +71,7 @@ import { ActivityGroupsModal } from "./ActivityGroupsModal";
 import { pdf } from "@react-pdf/renderer";
 import { ActivitySummaryPDFDocument } from "./ActivitySummaryPDFDocument";
 import { ExportFeedbackButtons } from "@/components/ui/export-feedback-buttons";
+import { CodeChallengeActivityDetails } from "@/features/student/components/CodeChallengeActivityDetails";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -125,6 +126,7 @@ export function ActivityDetail({
     const [isBatchGrading, setIsBatchGrading] = useState(false);
     const [isGroupsModalOpen, setIsGroupsModalOpen] = useState(false);
     const [activeTab, setActiveTab] = useState("results");
+    const [showStudentPreview, setShowStudentPreview] = useState(false);
     
     // Refs para captura fiable de valores en formularios manuales
     const gradeRef = useRef<HTMLInputElement>(null);
@@ -221,8 +223,10 @@ export function ActivityDetail({
             const leaderUser = group?.leader || (group?.members?.find((m: any) => m.isLeader)?.user);
             const leaderName = leaderUser ? formatName(leaderUser.name, leaderUser.profile) : "el líder";
 
-            // En actividades grupales solo los líderes tienen activo el botón de reevaluar/calificar
-            const canEvaluate = !activity.isGroupActivity || isLeader;
+            const hasSubmitted = Boolean(submission);
+
+            // Solo se permite calificar si hay entrega. En actividades grupales únicamente desde el líder del equipo.
+            const canEvaluate = hasSubmitted && (!activity.isGroupActivity || isLeader);
 
             return {
                 student,
@@ -232,6 +236,7 @@ export function ActivityDetail({
                 group,
                 isLeader,
                 leaderName,
+                hasSubmitted,
                 canEvaluate,
                 status: submission ? (submission.grade !== null ? "graded" : "submitted") : "pending"
             };
@@ -895,6 +900,20 @@ export function ActivityDetail({
                         </Button>
                     )}
 
+                    {activity.type === "CODE_CHALLENGE" && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            type="button"
+                            onClick={() => setShowStudentPreview(true)}
+                            className="h-8 gap-1.5 font-bold text-xs border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 shadow-2xs cursor-pointer"
+                            title="Ver cómo ve el estudiante la actividad y simular calificación con IA"
+                        >
+                            <Eye className="h-3.5 w-3.5 text-amber-500" />
+                            <span>Modo Estudiante</span>
+                        </Button>
+                    )}
+
                     <Button variant="outline" size="sm" asChild className="h-8 gap-1.5 font-semibold shadow-xs">
                         <Link href={`/dashboard/teacher/courses/${activity.courseId}?tab=activities`}>
                             <ArrowLeft className="h-4 w-4" />
@@ -1051,7 +1070,7 @@ export function ActivityDetail({
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {studentStatus.map(({ student, submission, status, isRejected, isReevaluationRequested, group, isLeader, leaderName, canEvaluate }, index) => {
+                                {studentStatus.map(({ student, submission, status, isRejected, isReevaluationRequested, group, isLeader, leaderName, hasSubmitted, canEvaluate }, index) => {
                                     const prevStudent = index > 0 ? studentStatus[index - 1] : null;
                                     const isFirstInGroup = index === 0 || prevStudent?.group?.id !== group?.id;
 
@@ -1151,38 +1170,45 @@ export function ActivityDetail({
                                         </TableCell>
                                         <TableCell className="text-right">
                                             <div className="flex items-center justify-end gap-1.5 w-full">
-                                                <Button
-                                                    variant={canEvaluate ? "default" : "outline"}
-                                                    size="sm"
-                                                    className={cn(
-                                                        "min-w-[105px] justify-center font-semibold gap-1.5 shadow-sm",
-                                                        !canEvaluate && "opacity-40 cursor-not-allowed bg-muted text-muted-foreground hover:bg-muted"
-                                                    )}
-                                                    onClick={() => {
-                                                        if (!canEvaluate) return;
-                                                        setEvaluatingStudentId(student.id);
-                                                    }}
-                                                    disabled={!canEvaluate}
-                                                    title={
-                                                        !canEvaluate
-                                                            ? (group ? `Actividad grupal: Reevaluación activa únicamente para el líder del equipo (${leaderName})` : "Actividad grupal: estudiante sin líder asignado")
-                                                            : undefined
-                                                    }
-                                                >
-                                                    <Sparkles className="h-3.5 w-3.5" />
-                                                    {submission?.grade !== null && submission?.grade !== undefined ? "Reevaluar" : "Calificar"}
-                                                </Button>
+                                                {(() => {
+                                                    const evaluationTooltip = !hasSubmitted
+                                                        ? (activity.isGroupActivity ? "El equipo aún no ha realizado la entrega" : "El estudiante aún no ha realizado la entrega")
+                                                        : !canEvaluate
+                                                            ? (group ? `Actividad grupal: La evaluación se realiza únicamente desde el líder del equipo (${leaderName})` : "Actividad grupal: estudiante sin líder asignado")
+                                                            : (submission?.grade !== null && submission?.grade !== undefined ? "Reevaluar entrega" : "Calificar entrega");
+
+                                                    return (
+                                                        <div title={evaluationTooltip} className="inline-block">
+                                                            <Button
+                                                                variant={canEvaluate ? "default" : "outline"}
+                                                                size="sm"
+                                                                className={cn(
+                                                                    "min-w-[105px] justify-center font-semibold gap-1.5 shadow-sm",
+                                                                    !canEvaluate && "opacity-40 cursor-not-allowed bg-muted text-muted-foreground hover:bg-muted"
+                                                                )}
+                                                                onClick={() => {
+                                                                    if (!canEvaluate) return;
+                                                                    setEvaluatingStudentId(student.id);
+                                                                }}
+                                                                disabled={!canEvaluate}
+                                                            >
+                                                                <Sparkles className="h-3.5 w-3.5" />
+                                                                {submission?.grade !== null && submission?.grade !== undefined ? "Reevaluar" : "Calificar"}
+                                                            </Button>
+                                                        </div>
+                                                    );
+                                                })()}
                                                 {submission ? (
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
-                                                        onClick={() => canEvaluate && handleDeleteSubmission(submission)}
-                                                        disabled={isPending || (!canEvaluate && activity.isGroupActivity)}
+                                                        onClick={() => (!activity.isGroupActivity || isLeader) && handleDeleteSubmission(submission)}
+                                                        disabled={isPending || (activity.isGroupActivity && !isLeader)}
                                                         className={cn(
                                                             "h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0",
-                                                            (!canEvaluate && activity.isGroupActivity) && "opacity-30 cursor-not-allowed"
+                                                            (activity.isGroupActivity && !isLeader) && "opacity-30 cursor-not-allowed"
                                                         )}
-                                                        title={(!canEvaluate && activity.isGroupActivity) ? "Solo se eliminan entregas desde el líder de grupo" : "Eliminar entrega"}
+                                                        title={(activity.isGroupActivity && !isLeader) ? "Solo se eliminan entregas desde el líder de grupo" : "Eliminar entrega"}
                                                     >
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>
@@ -1382,18 +1408,29 @@ export function ActivityDetail({
 
                                 {/* Action button to open dedicated Evaluation Modal */}
                                 <div className="pt-2 flex justify-end">
-                                    <Button
-                                        type="button"
-                                        onClick={() => {
-                                            setSelectedStudentIndex(null);
-                                            setEvaluatingStudentId(student.id);
-                                        }}
-                                        variant="default"
-                                        className="w-full font-bold gap-2 py-5 shadow-sm"
-                                    >
-                                        <Sparkles className="h-4 w-4" />
-                                        {submission?.grade !== null && submission?.grade !== undefined ? "Reevaluar / Modificar Calificación" : "Abrir Evaluador de Código"}
-                                    </Button>
+                                    <div title={!submission ? "El estudiante aún no ha realizado la entrega" : undefined} className="w-full">
+                                        <Button
+                                            type="button"
+                                            onClick={() => {
+                                                if (!submission) return;
+                                                setSelectedStudentIndex(null);
+                                                setEvaluatingStudentId(student.id);
+                                            }}
+                                            disabled={!submission}
+                                            variant={submission ? "default" : "outline"}
+                                            className={cn(
+                                                "w-full font-bold gap-2 py-5 shadow-sm",
+                                                !submission && "opacity-40 cursor-not-allowed bg-muted text-muted-foreground hover:bg-muted"
+                                            )}
+                                        >
+                                            <Sparkles className="h-4 w-4" />
+                                            {!submission 
+                                                ? "Sin Entrega para Evaluar"
+                                                : (submission?.grade !== null && submission?.grade !== undefined 
+                                                    ? "Reevaluar / Modificar Calificación" 
+                                                    : "Abrir Evaluador de Código")}
+                                        </Button>
+                                    </div>
                                 </div>
 
                                 {/* Calificación GitHub — IA y Manual */}
@@ -2353,13 +2390,13 @@ export function ActivityDetail({
             {(() => {
                 if (!evaluatingStudentId) return null;
                 const evalItem = studentStatus.find(s => s.student.id === evaluatingStudentId);
-                if (!evalItem) return null;
+                if (!evalItem || !evalItem.submission) return null;
                 const { student: evalStudent, submission: evalSubmission } = evalItem;
 
-                // Si la actividad es grupal, la navegación de evaluación es exclusiva para los líderes de grupo
+                // Si la actividad es grupal, la navegación de evaluación es exclusiva para los líderes de grupo con entrega
                 const evaluatableStudents = activity.isGroupActivity
-                    ? studentStatus.filter(s => s.isLeader || s.student.id === evalStudent.id)
-                    : studentStatus;
+                    ? studentStatus.filter(s => s.isLeader && s.submission)
+                    : studentStatus.filter(s => Boolean(s.submission));
 
                 return (
                     <Dialog open={!!evaluatingStudentId} onOpenChange={open => !open && setEvaluatingStudentId(null)}>
@@ -2587,6 +2624,21 @@ export function ActivityDetail({
                         window.location.reload();
                     }}
                 />
+            )}
+
+            {showStudentPreview && (
+                <Dialog open={showStudentPreview} onOpenChange={setShowStudentPreview}>
+                    <DialogContent showCloseButton={false} className="fixed inset-0 top-0 left-0 z-[100] w-screen h-screen max-w-none! sm:max-w-none! max-h-none! border-none rounded-none translate-x-0! translate-y-0! p-0 flex flex-col bg-background overflow-hidden">
+                        <DialogTitle className="sr-only">Modo Estudiante - Vista Previa</DialogTitle>
+                        <CodeChallengeActivityDetails
+                            activity={activity}
+                            userId="teacher-preview-id"
+                            studentName="Profesor (Modo Estudiante)"
+                            isTeacherPreview={true}
+                            onClosePreview={() => setShowStudentPreview(false)}
+                        />
+                    </DialogContent>
+                </Dialog>
             )}
         </div>
     );
