@@ -25,7 +25,7 @@ interface ActivityDetailsProps {
     studentName: string;
 }
 
-function GroupActivityBanner({ activity }: { activity: any }) {
+export function GroupActivityBanner({ activity, compact = false }: { activity: any; compact?: boolean }) {
     if (!activity.isGroupActivity) return null;
 
     const group = activity.studentGroup;
@@ -35,14 +35,44 @@ function GroupActivityBanner({ activity }: { activity: any }) {
 
     if (!group) {
         return (
-            <div className="mb-2.5 p-3 rounded-2xl border border-destructive/30 bg-destructive/10 text-destructive text-xs flex items-center gap-3">
-                <AlertCircle className="h-5 w-5 shrink-0" />
-                <div>
-                    <p className="font-bold text-foreground">Actividad Grupal — Sin Grupo Asignado</p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">
-                        Esta actividad requiere entrega en equipo, pero aún no perteneces a ningún grupo en este curso. Contacta a tu docente para que te asigne a un grupo de trabajo.
-                    </p>
+            <div className={`${compact ? "p-1.5 px-2.5 rounded-lg text-[11px]" : "mb-2.5 p-3 rounded-2xl text-xs"} border border-destructive/30 bg-destructive/10 text-destructive flex items-center justify-between gap-2`}>
+                <div className="flex items-center gap-1.5 truncate">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                    <span className="font-bold truncate">Actividad Grupal — Sin Grupo Asignado</span>
                 </div>
+                <span className="text-[10px] text-muted-foreground shrink-0">Contacta a tu docente</span>
+            </div>
+        );
+    }
+
+    if (compact) {
+        return (
+            <div className="p-1.5 px-2.5 rounded-lg border border-primary/20 bg-primary/5 text-xs flex items-center justify-between gap-2 shadow-2xs shrink-0">
+                <div className="flex items-center gap-1.5 min-w-0 truncate">
+                    {isLeader ? (
+                        <Crown className="h-3.5 w-3.5 text-amber-500 shrink-0 fill-amber-500" />
+                    ) : (
+                        <Users className="h-3.5 w-3.5 text-primary shrink-0" />
+                    )}
+                    <span className="font-bold text-foreground truncate text-[11px]">
+                        {group.name}
+                    </span>
+                    <Badge variant="outline" className={`text-[9px] px-1 py-0 h-4 shrink-0 font-medium ${isLeader ? "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30" : "bg-primary/10 text-primary border-primary/30"}`}>
+                        {isLeader ? "👑 Líder" : "Integrante"}
+                    </Badge>
+                    {!isLeader && (
+                        <span className="text-[10px] text-muted-foreground truncate hidden sm:inline" title={`Líder del equipo: ${leaderName}`}>
+                            • Líder: <strong>{leaderName}</strong>
+                        </span>
+                    )}
+                </div>
+                {hasSubmission ? (
+                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 shrink-0 font-bold">
+                        <CheckCircle2 className="h-2.5 w-2.5 mr-1" /> Entregado por Líder
+                    </Badge>
+                ) : (
+                    <span className="text-[10px] text-muted-foreground shrink-0 font-medium">Pendiente de entrega</span>
+                )}
             </div>
         );
     }
@@ -120,8 +150,8 @@ export function ActivityDetails({ activity, userId, studentName }: ActivityDetai
     const isFullHeight = activity.type === "GITHUB" || activity.type === "CODE_CHALLENGE";
 
     return (
-        <div className={`flex flex-col ${isFullHeight ? "h-full min-h-0 overflow-hidden flex-1" : "min-h-full w-full"} p-1 sm:p-2`}>
-            <GroupActivityBanner activity={activity} />
+        <div className={`flex flex-col ${isFullHeight ? "h-full min-h-0 overflow-hidden flex-1" : "min-h-full w-full"} p-0.5 sm:p-1`}>
+            {activity.type !== "GITHUB" && <GroupActivityBanner activity={activity} />}
             <ActivityContent activity={activity} userId={userId} studentName={studentName} />
         </div>
     );

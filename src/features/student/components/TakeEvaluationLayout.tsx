@@ -818,7 +818,7 @@ export function TakeEvaluationLayout({
     return (
         <div className="flex flex-col h-screen w-full bg-background text-foreground overflow-hidden">
             {/* Minimal Header with theme consistency */}
-            <header className="shrink-0 flex items-center justify-between px-4 py-2 border-b border-border bg-card text-card-foreground z-50 h-13 shadow-xs">
+            <header className="shrink-0 flex items-center justify-between px-4 border-b border-border bg-card text-card-foreground z-50 h-12 shadow-none">
                 <div className="flex items-center gap-2">
                     {/* Timer */}
                     {!isSubmitted && (

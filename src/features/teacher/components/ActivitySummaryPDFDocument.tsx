@@ -15,20 +15,23 @@ const styles = StyleSheet.create({
         marginBottom: 12,
         paddingBottom: 8,
         borderBottomWidth: 2,
-        borderBottomColor: "#2563eb",
+        borderBottomColor: "#0f172a",
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "flex-end",
     },
     appTitle: {
-        fontSize: 14,
+        fontSize: 13,
         fontFamily: "Helvetica-Bold",
-        color: "#2563eb",
+        color: "#0f172a",
         marginBottom: 2,
+        letterSpacing: 0.5,
+        textTransform: "uppercase",
     },
     subtitle: {
         fontSize: 9,
-        color: "#64748b",
+        fontFamily: "Helvetica-Bold",
+        color: "#1e3a5f",
     },
     statsContainer: {
         flexDirection: "row",
@@ -99,12 +102,12 @@ const styles = StyleSheet.create({
         fontSize: 8,
     },
     gradePass: {
-        backgroundColor: "#dcfce7",
-        color: "#15803d",
+        backgroundColor: "#ecfdf5",
+        color: "#065f46",
     },
     gradeFail: {
-        backgroundColor: "#fee2e2",
-        color: "#b91c1c",
+        backgroundColor: "#fff1f2",
+        color: "#9f1239",
     },
     gradePending: {
         backgroundColor: "#f1f5f9",
@@ -128,7 +131,7 @@ const styles = StyleSheet.create({
     feedbackLabel: {
         fontSize: 7,
         fontFamily: "Helvetica-Bold",
-        color: "#2563eb",
+        color: "#1e3a5f",
         textTransform: "uppercase",
         marginBottom: 2,
     },

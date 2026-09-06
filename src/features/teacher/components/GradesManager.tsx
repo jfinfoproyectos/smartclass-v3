@@ -53,7 +53,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UserAvatar } from "@/components/ui/user-avatar";
-import { useReactToPrint } from "react-to-print";
+import { CourseGradesPDFDocument } from "./CourseGradesPDFDocument";
 import { formatName } from "@/lib/utils";
 import { 
     calculateStudentGradeInGroup as calcGroup, 
@@ -132,21 +132,39 @@ export function GradesManager({ courseId, courseTitle = "Curso", initialData }: 
     };
 
     // --- Export Actions ---
-    const handlePrintPDF = useReactToPrint({
-        contentRef: printRef,
-        documentTitle: `Calificaciones_${courseTitle.replace(/\s+/g, '_')}`,
-        pageStyle: `
-            @page { size: landscape; margin: 15mm; }
-            @media print {
-                body { -webkit-print-color-adjust: exact; print-color-adjust: exact; padding: 0; }
-                .print-header { display: block !important; margin-bottom: 20px; text-align: center; }
-                .print-header h1 { font-size: 24px; font-weight: bold; margin: 0 0 5px 0; color: #0f172a; }
-                .print-header p { font-size: 14px; margin: 0; color: #64748b; }
-                table { border-collapse: collapse; width: 100%; border: 1px solid #e2e8f0; }
-                th, td { border: 1px solid #e2e8f0; padding: 6px; }
-            }
-        `
-    });
+    const [isExportingPDF, setIsExportingPDF] = useState(false);
+
+    const handleExportPDF = async () => {
+        setIsExportingPDF(true);
+        const toastId = toast.loading("Generando reporte PDF...", { id: "pdf-export" });
+        try {
+            const { pdf } = await import("@react-pdf/renderer");
+            const blob = await pdf(
+                <CourseGradesPDFDocument
+                    courseTitle={courseTitle}
+                    categories={categories}
+                    students={students}
+                    calcCategory={calculateStudentGradeInCategory}
+                    calcGroup={calculateStudentGradeInGroup}
+                    calcFinal={calculateFinalGrade}
+                />
+            ).toBlob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `Calificaciones_${courseTitle.replace(/\s+/g, '_')}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 100);
+            toast.success("Reporte PDF generado exitosamente", { id: "pdf-export" });
+        } catch (error) {
+            console.error(error);
+            toast.error("Error al generar el PDF", { id: "pdf-export" });
+        } finally {
+            setIsExportingPDF(false);
+        }
+    };
 
     const handleExportExcel = async () => {
         try {
@@ -415,7 +433,8 @@ export function GradesManager({ courseId, courseTitle = "Curso", initialData }: 
                             <Button 
                                 variant="outline" 
                                 size="sm"
-                                onClick={handlePrintPDF as any}
+                                disabled={isExportingPDF}
+                                onClick={handleExportPDF}
                                 className="gap-2"
                             >
                                 <FileText className="h-4 w-4 text-rose-600" />

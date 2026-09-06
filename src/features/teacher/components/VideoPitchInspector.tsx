@@ -24,6 +24,15 @@ import { gradeVideoPitchAction } from "@/features/teacher/actions/gradingActions
 import { GradingModeSelector } from "./GradingModeSelector";
 import { FeedbackViewer } from "@/features/student/components/FeedbackViewer";
 import { RUBRIC_LEVELS } from "./CodeProjectInspector";
+import {
+    getActivityChecklistConfig,
+    extractEvaluationMetadata,
+    stripEvaluationMetadata,
+    embedEvaluationMetadata,
+    calculateChecklistScore,
+    calculateCombinedFinalGrade,
+    EvaluationMetadata
+} from "@/features/teacher/utils/checklistGradingUtils";
 
 interface VideoPitchInspectorProps {
     student: any;
@@ -116,21 +125,8 @@ export function VideoPitchInspector({
 
     // Extraer Lista de Chequeo y Ponderaciones
     const checklistConfig = useMemo(() => {
-        if (!activity?.description) return null;
-        try {
-            const data = JSON.parse(activity.description);
-            if (data?.hasChecklist && Array.isArray(data?.criteria) && data.criteria.length > 0) {
-                return {
-                    criteria: data.criteria,
-                    aiWeight: typeof data.aiWeight === "number" ? data.aiWeight : 50,
-                    checklistWeight: typeof data.checklistWeight === "number" ? data.checklistWeight : 50,
-                };
-            }
-        } catch {
-            return null;
-        }
-        return null;
-    }, [activity?.description]);
+        return getActivityChecklistConfig(activity);
+    }, [activity]);
 
     const checklistData = checklistConfig?.criteria ?? null;
     const aiWeight = checklistConfig?.aiWeight ?? 50;
@@ -158,36 +154,56 @@ export function VideoPitchInspector({
 
     // Sincronizar al cambiar de estudiante
     useEffect(() => {
-        setGradeInput(submission?.grade !== null && submission?.grade !== undefined ? String(submission.grade) : "");
-        setTeacherNotesInput(submission?.feedback || "");
-        setAiFeedbackInput("");
-        setAiGrade(null);
+        const meta = extractEvaluationMetadata(submission?.feedback);
+        const cleanFeedback = stripEvaluationMetadata(submission?.feedback || "");
+
+        setCriteriaLevels(meta?.criteriaLevels || {});
+        setManualSustentacionScore(meta?.manualSustentacionScore ?? null);
+
+        const currentAi = meta?.aiGrade ?? null;
+        setAiGrade(currentAi);
         setAiResult(null);
-        setCriteriaLevels({});
-    }, [submission?.id, student?.id]);
+        setAiFeedbackInput("");
+        setTeacherNotesInput(cleanFeedback);
+
+        if (submission?.grade !== null && submission?.grade !== undefined) {
+            setGradeInput(String(submission.grade));
+        } else {
+            setGradeInput("");
+        }
+    }, [submission?.id, student?.id, submission?.feedback, submission?.grade]);
 
     // Nota de sustentación oral
     const checklistScore = useMemo(() => {
-        if (!checklistData || checklistData.length === 0) return 0;
-        if (manualSustentacionScore !== null) return manualSustentacionScore;
-
-        const totalEarnedWeight = checklistData.reduce((acc: number, crit: any) => {
-            const factor = criteriaLevels[crit.id];
-            if (typeof factor !== "number") return acc;
-            const weight = Number(crit.percentage) || 0;
-            return acc + (weight * factor);
-        }, 0);
-        return Math.min(5.0, Math.max(0.0, (totalEarnedWeight / 100) * 5.0));
+        return calculateChecklistScore(checklistData, criteriaLevels, manualSustentacionScore);
     }, [checklistData, criteriaLevels, manualSustentacionScore]);
 
     // Nota final combinada ponderada
     const combinedFinalScore = useMemo(() => {
         if (!checklistConfig) return checklistScore;
-        const aiScoreVal = aiGrade ?? (submission?.grade !== null ? Number(submission?.grade) : 0);
-        const aiPart = aiScoreVal * (aiWeight / 100);
-        const teacherPart = checklistScore * (checklistWeight / 100);
-        return Math.min(5.0, Math.max(0.0, aiPart + teacherPart));
+        const aiScoreVal = aiGrade ?? (checklistConfig ? 0 : (submission?.grade !== null ? Number(submission?.grade) : 0));
+        return calculateCombinedFinalGrade(aiScoreVal, checklistScore, aiWeight, checklistWeight);
     }, [checklistConfig, aiGrade, submission?.grade, aiWeight, checklistScore, checklistWeight]);
+
+    const handleUpdateCriteriaLevels = (nextLevels: Record<string, number | undefined>) => {
+        setCriteriaLevels(nextLevels);
+        setManualSustentacionScore(null);
+        if (checklistConfig) {
+            const nextChecklist = calculateChecklistScore(checklistData, nextLevels, null);
+            const aiScore = aiGrade ?? 0;
+            const nextCombined = calculateCombinedFinalGrade(aiScore, nextChecklist, aiWeight, checklistWeight);
+            setGradeInput(nextCombined.toFixed(1));
+        }
+    };
+
+    const handleQuickSustentacionPreset = (score: number) => {
+        setManualSustentacionScore(score);
+        if (checklistConfig) {
+            const aiScore = aiGrade ?? 0;
+            const nextCombined = calculateCombinedFinalGrade(aiScore, score, aiWeight, checklistWeight);
+            setGradeInput(nextCombined.toFixed(1));
+        }
+    };
 
     // Navegación entre estudiantes
     const currentIndex = useMemo(() => {
@@ -221,9 +237,16 @@ export function VideoPitchInspector({
             setAiResult(result);
             setAiGrade(result.grade);
             setAiFeedbackInput(result.feedback);
-            setGradeInput(result.grade.toFixed(1));
+            const finalCombined = checklistConfig
+                ? calculateCombinedFinalGrade(result.grade, checklistScore, aiWeight, checklistWeight)
+                : result.grade;
+            setGradeInput(finalCombined.toFixed(1));
             setRightTab("ai_eval");
-            toast.success(`✓ Evaluación multimodal completada. Nota sugerida: ${result.grade.toFixed(1)}`);
+            if (checklistConfig) {
+                toast.success(`✓ Evaluación multimodal completada (${result.grade.toFixed(1)}). Nota ponderada: ${finalCombined.toFixed(1)}`);
+            } else {
+                toast.success(`✓ Evaluación multimodal completada. Nota sugerida: ${result.grade.toFixed(1)}`);
+            }
         } catch (err: any) {
             toast.error(err.message || "Error al evaluar con IA.");
         } finally {
@@ -233,7 +256,13 @@ export function VideoPitchInspector({
 
     // Guardar calificación manual
     const handleSaveGrade = async () => {
-        const parsedGrade = parseFloat(gradeInput);
+        let gradeToSave = gradeInput;
+        if (checklistConfig && (!gradeToSave || isNaN(parseFloat(gradeToSave)))) {
+            gradeToSave = combinedFinalScore.toFixed(1);
+            setGradeInput(gradeToSave);
+        }
+
+        const parsedGrade = parseFloat(gradeToSave);
         if (isNaN(parsedGrade) || parsedGrade < 0 || parsedGrade > 5) {
             toast.error("Por favor ingresa una nota válida entre 0.0 y 5.0");
             return;
@@ -241,11 +270,21 @@ export function VideoPitchInspector({
 
         setIsSaving(true);
         try {
-            const fullFeedback = teacherNotesInput.trim()
+            let fullFeedback = teacherNotesInput.trim()
                 ? `${teacherNotesInput.trim()}${aiFeedbackInput ? `\n\n---\n### Evaluación Multimodal IA (Pitch)\n${aiFeedbackInput}` : ""}`
-                : aiFeedbackInput;
+                : (aiFeedbackInput || aiResult?.feedback || "");
 
-            await onGradeManual(gradeInput, fullFeedback, student.id, activity.id);
+            if (checklistConfig) {
+                const metadata: EvaluationMetadata = {
+                    aiGrade: aiGrade ?? 0,
+                    checklistScore: checklistScore,
+                    criteriaLevels: criteriaLevels,
+                    manualSustentacionScore: manualSustentacionScore,
+                };
+                fullFeedback = embedEvaluationMetadata(fullFeedback, metadata);
+            }
+
+            await onGradeManual(gradeToSave, fullFeedback, student.id, activity.id);
             toast.success("✓ Calificación guardada exitosamente");
         } catch (err: any) {
             toast.error(err.message || "Error al guardar la calificación");
@@ -494,11 +533,35 @@ export function VideoPitchInspector({
                                         <div className="flex items-center justify-between border-b pb-2">
                                             <div className="flex items-center gap-1.5">
                                                 <ListChecks className="h-4 w-4 text-primary" />
-                                                <span className="text-xs font-bold text-foreground">Sustentación Oral</span>
+                                                <span className="text-xs font-bold text-foreground">Sustentación Docente ({checklistWeight}%)</span>
                                             </div>
-                                            <span className="text-xs font-bold font-mono text-primary">
-                                                Nota: {checklistScore.toFixed(1)} / 5.0
-                                            </span>
+                                            <div className="flex items-center gap-2">
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        const allFull: Record<string, number> = {};
+                                                        checklistData.forEach((c: any) => { allFull[c.id] = 1.0; });
+                                                        handleUpdateCriteriaLevels(allFull);
+                                                    }}
+                                                    className="h-6 px-1.5 text-[10px] text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+                                                >
+                                                    Todos Sabe
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleUpdateCriteriaLevels({})}
+                                                    className="h-6 px-1.5 text-[10px] text-muted-foreground hover:bg-muted"
+                                                >
+                                                    Limpiar
+                                                </Button>
+                                                <span className="text-xs font-bold font-mono text-primary ml-1">
+                                                    {checklistScore.toFixed(1)} / 5.0
+                                                </span>
+                                            </div>
                                         </div>
 
                                         <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
@@ -517,7 +580,7 @@ export function VideoPitchInspector({
                                                                     type="button"
                                                                     onClick={() => {
                                                                         const nextLevels = { ...criteriaLevels, [crit.id]: currentFactor === lvl.factor ? undefined : lvl.factor };
-                                                                        setCriteriaLevels(nextLevels);
+                                                                        handleUpdateCriteriaLevels(nextLevels);
                                                                     }}
                                                                     className={cn(
                                                                         "text-[10px] font-bold px-2 py-0.5 rounded border transition-all",
@@ -535,19 +598,39 @@ export function VideoPitchInspector({
                                             })}
                                         </div>
 
-                                        <div className="flex items-center justify-between pt-1">
-                                            <span className="text-[11px] text-muted-foreground font-mono">
-                                                Ponderada: {combinedFinalScore.toFixed(1)} / 5.0
-                                            </span>
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={() => setGradeInput(combinedFinalScore.toFixed(1))}
-                                                className="h-6 text-[10px] font-bold gap-1 text-primary"
-                                            >
-                                                <Zap className="h-3 w-3 fill-primary" /> Adoptar Ponderada
-                                            </Button>
+                                        {/* Presets rápidos de nota de sustentación */}
+                                        <div className="flex items-center justify-between gap-1 pt-1 border-t border-dashed">
+                                            <span className="text-[10px] text-muted-foreground font-medium">Nota Rápida Sustentación:</span>
+                                            <div className="flex items-center gap-1">
+                                                {[5.0, 4.0, 3.0, 0.0].map((score) => (
+                                                    <Button
+                                                        key={score}
+                                                        type="button"
+                                                        variant={manualSustentacionScore === score ? "default" : "outline"}
+                                                        size="sm"
+                                                        onClick={() => handleQuickSustentacionPreset(score)}
+                                                        className="h-5 px-1.5 text-[10px] font-mono"
+                                                    >
+                                                        {score.toFixed(1)}
+                                                    </Button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Ponderación combinada */}
+                                        <div className="p-2 rounded-lg bg-background/80 border text-[11px] space-y-1">
+                                            <div className="flex items-center justify-between font-mono">
+                                                <span className="text-muted-foreground">
+                                                    (IA {aiWeight}%: {(aiGrade ?? 0).toFixed(1)}) + (Docente {checklistWeight}%: {checklistScore.toFixed(1)})
+                                                </span>
+                                                <span className="font-bold text-primary">
+                                                    = {combinedFinalScore.toFixed(1)} / 5.0
+                                                </span>
+                                            </div>
+                                            <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden flex">
+                                                <div className="bg-purple-500 h-full" style={{ width: `${aiWeight}%` }} title={`IA: ${aiWeight}%`} />
+                                                <div className="bg-blue-500 h-full" style={{ width: `${checklistWeight}%` }} title={`Docente: ${checklistWeight}%`} />
+                                            </div>
                                         </div>
                                     </div>
                                 )}

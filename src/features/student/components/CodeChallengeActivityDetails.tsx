@@ -662,6 +662,7 @@ export function CodeChallengeActivityDetails({
                                 <MDEditor.Markdown
                                     source={activity.statement || "**No hay enunciado disponible.**"}
                                     style={{ background: 'transparent', userSelect: 'none' }}
+                                    disableCopy={true}
                                 />
                             </div>
                         </TabsContent>

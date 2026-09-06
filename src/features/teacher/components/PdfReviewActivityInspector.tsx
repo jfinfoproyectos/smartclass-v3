@@ -11,7 +11,7 @@ import {
     Sparkles, Users, Crown, CheckCircle2, ChevronLeft, ChevronRight, ChevronDown,
     ExternalLink, Copy, Check, X, Clock,
     FileText, ClipboardList, Info, Loader2, Bot, ArrowRight, RotateCcw, CheckCircle,
-    ListChecks, SlidersHorizontal, HelpCircle, Zap
+    ListChecks, SlidersHorizontal, HelpCircle, Zap, UserCheck
 } from "lucide-react";
 import {
     DropdownMenu,
@@ -27,6 +27,15 @@ import '@uiw/react-md-editor/markdown-editor.css';
 import '@uiw/react-markdown-preview/markdown.css';
 import { useTheme } from "next-themes";
 import { improveFeedbackAction, gradePdfReviewAction } from "@/features/teacher/actions/gradingActions";
+import {
+    getActivityChecklistConfig,
+    extractEvaluationMetadata,
+    stripEvaluationMetadata,
+    embedEvaluationMetadata,
+    calculateChecklistScore,
+    calculateCombinedFinalGrade,
+    type EvaluationMetadata,
+} from "@/features/teacher/utils/checklistGradingUtils";
 import { GradingModeSelector } from "./GradingModeSelector";
 import { FeedbackViewer } from "@/features/student/components/FeedbackViewer";
 import { PdfChatInspector } from "./PdfChatInspector";
@@ -65,7 +74,7 @@ function getPdfEmbedUrl(url: string): string | null {
 // Separar retroalimentación almacenada entre reporte IA y observaciones del profesor
 function parseStoredFeedback(rawFeedback: string | null | undefined) {
     if (!rawFeedback) return { aiFeedback: "", teacherNotes: "" };
-    const cleanRaw = rawFeedback.replace("[ENTREGA RECHAZADA]\n", "").replace("[ENTREGA RECHAZADA]", "");
+    const cleanRaw = stripEvaluationMetadata(rawFeedback).replace("[ENTREGA RECHAZADA]\n", "").replace("[ENTREGA RECHAZADA]", "");
     const marker = "### 👨‍🏫 Observaciones del Profesor";
     const dividerMarker = "---";
 
@@ -102,6 +111,7 @@ export function PdfReviewActivityInspector({
     const mode = resolvedTheme === "dark" ? "dark" : resolvedTheme === "light" ? "light" : "auto";
 
     const parsed = useMemo(() => parseStoredFeedback(submission?.feedback), [submission?.feedback]);
+    const storedMeta = useMemo(() => extractEvaluationMetadata(submission?.feedback), [submission?.feedback]);
 
     const [gradeInput, setGradeInput] = useState<string>(
         submission?.grade !== null && submission?.grade !== undefined
@@ -110,11 +120,14 @@ export function PdfReviewActivityInspector({
     );
     const [teacherNotesInput, setTeacherNotesInput] = useState<string>(parsed.teacherNotes);
     const [aiFeedbackInput, setAiFeedbackInput] = useState<string>(parsed.aiFeedback);
-    const [aiGrade, setAiGrade] = useState<number | null>(
-        parsed.aiFeedback && submission?.grade !== null && submission?.grade !== undefined
+    const [aiGrade, setAiGrade] = useState<number | null>(() => {
+        if (storedMeta?.aiGrade !== undefined && storedMeta?.aiGrade !== null) {
+            return Number(storedMeta.aiGrade);
+        }
+        return parsed.aiFeedback && submission?.grade !== null && submission?.grade !== undefined
             ? Number(submission.grade)
-            : null
-    );
+            : null;
+    });
 
     const [isSaving, setIsSaving] = useState(false);
     const [isImprovingAI, setIsImprovingAI] = useState(false);
@@ -130,57 +143,38 @@ export function PdfReviewActivityInspector({
 
     // Extraer Lista de Chequeo, Criterios y Ponderaciones configuradas (por defecto: 30% IA / 70% Docente)
     const checklistConfig = useMemo(() => {
-        if (!activity?.description) return null;
-        try {
-            const data = JSON.parse(activity.description);
-            if (data?.hasChecklist && Array.isArray(data?.criteria) && data.criteria.length > 0) {
-                const aiWeight = typeof data.aiWeight === "number" ? data.aiWeight : 30;
-                const checklistWeight = typeof data.checklistWeight === "number" ? data.checklistWeight : 70;
-                return {
-                    criteria: data.criteria,
-                    aiWeight,
-                    checklistWeight,
-                };
-            }
-        } catch {
-            return null;
-        }
-        return null;
+        return getActivityChecklistConfig(activity?.description);
     }, [activity?.description]);
 
     const checklistData = checklistConfig?.criteria ?? null;
     const aiWeight = checklistConfig?.aiWeight ?? 30;
     const checklistWeight = checklistConfig?.checklistWeight ?? 70;
 
-    const [criteriaLevels, setCriteriaLevels] = useState<Record<string, number | undefined>>({});
-    const [manualSustentacionScore, setManualSustentacionScore] = useState<number | null>(null);
+    const [criteriaLevels, setCriteriaLevels] = useState<Record<string, number | undefined>>(() => {
+        return storedMeta?.criteriaLevels ?? {};
+    });
+    const [manualSustentacionScore, setManualSustentacionScore] = useState<number | null>(() => {
+        return storedMeta?.manualSustentacionScore ?? null;
+    });
 
     // Nota obtenida exclusivamente en la sustentación oral (0.0 - 5.0) de forma proporcional
     const checklistScore = useMemo(() => {
-        if (!checklistData || checklistData.length === 0) return 0;
-        if (manualSustentacionScore !== null) return manualSustentacionScore;
-
-        const totalEarnedWeight = checklistData.reduce((acc: number, crit: any) => {
-            const factor = criteriaLevels[crit.id];
-            if (typeof factor !== "number") return acc;
-            const weight = Number(crit.percentage) || 0;
-            return acc + (weight * factor);
-        }, 0);
-        return Math.min(5.0, Math.max(0.0, (totalEarnedWeight / 100) * 5.0));
+        return calculateChecklistScore(checklistData, criteriaLevels, manualSustentacionScore);
     }, [checklistData, criteriaLevels, manualSustentacionScore]);
 
     // Nota final combinada ponderada: (IA * aiWeight%) + (Sustentación * checklistWeight%)
     const combinedFinalScore = useMemo(() => {
         if (!checklistConfig) return checklistScore;
-        const aiScoreVal = aiGrade ?? (submission?.grade !== null ? Number(submission?.grade) : 0);
-        const aiPart = aiScoreVal * (aiWeight / 100);
-        const teacherPart = checklistScore * (checklistWeight / 100);
-        return Math.min(5.0, Math.max(0.0, aiPart + teacherPart));
+        const aiScoreVal = aiGrade ?? (checklistConfig ? 0 : (submission?.grade !== null ? Number(submission?.grade) : 0));
+        return calculateCombinedFinalGrade(aiScoreVal, checklistScore, aiWeight, checklistWeight);
     }, [checklistConfig, aiGrade, submission?.grade, aiWeight, checklistScore, checklistWeight]);
 
     // Sincronizar estado al cambiar de estudiante
     useEffect(() => {
         const nextParsed = parseStoredFeedback(submission?.feedback);
+        const meta = extractEvaluationMetadata(submission?.feedback);
+        setCriteriaLevels(meta?.criteriaLevels ?? {});
+        setManualSustentacionScore(meta?.manualSustentacionScore ?? null);
         setGradeInput(
             submission?.grade !== null && submission?.grade !== undefined
                 ? String(submission.grade)
@@ -191,12 +185,28 @@ export function PdfReviewActivityInspector({
         );
         setAiFeedbackInput(nextParsed.aiFeedback);
         setAiGrade(
-            nextParsed.aiFeedback && submission?.grade !== null && submission?.grade !== undefined
-                ? Number(submission.grade)
-                : null
+            meta?.aiGrade !== undefined && meta?.aiGrade !== null
+                ? Number(meta.aiGrade)
+                : (nextParsed.aiFeedback && !checklistConfig && submission?.grade !== null && submission?.grade !== undefined
+                    ? Number(submission.grade)
+                    : null)
         );
-        setRightTab(nextParsed.aiFeedback ? "ai_report" : "teacher_grade");
-    }, [student?.id, submission, activity.deadline]);
+        setRightTab(nextParsed.aiFeedback ? "ai_report" : (checklistConfig ? "teacher_grade" : "ai_report"));
+    }, [student?.id, submission?.id, submission?.feedback, submission?.grade, activity.deadline, checklistConfig]);
+
+    // Sincronizar automáticamente gradeInput con la nota combinada en tiempo real cuando la sustentación esté activa
+    useEffect(() => {
+        if (checklistConfig) {
+            setGradeInput(combinedFinalScore.toFixed(1));
+        }
+    }, [checklistConfig, combinedFinalScore]);
+
+    // Si la calificación docente está deshabilitada y la pestaña activa era teacher_grade, redirigir
+    useEffect(() => {
+        if (!checklistConfig && rightTab === "teacher_grade") {
+            setRightTab("ai_report");
+        }
+    }, [checklistConfig, rightTab]);
 
     // Navegación entre estudiantes (o líderes si es grupal)
     const currentIndex = studentsList.findIndex(s => s.student.id === student?.id);
@@ -244,11 +254,15 @@ export function PdfReviewActivityInspector({
                 gradingMode
             );
 
-            setAiGrade(result.grade);
-            setAiFeedbackInput(result.feedback);
-            setGradeInput(result.grade.toFixed(1));
+            const rawAi = result.rawAiGrade ?? result.grade;
+            setAiGrade(rawAi);
+            setAiFeedbackInput(stripEvaluationMetadata(result.feedback));
+            const finalCombined = checklistConfig
+                ? calculateCombinedFinalGrade(rawAi, checklistScore, aiWeight, checklistWeight)
+                : result.grade;
+            setGradeInput(finalCombined.toFixed(1));
             setRightTab("ai_report");
-            toast.success(`PDF evaluado con éxito: ${result.grade.toFixed(1)} / 5.0`, { id: toastId });
+            toast.success(`PDF evaluado con éxito: ${finalCombined.toFixed(1)} / 5.0 (IA: ${rawAi.toFixed(1)})`, { id: toastId });
         } catch (error: any) {
             toast.error("Error al evaluar el PDF con IA", { id: toastId, description: error.message });
         } finally {
@@ -284,11 +298,16 @@ export function PdfReviewActivityInspector({
     };
 
     const handleSave = async (andNext: boolean = false) => {
-        if (!gradeInput || isNaN(Number(gradeInput))) {
+        let gradeToSave = checklistConfig ? combinedFinalScore.toFixed(1) : gradeInput;
+        if (!gradeToSave || isNaN(Number(gradeToSave))) {
+            gradeToSave = combinedFinalScore.toFixed(1);
+        }
+
+        if (!gradeToSave || isNaN(Number(gradeToSave))) {
             toast.error("Por favor ingresa una nota válida entre 0.0 y 5.0");
             return;
         }
-        const numericGrade = Number(gradeInput);
+        const numericGrade = Number(gradeToSave);
         if (numericGrade < 0 || numericGrade > 5) {
             toast.error("La nota debe estar en el rango de 0.0 a 5.0");
             return;
@@ -304,9 +323,19 @@ export function PdfReviewActivityInspector({
             finalFeedback = aiFeedbackInput;
         }
 
+        if (checklistConfig) {
+            finalFeedback = embedEvaluationMetadata(finalFeedback, {
+                aiGrade: aiGrade,
+                checklistScore: checklistScore,
+                criteriaLevels: criteriaLevels as any,
+                manualSustentacionScore: manualSustentacionScore,
+                calculatedFinalGrade: numericGrade,
+            });
+        }
+
         setIsSaving(true);
         try {
-            await onGradeManual(gradeInput, finalFeedback, student.id, activity.id);
+            await onGradeManual(gradeToSave, finalFeedback, student.id, activity.id);
             toast.success("Calificación guardada correctamente");
             if (andNext && currentIndex < totalStudents - 1 && onSelectStudent) {
                 onSelectStudent(studentsList[currentIndex + 1].student.id);
@@ -475,7 +504,42 @@ export function PdfReviewActivityInspector({
                         </div>
                     )}
 
-                    {currentGrade !== null ? (
+                    {checklistConfig ? (
+                        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 flex-wrap animate-in fade-in">
+                            {/* Nota IA con porcentaje */}
+                            <div 
+                                className="flex items-center gap-1 bg-purple-500/10 border border-purple-500/25 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-lg text-xs shrink-0 font-bold shadow-2xs"
+                                title={`Evaluación IA: ${(aiGrade || 0).toFixed(1)} / 5.0 (${aiWeight}% de la nota final)`}
+                            >
+                                <Sparkles className="h-3 w-3 text-purple-600 dark:text-purple-400 shrink-0" />
+                                <span className="text-[10px] font-medium opacity-90 hidden sm:inline">IA</span>
+                                <span className="text-[10px] font-mono opacity-80">({aiWeight}%):</span>
+                                <span className="text-xs font-black font-mono">{(aiGrade || 0).toFixed(1)}</span>
+                            </div>
+
+                            {/* Nota Docente / Sustentación con porcentaje */}
+                            <div 
+                                className="flex items-center gap-1 bg-blue-500/10 border border-blue-500/25 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-lg text-xs shrink-0 font-bold shadow-2xs"
+                                title={`Sustentación Docente: ${checklistScore.toFixed(1)} / 5.0 (${checklistWeight}% de la nota final)`}
+                            >
+                                <UserCheck className="h-3 w-3 text-blue-600 dark:text-blue-400 shrink-0" />
+                                <span className="text-[10px] font-medium opacity-90 hidden sm:inline">Docente</span>
+                                <span className="text-[10px] font-mono opacity-80">({checklistWeight}%):</span>
+                                <span className="text-xs font-black font-mono">{checklistScore.toFixed(1)}</span>
+                            </div>
+
+                            {/* Nota Final Ponderada */}
+                            <div 
+                                className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/35 text-emerald-700 dark:text-emerald-300 px-2.5 py-0.5 rounded-lg text-xs shrink-0 font-bold shadow-2xs"
+                                title={`Nota Final Ponderada: ${combinedFinalScore.toFixed(1)} / 5.0`}
+                            >
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                <span className="text-[10px] uppercase font-bold tracking-wider opacity-85">Final:</span>
+                                <span className="text-sm font-black font-mono">{combinedFinalScore.toFixed(1)}</span>
+                                <span className="text-[10px] font-bold opacity-75">/ 5.0</span>
+                            </div>
+                        </div>
+                    ) : currentGrade !== null ? (
                         <div className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 px-2.5 py-0.5 rounded-lg text-xs shrink-0 font-bold animate-in fade-in">
                             <span className="text-[10px] uppercase font-bold opacity-80">Nota:</span>
                             <span className="text-sm font-black">{currentGrade.toFixed(1)}</span>
@@ -699,15 +763,17 @@ export function PdfReviewActivityInspector({
                                         </Badge>
                                     )}
                                 </TabsTrigger>
-                                <TabsTrigger value="teacher_grade" className="h-7 text-xs px-3 gap-1.5 font-semibold data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400">
-                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                                    <span>Evaluación Docente</span>
-                                    {gradeInput && !isNaN(Number(gradeInput)) && (
-                                        <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 font-mono bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-bold ml-1">
-                                            {Number(gradeInput).toFixed(1)}
-                                        </Badge>
-                                    )}
-                                </TabsTrigger>
+                                {checklistConfig && (
+                                    <TabsTrigger value="teacher_grade" className="h-7 text-xs px-3 gap-1.5 font-semibold data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400">
+                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                                        <span>Evaluación Docente</span>
+                                        {gradeInput && !isNaN(Number(gradeInput)) && (
+                                            <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 font-mono bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-bold ml-1">
+                                                {Number(gradeInput).toFixed(1)}
+                                            </Badge>
+                                        )}
+                                    </TabsTrigger>
+                                )}
                                 <TabsTrigger value="chat_pdf" className="h-7 text-xs px-3 gap-1.5 font-semibold data-[state=active]:text-sky-700 dark:data-[state=active]:text-sky-400">
                                     <Bot className="h-3.5 w-3.5 text-sky-600" />
                                     <span>Inspector / Chat IA</span>
@@ -821,7 +887,8 @@ export function PdfReviewActivityInspector({
                             </div>
                         </TabsContent>
 
-                        {/* TAB 2: Evaluación Docente (Teacher Grade Form) */}
+                        {/* TAB 2: Panel de Calificación Docente y Feedback (si está configurada) */}
+                        {checklistConfig && (
                         <TabsContent value="teacher_grade" className="flex-1 flex flex-col min-h-0 overflow-hidden m-0">
                             <div className="flex-1 overflow-y-auto p-4 space-y-4">
                                 {/* Sección Lista de Chequeo / Sustentación Docente (si está configurada) */}
@@ -1006,21 +1073,15 @@ export function PdfReviewActivityInspector({
                                             <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                                                 <div className="flex items-center gap-2">
                                                     <SlidersHorizontal className="h-3.5 w-3.5 text-primary" />
-                                                    <span className="font-bold text-foreground">Cálculo Ponderado:</span>
-                                                    <span className="font-mono text-muted-foreground">
-                                                        (IA {aiWeight}%: {(aiGrade || 0).toFixed(1)}) + (Docente {checklistWeight}%: {checklistScore.toFixed(1)})
-                                                    </span>
+                                                    <div className="flex flex-col text-right">
+                                                        <span className="font-bold text-xs font-mono text-emerald-700 dark:text-emerald-300">
+                                                            Nota Ponderada: {combinedFinalScore.toFixed(1)} / 5.0
+                                                        </span>
+                                                        <span className="font-mono text-muted-foreground text-[10px]">
+                                                            (IA {aiWeight}%: {(aiGrade || 0).toFixed(1)}) + (Docente {checklistWeight}%: {checklistScore.toFixed(1)})
+                                                        </span>
+                                                    </div>
                                                 </div>
-                                                <Button
-                                                    type="button"
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={() => setGradeInput(combinedFinalScore.toFixed(1))}
-                                                    className="h-7 text-xs font-bold gap-1 text-primary border-primary/40 bg-primary/5 hover:bg-primary/10 shadow-2xs"
-                                                >
-                                                    <Zap className="h-3 w-3 fill-primary" />
-                                                    Adoptar Nota Ponderada ({combinedFinalScore.toFixed(1)})
-                                                </Button>
                                             </div>
                                             <div className="h-2 w-full bg-muted rounded-full overflow-hidden flex">
                                                 <div 
@@ -1155,13 +1216,21 @@ export function PdfReviewActivityInspector({
                                 <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                                     <Button
                                         type="button"
-                                        variant="outline"
+                                        variant="default"
                                         size="sm"
                                         onClick={() => handleSave(false)}
                                         disabled={isSaving}
                                         className="h-9 px-4 text-xs font-bold shadow-xs"
                                     >
-                                        {isSaving ? "Guardando..." : "Guardar Nota"}
+                                        {isSaving ? "Guardando..." : (
+                                            checklistConfig 
+                                                ? (submission?.grade !== null && submission?.grade !== undefined 
+                                                    ? `Actualizar Nota (${combinedFinalScore.toFixed(1)})` 
+                                                    : `Guardar Nota (${combinedFinalScore.toFixed(1)})`)
+                                                : (submission?.grade !== null && submission?.grade !== undefined 
+                                                    ? "Actualizar Nota" 
+                                                    : "Guardar Nota")
+                                        )}
                                     </Button>
                                     <Button
                                         type="button"
@@ -1178,6 +1247,7 @@ export function PdfReviewActivityInspector({
                                 </div>
                             </div>
                         </TabsContent>
+                        )}
 
                         {/* TAB 3: Inspector / Chat Interactivo con PDF (Gemini) */}
                         <TabsContent value="chat_pdf" className="flex-1 flex flex-col min-h-0 overflow-hidden m-0">

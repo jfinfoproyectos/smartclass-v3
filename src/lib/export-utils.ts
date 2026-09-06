@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs';
+import { getActivityChecklistConfig, extractEvaluationMetadata, stripEvaluationMetadata } from '@/features/teacher/utils/checklistGradingUtils';
 
 /**
  * Export data to Excel file with styling
@@ -446,11 +447,93 @@ export async function exportSingleSubmissionToExcel(
 
     worksheet.addRow([]); // spacing
 
-    // Parse Feedback
+    // Parse Checklist & Metadata
     const rawFeedback = submission?.feedback || '';
-    const { tableRows, cleanLines } = parseFeedbackContent(rawFeedback);
+    const cleanFeedbackWithoutMeta = stripEvaluationMetadata(rawFeedback);
+    const checklistConfig = getActivityChecklistConfig(activity?.description);
+    const evalMetadata = extractEvaluationMetadata(rawFeedback);
 
-    // 2. Tabla de Archivos Evaluados (Si aplica)
+    // Split AI feedback and Teacher observations
+    let aiFeedbackText = cleanFeedbackWithoutMeta;
+    let teacherObservationsText = "";
+
+    const teacherMarker = "### 👨‍🏫 Observaciones del Profesor";
+    const markerIdx = cleanFeedbackWithoutMeta.indexOf(teacherMarker);
+    if (markerIdx !== -1) {
+        aiFeedbackText = cleanFeedbackWithoutMeta.substring(0, markerIdx).trim();
+        teacherObservationsText = cleanFeedbackWithoutMeta.substring(markerIdx + teacherMarker.length).trim();
+    } else if (cleanFeedbackWithoutMeta.includes("Observaciones del Profesor")) {
+        const parts = cleanFeedbackWithoutMeta.split(/Observaciones del Profesor/i);
+        aiFeedbackText = parts[0].trim();
+        teacherObservationsText = parts.slice(1).join("").trim();
+    }
+
+    // 2. Ponderación de Calificación (si aplica sustentación oral docente)
+    if (checklistConfig) {
+        addSectionHeader(`Ponderación de Calificación (${checklistConfig.aiWeight}% IA + ${checklistConfig.checklistWeight}% Sustentación Docente)`);
+        worksheet.addRow([`Evaluación IA (${checklistConfig.aiWeight}%):`, evalMetadata?.aiGrade !== null && evalMetadata?.aiGrade !== undefined ? `${evalMetadata.aiGrade.toFixed(1)} / 5.0` : '-']);
+        worksheet.addRow([`Sustentación Docente (${checklistConfig.checklistWeight}%):`, evalMetadata?.checklistScore !== null && evalMetadata?.checklistScore !== undefined ? `${evalMetadata.checklistScore.toFixed(1)} / 5.0` : '-']);
+        worksheet.addRow(['Nota Final Consolidada:', `${submission?.grade !== null && submission?.grade !== undefined ? Number(submission.grade).toFixed(1) : '-'} / 5.0`]);
+        worksheet.addRow([]); // spacing
+    }
+
+    // 3. Criterios de Sustentación Oral Calificados (si aplica)
+    if (checklistConfig?.criteria && checklistConfig.criteria.length > 0) {
+        addSectionHeader('Criterios de Sustentación Oral Calificados');
+        const critHeader = worksheet.addRow(['# Criterio', 'Ponderación (%)', 'Nivel Calificado', 'Nota /5.0', 'Pregunta Evaluada']);
+        critHeader.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        critHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } };
+        critHeader.alignment = { horizontal: 'center' };
+
+        const getLevelLabel = (factor?: number) => {
+            if (factor === 1.0) return 'Sabe (100%)';
+            if (factor === 0.75) return 'Aceptable (75%)';
+            if (factor === 0.5) return 'Parcial (50%)';
+            if (factor === 0) return 'No Sabe (0%)';
+            return '—';
+        };
+
+        checklistConfig.criteria.forEach((crit, idx) => {
+            const factor = evalMetadata?.criteriaLevels?.[crit.id]
+                ?? evalMetadata?.criteriaLevels?.[`crit-${idx + 1}`]
+                ?? evalMetadata?.criteriaLevels?.[String(idx + 1)];
+            const lvlLabel = typeof factor === 'number' ? getLevelLabel(factor) : '—';
+            const gradeVal = typeof factor === 'number' ? (factor * 5.0).toFixed(1) : '—';
+
+            const r = worksheet.addRow([
+                `#${idx + 1} ${crit.name}`,
+                `${crit.percentage}%`,
+                lvlLabel,
+                gradeVal,
+                crit.question || '-'
+            ]);
+            r.getCell(2).alignment = { horizontal: 'center' };
+            r.getCell(3).alignment = { horizontal: 'center' };
+            r.getCell(4).alignment = { horizontal: 'center' };
+            r.eachCell(cell => {
+                cell.border = {
+                    top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                    left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                    bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                    right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+                };
+            });
+        });
+
+        worksheet.addRow([]); // spacing
+    }
+
+    // 4. Observaciones del Profesor
+    if (teacherObservationsText) {
+        addSectionHeader('Observaciones y Recomendaciones del Profesor');
+        const obsRow = worksheet.addRow([teacherObservationsText]);
+        worksheet.mergeCells(`A${obsRow.number}:E${obsRow.number}`);
+        obsRow.alignment = { wrapText: true, vertical: 'top' };
+        worksheet.addRow([]);
+    }
+
+    // 5. Tabla de Archivos Evaluados (Si aplica)
+    const { tableRows, cleanLines } = parseFeedbackContent(aiFeedbackText);
     if (tableRows.length > 0) {
         addSectionHeader('Archivos / Entregables Evaluados');
         const tblHeader = worksheet.addRow(['Archivo', 'Nota /5.0', 'Estado']);
@@ -475,35 +558,38 @@ export async function exportSingleSubmissionToExcel(
         worksheet.addRow([]); // spacing
     }
 
-    // 3. Enunciado / Rúbrica
+    // 6. Retroalimentación Detallada de la IA
+    addSectionHeader('Retroalimentación de la IA');
+    if (cleanLines.length > 0) {
+        cleanLines.forEach(line => {
+            const lineRow = worksheet.addRow([line]);
+            worksheet.mergeCells(`A${lineRow.number}:E${lineRow.number}`);
+            lineRow.alignment = { wrapText: true, vertical: 'top' };
+        });
+    } else {
+        const fbRow = worksheet.addRow([aiFeedbackText || 'Sin retroalimentación registrada.']);
+        worksheet.mergeCells(`A${fbRow.number}:E${fbRow.number}`);
+        fbRow.alignment = { wrapText: true, vertical: 'top' };
+    }
+    worksheet.addRow([]);
+
+    // 7. Enunciado / Rúbrica
     if (activity.statement) {
         addSectionHeader('Enunciado / Rúbrica de Evaluación');
         const stmtText = activity.statement.replace(/\\n/g, '\n').replace(/[*`#]/g, '');
         const stmtRow = worksheet.addRow([stmtText]);
-        worksheet.mergeCells(`A${stmtRow.number}:C${stmtRow.number}`);
+        worksheet.mergeCells(`A${stmtRow.number}:E${stmtRow.number}`);
         stmtRow.alignment = { wrapText: true, vertical: 'top' };
         worksheet.addRow([]);
     }
 
-    // 4. Retroalimentación Detallada
-    addSectionHeader('Análisis y Retroalimentación Detallada');
-    if (cleanLines.length > 0) {
-        cleanLines.forEach(line => {
-            const lineRow = worksheet.addRow([line]);
-            worksheet.mergeCells(`A${lineRow.number}:C${lineRow.number}`);
-            lineRow.alignment = { wrapText: true, vertical: 'top' };
-        });
-    } else {
-        const fbRow = worksheet.addRow([rawFeedback || 'Sin retroalimentación registrada.']);
-        worksheet.mergeCells(`A${fbRow.number}:C${fbRow.number}`);
-        fbRow.alignment = { wrapText: true, vertical: 'top' };
-    }
+    worksheet.getColumn(1).width = 30;
+    worksheet.getColumn(2).width = 18;
+    worksheet.getColumn(3).width = 20;
+    worksheet.getColumn(4).width = 14;
+    worksheet.getColumn(5).width = 45;
 
-    worksheet.getColumn(1).width = 25;
-    worksheet.getColumn(2).width = 35;
-    worksheet.getColumn(3).width = 35;
-
-    const safeFilename = filename || `Retroalimentacion_${studentName.replace(/\s+/g, '_')}_${activity.title.replace(/\s+/g, '_')}`;
+    const safeFilename = filename || `Retroalimentacion_${studentName.replace(/\s+/g, '_')}_${(activity.title || 'Actividad').replace(/\s+/g, '_')}`;
     const buffer = await workbook.xlsx.writeBuffer();
     triggerDownload(buffer, safeFilename);
 }

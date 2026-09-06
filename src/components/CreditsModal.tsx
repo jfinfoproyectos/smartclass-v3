@@ -17,8 +17,9 @@ import {
     TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 
-export function CreditsModal({ asMenuItem }: { asMenuItem?: boolean }) {
+export function CreditsModal({ asMenuItem, className }: { asMenuItem?: boolean; className?: string }) {
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
@@ -27,8 +28,8 @@ export function CreditsModal({ asMenuItem }: { asMenuItem?: boolean }) {
 
     if (!mounted) {
         return (
-            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 opacity-60">
-                <Info className="h-4 w-4" />
+            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg shrink-0 opacity-50">
+                <Info className="h-3.5 w-3.5" />
                 <span className="sr-only">Créditos</span>
             </Button>
         );
@@ -72,14 +73,21 @@ export function CreditsModal({ asMenuItem }: { asMenuItem?: boolean }) {
             <Tooltip>
                 <DialogTrigger asChild>
                     <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 opacity-60 hover:opacity-100 transition-all">
-                            <Info className="h-4 w-4" />
+                        <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className={cn(
+                                "h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-background/90 dark:hover:bg-accent/70 hover:shadow-2xs transition-all", 
+                                className
+                            )}
+                        >
+                            <Info className="h-3.5 w-3.5" />
                             <span className="sr-only">Créditos</span>
                         </Button>
                     </TooltipTrigger>
                 </DialogTrigger>
-                <TooltipContent>
-                    <p>Créditos</p>
+                <TooltipContent side="bottom" className="text-xs">
+                    <p>Créditos e información</p>
                 </TooltipContent>
             </Tooltip>
             <DialogContent>

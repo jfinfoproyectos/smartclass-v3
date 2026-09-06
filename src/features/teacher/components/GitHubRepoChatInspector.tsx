@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { 
     Github, Sparkles, Send, Loader2, Bot, User, Trash2, ShieldAlert, GitCommit, Search,
-    Copy, Check, Maximize2, Minimize2, History, Plus, ChevronDown, MessageSquare, Clock, Eye
+    Copy, Check, Maximize2, Minimize2, History, Plus, ChevronDown, MessageSquare, Clock, Eye, Users
 } from "lucide-react";
 import {
     AlertDialog,
@@ -88,6 +88,17 @@ const PRESET_QUESTIONS = [
     },
 ];
 
+function getWelcomeMessage(readOnly: boolean, studentName?: string, groupName?: string | null): Message {
+    return {
+        id: "welcome",
+        role: "assistant",
+        content: readOnly
+            ? `👋 **Historial de Inspección GitHub MCP (estudiante)**\n\nAquí puedes consultar las auditorías y análisis técnicos realizados por tu docente sobre el repositorio de esta entrega${groupName ? ` (Equipo: **${groupName}**)` : ""}.\n\n> ℹ️ *Esta información es de carácter formativo y de consulta compartida para todo el equipo.*`
+            : `👋 **Asistente de Inspección GitHub MCP (docente)**\n\nPuedes hacerme cualquier pregunta técnica sobre el repositorio entregado ${studentName ? `por **${studentName}**` : ""}${groupName ? ` (Equipo: **${groupName}**)` : ""}.\n\n> ⚠️ *Recuerda: Todas las respuestas aquí generadas se guardan en el historial para consulta y **no afectan la calificación oficial** a menos que tú lo decidas.*`,
+        timestamp: new Date(),
+    };
+}
+
 export function GitHubRepoChatInspector({ 
     repoUrl, 
     studentName, 
@@ -97,16 +108,8 @@ export function GitHubRepoChatInspector({
     onToggleFullscreen,
     readOnly = false,
 }: GitHubRepoChatInspectorProps) {
-    const defaultWelcomeMessage: Message = {
-        id: "welcome",
-        role: "assistant",
-        content: readOnly
-            ? `👋 **Historial de Inspección GitHub MCP (estudiante)**\n\nAquí puedes consultar las auditorías y análisis técnicos realizados por tu docente sobre el repositorio de esta entrega.\n\n> ℹ️ *Esta información es de carácter formativo y de consulta.*`
-            : `👋 **Asistente de Inspección GitHub MCP (docente)**\n\nPuedes hacerme cualquier pregunta técnica sobre el repositorio entregado ${studentName ? `por **${studentName}**` : ""}.\n\n> ⚠️ *Recuerda: Todas las respuestas aquí generadas se guardan en el historial para consulta y **no afectan la calificación oficial** a menos que tú lo decidas.*`,
-        timestamp: new Date(),
-    };
-
-    const [messages, setMessages] = useState<Message[]>([defaultWelcomeMessage]);
+    const [groupName, setGroupName] = useState<string | null>(null);
+    const [messages, setMessages] = useState<Message[]>([getWelcomeMessage(readOnly, studentName, null)]);
     const [sessions, setSessions] = useState<McpChatSessionSummary[]>([]);
     const [activeChatId, setActiveChatId] = useState<string | null>(null);
     const [input, setInput] = useState("");
@@ -119,22 +122,29 @@ export function GitHubRepoChatInspector({
 
     // Cargar mensajes de una sesión específica
     const loadSessionMessages = useCallback(async (chatId: string) => {
+        if (!activityId || !studentId) return;
         setIsFetchingHistory(true);
         try {
             const res = await getMcpChatHistoryAction({ activityId, studentId, chatId });
-            if (res.success && Array.isArray(res.messages) && res.messages.length > 0) {
-                const loadedMsgs: Message[] = res.messages.map((m: any) => ({
-                    id: m.id || String(Date.now()),
-                    role: m.role,
-                    content: m.content,
-                    timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
-                    toolCallsCount: m.toolCallsCount,
-                }));
-                setMessages(loadedMsgs);
-                setActiveChatId(chatId);
-            } else {
-                setMessages([defaultWelcomeMessage]);
-                setActiveChatId(chatId);
+            if (res.success) {
+                const gName = (res as any).groupName || null;
+                if (gName) {
+                    setGroupName(gName);
+                }
+                if (Array.isArray(res.messages) && res.messages.length > 0) {
+                    const loadedMsgs: Message[] = res.messages.map((m: any) => ({
+                        id: m.id || String(Date.now()),
+                        role: m.role,
+                        content: m.content,
+                        timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
+                        toolCallsCount: m.toolCallsCount,
+                    }));
+                    setMessages(loadedMsgs);
+                    setActiveChatId(chatId);
+                } else {
+                    setMessages([getWelcomeMessage(readOnly, studentName, gName)]);
+                    setActiveChatId(chatId);
+                }
             }
         } catch (err) {
             console.error("Error cargando mensajes de la sesión:", err);
@@ -142,7 +152,7 @@ export function GitHubRepoChatInspector({
         } finally {
             setIsFetchingHistory(false);
         }
-    }, [activityId, studentId]);
+    }, [activityId, studentId, readOnly, studentName]);
 
     // Cargar la lista de sesiones históricas
     const refreshSessions = useCallback(async (autoSelectLatest = false) => {
@@ -153,12 +163,16 @@ export function GitHubRepoChatInspector({
             const res = await listMcpChatSessionsAction({ activityId, studentId });
             if (res.success && Array.isArray(res.sessions)) {
                 setSessions(res.sessions);
+                const gName = (res as any).groupName || null;
+                if (gName) {
+                    setGroupName(gName);
+                }
                 if (autoSelectLatest) {
                     if (res.sessions.length > 0) {
                         await loadSessionMessages(res.sessions[0].id);
                     } else {
                         setActiveChatId(null);
-                        setMessages([defaultWelcomeMessage]);
+                        setMessages([getWelcomeMessage(readOnly, studentName, gName)]);
                     }
                 }
             }
@@ -167,12 +181,12 @@ export function GitHubRepoChatInspector({
         } finally {
             setIsFetchingHistory(false);
         }
-    }, [activityId, studentId, loadSessionMessages]);
+    }, [activityId, studentId, loadSessionMessages, readOnly, studentName]);
 
-    // Carga inicial
+    // Carga inicial y cambio de estudiante/actividad
     useEffect(() => {
         refreshSessions(true);
-    }, [refreshSessions]);
+    }, [activityId, studentId, refreshSessions]);
 
     useEffect(() => {
         scrollBottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -182,7 +196,7 @@ export function GitHubRepoChatInspector({
     const handleStartNewChat = () => {
         if (isLoading) return;
         setActiveChatId(null);
-        setMessages([defaultWelcomeMessage]);
+        setMessages([getWelcomeMessage(readOnly, studentName, groupName)]);
         setInput("");
         toast.info("Nueva sesión de conversación iniciada.");
     };
@@ -311,22 +325,27 @@ export function GitHubRepoChatInspector({
     return (
         <div className="flex flex-col h-full bg-card rounded-xl border border-border overflow-hidden shadow-sm">
             {/* Header del Inspector MCP */}
-            <div className="p-3 sm:p-4 bg-muted/40 border-b border-border flex flex-wrap items-center justify-between gap-2 shrink-0">
+            <div className="p-1.5 sm:p-2 bg-muted/40 border-b border-border flex flex-wrap items-center justify-between gap-2 shrink-0">
                 <div className="flex items-center gap-2.5 min-w-0">
                     <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
                         <Github className="h-5 w-5" />
                     </div>
                     <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="font-bold text-sm tracking-tight truncate">Inspector GitHub MCP</h3>
-                            <Badge variant="outline" className="text-[10px] bg-primary/5 text-primary border-primary/20 font-mono shrink-0">
-                                Protocol MCP
-                            </Badge>
-                            {readOnly ? (
-                                <Badge variant="secondary" className="text-[10px] bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/30 gap-1 shrink-0">
-                                    <Eye className="h-3 w-3" /> Solo Lectura (Estudiante)
+                            <h3 className="font-bold text-sm tracking-tight truncate">
+                                {readOnly ? "Inspector de Repositorio" : "Inspector GitHub MCP"}
+                            </h3>
+                            {!readOnly && (
+                                <Badge variant="outline" className="text-[10px] bg-primary/5 text-primary border-primary/20 font-mono shrink-0">
+                                    Protocol MCP
                                 </Badge>
-                            ) : null}
+                            )}
+                            {groupName && (
+                                <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 gap-1 shrink-0 font-medium">
+                                    <Users className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                                    <span>Equipo: {groupName}</span>
+                                </Badge>
+                            )}
                             {isFetchingHistory && (
                                 <Badge variant="secondary" className="text-[10px] gap-1 animate-pulse shrink-0">
                                     <Loader2 className="h-3 w-3 animate-spin" /> Cargando...
@@ -335,8 +354,12 @@ export function GitHubRepoChatInspector({
                         </div>
                         <p className="text-xs text-muted-foreground truncate">
                             {readOnly 
-                                ? "Historial de análisis y consultas técnicas generadas por el docente"
-                                : "Inspección libre de repositorios sin afectar calificación oficial"}
+                                ? (groupName 
+                                    ? `Histórico de consultas del docente para el equipo ${groupName}`
+                                    : "Historial de consultas técnicas generadas por el docente")
+                                : (groupName 
+                                    ? `Inspección del equipo ${groupName} sin afectar calificación oficial`
+                                    : "Inspección libre de repositorios sin afectar calificación oficial")}
                         </p>
                     </div>
                 </div>
@@ -406,6 +429,12 @@ export function GitHubRepoChatInspector({
                                                     <span>{format(new Date(sess.createdAt), "dd MMM, HH:mm", { locale: es })}</span>
                                                     <span>•</span>
                                                     <span>{sess.messageCount} msgs</span>
+                                                    {sess.studentName && sess.studentName !== studentName && (
+                                                        <>
+                                                            <span>•</span>
+                                                            <span className="truncate max-w-[90px] text-foreground/75 font-medium">{sess.studentName}</span>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </button>
 
@@ -506,7 +535,7 @@ export function GitHubRepoChatInspector({
             )}
 
             {/* Área de Mensajes Desplazable */}
-            <div className="flex-1 overflow-y-auto min-h-0 p-3 sm:p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto min-h-0 p-1.5 sm:p-2 space-y-3">
                 <div className="space-y-4 max-w-3xl mx-auto">
                     {/* Si está en modo estudiante y no hay sesiones guardadas */}
                     {readOnly && sessions.length === 0 ? (
@@ -515,7 +544,7 @@ export function GitHubRepoChatInspector({
                             <div className="space-y-1">
                                 <h4 className="font-semibold text-sm text-foreground">Aún no hay inspecciones registradas</h4>
                                 <p className="text-xs max-w-sm">
-                                    Tu docente aún no ha realizado consultas o auditorías con el Inspector GitHub MCP para esta entrega.
+                                    Tu docente aún no ha realizado consultas o análisis para esta entrega.
                                 </p>
                             </div>
                         </div>
@@ -541,7 +570,7 @@ export function GitHubRepoChatInspector({
                                         {!isUser && msg.toolCallsCount && msg.toolCallsCount > 0 ? (
                                             <div className="mb-2 inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-background/50 px-2 py-0.5 rounded border border-border">
                                                 <Sparkles className="h-3 w-3 text-amber-500" />
-                                                Herramientas MCP invocadas: {msg.toolCallsCount}
+                                                Herramientas utilizadas: {msg.toolCallsCount}
                                             </div>
                                         ) : null}
 
@@ -549,6 +578,15 @@ export function GitHubRepoChatInspector({
                                             <ReactMarkdown
                                                 remarkPlugins={[remarkGfm]}
                                                 components={{
+                                                    a: ({ node, ...props }) => (
+                                                        <a
+                                                            {...props}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="text-primary underline hover:opacity-80 font-medium inline-flex items-center gap-0.5 cursor-pointer"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        />
+                                                    ),
                                                     table: ({ node, ...props }) => (
                                                         <div className="my-3 w-full overflow-x-auto rounded-lg border border-border bg-background/50">
                                                             <table className="w-full text-left text-xs border-collapse" {...props} />

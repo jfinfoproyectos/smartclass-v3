@@ -90,13 +90,13 @@ export function HeroSection() {
 
       {/* Navigation Header */}
       <header className="relative z-20 border-b border-white/10 backdrop-blur-md bg-slate-950/60 sticky top-0">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5 font-extrabold text-xl tracking-tight">
-            <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-sm">
-              <BrainCircuit className="w-5 h-5" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-12 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2 font-extrabold text-lg tracking-tight">
+            <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-sm">
+              <BrainCircuit className="w-4 h-4" />
             </div>
             <span className="bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-slate-300">
-              SmartClass <span className="text-emerald-400 text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 ml-1">v3</span>
+              SmartClass <span className="text-emerald-400 text-[10px] font-semibold px-1.5 py-0.2 rounded-full bg-emerald-500/10 border border-emerald-500/20 ml-1">v3</span>
             </span>
           </Link>
 

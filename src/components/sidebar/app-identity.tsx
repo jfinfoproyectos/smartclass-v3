@@ -54,19 +54,19 @@ export function AppIdentity() {
       <SidebarMenuItem>
         <div
           className={cn(
-            "flex items-center h-16 w-full border-b border-sidebar-border/80 bg-sidebar/80 backdrop-blur-xl transition-all",
-            isCollapsed ? "justify-center px-0" : "px-4"
+            "flex items-center h-12 w-full border-b border-sidebar-border/80 bg-sidebar/80 backdrop-blur-xl transition-all",
+            isCollapsed ? "justify-center px-0" : "px-3"
           )}
         >
-          <div className={cn("flex items-center gap-3 w-full", isCollapsed && "justify-center")}>
+          <div className={cn("flex items-center gap-2.5 w-full", isCollapsed && "justify-center")}>
             {/* Glowing Icon Box */}
             <div className="relative group shrink-0">
-              <div className="absolute -inset-0.5 rounded-xl bg-gradient-to-r from-primary via-primary/80 to-primary/50 opacity-60 blur-sm group-hover:opacity-100 transition duration-300" />
-              <div className="relative flex items-center justify-center h-9 w-9 rounded-xl bg-card text-primary border border-primary/30">
+              <div className="absolute -inset-0.5 rounded-lg bg-gradient-to-r from-primary via-primary/80 to-primary/50 opacity-60 blur-xs group-hover:opacity-100 transition duration-300" />
+              <div className="relative flex items-center justify-center h-8 w-8 rounded-lg bg-card text-primary border border-primary/30">
                 {isMounted && !isPending ? (
-                  <RoleIcon className="h-4.5 w-4.5" />
+                  <RoleIcon className="h-4 w-4" />
                 ) : (
-                  <BookOpen className="h-4.5 w-4.5" />
+                  <BookOpen className="h-4 w-4" />
                 )}
               </div>
             </div>

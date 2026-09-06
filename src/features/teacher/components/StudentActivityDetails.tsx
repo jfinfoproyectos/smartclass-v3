@@ -12,8 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Clock, AlertCircle, Printer, X, Eye, Pencil, Calendar } from "lucide-react";
 import { format } from "date-fns";
 import { useRef, useState, useEffect } from "react";
-import { useReactToPrint } from "react-to-print";
-import { CourseReportTemplate } from "@/features/student/components/CourseReportTemplate";
 import { SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { StudentAttendanceSummary } from "../../attendance/components/StudentAttendanceSummary";
@@ -53,8 +51,6 @@ interface StudentActivityDetailsProps {
 }
 
 export function StudentActivityDetails({ enrollment }: StudentActivityDetailsProps) {
-    const printRef = useRef<HTMLDivElement>(null);
-    const [isPrinting, setIsPrinting] = useState(false);
     const [remarks, setRemarks] = useState<any[]>([]);
     const [loadingRemarks, setLoadingRemarks] = useState(true);
     const [viewingRemark, setViewingRemark] = useState<any | null>(null);
@@ -68,20 +64,6 @@ export function StudentActivityDetails({ enrollment }: StudentActivityDetailsPro
     const [isLoadingHierarchy, setIsLoadingHierarchy] = useState(false);
     const [isExportingPDF, setIsExportingPDF] = useState(false);
     const [isExportingExcel, setIsExportingExcel] = useState(false);
-
-    const handlePrint = useReactToPrint({
-        contentRef: printRef,
-        documentTitle: `Reporte_${enrollment.user.name}_${enrollment.course.title}`,
-        onAfterPrint: () => setIsPrinting(false),
-    });
-
-    const onPrintClick = () => {
-        setIsPrinting(true);
-        // Small timeout to allow state to update and render the hidden template
-        setTimeout(() => {
-            handlePrint();
-        }, 100);
-    };
 
     const [attendances, setAttendances] = useState<any[]>([]);
     const [loadingAttendance, setLoadingAttendance] = useState(true);
@@ -246,11 +228,6 @@ export function StudentActivityDetails({ enrollment }: StudentActivityDetailsPro
                     >
                         <FileDown className="mr-2 h-4 w-4" />
                         PDF
-                    </Button>
-
-                    <Button variant="outline" size="sm" onClick={onPrintClick}>
-                        <Printer className="mr-2 h-4 w-4" />
-                        Imprimir
                     </Button>
                 </div>
             </div>
@@ -535,22 +512,7 @@ export function StudentActivityDetails({ enrollment }: StudentActivityDetailsPro
                 </DialogContent>
             </Dialog>
 
-            {/* Hidden Template for Printing */}
-            <div style={{ display: "none" }}>
-                <CourseReportTemplate
-                    ref={printRef}
-                    studentName={hierarchicalData?.studentName || (enrollment.user.profile?.nombres && enrollment.user.profile?.apellido
-                            ? `${enrollment.user.profile.nombres} ${enrollment.user.profile.apellido}`
-                            : enrollment.user.name)}
-                    courseName={hierarchicalData?.courseName || enrollment.course.title}
-                    teacherName={hierarchicalData?.teacherName || enrollment.course.teacher.name}
-                    averageGrade={hierarchicalData?.averageGrade || enrollment.averageGrade}
-                    activities={enrollment.course.activities}
-                    categories={hierarchicalData?.categories}
-                    attendances={hierarchicalData?.attendances || attendances}
-                    remarks={hierarchicalData?.remarks || remarks}
-                />
-            </div>
+
 
             {/* Deletion Confirmation */}
             <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>

@@ -111,7 +111,22 @@ export const ActivityReportTemplate = React.forwardRef<HTMLDivElement, ActivityR
                                 Enunciado / Rúbrica de Evaluación
                             </h3>
                             <div data-color-mode="light" className="prose prose-sm max-w-none prose-blue">
-                                <MDEditor.Markdown source={activity.statement || "**No hay rúbrica disponible.**"} style={{ background: 'transparent', color: 'inherit' }} />
+                                <MDEditor.Markdown 
+                                    source={activity.statement || "**No hay rúbrica disponible.**"} 
+                                    style={{ background: 'transparent', color: 'inherit' }} 
+                                    components={{
+                                        a: ({ node, ...props }) => (
+                                            <a {...props} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline" />
+                                        )
+                                    }}
+                                    rehypeRewrite={(node: any) => {
+                                        if (node && node.type === 'element' && node.tagName === 'a') {
+                                            node.properties = node.properties || {};
+                                            node.properties.target = '_blank';
+                                            node.properties.rel = 'noopener noreferrer';
+                                        }
+                                    }}
+                                />
                             </div>
                         </section>
 
@@ -121,7 +136,22 @@ export const ActivityReportTemplate = React.forwardRef<HTMLDivElement, ActivityR
                                 Retroalimentación
                             </h3>
                             <div data-color-mode="light" className="prose prose-sm max-w-none prose-blue">
-                                <MDEditor.Markdown source={submission?.feedback?.replace(/\\n/g, '\n') || "Sin comentarios adicionales."} style={{ background: 'transparent', color: 'inherit' }} />
+                                <MDEditor.Markdown 
+                                    source={submission?.feedback?.replace(/\\n/g, '\n') || "Sin comentarios adicionales."} 
+                                    style={{ background: 'transparent', color: 'inherit' }} 
+                                    components={{
+                                        a: ({ node, ...props }) => (
+                                            <a {...props} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline" />
+                                        )
+                                    }}
+                                    rehypeRewrite={(node: any) => {
+                                        if (node && node.type === 'element' && node.tagName === 'a') {
+                                            node.properties = node.properties || {};
+                                            node.properties.target = '_blank';
+                                            node.properties.rel = 'noopener noreferrer';
+                                        }
+                                    }}
+                                />
                             </div>
                         </section>
                     </div>

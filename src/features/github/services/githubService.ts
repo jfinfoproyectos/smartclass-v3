@@ -17,7 +17,7 @@ export const githubService = {
 
             // If URL contains /tree/branch or /blob/branch
             if (pathParts.length >= 4 && (pathParts[2] === "tree" || pathParts[2] === "blob")) {
-                branch = pathParts[3];
+                branch = pathParts.slice(3).join('/');
             }
 
             return { owner, repo, branch };
@@ -26,10 +26,62 @@ export const githubService = {
         }
     },
 
+    async getRepoBranches(owner: string, repo: string, token?: string): Promise<{ branches: string[]; defaultBranch: string }> {
+        const headers: HeadersInit = {
+            'Accept': 'application/vnd.github.v3+json'
+        };
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        let defaultBranch = "main";
+        try {
+            const repoRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers });
+            if (repoRes.ok) {
+                const repoData = await repoRes.json();
+                if (repoData.default_branch) {
+                    defaultBranch = repoData.default_branch;
+                }
+            }
+        } catch (e) {
+            // Ignore fallback error
+        }
+
+        try {
+            const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/branches?per_page=100`, { headers });
+            if (!res.ok) {
+                console.warn(`[GitHubService] Error fetching branches for ${owner}/${repo}: ${res.statusText}`);
+                return { branches: [defaultBranch], defaultBranch };
+            }
+
+            const data = await res.json();
+            if (!Array.isArray(data)) {
+                return { branches: [defaultBranch], defaultBranch };
+            }
+
+            const branchNames = data.map((b: any) => b.name).filter(Boolean);
+            if (branchNames.length === 0) {
+                branchNames.push(defaultBranch);
+            }
+
+            // Put default branch first if present
+            const orderedBranches = Array.from(new Set([
+                defaultBranch,
+                ...branchNames
+            ])).filter(b => branchNames.includes(b) || b === defaultBranch);
+
+            return { branches: orderedBranches, defaultBranch };
+        } catch (error) {
+            console.error("[GitHubService] Error al obtener ramas:", error);
+            return { branches: [defaultBranch], defaultBranch };
+        }
+    },
+
     async getFileContent(owner: string, repo: string, path: string, branch: string = "HEAD", token?: string, retries = 3): Promise<string | null> {
         // Use encodeURIComponent for each part of the path separately to avoid breaking slashes
         const encodedPath = path.split('/').map(part => encodeURIComponent(part)).join('/');
-        const url = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${encodedPath}`;
+        const targetBranch = branch && branch.trim() ? branch.trim() : "HEAD";
+        const url = `https://raw.githubusercontent.com/${owner}/${repo}/${targetBranch}/${encodedPath}`;
         const headers: HeadersInit = {};
         if (token) {
             headers['Authorization'] = `Bearer ${token}`;
@@ -48,6 +100,27 @@ export const githubService = {
                             continue;
                         }
                     }
+
+                    // Fallback to GitHub REST API contents endpoint if token exists or raw content failed
+                    if (token) {
+                        try {
+                            const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${encodedPath}${targetBranch !== "HEAD" ? `?ref=${encodeURIComponent(targetBranch)}` : ""}`;
+                            const apiHeaders: HeadersInit = {
+                                'Accept': 'application/vnd.github.v3+json',
+                                'Authorization': `Bearer ${token}`,
+                            };
+                            const apiRes = await fetch(apiUrl, { headers: apiHeaders });
+                            if (apiRes.ok) {
+                                const apiData = await apiRes.json();
+                                if (apiData.content && apiData.encoding === "base64") {
+                                    return Buffer.from(apiData.content, "base64").toString("utf-8");
+                                }
+                            }
+                        } catch {
+                            // ignore fallback error
+                        }
+                    }
+
                     console.error(`Failed to fetch ${url}: ${response.statusText}`);
                     return null;
                 }
@@ -67,12 +140,15 @@ export const githubService = {
         return null;
     },
 
-    async getRepoStructure(owner: string, repo: string, token?: string, retries = 3): Promise<string[]> {
+    async getRepoStructure(owner: string, repo: string, branch: string = "HEAD", token?: string, retries = 3): Promise<string[]> {
         // Use GitHub API to get the tree
-        // https://api.github.com/repos/OWNER/REPO/git/trees/HEAD?recursive=1
-        const url = `https://api.github.com/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`;
+        // https://api.github.com/repos/OWNER/REPO/git/trees/{branch}?recursive=1
+        const targetRef = branch && branch.trim() ? branch.trim() : "HEAD";
+        const url = `https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(targetRef)}?recursive=1`;
 
-        const headers: HeadersInit = {};
+        const headers: HeadersInit = {
+            'Accept': 'application/vnd.github.v3+json'
+        };
         if (token) {
             headers['Authorization'] = `Bearer ${token}`;
         }

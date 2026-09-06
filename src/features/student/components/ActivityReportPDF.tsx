@@ -1,18 +1,22 @@
 import { Page, Text, View, Document, StyleSheet, Link } from '@react-pdf/renderer';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { getActivityChecklistConfig, extractEvaluationMetadata, stripEvaluationMetadata } from '@/features/teacher/utils/checklistGradingUtils';
 
-// Colores de la marca
+// Colores corporativos
 const COLORS = {
-    primary: '#2563eb', // blue-600
-    secondary: '#1e40af', // blue-800
-    accent: '#3b82f6', // blue-500
-    background: '#f8fafc', // slate-50
-    text: '#1e293b', // slate-800
-    textLight: '#64748b', // slate-500
-    border: '#e2e8f0', // slate-200
-    codeBg: '#f1f5f9', // slate-100
-    codeBorder: '#cbd5e1', // slate-300
+    primary: '#0f172a', // Deep Executive Slate
+    secondary: '#1e3a5f', // Rich Corporate Navy
+    accent: '#0284c7', // Professional Corporate Cyan
+    background: '#f8fafc', // Clean slate-50
+    text: '#0f172a', // Slate-900
+    textLight: '#475569', // Slate-600
+    border: '#cbd5e1', // Slate-300
+    codeBg: '#f1f5f9', // Slate-100
+    codeBorder: '#cbd5e1',
+    success: '#047857',
+    warning: '#b45309',
+    danger: '#9f1239',
 };
 
 const styles = StyleSheet.create({
@@ -25,8 +29,10 @@ const styles = StyleSheet.create({
     },
     header: {
         flexDirection: 'row',
-        backgroundColor: COLORS.primary,
-        padding: 18,
+        backgroundColor: '#0f172a',
+        padding: 16,
+        borderBottomWidth: 3,
+        borderBottomColor: '#0284c7',
         color: '#ffffff',
         alignItems: 'center',
     },
@@ -34,35 +40,39 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     universityName: {
-        fontSize: 8,
-        opacity: 0.9,
+        fontSize: 7.5,
+        color: '#94a3b8',
         marginBottom: 3,
         textTransform: 'uppercase',
+        letterSpacing: 0.5,
     },
     title: {
-        fontSize: 15,
+        fontSize: 14,
         fontFamily: 'Helvetica-Bold',
-        marginBottom: 3,
+        marginBottom: 2,
         lineHeight: 1.2,
+        color: '#ffffff',
     },
     courseTitle: {
-        fontSize: 9.5,
-        opacity: 0.9,
+        fontSize: 9,
+        color: '#cbd5e1',
     },
     gradeBadge: {
         backgroundColor: '#ffffff',
         paddingVertical: 6,
         paddingHorizontal: 12,
-        borderRadius: 6,
+        borderRadius: 4,
         alignItems: 'center',
         justifyContent: 'center',
         marginLeft: 15,
-        minWidth: 70,
+        minWidth: 72,
+        borderWidth: 1,
+        borderColor: '#cbd5e1',
     },
     gradeValue: {
         fontSize: 18,
         fontFamily: 'Helvetica-Bold',
-        color: COLORS.primary,
+        color: '#0f172a',
     },
     gradeLabel: {
         fontSize: 7,
@@ -108,10 +118,80 @@ const styles = StyleSheet.create({
         paddingBottom: 3,
     },
     sectionTitle: {
-        fontSize: 10.5,
+        fontSize: 10,
         fontFamily: 'Helvetica-Bold',
         color: COLORS.secondary,
         textTransform: 'uppercase',
+    },
+    // Weighting summary box
+    weightsContainer: {
+        backgroundColor: COLORS.background,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        borderRadius: 4,
+        padding: 8,
+        marginBottom: 10,
+    },
+    weightsRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 4,
+    },
+    weightCard: {
+        flex: 1,
+        backgroundColor: '#ffffff',
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        borderRadius: 3,
+        padding: 5,
+        marginHorizontal: 2,
+        alignItems: 'center',
+    },
+    weightCardTitle: {
+        fontSize: 7,
+        color: COLORS.textLight,
+        textTransform: 'uppercase',
+        fontFamily: 'Helvetica-Bold',
+    },
+    weightCardValue: {
+        fontSize: 11,
+        fontFamily: 'Helvetica-Bold',
+        color: COLORS.primary,
+        marginTop: 1,
+    },
+    // Criteria items
+    criterionCard: {
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        borderRadius: 4,
+        padding: 7,
+        marginBottom: 5,
+        backgroundColor: '#ffffff',
+    },
+    criterionHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 3,
+    },
+    criterionName: {
+        fontSize: 8.5,
+        fontFamily: 'Helvetica-Bold',
+        color: COLORS.text,
+        flex: 1,
+    },
+    levelBadge: {
+        paddingHorizontal: 5,
+        paddingVertical: 1.5,
+        borderRadius: 3,
+        fontSize: 7.5,
+        fontFamily: 'Helvetica-Bold',
+    },
+    criterionQuestion: {
+        fontSize: 7.5,
+        color: COLORS.textLight,
+        marginTop: 2,
+        fontStyle: 'italic',
     },
     paragraph: {
         fontSize: 8.5,
@@ -258,9 +338,29 @@ interface ActivityReportPDFProps {
 }
 
 export const ActivityReportPDF = ({ activity, submission, studentName }: ActivityReportPDFProps) => {
-    const rawFeedback = submission?.feedback || "Sin comentarios adicionales.";
+    const rawFeedbackFull = submission?.feedback || "Sin comentarios adicionales.";
+    const cleanFeedbackWithoutMeta = stripEvaluationMetadata(rawFeedbackFull);
     const rawStatement = activity?.statement || "Sin enunciado disponible.";
-    const filePaths = activity?.filePaths ? activity.filePaths.split(',') : [];
+    const filePaths = activity?.filePaths ? (typeof activity.filePaths === 'string' ? activity.filePaths.split(',') : activity.filePaths) : [];
+
+    // Extract checklist config & eval metadata
+    const checklistConfig = getActivityChecklistConfig(activity?.description);
+    const evalMetadata = extractEvaluationMetadata(rawFeedbackFull);
+
+    // Split AI feedback and Teacher observations
+    let aiFeedbackText = cleanFeedbackWithoutMeta;
+    let teacherObservationsText = "";
+
+    const teacherMarker = "### 👨‍🏫 Observaciones del Profesor";
+    const markerIdx = cleanFeedbackWithoutMeta.indexOf(teacherMarker);
+    if (markerIdx !== -1) {
+        aiFeedbackText = cleanFeedbackWithoutMeta.substring(0, markerIdx).trim();
+        teacherObservationsText = cleanFeedbackWithoutMeta.substring(markerIdx + teacherMarker.length).trim();
+    } else if (cleanFeedbackWithoutMeta.includes("Observaciones del Profesor")) {
+        const parts = cleanFeedbackWithoutMeta.split(/Observaciones del Profesor/i);
+        aiFeedbackText = parts[0].trim();
+        teacherObservationsText = parts.slice(1).join("").trim();
+    }
 
     // Parse statement into clean lines
     const statementLines = rawStatement
@@ -270,13 +370,12 @@ export const ActivityReportPDF = ({ activity, submission, studentName }: Activit
         .filter(Boolean);
 
     // Parse feedback into clean lines and table rows
-    const feedbackLines = rawFeedback
+    const feedbackLines = aiFeedbackText
         .replace(/\\n/g, '\n')
         .split('\n')
         .map((l: string) => l.trim())
         .filter(Boolean);
 
-    // Extract Markdown Table from feedback if present
     const tableHeaders: string[] = [];
     const tableRows: string[][] = [];
     const regularFeedbackLines: Array<{ text: string; isHeader: boolean; isBullet: boolean; isQuote: boolean }> = [];
@@ -308,13 +407,21 @@ export const ActivityReportPDF = ({ activity, submission, studentName }: Activit
         }
     });
 
+    const getLevelInfo = (factor?: number) => {
+        if (factor === 1.0) return { label: 'Sabe (100%)', bg: '#ecfdf5', text: '#065f46' };
+        if (factor === 0.75) return { label: 'Aceptable (75%)', bg: '#f0f9ff', text: '#0369a1' };
+        if (factor === 0.5) return { label: 'Parcial (50%)', bg: '#fffbeb', text: '#92400e' };
+        if (factor === 0) return { label: 'No Sabe (0%)', bg: '#fff1f2', text: '#9f1239' };
+        return null;
+    };
+
     return (
         <Document>
             <Page size="A4" style={styles.page}>
                 {/* Header Banner */}
                 <View style={styles.header}>
                     <View style={styles.headerContent}>
-                        <Text style={styles.universityName}>Escuela de Ingeniería de Antioquia</Text>
+                        <Text style={styles.universityName}>SmartClass — Reporte de Evaluación Académica</Text>
                         <Text style={styles.title}>{cleanText(activity?.title || 'Actividad')}</Text>
                         <Text style={styles.courseTitle}>{cleanText(activity?.course?.title || activity?.courseTitle || 'Curso')}</Text>
                     </View>
@@ -335,13 +442,13 @@ export const ActivityReportPDF = ({ activity, submission, studentName }: Activit
                     <View style={styles.metaItem}>
                         <Text style={styles.metaLabel}>Fecha de Entrega</Text>
                         <Text style={styles.metaValue}>
-                            {submission?.submittedAt || submission?.createdAt ? format(new Date(submission.submittedAt || submission.createdAt), "PP p", { locale: es }) : 'N/A'}
+                            {submission?.submittedAt || submission?.createdAt || submission?.lastSubmittedAt ? format(new Date(submission.submittedAt || submission.createdAt || submission.lastSubmittedAt), "PP p", { locale: es }) : 'N/A'}
                         </Text>
                     </View>
                     <View style={styles.metaItem}>
                         <Text style={styles.metaLabel}>Repositorio / URL</Text>
                         {submission?.url ? (
-                            <Link src={submission.url} style={[styles.metaValue, { color: COLORS.primary, fontSize: 8 }]}>
+                            <Link src={submission.url} style={[styles.metaValue, { color: COLORS.accent, fontSize: 8 }]}>
                                 {submission.url}
                             </Link>
                         ) : (
@@ -351,6 +458,149 @@ export const ActivityReportPDF = ({ activity, submission, studentName }: Activit
                 </View>
 
                 <View style={styles.content}>
+                    {/* Desglose de Ponderación (si aplica sustentación oral docente) */}
+                    {checklistConfig && (
+                        <View style={styles.weightsContainer} wrap={false}>
+                            <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: COLORS.secondary }}>
+                                PONDERACIÓN DE CALIFICACIÓN ({checklistConfig.aiWeight}% IA + {checklistConfig.checklistWeight}% Sustentación Docente)
+                            </Text>
+                            <View style={styles.weightsRow}>
+                                <View style={styles.weightCard}>
+                                    <Text style={styles.weightCardTitle}>Evaluación IA ({checklistConfig.aiWeight}%)</Text>
+                                    <Text style={styles.weightCardValue}>
+                                        {evalMetadata?.aiGrade !== null && evalMetadata?.aiGrade !== undefined ? evalMetadata.aiGrade.toFixed(1) : '—'}
+                                    </Text>
+                                </View>
+                                <View style={styles.weightCard}>
+                                    <Text style={styles.weightCardTitle}>Sustentación ({checklistConfig.checklistWeight}%)</Text>
+                                    <Text style={styles.weightCardValue}>
+                                        {evalMetadata?.checklistScore !== null && evalMetadata?.checklistScore !== undefined ? evalMetadata.checklistScore.toFixed(1) : '—'}
+                                    </Text>
+                                </View>
+                                <View style={[styles.weightCard, { backgroundColor: '#ecfdf5', borderColor: '#a7f3d0' }]}>
+                                    <Text style={[styles.weightCardTitle, { color: '#065f46' }]}>Nota Ponderada</Text>
+                                    <Text style={[styles.weightCardValue, { color: '#065f46' }]}>
+                                        {submission?.grade !== null && submission?.grade !== undefined ? Number(submission.grade).toFixed(1) : '—'}
+                                    </Text>
+                                </View>
+                            </View>
+                        </View>
+                    )}
+
+                    {/* Criterios de Sustentación Oral Calificados */}
+                    {checklistConfig?.criteria && checklistConfig.criteria.length > 0 && (
+                        <View style={styles.section} wrap={false}>
+                            <View style={styles.sectionHeader}>
+                                <Text style={styles.sectionTitle}>
+                                    Criterios de Sustentación Oral Calificados ({checklistConfig.criteria.length} Criterios)
+                                </Text>
+                            </View>
+                            {checklistConfig.criteria.map((crit, idx) => {
+                                const factor = evalMetadata?.criteriaLevels?.[crit.id]
+                                    ?? evalMetadata?.criteriaLevels?.[`crit-${idx + 1}`]
+                                    ?? evalMetadata?.criteriaLevels?.[String(idx + 1)];
+                                const level = typeof factor === 'number' ? getLevelInfo(factor) : null;
+                                const criterionGrade = typeof factor === 'number' ? (factor * 5.0).toFixed(1) : '—';
+
+                                return (
+                                    <View key={crit.id || idx} style={styles.criterionCard} wrap={false}>
+                                        <View style={styles.criterionHeader}>
+                                            <Text style={styles.criterionName}>
+                                                #{idx + 1} {crit.name} ({crit.percentage}%)
+                                            </Text>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                {level && (
+                                                    <View style={[styles.levelBadge, { backgroundColor: level.bg }]}>
+                                                        <Text style={{ color: level.text, fontSize: 7, fontFamily: 'Helvetica-Bold' }}>
+                                                            {level.label}
+                                                        </Text>
+                                                    </View>
+                                                )}
+                                                <Text style={{ fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: COLORS.textLight, marginLeft: 4 }}>
+                                                    Nota: {criterionGrade} / 5.0
+                                                </Text>
+                                            </View>
+                                        </View>
+                                        {crit.question && (
+                                            <Text style={styles.criterionQuestion}>
+                                                Pregunta: {crit.question}
+                                            </Text>
+                                        )}
+                                    </View>
+                                );
+                            })}
+                        </View>
+                    )}
+
+                    {/* Observaciones del Profesor (si existen) */}
+                    {teacherObservationsText && (
+                        <View style={styles.section} wrap={false}>
+                            <View style={styles.sectionHeader}>
+                                <Text style={styles.sectionTitle}>Observaciones del Profesor</Text>
+                            </View>
+                            <View style={styles.blockquote}>
+                                <Text style={styles.blockquoteText}>{teacherObservationsText}</Text>
+                            </View>
+                        </View>
+                    )}
+
+                    {/* Tabla de Archivos Evaluados (si existe) */}
+                    {tableHeaders.length > 0 && tableRows.length > 0 && (
+                        <View style={styles.section} wrap={false}>
+                            <View style={styles.sectionHeader}>
+                                <Text style={styles.sectionTitle}>Entregables / Archivos Evaluados</Text>
+                            </View>
+                            <View style={styles.pdfTable}>
+                                <View style={styles.pdfTableHeader}>
+                                    {tableHeaders.map((h, i) => (
+                                        <Text key={i} style={styles.pdfTableHeaderCell}>{h}</Text>
+                                    ))}
+                                </View>
+                                {tableRows.map((row, rIdx) => (
+                                    <View key={rIdx} style={styles.pdfTableRow}>
+                                        {row.map((cell, cIdx) => (
+                                            <Text key={cIdx} style={styles.pdfTableCell}>{cell}</Text>
+                                        ))}
+                                    </View>
+                                ))}
+                            </View>
+                        </View>
+                    )}
+
+                    {/* Retroalimentación de la IA */}
+                    <View style={styles.section}>
+                        <View style={styles.sectionHeader} wrap={false}>
+                            <Text style={styles.sectionTitle}>Retroalimentación de la IA (Gemini)</Text>
+                        </View>
+                        {regularFeedbackLines.map((item, idx) => {
+                            if (item.isHeader) {
+                                return (
+                                    <View key={idx} style={{ marginTop: 6, marginBottom: 2 }} wrap={false}>
+                                        <Text style={styles.heading}>{item.text}</Text>
+                                    </View>
+                                );
+                            }
+                            if (item.isQuote) {
+                                return (
+                                    <View key={idx} style={styles.blockquote} wrap={false}>
+                                        <Text style={styles.blockquoteText}>{item.text}</Text>
+                                    </View>
+                                );
+                            }
+                            if (item.isBullet) {
+                                return (
+                                    <View key={idx} style={styles.bulletItem} wrap={false}>
+                                        <Text style={styles.bulletDot}>•</Text>
+                                        <Text style={styles.bulletText}>{item.text}</Text>
+                                    </View>
+                                );
+                            }
+                            return (
+                                <Text key={idx} style={styles.paragraph}>{item.text}</Text>
+                            );
+                        })}
+                    </View>
+
                     {/* Archivos Requeridos */}
                     {filePaths.length > 0 && (
                         <View style={styles.section} wrap={false}>
@@ -358,20 +608,20 @@ export const ActivityReportPDF = ({ activity, submission, studentName }: Activit
                                 <Text style={styles.sectionTitle}>Archivos Requeridos</Text>
                             </View>
                             <View style={styles.reqFilesContainer}>
-                                <Text style={styles.reqFilesTitle}>Archivos Requeridos para Evaluación:</Text>
+                                <Text style={styles.reqFilesTitle}>Archivos Requeridos por la Actividad:</Text>
                                 <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
                                     {filePaths.map((path: string, index: number) => (
-                                        <Text key={index} style={styles.reqFileBadge}>{path.trim()}</Text>
+                                        <Text key={index} style={styles.reqFileBadge}>{String(path).trim()}</Text>
                                     ))}
                                 </View>
                             </View>
                         </View>
                     )}
 
-                    {/* 2. Enunciado / Rúbrica */}
+                    {/* Enunciado / Rúbrica */}
                     <View style={styles.section}>
                         <View style={styles.sectionHeader} wrap={false}>
-                            <Text style={styles.sectionTitle}>Enunciado / Rúbrica de Evaluación</Text>
+                            <Text style={styles.sectionTitle}>Enunciado y Rúbrica de la Actividad</Text>
                         </View>
                         {statementLines.map((line: string, idx: number) => {
                             const cleaned = cleanText(line);
@@ -407,69 +657,12 @@ export const ActivityReportPDF = ({ activity, submission, studentName }: Activit
                             );
                         })}
                     </View>
-
-                    {/* 3. Tabla de Archivos Evaluados (Si existe) */}
-                    {tableHeaders.length > 0 && tableRows.length > 0 && (
-                        <View style={styles.section} wrap={false}>
-                            <View style={styles.sectionHeader}>
-                                <Text style={styles.sectionTitle}>Entregables Evaluados</Text>
-                            </View>
-                            <View style={styles.pdfTable}>
-                                <View style={styles.pdfTableHeader}>
-                                    {tableHeaders.map((h, i) => (
-                                        <Text key={i} style={styles.pdfTableHeaderCell}>{h}</Text>
-                                    ))}
-                                </View>
-                                {tableRows.map((row, rIdx) => (
-                                    <View key={rIdx} style={styles.pdfTableRow}>
-                                        {row.map((cell, cIdx) => (
-                                            <Text key={cIdx} style={styles.pdfTableCell}>{cell}</Text>
-                                        ))}
-                                    </View>
-                                ))}
-                            </View>
-                        </View>
-                    )}
-
-                    {/* 4. Retroalimentación */}
-                    <View style={styles.section}>
-                        <View style={styles.sectionHeader} wrap={false}>
-                            <Text style={styles.sectionTitle}>Retroalimentación de la Entrega</Text>
-                        </View>
-                        {regularFeedbackLines.map((item, idx) => {
-                            if (item.isHeader) {
-                                return (
-                                    <View key={idx} style={{ marginTop: 6, marginBottom: 2 }} wrap={false}>
-                                        <Text style={styles.heading}>{item.text}</Text>
-                                    </View>
-                                );
-                            }
-                            if (item.isQuote) {
-                                return (
-                                    <View key={idx} style={styles.blockquote} wrap={false}>
-                                        <Text style={styles.blockquoteText}>{item.text}</Text>
-                                    </View>
-                                );
-                            }
-                            if (item.isBullet) {
-                                return (
-                                    <View key={idx} style={styles.bulletItem} wrap={false}>
-                                        <Text style={styles.bulletDot}>•</Text>
-                                        <Text style={styles.bulletText}>{item.text}</Text>
-                                    </View>
-                                );
-                            }
-                            return (
-                                <Text key={idx} style={styles.paragraph}>{item.text}</Text>
-                            );
-                        })}
-                    </View>
                 </View>
 
                 {/* Footer */}
                 <View style={styles.footer} fixed>
                     <Text style={styles.footerText}>
-                        Generado por EIA Learning System • {format(new Date(), "PP", { locale: es })}
+                        Generado por SmartClass • {format(new Date(), "PP", { locale: es })}
                     </Text>
                     <Text style={styles.footerText} render={({ pageNumber, totalPages }) => (
                         `${pageNumber} / ${totalPages}`

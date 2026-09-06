@@ -193,8 +193,8 @@ h1, h2, h3, h4, h5, h6, .prose h1, .prose h2, .prose h3, .prose h4 {
 
   if (!mounted) {
     return (
-      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 opacity-50">
-        <Palette className="h-4 w-4" />
+      <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg shrink-0 opacity-50">
+        <Palette className="h-3.5 w-3.5" />
       </Button>
     );
   }
@@ -207,9 +207,9 @@ h1, h2, h3, h4, h5, h6, .prose h1, .prose h2, .prose h3, .prose h4 {
           <span>Apariencia (60-30-10)</span>
         </DropdownMenuSubTrigger>
         <DropdownMenuPortal>
-          <DropdownMenuSubContent className="w-[200px] bg-background border-border">
-            <DropdownMenuLabel className="text-[10px] uppercase tracking-widest opacity-50 flex items-center justify-between">
-              <span>Temas 60-30-10</span>
+          <DropdownMenuSubContent className="w-56 bg-background/95 backdrop-blur-md border-border/80 shadow-xl">
+            <DropdownMenuLabel className="text-[10px] uppercase tracking-widest opacity-60 flex items-center justify-between">
+              <span>Paleta 60-30-10</span>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem 
@@ -248,15 +248,22 @@ h1, h2, h3, h4, h5, h6, .prose h1, .prose h2, .prose h3, .prose h4 {
         <DropdownMenuTrigger asChild>
           <span className="inline-block">
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className={cn("h-8 w-8 shrink-0 focus-visible:ring-0 opacity-60 hover:opacity-100 transition-all", className)}>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className={cn(
+                  "h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-background/90 dark:hover:bg-accent/70 hover:shadow-2xs transition-all", 
+                  className
+                )}
+              >
                  <Palette className="h-3.5 w-3.5" />
                  <span className="sr-only">Apariencia</span>
               </Button>
             </TooltipTrigger>
           </span>
         </DropdownMenuTrigger>
-        <TooltipContent>
-          <p>Apariencia (Sistema 60-30-10)</p>
+        <TooltipContent side="bottom" className="text-xs">
+          <p>Paleta de colores (60-30-10)</p>
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="w-[200px] bg-background/95 backdrop-blur-md border-border/80 shadow-xl">

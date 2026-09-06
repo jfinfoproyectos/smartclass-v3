@@ -5,10 +5,10 @@ const styles = StyleSheet.create({
     page: { paddingTop: 40, paddingLeft: 40, paddingRight: 40, paddingBottom: 55, fontSize: 10, fontFamily: "Helvetica", color: "#1e293b", backgroundColor: "#ffffff" },
     header: {
         marginBottom: 20, paddingBottom: 12,
-        borderBottomWidth: 2, borderBottomColor: "#8b5cf6", borderBottomStyle: "solid",
+        borderBottomWidth: 2, borderBottomColor: "#0f172a", borderStyle: "solid",
     },
-    appTitle: { fontSize: 22, fontWeight: "bold", color: "#8b5cf6", marginBottom: 4 },
-    reportTitle: { fontSize: 14, color: "#64748b" },
+    appTitle: { fontSize: 16, fontWeight: "bold", color: "#0f172a", marginBottom: 4, letterSpacing: 0.5, textTransform: "uppercase" },
+    reportTitle: { fontSize: 12, color: "#1e3a5f", fontWeight: "bold" },
     infoGrid: { flexDirection: "row", flexWrap: "wrap", marginBottom: 20 },
     infoItem: { width: "50%", marginBottom: 6, fontSize: 10 },
     labelText: { fontWeight: "bold", color: "#475569" },
@@ -16,70 +16,71 @@ const styles = StyleSheet.create({
     // Stats
     statsContainer: {
         flexDirection: "row", marginBottom: 20,
-        borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "solid", borderRadius: 6,
+        borderWidth: 1, borderColor: "#cbd5e1", borderStyle: "solid", borderRadius: 4,
         backgroundColor: "#f8fafc"
     },
-    statBox: { alignItems: "center", flex: 1, padding: 12 },
-    statDivider: { borderRightWidth: 1, borderRightColor: "#e2e8f0", borderRightStyle: "solid" },
-    statValue: { fontSize: 20, fontWeight: "bold", color: "#8b5cf6" },
+    statBox: { alignItems: "center", flex: 1, padding: 10 },
+    statDivider: { borderRightWidth: 1, borderRightColor: "#cbd5e1", borderRightStyle: "solid" },
+    statValue: { fontSize: 18, fontWeight: "bold", color: "#0284c7" },
     statLabel: { fontSize: 8, color: "#64748b", textTransform: "uppercase", marginTop: 4 },
 
     // Section Titles
     sectionTitle: {
-        fontSize: 14, fontWeight: "bold", color: "#1e293b",
-        marginTop: 20, marginBottom: 10,
-        backgroundColor: "#f1f5f9", padding: 6, borderRadius: 4
+        fontSize: 12, fontWeight: "bold", color: "#0f172a",
+        marginTop: 18, marginBottom: 8,
+        backgroundColor: "#f1f5f9", padding: 6, borderRadius: 4,
+        borderBottomWidth: 1, borderBottomColor: "#cbd5e1",
     },
     subSectionTitle: {
-        fontSize: 12, fontWeight: "bold", color: "#334155",
-        marginTop: 12, marginBottom: 6,
+        fontSize: 10.5, fontWeight: "bold", color: "#1e3a5f",
+        marginTop: 10, marginBottom: 6,
     },
 
     // Global Analysis
     globalAnalysisBox: {
-        padding: 12, backgroundColor: "#fdf4ff", 
-        borderLeftWidth: 4, borderLeftColor: "#d946ef", borderLeftStyle: "solid",
+        padding: 12, backgroundColor: "#f8fafc", 
+        borderLeftWidth: 4, borderLeftColor: "#0284c7", borderLeftStyle: "solid",
         borderRadius: 4, marginBottom: 16
     },
-    globalAnalysisText: { fontSize: 10, color: "#4a044e", lineHeight: 1.4 },
+    globalAnalysisText: { fontSize: 9.5, color: "#0f172a", lineHeight: 1.4 },
 
     // Lists
-    listItem: { flexDirection: "row", marginBottom: 6 },
-    bulletPoint: { width: 12, fontSize: 10, color: "#8b5cf6", fontWeight: "bold" },
-    listText: { flex: 1, fontSize: 10, lineHeight: 1.4 },
+    listItem: { flexDirection: "row", marginBottom: 5 },
+    bulletPoint: { width: 12, fontSize: 10, color: "#0284c7", fontWeight: "bold" },
+    listText: { flex: 1, fontSize: 9.5, lineHeight: 1.4, color: "#1e293b" },
 
     // Common Errors Table
     tableWrapper: {
-        borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "solid",
-        borderRadius: 4, marginBottom: 16
+        borderWidth: 1, borderColor: "#cbd5e1", borderStyle: "solid",
+        borderRadius: 4, marginBottom: 16, overflow: "hidden",
     },
     tableHeader: {
-        flexDirection: "row", backgroundColor: "#f1f5f9",
-        borderBottomWidth: 1, borderBottomColor: "#cbd5e1", borderBottomStyle: "solid",
+        flexDirection: "row", backgroundColor: "#1e293b",
+        borderBottomWidth: 1, borderBottomColor: "#cbd5e1", borderStyle: "solid",
         padding: 6, alignItems: "center",
     },
     tableRow: {
         flexDirection: "row",
-        borderBottomWidth: 1, borderBottomColor: "#e2e8f0", borderBottomStyle: "solid",
+        borderBottomWidth: 1, borderBottomColor: "#e2e8f0", borderStyle: "solid",
         padding: 6, alignItems: "center",
     },
     tableRowAlt: { backgroundColor: "#f8fafc" },
-    colConcept: { width: "25%", fontWeight: "bold" },
-    colDesc: { width: "55%", paddingHorizontal: 4 },
-    colPrev: { width: "20%", textAlign: "right", color: "#ef4444", fontWeight: "bold" },
+    colConcept: { width: "25%", fontWeight: "bold", color: "#0f172a" },
+    colDesc: { width: "55%", paddingHorizontal: 4, color: "#334155" },
+    colPrev: { width: "20%", textAlign: "right", color: "#9f1239", fontWeight: "bold" },
 
     // Plagiarism
     plagiarismCard: {
-        borderWidth: 1, borderColor: "#fecaca", borderStyle: "solid",
-        backgroundColor: "#fef2f2", padding: 10, borderRadius: 4, marginBottom: 8
+        borderWidth: 1, borderColor: "#fecdd3", borderStyle: "solid",
+        backgroundColor: "#fff1f2", padding: 10, borderRadius: 4, marginBottom: 8
     },
     plagHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
-    plagStudents: { fontSize: 10, fontWeight: "bold", color: "#991b1b" },
-    plagScore: { fontSize: 10, fontWeight: "bold", color: "#dc2626" },
-    plagReason: { fontSize: 9, color: "#7f1d1d", fontStyle: "italic" },
+    plagStudents: { fontSize: 10, fontWeight: "bold", color: "#9f1239" },
+    plagScore: { fontSize: 10, fontWeight: "bold", color: "#9f1239" },
+    plagReason: { fontSize: 9, color: "#475569", fontStyle: "italic" },
     plagWarningBadge: { 
-        fontSize: 8, color: "#ffffff", backgroundColor: "#dc2626", 
-        paddingHorizontal: 4, paddingVertical: 2, borderRadius: 2, alignSelf: "flex-start", marginTop: 4 
+        fontSize: 8, color: "#ffffff", backgroundColor: "#9f1239", 
+        paddingHorizontal: 5, paddingVertical: 2, borderRadius: 2, alignSelf: "flex-start", marginTop: 4 
     },
 
     footer: {

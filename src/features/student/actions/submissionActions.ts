@@ -11,33 +11,8 @@ async function getSession() {
     return await auth.api.getSession({ headers: await headers() });
 }
 
-async function notifyTeacherOfSubmission(activityId: string, studentName: string, isReevaluation: boolean = false) {
-    try {
-        const activity = await prisma.activity.findUnique({
-            where: { id: activityId },
-            include: {
-                course: {
-                    select: {
-                        title: true,
-                        teacherId: true
-                    }
-                }
-            }
-        });
-        
-        if (activity?.course?.teacherId) {
-            const { sendPushNotification } = await import("@/lib/push-notifications");
-            await sendPushNotification(activity.course.teacherId, {
-                title: isReevaluation ? "Solicitud de Reevaluación 🔄" : "Nueva entrega de estudiante 📥",
-                body: isReevaluation
-                    ? `${studentName} ha actualizado su entrega en "${activity.title}" y solicita reevaluación.`
-                    : `${studentName} entregó la actividad "${activity.title}".`,
-                url: `/dashboard/teacher/courses/${activity.courseId}/activities/${activityId}`
-            });
-        }
-    } catch (err) {
-        console.error("Failed to notify teacher of submission:", err);
-    }
+async function notifyTeacherOfSubmission(_activityId: string, _studentName: string, _isReevaluation: boolean = false) {
+    // Push notifications completely disabled
 }
 
 export async function submitActivityAction(prevState: any, formData: FormData) {

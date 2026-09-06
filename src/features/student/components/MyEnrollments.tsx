@@ -314,40 +314,42 @@ export function MyEnrollments({
                             {/* Unified Master Header: AI Canvas Style */}
                             <div className="flex-none bg-background/95 backdrop-blur-xl w-full border-b border-border/50 shadow-sm transition-all duration-300">
                                 <TooltipProvider delayDuration={300}>
-                                    {/* Row 1: Primary Controls & Identity (h-16 to match AppIdentity sidebar header) */}
-                                    <div className="flex items-center h-16 border-b border-border/40 bg-background/80 backdrop-blur-xl">
+                                    {/* Row 1: Primary Controls & Identity (h-12 to match AppIdentity sidebar header and dashboard layout) */}
+                                    <div className="flex items-center h-12 border-b border-border/40 bg-background/80 backdrop-blur-xl">
                                         {/* Left: Sidebar trigger */}
-                                        <div className="flex items-center h-full px-3 border-r border-border/40">
+                                        <div className="flex items-center h-full px-2.5 sm:px-3 border-r border-border/40">
                                             <SidebarTrigger className="h-8 w-8 hover:bg-muted/80 rounded-xl transition-colors" />
                                         </div>
 
                                         {/* Middle: Course details */}
-                                        <div className="flex-1 flex flex-col justify-center h-full px-4 min-w-0">
-                                            <h2 className="text-sm sm:text-base font-semibold tracking-tight text-foreground truncate">
+                                        <div className="flex-1 flex items-center gap-2 h-full px-3 sm:px-4 min-w-0">
+                                            <h2 className="text-xs sm:text-sm font-semibold tracking-tight text-foreground truncate">
                                                 {enrollment.course.title}
                                             </h2>
-                                            <div className="flex items-center gap-1.5 mt-0.5">
+                                            <div className="hidden md:flex items-center gap-1 shrink-0 text-muted-foreground">
+                                                <span className="text-[10px] opacity-40">•</span>
                                                 <Users className="h-3 w-3 text-primary" />
-                                                <span className="text-xs font-medium text-muted-foreground truncate">
+                                                <span className="text-[11px] font-medium truncate">
                                                     Docente: {formatName(enrollment.course.teacher.name, enrollment.course.teacher.profile)}
                                                 </span>
                                             </div>
                                         </div>
 
                                         {/* Right: Progress & Utilities */}
-                                        <div className="hidden sm:flex flex-col items-end justify-center h-full px-4 border-l border-border/40">
-                                            <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-0.5">Tu Progreso</span>
-                                            <div className="flex items-center gap-2">
-                                                <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-semibold text-xs px-2.5 py-0.5 rounded-full">
-                                                    {progressPercentage}%
-                                                </Badge>
-                                            </div>
+                                        <div className="hidden sm:flex items-center gap-1.5 h-full px-3 border-l border-border/40">
+                                            <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Progreso:</span>
+                                            <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-semibold text-[10px] px-2 py-0 rounded-full h-4.5">
+                                                {progressPercentage}%
+                                            </Badge>
                                         </div>
 
-                                        <div className="flex items-center h-full px-3 gap-1.5 border-l border-border/40">
-                                            <ThemeSelector themes={themes} />
-                                            <ModeToggle />
-                                            <CreditsModal />
+                                        <div className="flex items-center h-full px-2.5 border-l border-border/40">
+                                            <div className="flex items-center gap-0.5 bg-muted/60 dark:bg-muted/30 p-0.5 rounded-xl border border-border/70 shadow-2xs backdrop-blur-md">
+                                                <ThemeSelector themes={themes} />
+                                                <ModeToggle />
+                                                <div className="h-3.5 w-[1px] bg-border/80 mx-0.5" />
+                                                <CreditsModal />
+                                            </div>
                                         </div>
                                     </div>
 

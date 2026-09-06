@@ -80,8 +80,8 @@ export function PublicHeader({
   const activeTitle = activeTopic ? activeTopic.title : "Inicio";
 
   return (
-    <header className="flex-none border-b border-border/80 bg-background/80 backdrop-blur-xl z-50 sticky top-0 w-full flex flex-col shadow-sm">
-      <div className="h-13 w-full flex items-center justify-between px-3 sm:px-5 gap-3">
+    <header className="flex-none border-b border-border/80 bg-background/80 backdrop-blur-xl z-50 sticky top-0 w-full flex flex-col shadow-none">
+      <div className="h-12 w-full flex items-center justify-between px-3 sm:px-5 gap-3">
         <div className="flex items-center gap-2 flex-1 min-w-0">
           {/* Back to app button */}
           {mounted && (

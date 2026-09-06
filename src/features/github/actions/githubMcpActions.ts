@@ -16,11 +16,69 @@ export interface McpChatSessionSummary {
     updatedAt: Date;
     messageCount: number;
     preview: string;
+    studentName?: string;
+    groupName?: string;
+}
+
+/**
+ * Obtiene todos los IDs de estudiantes que pertenecen al mismo grupo para una actividad dada.
+ * Si la actividad no es grupal o el estudiante no está en un grupo, devuelve [studentId].
+ */
+async function getGroupStudentIds(activityId: string, studentId: string): Promise<{
+    memberIds: string[];
+    isGroupActivity: boolean;
+    groupName?: string;
+}> {
+    try {
+        const activity = await prisma.activity.findUnique({
+            where: { id: activityId },
+            select: { id: true, isGroupActivity: true, courseId: true, groupScope: true },
+        });
+
+        if (!activity || !activity.isGroupActivity) {
+            return { memberIds: [studentId], isGroupActivity: false };
+        }
+
+        const isActivityScope = (activity as any).groupScope === "ACTIVITY";
+
+        // Buscar si studentId pertenece a un grupo en esta actividad o curso
+        const membership = await prisma.studentGroupMember.findFirst({
+            where: {
+                userId: studentId,
+                group: isActivityScope
+                    ? { activityId: activity.id }
+                    : { courseId: activity.courseId, activityId: null },
+            },
+            include: {
+                group: {
+                    include: {
+                        members: {
+                            select: { userId: true },
+                        },
+                    },
+                },
+            },
+        });
+
+        if (!membership?.group?.members?.length) {
+            return { memberIds: [studentId], isGroupActivity: true };
+        }
+
+        const memberIds = membership.group.members.map((m) => m.userId);
+        return {
+            memberIds: Array.from(new Set([studentId, ...memberIds])),
+            isGroupActivity: true,
+            groupName: membership.group.name,
+        };
+    } catch (err) {
+        console.error("Error al obtener miembros del grupo para MCP chat:", err);
+        return { memberIds: [studentId], isGroupActivity: false };
+    }
 }
 
 /**
  * Lista los resúmenes de todas las conversaciones históricas del inspector para una entrega.
- * Accesible tanto para el docente como para el estudiante (de su propia entrega).
+ * Si la actividad es grupal, todos los miembros del grupo pueden visualizar el historial compartido.
  */
 export async function listMcpChatSessionsAction({
     activityId,
@@ -35,11 +93,14 @@ export async function listMcpChatSessionsAction({
     }
 
     if (!activityId || !studentId) {
-        return { success: true, sessions: [] };
+        return { success: true, sessions: [], isGroupActivity: false };
     }
 
+    const { memberIds: targetStudentIds, isGroupActivity, groupName } = await getGroupStudentIds(activityId, studentId);
+
     const isTeacher = session.user.role === "teacher" || session.user.role === "admin";
-    const isStudent = session.user.role === "student" && session.user.id === studentId;
+    // El estudiante está autorizado si su propio ID es studentId o si pertenece al mismo grupo para esta actividad
+    const isStudent = session.user.role === "student" && (targetStudentIds.includes(session.user.id) || session.user.id === studentId);
 
     if (!isTeacher && !isStudent) {
         throw new Error("Unauthorized: No tienes permisos para ver el historial de esta actividad.");
@@ -49,7 +110,7 @@ export async function listMcpChatSessionsAction({
         const chats = await prisma.mcpInspectorChat.findMany({
             where: {
                 activityId,
-                studentId,
+                studentId: { in: targetStudentIds },
             },
             orderBy: { createdAt: "desc" },
             select: {
@@ -58,6 +119,11 @@ export async function listMcpChatSessionsAction({
                 createdAt: true,
                 updatedAt: true,
                 messages: true,
+                student: {
+                    select: {
+                        name: true,
+                    },
+                },
             },
         });
 
@@ -77,10 +143,12 @@ export async function listMcpChatSessionsAction({
                 updatedAt: c.updatedAt,
                 messageCount: msgs.length,
                 preview: firstUserMsg ? firstUserMsg.content.slice(0, 100) : "",
+                studentName: c.student?.name,
+                groupName,
             };
         });
 
-        return { success: true, sessions };
+        return { success: true, sessions, isGroupActivity, groupName };
     } catch (error: any) {
         console.error("Error al listar sesiones MCP:", error);
         return { success: false, sessions: [], error: error.message };
@@ -89,7 +157,7 @@ export async function listMcpChatSessionsAction({
 
 /**
  * Obtiene los mensajes de una sesión histórica específica o la más reciente.
- * Accesible tanto para el docente como para el estudiante (de su propia entrega).
+ * Si la actividad es grupal, cualquier miembro del grupo puede consultar las conversaciones compartidas.
  */
 export async function getMcpChatHistoryAction({
     activityId,
@@ -109,8 +177,10 @@ export async function getMcpChatHistoryAction({
         return { success: true, messages: [], chatId: null, title: null };
     }
 
+    const { memberIds: targetStudentIds, isGroupActivity, groupName } = await getGroupStudentIds(activityId, studentId);
+
     const isTeacher = session.user.role === "teacher" || session.user.role === "admin";
-    const isStudent = session.user.role === "student" && session.user.id === studentId;
+    const isStudent = session.user.role === "student" && (targetStudentIds.includes(session.user.id) || session.user.id === studentId);
 
     if (!isTeacher && !isStudent) {
         throw new Error("Unauthorized: No tienes permisos para ver este historial.");
@@ -120,14 +190,18 @@ export async function getMcpChatHistoryAction({
         let chat = null;
 
         if (chatId) {
-            chat = await prisma.mcpInspectorChat.findUnique({
-                where: { id: chatId },
+            chat = await prisma.mcpInspectorChat.findFirst({
+                where: {
+                    id: chatId,
+                    activityId,
+                    studentId: { in: targetStudentIds },
+                },
             });
         } else {
             chat = await prisma.mcpInspectorChat.findFirst({
                 where: {
                     activityId,
-                    studentId,
+                    studentId: { in: targetStudentIds },
                 },
                 orderBy: { createdAt: "desc" },
             });
@@ -139,6 +213,7 @@ export async function getMcpChatHistoryAction({
             messages,
             chatId: chat?.id || null,
             title: chat?.title || null,
+            groupName,
         };
     } catch (error: any) {
         console.error("Error cargando historial de chat MCP:", error);
@@ -285,10 +360,12 @@ export async function deleteMcpChatHistoryAction({
             throw new Error("Se requiere ID de actividad y de estudiante para eliminar todo el historial.");
         }
 
+        const { memberIds: targetStudentIds } = await getGroupStudentIds(activityId, studentId);
+
         await prisma.mcpInspectorChat.deleteMany({
             where: {
                 activityId,
-                studentId,
+                studentId: { in: targetStudentIds },
             },
         });
 

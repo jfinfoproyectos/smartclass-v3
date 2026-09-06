@@ -6,10 +6,10 @@ const styles = StyleSheet.create({
     page: { paddingTop: 40, paddingLeft: 40, paddingRight: 40, paddingBottom: 55, fontSize: 10, fontFamily: "Helvetica", color: "#1e293b" },
     header: {
         marginBottom: 16, paddingBottom: 10,
-        borderBottomWidth: 2, borderBottomColor: "#2563eb", borderBottomStyle: "solid",
+        borderBottomWidth: 2, borderBottomColor: "#0f172a", borderStyle: "solid",
     },
-    appTitle: { fontSize: 20, fontWeight: "bold", color: "#2563eb", marginBottom: 2 },
-    reportTitle: { fontSize: 12, color: "#64748b" },
+    appTitle: { fontSize: 16, fontWeight: "bold", color: "#0f172a", marginBottom: 2, letterSpacing: 0.5, textTransform: "uppercase" },
+    reportTitle: { fontSize: 12, color: "#1e3a5f", fontWeight: "bold" },
     infoGrid: { flexDirection: "row", flexWrap: "wrap", marginBottom: 16, marginTop: 12 },
     infoItem: { width: "50%", marginBottom: 4, fontSize: 9 },
     labelText: { fontWeight: "bold", color: "#475569" },
@@ -208,35 +208,35 @@ export function EvaluationReportPDF({
                         <Text style={styles.kpiLabel}>Total Estudiantes</Text>
                     </View>
                     <View style={styles.kpiBox}>
-                        <Text style={[styles.kpiValue, { color: "#2563eb" }]}>{avgScore}</Text>
+                        <Text style={[styles.kpiValue, { color: "#0284c7" }]}>{avgScore}</Text>
                         <Text style={styles.kpiLabel}>Nota Promedio</Text>
                     </View>
                     <View style={styles.kpiBox}>
-                        <Text style={[styles.kpiValue, { color: "#22c55e" }]}>{maxScore}</Text>
+                        <Text style={[styles.kpiValue, { color: "#047857" }]}>{maxScore}</Text>
                         <Text style={styles.kpiLabel}>Nota Máxima</Text>
                     </View>
                     <View style={styles.kpiBox}>
-                        <Text style={[styles.kpiValue, { color: "#ef4444" }]}>{minScore}</Text>
+                        <Text style={[styles.kpiValue, { color: "#9f1239" }]}>{minScore}</Text>
                         <Text style={styles.kpiLabel}>Nota Mínima</Text>
                     </View>
                 </View>
 
                 {/* State summary row */}
                 <View style={styles.kpiRow} wrap={false}>
-                    <View style={[styles.kpiBox, { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" }]}>
-                        <Text style={[styles.kpiValue, { color: "#15803d", fontSize: 16 }]}>{passCount}</Text>
+                    <View style={[styles.kpiBox, { backgroundColor: "#ecfdf5", borderColor: "#a7f3d0" }]}>
+                        <Text style={[styles.kpiValue, { color: "#065f46", fontSize: 16 }]}>{passCount}</Text>
                         <Text style={styles.kpiLabel}>Aprobados (≥3.0)</Text>
                     </View>
-                    <View style={[styles.kpiBox, { backgroundColor: "#fef2f2", borderColor: "#fecaca" }]}>
-                        <Text style={[styles.kpiValue, { color: "#dc2626", fontSize: 16 }]}>{failCount}</Text>
+                    <View style={[styles.kpiBox, { backgroundColor: "#fff1f2", borderColor: "#fecdd3" }]}>
+                        <Text style={[styles.kpiValue, { color: "#9f1239", fontSize: 16 }]}>{failCount}</Text>
                         <Text style={styles.kpiLabel}>Reprobados (&lt;3.0)</Text>
                     </View>
                     <View style={[styles.kpiBox, { backgroundColor: "#f8fafc", borderColor: "#e2e8f0" }]}>
                         <Text style={[styles.kpiValue, { color: "#64748b", fontSize: 16 }]}>{inProgressCount}</Text>
                         <Text style={styles.kpiLabel}>En Progreso</Text>
                     </View>
-                    <View style={[styles.kpiBox, { backgroundColor: "#eff6ff", borderColor: "#bfdbfe" }]}>
-                        <Text style={[styles.kpiValue, { color: "#2563eb", fontSize: 16 }]}>{passRate}%</Text>
+                    <View style={[styles.kpiBox, { backgroundColor: "#f0f9ff", borderColor: "#bae6fd" }]}>
+                        <Text style={[styles.kpiValue, { color: "#0369a1", fontSize: 16 }]}>{passRate}%</Text>
                         <Text style={styles.kpiLabel}>Tasa Aprobación</Text>
                     </View>
                 </View>

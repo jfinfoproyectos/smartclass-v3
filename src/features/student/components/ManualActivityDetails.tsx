@@ -247,8 +247,11 @@ export function ManualActivityDetails({ activity, userId, studentName }: ManualA
                                 <CardTitle>Enunciado / Rúbrica</CardTitle>
                             </CardHeader>
                             <CardContent className="pt-4">
-                                <div className="bg-card rounded-lg p-2">
-                                    <FeedbackViewer feedback={activity.statement || "**No hay enunciado disponible.**"} />
+                                <div className="bg-card rounded-lg p-2 select-none" onCopy={(e) => e.preventDefault()} onContextMenu={(e) => e.preventDefault()}>
+                                    <FeedbackViewer 
+                                        feedback={activity.statement || "**No hay enunciado disponible.**"} 
+                                        preventCopy={true}
+                                    />
                                 </div>
                             </CardContent>
                         </Card>

@@ -173,31 +173,53 @@ export async function finalizeGitHubGradingAction(
     const { finalizeSubmission } = await import("../services/ai/gradingService");
     const result = await finalizeSubmission(analyses, statement, missingFiles, session.user.id, totalExpectedFiles, gradingMode);
 
-    const feedbackText = result.feedback;
+    const [activity, student, existingSubmission] = await Promise.all([
+        prisma.activity.findUnique({ where: { id: activityId }, select: { title: true, description: true } }),
+        prisma.user.findUnique({ where: { id: studentUserId }, select: { name: true } }),
+        prisma.submission.findUnique({
+            where: { userId_activityId: { userId: studentUserId, activityId } },
+            select: { feedback: true, grade: true }
+        })
+    ]);
+
+    const { getActivityChecklistConfig, extractEvaluationMetadata, embedEvaluationMetadata, calculateCombinedFinalGrade } = await import("../utils/checklistGradingUtils");
+    const checklistConfig = getActivityChecklistConfig(activity?.description);
+
+    let finalGradeToSave = result.grade;
+    let feedbackToSave = result.feedback;
+
+    if (checklistConfig?.enabled) {
+        const existingMeta = extractEvaluationMetadata(existingSubmission?.feedback);
+        const rawAiGrade = result.grade;
+        const teacherScore = existingMeta?.checklistScore ?? 0;
+        finalGradeToSave = calculateCombinedFinalGrade(rawAiGrade, teacherScore, checklistConfig.aiWeight, checklistConfig.checklistWeight);
+        feedbackToSave = embedEvaluationMetadata(result.feedback, {
+            aiGrade: rawAiGrade,
+            checklistScore: teacherScore,
+            criteriaLevels: existingMeta?.criteriaLevels ?? {},
+            manualSustentacionScore: existingMeta?.manualSustentacionScore ?? null,
+            calculatedFinalGrade: finalGradeToSave,
+        });
+    }
 
     await activityService.submitActivity({
         url: repoUrl,
         activityId,
         userId: studentUserId,
-        grade: result.grade,
-        feedback: feedbackText,
+        grade: finalGradeToSave,
+        feedback: feedbackToSave,
     });
 
     // Auditoría
     const { auditLogger } = await import("../../admin/services/auditLogger");
-    const [activity, student] = await Promise.all([
-        prisma.activity.findUnique({ where: { id: activityId }, select: { title: true } }),
-        prisma.user.findUnique({ where: { id: studentUserId }, select: { name: true } })
-    ]);
-
-    await auditLogger.logGrade(activityId, activity?.title || "Actividad", student?.name || "Estudiante", result.grade, session.user.id, session.user.name || "Profesor");
+    await auditLogger.logGrade(activityId, activity?.title || "Actividad", student?.name || "Estudiante", finalGradeToSave, session.user.id, session.user.name || "Profesor");
 
     // 🔔 PUSH NOTIFICATION
     try {
         const { sendPushNotification } = await import("@/lib/push-notifications");
         await sendPushNotification(studentUserId, {
             title: "Actividad Calificada 📝",
-            body: `Tu entrega para "${activity?.title || 'Actividad'}" ha sido calificada con ${result.grade}.`,
+            body: `Tu entrega para "${activity?.title || 'Actividad'}" ha sido calificada con ${finalGradeToSave.toFixed(1)}.`,
             url: `/dashboard/student/activities`
         });
     } catch (pushError) {
@@ -208,7 +230,11 @@ export async function finalizeGitHubGradingAction(
     revalidatePath(`/dashboard/teacher`);
     revalidatePath("/dashboard/student");
 
-    return result;
+    return {
+        ...result,
+        grade: finalGradeToSave,
+        rawAiGrade: result.grade,
+    };
 }
 
 export async function gradeManualActivityAction(formData: FormData) {
@@ -367,33 +393,61 @@ export async function gradePdfReviewAction(
     const { gradePdfReviewSubmission } = await import("../services/ai/pdfReviewService");
     const result = await gradePdfReviewSubmission(criteria, pdfUrl, session.user.id, gradingMode);
 
+    const [activity, student, existingSubmission] = await Promise.all([
+        prisma.activity.findUnique({ where: { id: activityId }, select: { title: true, description: true } }),
+        prisma.user.findUnique({ where: { id: studentUserId }, select: { name: true } }),
+        prisma.submission.findUnique({
+            where: { userId_activityId: { userId: studentUserId, activityId } },
+            select: { feedback: true, grade: true }
+        })
+    ]);
+
+    const { getActivityChecklistConfig, extractEvaluationMetadata, embedEvaluationMetadata, calculateCombinedFinalGrade } = await import("../utils/checklistGradingUtils");
+    const checklistConfig = getActivityChecklistConfig(activity?.description);
+
+    let finalGradeToSave = result.grade;
+    let feedbackToSave = result.feedback;
+
+    if (checklistConfig?.enabled) {
+        const existingMeta = extractEvaluationMetadata(existingSubmission?.feedback);
+        const rawAiGrade = result.grade;
+        const teacherScore = existingMeta?.checklistScore ?? 0;
+        finalGradeToSave = calculateCombinedFinalGrade(rawAiGrade, teacherScore, checklistConfig.aiWeight, checklistConfig.checklistWeight);
+        feedbackToSave = embedEvaluationMetadata(result.feedback, {
+            aiGrade: rawAiGrade,
+            checklistScore: teacherScore,
+            criteriaLevels: existingMeta?.criteriaLevels ?? {},
+            manualSustentacionScore: existingMeta?.manualSustentacionScore ?? null,
+            calculatedFinalGrade: finalGradeToSave,
+        });
+    }
+
     // Save the submission
     await activityService.submitActivity({
         url: pdfUrl,
         activityId,
         userId: studentUserId,
-        grade: result.grade,
-        feedback: result.feedback
+        grade: finalGradeToSave,
+        feedback: feedbackToSave
     });
 
     // Auditoría
     const { auditLogger } = await import("../../admin/services/auditLogger");
-    const [activity, student] = await Promise.all([
-        prisma.activity.findUnique({ where: { id: activityId }, select: { title: true } }),
-        prisma.user.findUnique({ where: { id: studentUserId }, select: { name: true } })
-    ]);
-
     await auditLogger.logGrade(
         activityId,
         activity?.title || "Actividad",
         student?.name || "Estudiante",
-        result.grade,
+        finalGradeToSave,
         session.user.id,
         session.user.name || "Profesor"
     );
 
     revalidatePath(`/dashboard/teacher/courses/${courseId}/activities/${activityId}`);
-    return result;
+    return {
+        ...result,
+        grade: finalGradeToSave,
+        rawAiGrade: result.grade,
+    };
 }
 
 export async function gradeCodeChallengeAction(

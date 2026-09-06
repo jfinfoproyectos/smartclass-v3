@@ -14,8 +14,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRouter } from "next/navigation";
 import { submitGithubActivityAction } from "@/features/student/actions/submissionActions";
 import { toast } from "sonner";
-import { useReactToPrint } from 'react-to-print';
-import { ActivityReportTemplate } from "./ActivityReportTemplate";
 import { ExportFeedbackButtons } from "@/components/ui/export-feedback-buttons";
 import { GitHubRepoChatInspector } from "@/features/teacher/components/GitHubRepoChatInspector";
 import MDEditor from '@uiw/react-md-editor';
@@ -46,13 +44,6 @@ export function CodeProjectActivityDetails({ activity, userId, studentName }: Co
     const [error, setError] = useState<string | null>(null);
     const [submitSuccess, setSubmitSuccess] = useState(false);
     const router = useRouter();
-
-    const componentRef = useRef<HTMLDivElement>(null);
-
-    const handlePrint = useReactToPrint({
-        contentRef: componentRef,
-        documentTitle: `Informe_${activity.title.replace(/\s+/g, '_')}`,
-    });
 
     useEffect(() => {
         setMounted(true);
@@ -255,18 +246,11 @@ export function CodeProjectActivityDetails({ activity, userId, studentName }: Co
 
                             {isGraded && (
                                 <div className="pt-4 flex justify-end">
-                                    <div style={{ display: 'none' }}>
-                                        <ActivityReportTemplate
-                                            ref={componentRef}
-                                            activity={activity}
-                                            submission={submission}
-                                            studentName={studentName}
-                                        />
-                                    </div>
-                                    <Button variant="outline" size="sm" onClick={() => handlePrint()} className="gap-2">
-                                        <Download className="h-4 w-4" />
-                                        Descargar Informe de Evaluación
-                                    </Button>
+                                    <ExportFeedbackButtons
+                                        activity={activity}
+                                        submission={submission}
+                                        studentName={studentName}
+                                    />
                                 </div>
                             )}
                         </div>
@@ -286,7 +270,7 @@ export function CodeProjectActivityDetails({ activity, userId, studentName }: Co
                             </TabsTrigger>
                             <TabsTrigger value="inspector" className="flex items-center gap-2 shrink-0 px-3 py-1.5 whitespace-nowrap text-xs font-semibold">
                                 <Bot className="h-4 w-4 shrink-0 text-sky-500" />
-                                <span>Inspector MCP</span>
+                                <span>Inspector</span>
                             </TabsTrigger>
                         </TabsList>
                     </div>
@@ -298,8 +282,11 @@ export function CodeProjectActivityDetails({ activity, userId, studentName }: Co
                                 <CardTitle className="text-lg">Enunciado y Criterios</CardTitle>
                             </CardHeader>
                             <CardContent className="pt-4">
-                                <div className="bg-card rounded-lg p-2">
-                                    <FeedbackViewer feedback={activity.statement || "**No hay enunciado disponible.**"} />
+                                <div className="bg-card rounded-lg p-2 select-none" onCopy={(e) => e.preventDefault()} onContextMenu={(e) => e.preventDefault()}>
+                                    <FeedbackViewer 
+                                        feedback={activity.statement || "**No hay enunciado disponible.**"} 
+                                        preventCopy={true}
+                                    />
                                 </div>
                             </CardContent>
                         </Card>

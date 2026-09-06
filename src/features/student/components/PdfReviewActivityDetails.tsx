@@ -14,8 +14,6 @@ import { Clock } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRouter } from "next/navigation";
 import { submitPdfActivityAction } from "@/features/student/actions/submissionActions";
-import { useReactToPrint } from "react-to-print";
-import { ActivityReportTemplate } from "./ActivityReportTemplate";
 import { ExportFeedbackButtons } from "@/components/ui/export-feedback-buttons";
 import MDEditor from "@uiw/react-md-editor";
 import "@uiw/react-md-editor/markdown-editor.css";
@@ -40,12 +38,6 @@ export function PdfReviewActivityDetails({ activity, userId, studentName }: PdfR
     const isRejected = submission && submission.grade === null && submission.feedback && submission.feedback.includes("[ENTREGA RECHAZADA]");
     const { resolvedTheme } = useTheme();
     const [mounted, setMounted] = useState(false);
-    const componentRef = useRef<HTMLDivElement>(null);
-
-    const handlePrint = useReactToPrint({
-        contentRef: componentRef,
-        documentTitle: `Informe_${activity.title.replace(/\s+/g, "_")}`,
-    });
 
     useEffect(() => {
         setMounted(true);
@@ -129,25 +121,13 @@ export function PdfReviewActivityDetails({ activity, userId, studentName }: PdfR
                                         <span className="text-2xl font-bold text-primary">
                                             {submission.grade.toFixed(1)}
                                         </span>
-                                    </div>
-
-                                    <div style={{ display: "none" }}>
-                                        <ActivityReportTemplate
-                                            ref={componentRef}
+                                        <ExportFeedbackButtons
                                             activity={activity}
                                             submission={submission}
                                             studentName={studentName}
+                                            size="sm"
                                         />
                                     </div>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="gap-2"
-                                        onClick={() => handlePrint()}
-                                    >
-                                        <Download className="h-4 w-4" />
-                                        Descargar Informe
-                                    </Button>
                                 </div>
                             )}
                         </div>
@@ -262,8 +242,11 @@ export function PdfReviewActivityDetails({ activity, userId, studentName }: PdfR
                                 </p>
                             </CardHeader>
                             <CardContent className="pt-4">
-                                <div className="bg-card rounded-lg p-2">
-                                    <FeedbackViewer feedback={activity.statement || "**No hay criterios de evaluación disponibles.**"} />
+                                <div className="bg-card rounded-lg p-2 select-none" onCopy={(e) => e.preventDefault()} onContextMenu={(e) => e.preventDefault()}>
+                                    <FeedbackViewer 
+                                        feedback={activity.statement || "**No hay criterios de evaluación disponibles.**"} 
+                                        preventCopy={true}
+                                    />
                                 </div>
                             </CardContent>
                         </Card>

@@ -13,7 +13,6 @@ import {
 import { ThemeSelector } from "@/components/theme/ThemeSelector";
 import { ModeToggle } from "@/components/theme/ModeToggle";
 import { PaperModeToggle } from "@/components/theme/PaperModeToggle";
-import { PushNotificationToggle } from "@/components/notification/PushNotificationToggle";
 import { CreditsModal } from "@/components/CreditsModal";
 
 interface MobileSettingsMenuProps {
@@ -61,8 +60,6 @@ export function MobileSettingsMenu({ themes, showThemeSelector, showModeToggle }
           <span className="text-xs font-medium">Modo Papel</span>
           <PaperModeToggle />
         </div>
-        
-        <PushNotificationToggle asMenuItem={true} />
         
         <DropdownMenuSeparator />
         

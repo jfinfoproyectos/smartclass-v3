@@ -5,12 +5,32 @@ import { useState, useEffect } from "react";
 import MDEditor from '@uiw/react-md-editor';
 import '@uiw/react-md-editor/markdown-editor.css';
 import '@uiw/react-markdown-preview/markdown.css';
+import { stripEvaluationMetadata } from "@/features/teacher/utils/checklistGradingUtils";
+import { cn } from "@/lib/utils";
 
 interface FeedbackViewerProps {
     feedback: string;
+    repoUrl?: string;
+    configuredPaths?: string | string[];
+    preventCopy?: boolean;
 }
 
-export function FeedbackViewer({ feedback }: FeedbackViewerProps) {
+function buildGitHubFileBlobUrl(repoUrl?: string, filePath?: string): string | null {
+    if (!repoUrl || !filePath) return null;
+    try {
+        const cleanRepo = repoUrl.trim().replace(/\.git$/, '').replace(/\/$/, '');
+        const match = cleanRepo.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)(?:\/(?:tree|blob)\/([^/]+))?/);
+        if (!match) return null;
+        const [, owner, repo, branch] = match;
+        const targetBranch = branch || 'main';
+        const cleanPath = filePath.trim().replace(/^\//, '');
+        return `https://github.com/${owner}/${repo}/blob/${targetBranch}/${cleanPath}`;
+    } catch {
+        return null;
+    }
+}
+
+export function FeedbackViewer({ feedback, repoUrl, configuredPaths, preventCopy = false }: FeedbackViewerProps) {
     const { resolvedTheme } = useTheme();
     const [mounted, setMounted] = useState(false);
 
@@ -20,8 +40,8 @@ export function FeedbackViewer({ feedback }: FeedbackViewerProps) {
 
     const mode = mounted ? (resolvedTheme === "dark" ? "dark" : resolvedTheme === "light" ? "light" : "auto") : "light";
 
-    // Replace literal escaped newlines with actual newlines
-    let formattedFeedback = typeof feedback === 'string' ? feedback.replace(/\\n/g, '\n') : feedback;
+    // Replace literal escaped newlines with actual newlines and strip invisible evaluation metadata
+    let formattedFeedback = typeof feedback === 'string' ? stripEvaluationMetadata(feedback.replace(/\\n/g, '\n')) : feedback;
 
     if (typeof formattedFeedback === 'string') {
         // Fix URLs containing newlines/spaces inside markdown link parentheses: `[label](https://foo \n\n bar)` -> `[label](https://foobar)`
@@ -56,11 +76,118 @@ export function FeedbackViewer({ feedback }: FeedbackViewerProps) {
             .replace(/#{1,4}\s*(?:\*\*)?Recomendaciones:(?:\*\*)?\s*/gi, '\n\n**Recomendaciones:**\n')
             // Fix flattened numbered lists (e.g. ` 1. ` -> `\n1. `)
             .replace(/\s+(\d+\.)\s+/g, '\n$1 ');
+
+        // Auto-link unlinked table file names if repoUrl is present
+        if (repoUrl) {
+            const cleanRepo = repoUrl.trim().replace(/\.git$/, '').replace(/\/$/, '');
+            const pathsArray: string[] = Array.isArray(configuredPaths)
+                ? configuredPaths
+                : typeof configuredPaths === 'string'
+                    ? configuredPaths.split(',').map(p => p.trim()).filter(Boolean)
+                    : [];
+
+            const findFullPath = (filename: string): string => {
+                const cleanName = filename.toLowerCase();
+                const found = pathsArray.find(p => {
+                    const pLower = p.toLowerCase();
+                    return pLower === cleanName || pLower.endsWith('/' + cleanName) || pLower.endsWith('\\' + cleanName);
+                });
+                return found || filename;
+            };
+
+            formattedFeedback = formattedFeedback.replace(
+                /^(\|\s*)(?!\[)([\w\-.]+\.(?:java|ts|tsx|js|jsx|py|cpp|c|cs|html|css|json|md|sql))(\s*\|)/gm,
+                (match, p1, filename, p3) => {
+                    const fullPath = findFullPath(filename);
+                    const blobUrl = buildGitHubFileBlobUrl(cleanRepo, fullPath);
+                    if (blobUrl) {
+                        return `${p1}[${filename}](${blobUrl})${p3}`;
+                    }
+                    return match;
+                }
+            );
+        }
     }
 
+    const handleContainerClick = (e: React.MouseEvent<HTMLDivElement>) => {
+        const anchor = (e.target as HTMLElement).closest('a');
+        if (anchor && anchor.href) {
+            anchor.target = '_blank';
+            anchor.rel = 'noopener noreferrer';
+        }
+    };
+
     return (
-        <div data-color-mode={mode} className="w-full max-w-full overflow-x-auto [&_pre]:whitespace-pre-wrap! [&_pre]:wrap-break-word!">
-            <MDEditor.Markdown source={formattedFeedback} style={{ background: 'transparent' }} />
+        <div 
+            data-color-mode={mode} 
+            onClickCapture={handleContainerClick}
+            onCopy={(e) => {
+                if (preventCopy) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (e.clipboardData) {
+                        e.clipboardData.clearData();
+                    }
+                }
+            }}
+            onCut={(e) => {
+                if (preventCopy) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (e.clipboardData) {
+                        e.clipboardData.clearData();
+                    }
+                }
+            }}
+            onContextMenu={(e) => {
+                if (preventCopy) {
+                    e.preventDefault();
+                }
+            }}
+            onKeyDown={(e) => {
+                if (preventCopy && (e.ctrlKey || e.metaKey)) {
+                    const key = e.key.toLowerCase();
+                    if (key === 'c' || key === 'x' || key === 'insert') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }
+                }
+            }}
+            onDragStart={(e) => {
+                if (preventCopy) {
+                    e.preventDefault();
+                }
+            }}
+            className={cn(
+                "w-full max-w-full overflow-x-auto [&_pre]:whitespace-pre-wrap! [&_pre]:wrap-break-word!",
+                preventCopy && "select-none prevent-copy"
+            )}
+        >
+            <MDEditor.Markdown 
+                source={formattedFeedback} 
+                style={{ background: 'transparent' }}
+                disableCopy={preventCopy ? true : undefined}
+                components={{
+                    a: ({ node, ...props }) => (
+                        <a
+                            {...props}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                            }}
+                            className="text-primary underline hover:opacity-80 font-medium inline-flex items-center gap-0.5 cursor-pointer"
+                        />
+                    )
+                }}
+                rehypeRewrite={(node: any) => {
+                    if (node && node.type === 'element' && node.tagName === 'a') {
+                        node.properties = node.properties || {};
+                        node.properties.target = '_blank';
+                        node.properties.rel = 'noopener noreferrer';
+                    }
+                }}
+            />
             <style jsx global>{`
                 /* Clean, responsive Markdown Table Styling */
                 .wmde-markdown table {
@@ -96,10 +223,18 @@ export function FeedbackViewer({ feedback }: FeedbackViewerProps) {
                     font-weight: 700 !important;
                     background-color: var(--muted, rgba(120,120,120,0.1)) !important;
                 }
-                .wmde-markdown table a {
+                .wmde-markdown a {
                     word-break: break-all !important;
                     overflow-wrap: anywhere !important;
                     color: var(--primary, #3b82f6) !important;
+                    text-decoration: underline !important;
+                    text-underline-offset: 2px !important;
+                    cursor: pointer !important;
+                    transition: opacity 0.2s ease, color 0.2s ease !important;
+                }
+                .wmde-markdown a:hover {
+                    opacity: 0.8 !important;
+                    text-decoration: underline !important;
                 }
                 
                 /* Inline code - using primary color from theme */
@@ -130,6 +265,39 @@ export function FeedbackViewer({ feedback }: FeedbackViewerProps) {
                     border: none !important;
                     padding: 0 !important;
                     font-weight: 400 !important;
+                }
+
+                /* Anti-copy protection styles */
+                .prevent-copy,
+                .prevent-copy * {
+                    -webkit-user-select: none !important;
+                    -moz-user-select: none !important;
+                    -ms-user-select: none !important;
+                    user-select: none !important;
+                }
+
+                .prevent-copy pre,
+                .prevent-copy code,
+                .prevent-copy pre *,
+                .prevent-copy code * {
+                    -webkit-user-select: none !important;
+                    -moz-user-select: none !important;
+                    -ms-user-select: none !important;
+                    user-select: none !important;
+                }
+
+                /* Hide copy buttons in code blocks or headers */
+                .prevent-copy button,
+                .prevent-copy .copy-code,
+                .prevent-copy [class*="copy"],
+                .prevent-copy [data-code],
+                .prevent-copy [aria-label*="copy" i],
+                .prevent-copy [title*="copy" i],
+                .prevent-copy [title*="copiar" i] {
+                    display: none !important;
+                    pointer-events: none !important;
+                    visibility: hidden !important;
+                    opacity: 0 !important;
                 }
             `}</style>
         </div>

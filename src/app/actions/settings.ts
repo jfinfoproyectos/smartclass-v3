@@ -46,8 +46,8 @@ export async function getVisualSettingsAction() {
             codeTheme: settings?.appCodeTheme || "one-dark-pro",
             allowCodeThemeChange: settings?.appAllowCodeThemeChange ?? true
         };
-    } catch (error) {
-        console.error("Error fetching settings, using defaults:", error);
+    } catch (error: any) {
+        console.warn("Aviso: usando configuración visual por defecto:", error?.message || error);
         return {
             themeMode: "STUDENT",
             themeColor: "zinc",

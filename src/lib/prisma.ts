@@ -12,14 +12,32 @@ let prisma: PrismaClient;
 
 const connectionString = process.env.DATABASE_URL!;
 
+function createPool() {
+  const pool = new Pool({
+    connectionString,
+    max: 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 20000,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10000,
+  });
+
+  pool.on("error", (err) => {
+    // Evita crashes por desconexión en clientes ociosos (común en Postgres en la nube como Prisma Accelerate)
+    console.warn("⚠️ Advertencia en pool de Postgres:", err.message);
+  });
+
+  return pool;
+}
+
 if (process.env.NODE_ENV === "production") {
-  const pool = new Pool({ connectionString });
+  const pool = createPool();
   const adapter = new PrismaPg(pool);
   prisma = new PrismaClient({ adapter });
 } else {
   if (!globalForPrisma.prisma) {
     // Create pool once
-    const pool = new Pool({ connectionString });
+    const pool = createPool();
     globalForPrisma.pgPool = pool;
     
     // Create adapter and client once

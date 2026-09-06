@@ -232,9 +232,9 @@ export function GithubRepoAudit({ repoUrl, activityId, title, isFullscreen, onTo
 
     return (
         <div className="w-full h-full min-h-0 flex flex-col overflow-hidden">
-            <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 space-y-5">
+            <div className="flex-1 min-h-0 overflow-y-auto p-1.5 sm:p-2 space-y-2">
                 {/* Header & Controls Bar */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl border border-border/80 bg-card text-card-foreground shadow-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-1.5 sm:p-2 rounded-xl border border-border/80 bg-card text-card-foreground shadow-2xs">
                     <div className="space-y-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                             <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
@@ -302,68 +302,78 @@ export function GithubRepoAudit({ repoUrl, activityId, title, isFullscreen, onTo
                 </div>
             )}
 
-            {/* Tarjetas Bento de Métricas Clave */}
-            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* Tarjetas Bento de Métricas Clave Compactas */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
                 {/* Total Commits */}
-                <Card className="rounded-2xl border-border/80 bg-card shadow-2xs">
-                    <CardContent className="p-4 flex items-center gap-3">
-                        <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 shrink-0">
-                            <GitCommit className="h-5 w-5" />
-                        </div>
-                        <div className="min-w-0">
-                            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total Commits</p>
-                            <div className="flex items-baseline gap-1.5">
-                                <span className="text-2xl font-black tracking-tight text-foreground">{summary.totalCommits}</span>
-                                <span className="text-[10px] text-muted-foreground">registrados</span>
+                <Card className="rounded-xl border-border/80 bg-card shadow-2xs">
+                    <CardContent className="p-2.5 sm:p-3 flex flex-col justify-between h-full">
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                            <span className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                                Total Commits
+                            </span>
+                            <div className="p-1 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 shrink-0">
+                                <GitCommit className="h-3.5 w-3.5" />
                             </div>
+                        </div>
+                        <div className="flex items-baseline gap-1.5 flex-wrap">
+                            <span className="text-xl sm:text-2xl font-black tracking-tight text-foreground">{summary.totalCommits}</span>
+                            <span className="text-[10px] text-muted-foreground">registrados</span>
                         </div>
                     </CardContent>
                 </Card>
 
                 {/* Colaboradores Activos */}
-                <Card className="rounded-2xl border-border/80 bg-card shadow-2xs">
-                    <CardContent className="p-4 flex items-center gap-3">
-                        <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
-                            <Users className="h-5 w-5" />
-                        </div>
-                        <div className="min-w-0">
-                            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Colaboradores</p>
-                            <div className="flex items-baseline gap-1.5">
-                                <span className="text-2xl font-black tracking-tight text-foreground">{summary.totalContributors}</span>
-                                <span className="text-[10px] text-muted-foreground">autores únicos</span>
+                <Card className="rounded-xl border-border/80 bg-card shadow-2xs">
+                    <CardContent className="p-2.5 sm:p-3 flex flex-col justify-between h-full">
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                            <span className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                                Colaboradores
+                            </span>
+                            <div className="p-1 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
+                                <Users className="h-3.5 w-3.5" />
                             </div>
+                        </div>
+                        <div className="flex items-baseline gap-1.5 flex-wrap">
+                            <span className="text-xl sm:text-2xl font-black tracking-tight text-foreground">{summary.totalContributors}</span>
+                            <span className="text-[10px] text-muted-foreground">autores únicos</span>
                         </div>
                     </CardContent>
                 </Card>
 
                 {/* Días Activos de Trabajo */}
-                <Card className="rounded-2xl border-border/80 bg-card shadow-2xs">
-                    <CardContent className="p-4 flex items-center gap-3">
-                        <div className="p-2.5 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 shrink-0">
-                            <CalendarDays className="h-5 w-5" />
-                        </div>
-                        <div className="min-w-0">
-                            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Días Activos</p>
-                            <div className="flex items-baseline gap-1.5">
-                                <span className="text-2xl font-black tracking-tight text-foreground">{summary.activeDaysCount}</span>
-                                <span className="text-[10px] text-muted-foreground">de {summary.daysSpan} días lapso</span>
+                <Card className="rounded-xl border-border/80 bg-card shadow-2xs">
+                    <CardContent className="p-2.5 sm:p-3 flex flex-col justify-between h-full">
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                            <span className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                                Días Activos
+                            </span>
+                            <div className="p-1 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 shrink-0">
+                                <CalendarDays className="h-3.5 w-3.5" />
                             </div>
+                        </div>
+                        <div className="flex items-baseline gap-1.5 flex-wrap">
+                            <span className="text-xl sm:text-2xl font-black tracking-tight text-foreground">{summary.activeDaysCount}</span>
+                            <span className="text-[10px] text-muted-foreground">de {summary.daysSpan} días lapso</span>
                         </div>
                     </CardContent>
                 </Card>
 
                 {/* Mayor Aportador */}
-                <Card className="rounded-2xl border-border/80 bg-card shadow-2xs">
-                    <CardContent className="p-4 flex items-center gap-3">
-                        <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0">
-                            <Crown className="h-5 w-5 fill-amber-500/40" />
+                <Card className="rounded-xl border-border/80 bg-card shadow-2xs">
+                    <CardContent className="p-2.5 sm:p-3 flex flex-col justify-between h-full">
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                            <span className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                                Líder de Commits
+                            </span>
+                            <div className="p-1 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0">
+                                <Crown className="h-3.5 w-3.5 fill-amber-500/40" />
+                            </div>
                         </div>
-                        <div className="min-w-0 flex-1">
-                            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider truncate">Líder de Commits</p>
-                            <p className="text-sm font-bold text-foreground truncate">
+                        <div className="min-w-0">
+                            <p className="text-xs sm:text-sm font-bold text-foreground leading-snug break-words" title={summary.topContributor?.name}>
                                 {summary.topContributor?.name || "Sin datos"}
                             </p>
-                            <p className="text-[10px] text-amber-700 dark:text-amber-400 font-semibold">
+                            <p className="text-[10px] text-amber-700 dark:text-amber-400 font-semibold leading-tight mt-0.5">
                                 {summary.topContributor?.commitsCount || 0} commits ({summary.topContributor?.percentage || 0}%)
                             </p>
                         </div>

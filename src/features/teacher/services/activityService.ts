@@ -415,13 +415,31 @@ export const activityService = {
                 (submission.activity as any).course.teacherId
             );
 
-            let newFeedback = gradingResult.feedback;
+            const { getActivityChecklistConfig, extractEvaluationMetadata, embedEvaluationMetadata, calculateCombinedFinalGrade } = await import("../utils/checklistGradingUtils");
+            const checklistConfig = getActivityChecklistConfig(submission.activity.description);
+
+            let gradeToSave = gradingResult.grade;
+            let feedbackToSave = gradingResult.feedback;
+
+            if (checklistConfig?.enabled) {
+                const existingMeta = extractEvaluationMetadata(submission.feedback);
+                const rawAiGrade = gradingResult.grade;
+                const teacherScore = existingMeta?.checklistScore ?? 0;
+                gradeToSave = calculateCombinedFinalGrade(rawAiGrade, teacherScore, checklistConfig.aiWeight, checklistConfig.checklistWeight);
+                feedbackToSave = embedEvaluationMetadata(gradingResult.feedback, {
+                    aiGrade: rawAiGrade,
+                    checklistScore: teacherScore,
+                    criteriaLevels: existingMeta?.criteriaLevels ?? {},
+                    manualSustentacionScore: existingMeta?.manualSustentacionScore ?? null,
+                    calculatedFinalGrade: gradeToSave,
+                });
+            }
 
             return await prisma.submission.update({
                 where: { id: submissionId },
                 data: {
-                    grade: gradingResult.grade,
-                    feedback: newFeedback
+                    grade: gradeToSave,
+                    feedback: feedbackToSave
                 }
             });
         } catch (error) {

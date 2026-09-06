@@ -3,8 +3,9 @@
 import { useEffect, useState, useRef } from "react";
 import { getCourseDuplicateLinksAction } from "@/features/teacher/actions/reportActions";;;
 import { Button } from "@/components/ui/button";
-import { Loader2, FileWarning, Printer, AlertTriangle } from "lucide-react";
-import { useReactToPrint } from "react-to-print";
+import { Loader2, FileWarning, Download, AlertTriangle } from "lucide-react";
+import { DuplicateLinksPDFDocument } from "./DuplicateLinksPDFDocument";
+import { toast } from "sonner";
 import {
     Table,
     TableBody,
@@ -22,12 +23,35 @@ interface DuplicateLinksReportProps {
 export function DuplicateLinksReport({ courseId, courseName }: DuplicateLinksReportProps) {
     const [loading, setLoading] = useState(true);
     const [data, setData] = useState<any[]>([]);
-    const componentRef = useRef<HTMLDivElement>(null);
+    const [isExportingPDF, setIsExportingPDF] = useState(false);
 
-    const handlePrint = useReactToPrint({
-        contentRef: componentRef,
-        documentTitle: `Reporte_Duplicados_${courseName.replace(/\s+/g, '_')}`,
-    });
+    const handleExportPDF = async () => {
+        setIsExportingPDF(true);
+        const toastId = toast.loading("Generando PDF de enlaces duplicados...", { id: "dup-pdf" });
+        try {
+            const { pdf } = await import("@react-pdf/renderer");
+            const blob = await pdf(
+                <DuplicateLinksPDFDocument
+                    courseName={courseName}
+                    data={data}
+                />
+            ).toBlob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `Reporte_Duplicados_${courseName.replace(/\s+/g, '_')}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 100);
+            toast.success("PDF generado exitosamente", { id: "dup-pdf" });
+        } catch (err: any) {
+            console.error(err);
+            toast.error("Error al generar el PDF", { id: "dup-pdf" });
+        } finally {
+            setIsExportingPDF(false);
+        }
+    };
 
     useEffect(() => {
         const fetchData = async () => {
@@ -78,15 +102,19 @@ export function DuplicateLinksReport({ courseId, courseName }: DuplicateLinksRep
                         Se encontraron {data.length} actividades con entregas duplicadas.
                     </p>
                 </div>
-                <Button onClick={handlePrint} variant="outline" className="gap-2">
-                    <Printer className="h-4 w-4" />
+                <Button 
+                    onClick={handleExportPDF} 
+                    disabled={isExportingPDF}
+                    variant="outline" 
+                    className="gap-2 text-rose-600 border-rose-200 hover:bg-rose-50"
+                >
+                    <Download className="h-4 w-4" />
                     Generar PDF
                 </Button>
             </div>
 
             <div className="overflow-y-auto">
-                {/* Printable Content */}
-                <div ref={componentRef} className="space-y-8 p-4 bg-background text-foreground print:p-8 print:bg-white print:text-black">
+                <div className="space-y-8 p-4 bg-background text-foreground">
                     <div className="hidden print:block mb-6 border-b pb-4">
                         <h1 className="text-2xl font-bold">Reporte de Enlaces Duplicados</h1>
                         <p className="text-muted-foreground">Curso: {courseName}</p>

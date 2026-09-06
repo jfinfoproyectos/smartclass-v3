@@ -8,7 +8,43 @@ async function getSession() {
     return await auth.api.getSession({ headers: await headers() });
 }
 
-export async function scanRepositoryAction(repoUrl: string) {
+export async function getRepoBranchesAction(repoUrl: string, activityId?: string) {
+    const session = await getSession();
+    if (!session || (session.user.role !== "teacher" && session.user.role !== "student" && session.user.role !== "admin")) {
+        throw new Error("Unauthorized");
+    }
+
+    const { githubService } = await import("../services/githubService");
+    const { getGithubToken } = await import("@/lib/githubTokenHelper");
+
+    const repoInfo = githubService.parseGitHubUrl(repoUrl);
+    if (!repoInfo) throw new Error("URL de GitHub inválida");
+
+    let teacherId = session.user.id;
+    if (activityId) {
+        const activity = await prisma.activity.findUnique({
+            where: { id: activityId },
+            include: { course: true }
+        });
+        if (activity) {
+            teacherId = activity.course.teacherId;
+        }
+    }
+
+    const token = await getGithubToken(teacherId);
+    const result = await githubService.getRepoBranches(repoInfo.owner, repoInfo.repo, token || undefined);
+
+    const activeBranch = repoInfo.branch !== "HEAD" ? repoInfo.branch : result.defaultBranch;
+
+    return {
+        ...result,
+        activeBranch,
+        owner: repoInfo.owner,
+        repo: repoInfo.repo,
+    };
+}
+
+export async function scanRepositoryAction(repoUrl: string, branch?: string) {
     const session = await getSession();
     if (!session || session.user.role !== "teacher") {
         throw new Error("Unauthorized");
@@ -20,19 +56,20 @@ export async function scanRepositoryAction(repoUrl: string) {
     const repoInfo = githubService.parseGitHubUrl(repoUrl);
     if (!repoInfo) throw new Error("URL de GitHub inválida");
 
+    const effectiveBranch = branch || (repoInfo.branch !== "HEAD" ? repoInfo.branch : "HEAD");
     const token = await getGithubToken(session.user.id);
-    const files = await githubService.getRepoStructure(repoInfo.owner, repoInfo.repo, token || undefined);
+    const files = await githubService.getRepoStructure(repoInfo.owner, repoInfo.repo, effectiveBranch, token || undefined);
 
     let warning;
     if (!token) {
         warning = "Aviso: No tienes configurado tu Token de GitHub en tu perfil. Estás expuesto a posibles límites de tasa de la API.";
     }
 
-    return { files, warning };
+    return { files, warning, branch: effectiveBranch };
 }
 
 
-export async function fetchRepoFilesAction(repoUrl: string, filePaths: string, activityId?: string) {
+export async function fetchRepoFilesAction(repoUrl: string, filePaths: string, activityId?: string, branch?: string) {
     const session = await getSession();
     if (!session || (session.user.role !== "student" && session.user.role !== "teacher")) {
         throw new Error("Unauthorized");
@@ -60,10 +97,11 @@ export async function fetchRepoFilesAction(repoUrl: string, filePaths: string, a
     const paths = (filePaths || "").split(',').map((p: string) => p.trim());
     const validFiles = [];
     const missingFiles = [];
+    const effectiveBranch = branch || repoInfo.branch;
 
     for (const path of paths) {
         if (!path) continue;
-        const content = await githubService.getFileContent(repoInfo.owner, repoInfo.repo, path, repoInfo.branch, token || undefined);
+        const content = await githubService.getFileContent(repoInfo.owner, repoInfo.repo, path, effectiveBranch, token || undefined);
         if (content) {
             validFiles.push({ path, content });
         } else {
@@ -78,13 +116,13 @@ export async function fetchRepoFilesAction(repoUrl: string, filePaths: string, a
             : "Aviso: No tienes configurado tu Token de GitHub en tu perfil. Estás expuesto a posibles límites de tasa.";
     }
 
-    return { validFiles, missingFiles, warning };
+    return { validFiles, missingFiles, warning, branch: effectiveBranch };
 }
 
-export async function getGitHubSubmissionDetailsAction(repoUrl: string, filePaths: string, activityId?: string) {
+export async function getGitHubSubmissionDetailsAction(repoUrl: string, filePaths: string, activityId?: string, branch?: string) {
     // This is essentially a wrapper for fetchRepoFilesAction but with a slightly different return structure or intended use
     // We'll implement it to match ActivityDetail's expectation
-    const result = await fetchRepoFilesAction(repoUrl, filePaths, activityId);
+    const result = await fetchRepoFilesAction(repoUrl, filePaths, activityId, branch);
     const { githubService } = await import("../services/githubService");
     const repoInfo = githubService.parseGitHubUrl(repoUrl);
     
@@ -94,7 +132,7 @@ export async function getGitHubSubmissionDetailsAction(repoUrl: string, filePath
     };
 }
 
-export async function getRepoStructureAction(repoUrl: string, teacherId?: string) {
+export async function getRepoStructureAction(repoUrl: string, teacherId?: string, branch?: string) {
     const session = await getSession();
     if (!session || (session.user.role !== "student" && session.user.role !== "teacher")) {
         throw new Error("Unauthorized");
@@ -106,8 +144,9 @@ export async function getRepoStructureAction(repoUrl: string, teacherId?: string
     const repoInfo = githubService.parseGitHubUrl(repoUrl);
     if (!repoInfo) throw new Error("URL de GitHub inválida");
 
+    const effectiveBranch = branch || repoInfo.branch;
     const token = await getGithubToken(teacherId || session.user.id);
-    const files = await githubService.getRepoStructure(repoInfo.owner, repoInfo.repo, token || undefined);
+    const files = await githubService.getRepoStructure(repoInfo.owner, repoInfo.repo, effectiveBranch, token || undefined);
 
     let warning;
     if (!token) {
@@ -117,7 +156,7 @@ export async function getRepoStructureAction(repoUrl: string, teacherId?: string
     return files;
 }
 
-export async function getRepoAuditAction(repoUrl: string, activityId?: string) {
+export async function getRepoAuditAction(repoUrl: string, activityId?: string, branch?: string) {
     const session = await getSession();
     if (!session || (session.user.role !== "student" && session.user.role !== "teacher")) {
         throw new Error("No autorizado");
@@ -143,12 +182,13 @@ export async function getRepoAuditAction(repoUrl: string, activityId?: string) {
     }
 
     const token = await getGithubToken(teacherId);
+    const effectiveBranch = branch || repoInfo.branch;
 
     // 1. Obtener lista de commits del repositorio
     const rawCommits = await githubService.getRepoCommits(
         repoInfo.owner,
         repoInfo.repo,
-        repoInfo.branch,
+        effectiveBranch,
         token || undefined,
         3 // Hasta 300 commits
     );

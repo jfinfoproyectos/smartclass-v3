@@ -12,20 +12,33 @@ import {
     Github, Code2, FileCode, FileText, Folder, Search, Sparkles, Bot,
     Loader2, CheckCircle, Eye, Copy, Check, RotateCcw, ExternalLink, Zap, X, Link as LinkIcon, AlertTriangle, ClipboardList,
     ChevronLeft, ChevronRight, ChevronDown, Maximize2, Minimize2, ListChecks, HelpCircle, CheckCircle2, MinusCircle, XCircle, Info, ZoomIn, ZoomOut,
-    GitCommitVertical, ArrowUp, ArrowDown, GripVertical, ListOrdered, ArrowUpDown
+    GitCommitVertical, ArrowUp, ArrowDown, GripVertical, ListOrdered, ArrowUpDown, GitBranch, UserCheck, SlidersHorizontal
 } from "lucide-react";
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { formatName, cn } from "@/lib/utils";
-import { scanRepositoryAction, fetchRepoFilesAction } from "@/features/github/actions/githubActions";
+import { scanRepositoryAction, fetchRepoFilesAction, getRepoBranchesAction } from "@/features/github/actions/githubActions";
+import { githubService } from "@/features/github/services/githubService";
 import { analyzeGitHubFileAction, finalizeGitHubGradingAction, improveFeedbackAction } from "@/features/teacher/actions/gradingActions";
+import { 
+    getActivityChecklistConfig, 
+    extractEvaluationMetadata, 
+    stripEvaluationMetadata, 
+    embedEvaluationMetadata, 
+    calculateChecklistScore, 
+    calculateCombinedFinalGrade,
+    type EvaluationMetadata 
+} from "@/features/teacher/utils/checklistGradingUtils";
 import { GradingModeSelector } from "@/features/teacher/components/GradingModeSelector";
 import { FeedbackViewer } from "@/features/student/components/FeedbackViewer";
+import { ExportFeedbackButtons } from "@/components/ui/export-feedback-buttons";
 import { GitHubRepoChatInspector } from "@/features/teacher/components/GitHubRepoChatInspector";
 import { GithubRepoAudit } from "@/features/github/components/GithubRepoAudit";
 import {
@@ -167,7 +180,7 @@ const PRIMARY_CODE_EXTENSIONS = [
 // Helper to split stored feedback into AI portion and Teacher Notes portion
 function parseInitialFeedback(rawFeedback: string | null | undefined) {
     if (!rawFeedback) return { aiFeedback: "", teacherNotes: "" };
-    const cleanRaw = rawFeedback.replace("[ENTREGA RECHAZADA]\n", "").replace("[ENTREGA RECHAZADA]", "");
+    const cleanRaw = stripEvaluationMetadata(rawFeedback).replace("[ENTREGA RECHAZADA]\n", "").replace("[ENTREGA RECHAZADA]", "");
     const marker = "### 👨‍🏫 Observaciones del Profesor";
     const dividerMarker = "---";
     
@@ -227,8 +240,9 @@ function SortableEvaluationFileItem({
         <div
             ref={setNodeRef}
             style={style}
+            onClick={() => onPreview(path)}
             className={cn(
-                "flex items-center gap-1.5 p-1.5 rounded-lg border bg-background/95 text-xs font-mono group transition-colors select-none",
+                "flex items-center gap-1.5 p-1.5 rounded-lg border bg-background/95 text-xs font-mono group transition-colors select-none min-w-0 w-full cursor-pointer",
                 isDragging ? "ring-2 ring-primary border-transparent shadow-lg" : "hover:border-primary/40",
                 isPreviewing && "border-primary/50 bg-primary/5"
             )}
@@ -236,6 +250,7 @@ function SortableEvaluationFileItem({
             <div 
                 {...attributes} 
                 {...listeners} 
+                onClick={(e) => e.stopPropagation()}
                 className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground shrink-0"
                 title="Arrastra para reordenar prioridad"
             >
@@ -258,7 +273,7 @@ function SortableEvaluationFileItem({
             <span 
                 onClick={() => onPreview(path)} 
                 className={cn(
-                    "flex-1 truncate cursor-pointer text-[11px] transition-colors",
+                    "flex-1 min-w-0 truncate cursor-pointer text-[11px] transition-colors",
                     isPreviewing ? "font-bold text-primary" : "text-foreground hover:text-primary"
                 )}
                 title={path}
@@ -351,6 +366,9 @@ export function CodeProjectInspector({
     const showAllRepoFiles = fileViewMode === "explorer";
     const setShowAllRepoFiles = (show: boolean) => setFileViewMode(show ? "explorer" : "required");
     const [fullscreenSection, setFullscreenSection] = useState<"none" | "explorer" | "content">("none");
+    const [branches, setBranches] = useState<string[]>([]);
+    const [selectedBranch, setSelectedBranch] = useState<string>("");
+    const [isLoadingBranches, setIsLoadingBranches] = useState(false);
 
     const dndSensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -400,49 +418,27 @@ export function CodeProjectInspector({
 
     // Extraer Lista de Chequeo, Criterios y Ponderaciones configuradas (por defecto: 30% IA / 70% Docente)
     const checklistConfig = useMemo(() => {
-        if (!activity?.description) return null;
-        try {
-            const data = JSON.parse(activity.description);
-            if (data?.hasChecklist && Array.isArray(data?.criteria) && data.criteria.length > 0) {
-                const aiWeight = typeof data.aiWeight === "number" ? data.aiWeight : 30;
-                const checklistWeight = typeof data.checklistWeight === "number" ? data.checklistWeight : 70;
-                return {
-                    criteria: data.criteria,
-                    aiWeight,
-                    checklistWeight,
-                };
-            }
-        } catch {
-            return null;
-        }
-        return null;
+        return getActivityChecklistConfig(activity?.description);
     }, [activity?.description]);
+
+    const isTeacherGradingEnabled = Boolean(checklistConfig);
 
     const checklistData = checklistConfig?.criteria ?? null;
     const aiWeight = checklistConfig?.aiWeight ?? 30;
     const checklistWeight = checklistConfig?.checklistWeight ?? 70;
 
+    // Metadatos persistidos en el feedback de la entrega
+    const storedMeta = useMemo(() => {
+        return extractEvaluationMetadata(submission?.feedback);
+    }, [submission?.feedback]);
+
     // Evaluación por niveles en sustentación (1.0 = Sabe, 0.75 = Aceptable, 0.5 = Parcial, 0.0 = No Sabe)
-    const [criteriaLevels, setCriteriaLevels] = useState<Record<string, number>>({});
-    const [manualSustentacionScore, setManualSustentacionScore] = useState<number | null>(null);
-
-    // Nota obtenida exclusivamente en la sustentación oral (0.0 - 5.0) de forma proporcional
-    const checklistScore = useMemo(() => {
-        if (!checklistData || checklistData.length === 0) return 0;
-        
-        // Si el profesor utilizó Calificación Rápida directamente
-        if (manualSustentacionScore !== null) {
-            return manualSustentacionScore;
-        }
-
-        const totalEarnedWeight = checklistData.reduce((acc: number, crit: any) => {
-            const factor = criteriaLevels[crit.id];
-            if (typeof factor !== "number") return acc;
-            const weight = Number(crit.percentage) || 0;
-            return acc + (weight * factor);
-        }, 0);
-        return Math.min(5.0, Math.max(0.0, (totalEarnedWeight / 100) * 5.0));
-    }, [checklistData, criteriaLevels, manualSustentacionScore]);
+    const [criteriaLevels, setCriteriaLevels] = useState<Record<string, number | undefined>>(() => {
+        return storedMeta?.criteriaLevels ?? {};
+    });
+    const [manualSustentacionScore, setManualSustentacionScore] = useState<number | null>(() => {
+        return storedMeta?.manualSustentacionScore ?? null;
+    });
 
     // Student navigation (previous / next / select)
     const currentIndex = useMemo(() => {
@@ -484,20 +480,26 @@ export function CodeProjectInspector({
     // Nota obtenida de la evaluación de la IA (0.0 - 5.0)
     const aiGrade = useMemo(() => {
         if (gradingResult?.grade !== undefined && gradingResult?.grade !== null) {
-            return Number(gradingResult.grade);
+            return Number(gradingResult.rawAiGrade ?? gradingResult.grade);
         }
-        if (submission?.grade !== undefined && submission?.grade !== null) {
+        if (storedMeta?.aiGrade !== undefined && storedMeta?.aiGrade !== null) {
+            return Number(storedMeta.aiGrade);
+        }
+        if (!checklistConfig && submission?.grade !== undefined && submission?.grade !== null) {
             return Number(submission.grade);
         }
         return 0;
-    }, [gradingResult, submission]);
+    }, [gradingResult, storedMeta, checklistConfig, submission?.grade]);
+
+    // Nota obtenida exclusivamente en la sustentación oral (0.0 - 5.0) de forma proporcional
+    const checklistScore = useMemo(() => {
+        return calculateChecklistScore(checklistData, criteriaLevels, manualSustentacionScore);
+    }, [checklistData, criteriaLevels, manualSustentacionScore]);
 
     // Nota final combinada ponderada: (IA * aiWeight%) + (Sustentación * checklistWeight%)
     const combinedFinalScore = useMemo(() => {
         if (!checklistConfig) return checklistScore;
-        const aiPart = aiGrade * (aiWeight / 100);
-        const teacherPart = checklistScore * (checklistWeight / 100);
-        return Math.min(5.0, Math.max(0.0, aiPart + teacherPart));
+        return calculateCombinedFinalGrade(aiGrade, checklistScore, aiWeight, checklistWeight);
     }, [checklistConfig, aiGrade, aiWeight, checklistScore, checklistWeight]);
     
     // Manual Score & Dual Feedback state
@@ -516,24 +518,125 @@ export function CodeProjectInspector({
 
     const logRef = useRef<HTMLDivElement>(null);
 
+    // Sincronizar estado completo al cambiar de estudiante o entrega
+    useEffect(() => {
+        const parsed = parseInitialFeedback(submission?.feedback);
+        const meta = extractEvaluationMetadata(submission?.feedback);
+        setCriteriaLevels(meta?.criteriaLevels ?? {});
+        setManualSustentacionScore(meta?.manualSustentacionScore ?? null);
+        setAiFeedbackInput(parsed.aiFeedback);
+        setTeacherNotesInput(parsed.teacherNotes);
+        setGradingResult(null);
+        setGradeInput(
+            submission?.grade !== null && submission?.grade !== undefined
+                ? String(submission.grade)
+                : ""
+        );
+    }, [student?.id, submission?.id, submission?.feedback, submission?.grade]);
+
+    // Actualiza niveles de criterios y sincroniza automáticamente la nota final ponderada
+    const handleUpdateCriteriaLevels = (nextLevels: Record<string, number | undefined>) => {
+        setManualSustentacionScore(null);
+        const cleaned: Record<string, number> = {};
+        for (const [k, v] of Object.entries(nextLevels)) {
+            if (typeof v === "number") cleaned[k] = v;
+        }
+        setCriteriaLevels(cleaned);
+
+        if (checklistConfig) {
+            const nextScore = calculateChecklistScore(checklistData, cleaned, null);
+            const nextCombined = calculateCombinedFinalGrade(aiGrade, nextScore, aiWeight, checklistWeight);
+            setGradeInput(nextCombined.toFixed(1));
+        }
+    };
+
+    // Mantener sincronizado gradeInput con la nota combinada en tiempo real cuando la sustentación/checklist esté activa
+    useEffect(() => {
+        if (checklistConfig) {
+            setGradeInput(combinedFinalScore.toFixed(1));
+        }
+    }, [checklistConfig, combinedFinalScore]);
+
+    // Redirigir si la calificación docente está deshabilitada y la pestaña activa era teacher_grade
+    useEffect(() => {
+        if (!isTeacherGradingEnabled && activeTab === "teacher_grade") {
+            setActiveTab("preview");
+        }
+    }, [isTeacherGradingEnabled, activeTab]);
+
     useEffect(() => {
         if (logRef.current) {
             logRef.current.scrollTop = logRef.current.scrollHeight;
         }
     }, [gradingLogs]);
 
-    // Auto scan repository on mount if submission exists
+    // Effective repo URL with selected branch
+    const effectiveRepoUrl = useMemo(() => {
+        if (!submission?.url) return "";
+        try {
+            const parsed = githubService.parseGitHubUrl(submission.url);
+            if (!parsed) return submission.url;
+            if (!selectedBranch || selectedBranch === "HEAD") return submission.url;
+            return `https://github.com/${parsed.owner}/${parsed.repo}/tree/${selectedBranch}`;
+        } catch {
+            return submission.url;
+        }
+    }, [submission?.url, selectedBranch]);
+
+    // Auto scan repository on mount and fetch branches if submission exists
     useEffect(() => {
         if (submission?.url) {
-            handleScanRepo();
+            initRepoAndBranches(submission.url);
         }
     }, [submission?.url]);
 
-    const handleScanRepo = async () => {
+    const initRepoAndBranches = async (url: string) => {
+        setIsLoadingBranches(true);
+        let branchToUse = "main";
+        try {
+            const parsed = githubService.parseGitHubUrl(url);
+            const branchRes = await getRepoBranchesAction(url, activity?.id);
+            const availableBranches = branchRes.branches || [];
+            setBranches(availableBranches);
+
+            if (parsed && parsed.branch && parsed.branch !== "HEAD") {
+                branchToUse = parsed.branch;
+            } else if (branchRes.activeBranch) {
+                branchToUse = branchRes.activeBranch;
+            } else if (branchRes.defaultBranch) {
+                branchToUse = branchRes.defaultBranch;
+            } else if (availableBranches.length > 0) {
+                branchToUse = availableBranches[0];
+            }
+            setSelectedBranch(branchToUse);
+        } catch (err: any) {
+            console.warn("No se pudieron cargar ramas:", err);
+            const parsed = githubService.parseGitHubUrl(url);
+            if (parsed && parsed.branch && parsed.branch !== "HEAD") {
+                branchToUse = parsed.branch;
+                setSelectedBranch(branchToUse);
+            }
+        } finally {
+            setIsLoadingBranches(false);
+        }
+
+        await handleScanRepo(branchToUse);
+    };
+
+    const handleSelectBranch = async (newBranch: string) => {
+        if (newBranch === selectedBranch || isScanning) return;
+        setSelectedBranch(newBranch);
+        fileCache.current = {};
+        toast.info(`Cambiando a la rama "${newBranch}"...`);
+        await handleScanRepo(newBranch);
+    };
+
+    const handleScanRepo = async (branchOverride?: string) => {
         if (!submission?.url) return;
         setIsScanning(true);
+        const branchToUse = branchOverride || selectedBranch || undefined;
         try {
-            const res = await scanRepositoryAction(submission.url);
+            const res = await scanRepositoryAction(submission.url, branchToUse);
             const files = res.files || [];
             setRepoFiles(files);
             
@@ -563,12 +666,12 @@ export function CodeProjectInspector({
             setSelectedFiles(initialSelection);
 
             if (initialSelection.length > 0) {
-                handleLoadFilePreview(initialSelection[0]);
+                handleLoadFilePreview(initialSelection[0], branchToUse, false);
             } else if (files.length > 0) {
-                handleLoadFilePreview(files[0]);
+                handleLoadFilePreview(files[0], branchToUse, false);
             }
             
-            toast.success(`${files.length} archivos encontrados en el repositorio.`);
+            toast.success(`${files.length} archivos en la rama "${branchToUse || 'principal'}"`);
         } catch (err: any) {
             toast.error("Error al escanear el repositorio", { description: err.message });
         } finally {
@@ -576,19 +679,25 @@ export function CodeProjectInspector({
         }
     };
 
-    const handleLoadFilePreview = async (filePath: string) => {
+    const handleLoadFilePreview = async (filePath: string, branchOverride?: string, shouldSwitchTab: boolean = true) => {
         setPreviewFile(filePath);
-        if (fileCache.current[filePath]) {
-            setPreviewContent(fileCache.current[filePath]);
+        if (shouldSwitchTab) {
+            setActiveTab("preview");
+        }
+        const branchToUse = branchOverride || selectedBranch || undefined;
+        const cacheKey = `${branchToUse || 'HEAD'}:${filePath}`;
+
+        if (fileCache.current[cacheKey]) {
+            setPreviewContent(fileCache.current[cacheKey]);
             return;
         }
 
         setIsLoadingPreview(true);
         try {
-            const res = await fetchRepoFilesAction(submission.url, filePath, activity.id);
+            const res = await fetchRepoFilesAction(submission.url, filePath, activity.id, branchToUse);
             if (res.validFiles && res.validFiles.length > 0) {
                 const content = res.validFiles[0].content;
-                fileCache.current[filePath] = content;
+                fileCache.current[cacheKey] = content;
                 setPreviewContent(content);
             } else {
                 setPreviewContent("// No se pudo cargar el contenido de este archivo.");
@@ -607,6 +716,9 @@ export function CodeProjectInspector({
             !f.includes(".git/")
         );
         setSelectedFiles(primary);
+        if (primary.length > 0) {
+            handleLoadFilePreview(primary[0]);
+        }
         toast.info(`${primary.length} archivos de código principal seleccionados.`);
     };
 
@@ -633,12 +745,16 @@ export function CodeProjectInspector({
 
         try {
             addLog("🔍 Iniciando evaluación con Inteligencia Artificial...");
+            if (selectedBranch) {
+                addLog(`🌿 Rama seleccionada para evaluación: "${selectedBranch}"`);
+            }
             addLog(`📂 Descargando los ${selectedFiles.length} archivos seleccionados del proyecto...`);
 
             const { validFiles, missingFiles, warning } = await fetchRepoFilesAction(
                 submission.url,
                 selectedFiles.join(','),
-                activity.id
+                activity.id,
+                selectedBranch || undefined
             );
 
             if (warning) addLog(`⚠️ Advertencia: ${warning}`);
@@ -655,7 +771,7 @@ export function CodeProjectInspector({
                     file.path,
                     file.content,
                     activity.statement || "",
-                    submission.url,
+                    effectiveRepoUrl || submission.url,
                     accumulatedContext,
                     gradingMode
                 );
@@ -678,7 +794,7 @@ export function CodeProjectInspector({
             const result = await finalizeGitHubGradingAction(
                 activity.id,
                 student.id,
-                submission.url,
+                effectiveRepoUrl || submission.url,
                 activity.statement || "",
                 analyses,
                 missingFilesForEval,
@@ -688,13 +804,17 @@ export function CodeProjectInspector({
             );
 
             setGradingResult(result);
-            setGradeInput(result.grade.toFixed(1));
-            setAiFeedbackInput(result.feedback);
+            const rawAi = result.rawAiGrade ?? result.grade;
+            const effectiveCombined = checklistConfig
+                ? calculateCombinedFinalGrade(rawAi, checklistScore, aiWeight, checklistWeight)
+                : result.grade;
+            setGradeInput(effectiveCombined.toFixed(1));
+            setAiFeedbackInput(stripEvaluationMetadata(result.feedback));
             setActiveTab("ai_report");
             router.refresh();
 
-            addLog(`🎉 Calificación final completada: ${result.grade.toFixed(1)} / 5.0`);
-            toast.success(`Evaluación completada: Nota ${result.grade.toFixed(1)} / 5.0`);
+            addLog(`🎉 Calificación final completada: ${effectiveCombined.toFixed(1)} / 5.0 (IA: ${rawAi.toFixed(1)})`);
+            toast.success(`Evaluación completada: Nota ${effectiveCombined.toFixed(1)} / 5.0`);
         } catch (err: any) {
             addLog(`❌ Error en evaluación: ${err.message}`);
             toast.error("Error al evaluar con IA", { description: err.message });
@@ -722,7 +842,12 @@ export function CodeProjectInspector({
     };
 
     const handleSaveScore = async () => {
-        if (!gradeInput) {
+        let gradeToSave = checklistConfig ? combinedFinalScore.toFixed(1) : gradeInput;
+        if (!gradeToSave || isNaN(parseFloat(gradeToSave))) {
+            gradeToSave = combinedFinalScore.toFixed(1);
+        }
+
+        if (!gradeToSave) {
             toast.error("Ingresa una nota válida.");
             return;
         }
@@ -742,7 +867,7 @@ export function CodeProjectInspector({
                 }
             }
 
-            const currentGrade = parseFloat(gradeInput);
+            const currentGrade = parseFloat(gradeToSave);
 
             if (
                 gradingResult && 
@@ -750,10 +875,22 @@ export function CodeProjectInspector({
                 currentGrade !== gradingResult.grade && 
                 teacherObservationInput.trim()
             ) {
-                finalFeedback += `\n\n---\n\n> 📝 **Justificación del Ajuste de Nota (Profesor):**\n> ${teacherObservationInput.trim()} *(Nota IA: ${gradingResult.grade.toFixed(1)} → Nota Definitiva: ${currentGrade.toFixed(1)})*`;
+                finalFeedback += `\n\n---\n\n> 📝 **Justificación del Ajuste de Nota (Profesor):**\n> ${teacherObservationInput.trim()} *(Nota IA: ${(gradingResult.rawAiGrade ?? gradingResult.grade).toFixed(1)} → Nota Definitiva: ${currentGrade.toFixed(1)})*`;
             }
 
-            await onGradeManual(gradeInput, finalFeedback, student.id, activity.id);
+            // Si la actividad tiene lista de chequeo, embeber metadatos para persistir los criterios y notas individuales
+            if (checklistConfig) {
+                const metaToSave: EvaluationMetadata = {
+                    aiGrade: aiGrade,
+                    checklistScore: checklistScore,
+                    criteriaLevels: criteriaLevels,
+                    manualSustentacionScore: manualSustentacionScore,
+                    calculatedFinalGrade: currentGrade,
+                };
+                finalFeedback = embedEvaluationMetadata(finalFeedback, metaToSave);
+            }
+
+            await onGradeManual(gradeToSave, finalFeedback, student.id, activity.id);
             router.refresh();
             toast.success("Calificación guardada correctamente.");
         } catch (err: any) {
@@ -944,24 +1081,85 @@ export function CodeProjectInspector({
                     </div>
 
                     {submission?.url && (
-                        <Button
-                            asChild
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-7 px-2.5 text-xs gap-1.5 shrink-0"
-                            title="Abrir repositorio en GitHub (nueva pestaña)"
-                        >
-                            <a 
-                                href={submission.url} 
-                                target="_blank" 
-                                rel="noreferrer"
+                        <div className="flex items-center gap-1.5 shrink-0">
+                            <Button
+                                asChild
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2.5 text-xs gap-1.5 shrink-0"
+                                title="Abrir repositorio en GitHub en la rama seleccionada"
                             >
-                                <Github className="h-3.5 w-3.5 text-primary" />
-                                <span>Ver Repo</span>
-                                <ExternalLink className="h-3 w-3 opacity-60" />
-                            </a>
-                        </Button>
+                                <a 
+                                    href={effectiveRepoUrl || submission.url} 
+                                    target="_blank" 
+                                    rel="noreferrer"
+                                >
+                                    <Github className="h-3.5 w-3.5 text-primary" />
+                                    <span>Ver Repo</span>
+                                    <ExternalLink className="h-3 w-3 opacity-60" />
+                                </a>
+                            </Button>
+
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={isLoadingBranches || isScanning}
+                                        className="h-7 px-2 text-xs gap-1.5 shrink-0 font-mono border-border/80 hover:border-primary/50 bg-background/80 max-w-[170px]"
+                                        title={`Rama seleccionada: ${selectedBranch || 'default'}. Clic para cambiar de rama.`}
+                                    >
+                                        {isLoadingBranches ? (
+                                            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                                        ) : (
+                                            <GitBranch className="h-3.5 w-3.5 text-primary shrink-0" />
+                                        )}
+                                        <span className="truncate font-semibold text-xs">
+                                            {selectedBranch || "Rama"}
+                                        </span>
+                                        <ChevronDown className="h-3 w-3 opacity-60 shrink-0" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="start" className="w-56 max-h-72 overflow-y-auto">
+                                    <DropdownMenuLabel className="text-[11px] font-semibold text-muted-foreground flex items-center justify-between">
+                                        <span>Ramas del Repositorio</span>
+                                        {branches.length > 0 && (
+                                            <Badge variant="outline" className="text-[9px] font-mono py-0 px-1">
+                                                {branches.length}
+                                            </Badge>
+                                        )}
+                                    </DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    {branches.length === 0 ? (
+                                        <div className="py-2 px-3 text-xs text-muted-foreground text-center">
+                                            {isLoadingBranches ? "Cargando ramas..." : "No se detectaron ramas adicionales"}
+                                        </div>
+                                    ) : (
+                                        branches.map((branchName) => {
+                                            const isCurrent = (selectedBranch || "").toLowerCase() === branchName.toLowerCase();
+                                            return (
+                                                <DropdownMenuItem
+                                                    key={branchName}
+                                                    onClick={() => handleSelectBranch(branchName)}
+                                                    className={cn(
+                                                        "text-xs font-mono flex items-center justify-between cursor-pointer py-1.5",
+                                                        isCurrent && "bg-primary/10 text-primary font-bold"
+                                                    )}
+                                                >
+                                                    <span className="truncate flex items-center gap-1.5">
+                                                        <GitBranch className="h-3 w-3 shrink-0 opacity-70" />
+                                                        {branchName}
+                                                    </span>
+                                                    {isCurrent && <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-2" />}
+                                                </DropdownMenuItem>
+                                            );
+                                        })
+                                    )}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
                     )}
 
                     <Badge variant="secondary" className="text-[10px] hidden sm:inline-flex shrink-0 ml-1">
@@ -983,13 +1181,48 @@ export function CodeProjectInspector({
                         Calificar con IA {selectedFiles.length > 0 && `(${selectedFiles.length})`}
                     </Button>
 
-                    {currentDisplayedGrade !== null && (
+                    {checklistConfig ? (
+                        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 flex-wrap animate-in fade-in">
+                            {/* Nota IA con porcentaje */}
+                            <div 
+                                className="flex items-center gap-1 bg-purple-500/10 border border-purple-500/25 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-lg text-xs shrink-0 font-bold shadow-2xs"
+                                title={`Evaluación IA: ${aiGrade.toFixed(1)} / 5.0 (${aiWeight}% de la nota final)`}
+                            >
+                                <Sparkles className="h-3 w-3 text-purple-600 dark:text-purple-400 shrink-0" />
+                                <span className="text-[10px] font-medium opacity-90 hidden sm:inline">IA</span>
+                                <span className="text-[10px] font-mono opacity-80">({aiWeight}%):</span>
+                                <span className="text-xs font-black font-mono">{aiGrade.toFixed(1)}</span>
+                            </div>
+
+                            {/* Nota Profesor / Sustentación con porcentaje */}
+                            <div 
+                                className="flex items-center gap-1 bg-blue-500/10 border border-blue-500/25 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-lg text-xs shrink-0 font-bold shadow-2xs"
+                                title={`Sustentación Docente: ${checklistScore.toFixed(1)} / 5.0 (${checklistWeight}% de la nota final)`}
+                            >
+                                <UserCheck className="h-3 w-3 text-blue-600 dark:text-blue-400 shrink-0" />
+                                <span className="text-[10px] font-medium opacity-90 hidden sm:inline">Docente</span>
+                                <span className="text-[10px] font-mono opacity-80">({checklistWeight}%):</span>
+                                <span className="text-xs font-black font-mono">{checklistScore.toFixed(1)}</span>
+                            </div>
+
+                            {/* Nota Final Ponderada */}
+                            <div 
+                                className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/35 text-emerald-700 dark:text-emerald-300 px-2.5 py-0.5 rounded-lg text-xs shrink-0 font-bold shadow-2xs"
+                                title={`Nota Final Ponderada: ${combinedFinalScore.toFixed(1)} / 5.0`}
+                            >
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                <span className="text-[10px] uppercase font-bold tracking-wider opacity-85">Final:</span>
+                                <span className="text-sm font-black font-mono">{combinedFinalScore.toFixed(1)}</span>
+                                <span className="text-[10px] font-bold opacity-75">/ 5.0</span>
+                            </div>
+                        </div>
+                    ) : currentDisplayedGrade !== null ? (
                         <div className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 px-2.5 py-0.5 rounded-lg text-xs shrink-0 font-bold animate-in fade-in">
                             <span className="text-[10px] uppercase font-bold opacity-80">Nota:</span>
                             <span className="text-sm font-black">{currentDisplayedGrade.toFixed(1)}</span>
                             <span className="text-[10px] font-bold opacity-75">/ 5.0</span>
                         </div>
-                    )}
+                    ) : null}
 
                     {onClose && (
                         <Button
@@ -1117,6 +1350,41 @@ export function CodeProjectInspector({
                             </div>
                         )}
 
+                        {/* Branch Indicator in Left Sidebar Toolbar */}
+                        {submission?.url && (
+                            <div className="flex items-center justify-between px-2 py-1 text-[11px] text-muted-foreground bg-muted/30 rounded-md border border-border/40">
+                                <span className="flex items-center gap-1.5 font-mono text-[11px] truncate min-w-0">
+                                    <GitBranch className="h-3 w-3 text-primary shrink-0" />
+                                    <span className="opacity-70 text-[10px]">Rama:</span>
+                                    <strong className="text-foreground font-semibold truncate">{selectedBranch || "default"}</strong>
+                                </span>
+                                {branches.length > 1 && (
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="ghost" size="sm" className="h-5 px-1.5 text-[10px] text-primary hover:text-primary gap-0.5 shrink-0 font-medium">
+                                                <span>Cambiar</span>
+                                                <ChevronDown className="h-2.5 w-2.5 opacity-60" />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="w-52 max-h-60 overflow-y-auto">
+                                            <DropdownMenuLabel className="text-[10px]">Ramas del repositorio</DropdownMenuLabel>
+                                            <DropdownMenuSeparator />
+                                            {branches.map(b => (
+                                                <DropdownMenuItem
+                                                    key={b}
+                                                    onClick={() => handleSelectBranch(b)}
+                                                    className={cn("text-xs font-mono flex items-center justify-between cursor-pointer", selectedBranch === b && "bg-accent font-bold")}
+                                                >
+                                                    <span className="truncate">{b}</span>
+                                                    {selectedBranch === b && <Check className="h-3 w-3 text-primary shrink-0" />}
+                                                </DropdownMenuItem>
+                                            ))}
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                )}
+                            </div>
+                        )}
+
                         {fileViewMode !== "order" && (
                             /* Search Input & Re-scan Button */
                             <div className="flex items-center gap-1.5">
@@ -1134,7 +1402,7 @@ export function CodeProjectInspector({
                                     size="sm"
                                     variant="outline"
                                     disabled={isScanning || isEvaluating}
-                                    onClick={handleScanRepo}
+                                    onClick={() => handleScanRepo()}
                                     className="h-8 px-2.5 text-xs gap-1.5 shrink-0"
                                     title="Volver a escanear archivos del repositorio"
                                 >
@@ -1174,6 +1442,9 @@ export function CodeProjectInspector({
                                                 className="text-xs h-7 gap-1 mt-1 font-semibold"
                                                 onClick={() => {
                                                     setSelectedFiles(foundConfiguredFiles);
+                                                    if (foundConfiguredFiles.length > 0) {
+                                                        handleLoadFilePreview(foundConfiguredFiles[0]);
+                                                    }
                                                 }}
                                             >
                                                 Cargar requeridos ({foundConfiguredFiles.length})
@@ -1183,7 +1454,7 @@ export function CodeProjectInspector({
                                 ) : (
                                     <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEndOrder}>
                                         <SortableContext items={selectedFiles} strategy={verticalListSortingStrategy}>
-                                            <div className="flex flex-col gap-1.5 w-full">
+                                            <div className="flex flex-col gap-1.5 w-full min-w-0">
                                                 {selectedFiles.map((filePath, index) => (
                                                     <SortableEvaluationFileItem
                                                         key={filePath}
@@ -1241,6 +1512,7 @@ export function CodeProjectInspector({
                                         return (
                                             <div
                                                 key={path}
+                                                onClick={() => handleLoadFilePreview(path)}
                                                 className={`flex items-center justify-between p-1.5 rounded-lg border transition-all cursor-pointer group ${
                                                     isPreviewing 
                                                         ? "bg-primary/10 border-primary/40" 
@@ -1252,8 +1524,12 @@ export function CodeProjectInspector({
                                                         id={`check-${path}`}
                                                         checked={isSelected}
                                                         onCheckedChange={(checked) => {
-                                                            if (checked) setSelectedFiles(prev => [...prev, path]);
-                                                            else setSelectedFiles(prev => prev.filter(p => p !== path));
+                                                            if (checked) {
+                                                                setSelectedFiles(prev => [...prev, path]);
+                                                                handleLoadFilePreview(path);
+                                                            } else {
+                                                                setSelectedFiles(prev => prev.filter(p => p !== path));
+                                                            }
                                                         }}
                                                         onClick={(e) => e.stopPropagation()}
                                                     />
@@ -1272,7 +1548,6 @@ export function CodeProjectInspector({
                                                         <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                                                     )}
                                                     <span 
-                                                        onClick={() => handleLoadFilePreview(path)}
                                                         className={`truncate select-none text-[11px] ${
                                                             isPreviewing ? "font-bold text-primary" : "text-foreground"
                                                         }`}
@@ -1286,7 +1561,10 @@ export function CodeProjectInspector({
                                                     type="button"
                                                     variant="ghost"
                                                     size="sm"
-                                                    onClick={() => handleLoadFilePreview(path)}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleLoadFilePreview(path);
+                                                    }}
                                                     className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
                                                     title="Ver código"
                                                 >
@@ -1360,37 +1638,73 @@ export function CodeProjectInspector({
                         : "lg:col-span-8"
                 }`}>
                     <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as "statement" | "preview" | "ai_report" | "teacher_grade" | "mcp_chat" | "git_audit")} className="w-full h-full flex flex-col min-h-0 overflow-hidden">
-                        <div className="w-full overflow-x-auto scrollbar-none pb-1 shrink-0 -mx-1 px-1">
-                            <TabsList className="inline-flex w-max min-w-full lg:grid lg:grid-cols-6 h-auto min-h-10 p-1 gap-1">
-                                <TabsTrigger value="statement" className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 shrink-0 whitespace-nowrap">
-                                    <ClipboardList className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                                    <span>Enunciado</span>
+                        <div className="flex items-center gap-1.5 border-b border-border/60 shrink-0 overflow-x-auto scrollbar-none">
+                            <TabsList className={cn(
+                                "flex w-max lg:w-full h-8 sm:h-9 lg:h-10 !bg-transparent !p-0 !border-0 !rounded-none !shadow-none gap-0.5 lg:gap-0",
+                                isTeacherGradingEnabled ? "lg:grid lg:grid-cols-6" : "lg:grid lg:grid-cols-5"
+                            )}>
+                                <TabsTrigger 
+                                    value="statement" 
+                                    className="group relative flex items-center justify-center gap-1.5 h-full px-2.5 sm:px-3 lg:px-1 text-[11px] sm:text-xs font-semibold !rounded-none !border-0 !border-b-2 !border-transparent transition-all text-muted-foreground hover:text-foreground hover:!border-border/80 data-[state=active]:!border-primary data-[state=active]:!text-primary data-[state=active]:font-bold data-[state=active]:!bg-transparent data-[state=active]:!shadow-none cursor-pointer shrink-0 lg:shrink whitespace-nowrap lg:whitespace-normal truncate"
+                                >
+                                    <ClipboardList className="h-3.5 w-3.5 text-amber-500 shrink-0 transition-colors group-data-[state=active]:text-primary" />
+                                    <span className="truncate">Enunciado</span>
                                 </TabsTrigger>
-                                <TabsTrigger value="ai_report" className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 shrink-0 whitespace-nowrap">
-                                    <Sparkles className="h-3.5 w-3.5 text-purple-500 shrink-0" />
-                                    <span>Evaluación IA</span>
+
+                                <TabsTrigger 
+                                    value="ai_report" 
+                                    className="group relative flex items-center justify-center gap-1.5 h-full px-2.5 sm:px-3 lg:px-1 text-[11px] sm:text-xs font-semibold !rounded-none !border-0 !border-b-2 !border-transparent transition-all text-muted-foreground hover:text-foreground hover:!border-border/80 data-[state=active]:!border-primary data-[state=active]:!text-primary data-[state=active]:font-bold data-[state=active]:!bg-transparent data-[state=active]:!shadow-none cursor-pointer shrink-0 lg:shrink whitespace-nowrap lg:whitespace-normal truncate"
+                                >
+                                    <Sparkles className="h-3.5 w-3.5 text-purple-500 shrink-0 transition-colors group-data-[state=active]:text-primary" />
+                                    <span className="truncate">Evaluación IA</span>
+                                    {isTeacherGradingEnabled && aiGrade > 0 && (
+                                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 font-mono bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30 font-bold ml-0.5 shrink-0">
+                                            {aiGrade.toFixed(1)}
+                                        </Badge>
+                                    )}
                                 </TabsTrigger>
-                                <TabsTrigger value="teacher_grade" className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 shrink-0 whitespace-nowrap">
-                                    <CheckCircle className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                                    <span>Evaluación Docente</span>
+
+                                {isTeacherGradingEnabled && (
+                                    <TabsTrigger 
+                                        value="teacher_grade" 
+                                        className="group relative flex items-center justify-center gap-1.5 h-full px-2.5 sm:px-3 lg:px-1 text-[11px] sm:text-xs font-semibold !rounded-none !border-0 !border-b-2 !border-transparent transition-all text-muted-foreground hover:text-foreground hover:!border-border/80 data-[state=active]:!border-primary data-[state=active]:!text-primary data-[state=active]:font-bold data-[state=active]:!bg-transparent data-[state=active]:!shadow-none cursor-pointer shrink-0 lg:shrink whitespace-nowrap lg:whitespace-normal truncate"
+                                    >
+                                        <UserCheck className="h-3.5 w-3.5 text-emerald-500 shrink-0 transition-colors group-data-[state=active]:text-primary" />
+                                        <span className="truncate">Evaluación Docente</span>
+                                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 font-mono bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30 font-bold ml-0.5 shrink-0">
+                                            {checklistScore.toFixed(1)}
+                                        </Badge>
+                                    </TabsTrigger>
+                                )}
+
+                                <TabsTrigger 
+                                    value="preview" 
+                                    className="group relative flex items-center justify-center gap-1.5 h-full px-2.5 sm:px-3 lg:px-1 text-[11px] sm:text-xs font-semibold !rounded-none !border-0 !border-b-2 !border-transparent transition-all text-muted-foreground hover:text-foreground hover:!border-border/80 data-[state=active]:!border-primary data-[state=active]:!text-primary data-[state=active]:font-bold data-[state=active]:!bg-transparent data-[state=active]:!shadow-none cursor-pointer shrink-0 lg:shrink whitespace-nowrap lg:whitespace-normal truncate"
+                                >
+                                    <Code2 className="h-3.5 w-3.5 text-blue-500 shrink-0 transition-colors group-data-[state=active]:text-primary" />
+                                    <span className="truncate">Código</span>
                                 </TabsTrigger>
-                                <TabsTrigger value="preview" className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 shrink-0 whitespace-nowrap">
-                                    <Code2 className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                                    <span>Código</span>
+
+                                <TabsTrigger 
+                                    value="mcp_chat" 
+                                    className="group relative flex items-center justify-center gap-1.5 h-full px-2.5 sm:px-3 lg:px-1 text-[11px] sm:text-xs font-semibold !rounded-none !border-0 !border-b-2 !border-transparent transition-all text-muted-foreground hover:text-foreground hover:!border-border/80 data-[state=active]:!border-primary data-[state=active]:!text-primary data-[state=active]:font-bold data-[state=active]:!bg-transparent data-[state=active]:!shadow-none cursor-pointer shrink-0 lg:shrink whitespace-nowrap lg:whitespace-normal truncate"
+                                >
+                                    <Bot className="h-3.5 w-3.5 text-sky-500 shrink-0 transition-colors group-data-[state=active]:text-primary" />
+                                    <span className="truncate">Inspector</span>
                                 </TabsTrigger>
-                                <TabsTrigger value="mcp_chat" className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 shrink-0 whitespace-nowrap">
-                                    <Bot className="h-3.5 w-3.5 text-sky-500 shrink-0" />
-                                    <span>Inspector</span>
-                                </TabsTrigger>
-                                <TabsTrigger value="git_audit" className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 shrink-0 whitespace-nowrap">
-                                    <GitCommitVertical className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
-                                    <span>Auditoría Git</span>
+
+                                <TabsTrigger 
+                                    value="git_audit" 
+                                    className="group relative flex items-center justify-center gap-1.5 h-full px-2.5 sm:px-3 lg:px-1 text-[11px] sm:text-xs font-semibold !rounded-none !border-0 !border-b-2 !border-transparent transition-all text-muted-foreground hover:text-foreground hover:!border-border/80 data-[state=active]:!border-primary data-[state=active]:!text-primary data-[state=active]:font-bold data-[state=active]:!bg-transparent data-[state=active]:!shadow-none cursor-pointer shrink-0 lg:shrink whitespace-nowrap lg:whitespace-normal truncate"
+                                >
+                                    <GitCommitVertical className="h-3.5 w-3.5 text-indigo-500 shrink-0 transition-colors group-data-[state=active]:text-primary" />
+                                    <span className="truncate">Auditoría Git</span>
                                 </TabsTrigger>
                             </TabsList>
                         </div>
 
                         {/* Tab 0: Activity Statement / Rubric Instructions */}
-                        <TabsContent value="statement" className="mt-3 flex-1 min-h-0 overflow-hidden flex flex-col h-full">
+                        <TabsContent value="statement" className="mt-1 flex-1 min-h-0 overflow-hidden flex flex-col h-full">
                             <div className="rounded-xl border bg-card text-card-foreground shadow-xs overflow-hidden flex flex-col h-full flex-1 min-h-0">
                                 <div className="p-3 bg-muted/40 border-b flex items-center justify-between text-xs shrink-0">
                                     <div className="flex items-center gap-2 truncate">
@@ -1451,7 +1765,7 @@ export function CodeProjectInspector({
                         </TabsContent>
 
                         {/* Tab 1: Live Code Inspection */}
-                        <TabsContent value="preview" className="mt-3 flex-1 min-h-0 overflow-hidden flex flex-col h-full">
+                        <TabsContent value="preview" className="mt-1 flex-1 min-h-0 overflow-hidden flex flex-col h-full">
                             <div className="rounded-xl border bg-card text-card-foreground shadow-xs overflow-hidden flex flex-col h-full flex-1 min-h-0">
                                 <div className="p-3 bg-muted/40 border-b flex items-center justify-between text-xs">
                                     <div className="flex items-center gap-2 truncate">
@@ -1528,7 +1842,7 @@ export function CodeProjectInspector({
                         </TabsContent>
 
                         {/* Tab 2: Read-Only AI Evaluation Report */}
-                        <TabsContent value="ai_report" className="mt-3 flex-1 min-h-0 overflow-y-auto">
+                        <TabsContent value="ai_report" className="mt-1 flex-1 min-h-0 overflow-y-auto">
                             <div className="rounded-xl border bg-card p-5 shadow-sm space-y-4 h-full flex flex-col min-h-0 overflow-hidden">
                                 <div className="flex items-center justify-between gap-2 shrink-0 border-b pb-3">
                                     <div className="space-y-0.5">
@@ -1541,6 +1855,15 @@ export function CodeProjectInspector({
                                         </p>
                                     </div>
                                     <div className="flex items-center gap-1.5 shrink-0">
+                                        {submission && (
+                                            <ExportFeedbackButtons
+                                                activity={activity}
+                                                submission={submission}
+                                                studentName={student?.name || student?.email || "Estudiante"}
+                                                studentEmail={student?.email}
+                                                size="sm"
+                                            />
+                                        )}
                                         <Badge variant="outline" className="text-[10px] text-muted-foreground font-mono shrink-0">
                                             Solo Lectura
                                         </Badge>
@@ -1587,9 +1910,47 @@ export function CodeProjectInspector({
                                     </div>
                                 </div>
 
-                                <div className="flex-1 min-h-0 overflow-y-auto pr-1" style={{ zoom: textZoom }}>
+                                <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-3" style={{ zoom: textZoom }}>
+                                    {isTeacherGradingEnabled && (
+                                        <div className="p-3 rounded-xl border border-primary/20 bg-muted/20 space-y-2">
+                                            <div className="flex items-center justify-between text-xs">
+                                                <span className="font-bold flex items-center gap-1.5 text-foreground">
+                                                    <SlidersHorizontal className="h-3.5 w-3.5 text-primary" />
+                                                    Ponderación: {aiWeight}% IA + {checklistWeight}% Sustentación Docente
+                                                </span>
+                                                <span className="text-[11px] font-mono">
+                                                    Nota Final: <strong className="text-emerald-700 dark:text-emerald-300 font-bold">{combinedFinalScore.toFixed(1)} / 5.0</strong>
+                                                </span>
+                                            </div>
+                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                                                <div className="p-2 rounded-lg bg-purple-500/[0.06] border border-purple-500/20 flex items-center justify-between">
+                                                    <span className="text-[10px] font-bold text-purple-700 dark:text-purple-300 flex items-center gap-1">
+                                                        <Sparkles className="h-3 w-3" /> Evaluación IA ({aiWeight}%)
+                                                    </span>
+                                                    <span className="font-mono font-black">{aiGrade.toFixed(1)}</span>
+                                                </div>
+                                                <div className="p-2 rounded-lg bg-blue-500/[0.06] border border-blue-500/20 flex items-center justify-between">
+                                                    <span className="text-[10px] font-bold text-blue-700 dark:text-blue-300 flex items-center gap-1">
+                                                        <UserCheck className="h-3 w-3" /> Sustentación ({checklistWeight}%)
+                                                    </span>
+                                                    <span className="font-mono font-black">{checklistScore.toFixed(1)}</span>
+                                                </div>
+                                                <div className="p-2 rounded-lg bg-emerald-500/[0.08] border border-emerald-500/30 flex items-center justify-between">
+                                                    <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
+                                                        <CheckCircle2 className="h-3 w-3" /> Nota Final Ponderada
+                                                    </span>
+                                                    <span className="font-mono font-black text-emerald-700 dark:text-emerald-300">{combinedFinalScore.toFixed(1)}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {aiFeedbackInput ? (
-                                        <FeedbackViewer feedback={aiFeedbackInput} />
+                                        <FeedbackViewer 
+                                            feedback={aiFeedbackInput} 
+                                            repoUrl={effectiveRepoUrl || submission.url}
+                                            configuredPaths={activity.filePaths}
+                                        />
                                     ) : (
                                         <div className="flex flex-col items-center justify-center h-64 text-center space-y-3">
                                             <Sparkles className="h-10 w-10 text-primary opacity-40 animate-pulse" />
@@ -1614,7 +1975,8 @@ export function CodeProjectInspector({
                         </TabsContent>
 
                         {/* Tab 3: Grade Assignment & Teacher Notes */}
-                        <TabsContent value="teacher_grade" className="mt-3 flex-1 min-h-0 overflow-y-auto">
+                        {isTeacherGradingEnabled && (
+                        <TabsContent value="teacher_grade" className="mt-1 flex-1 min-h-0 overflow-y-auto">
                             <div className="rounded-xl border bg-card p-5 shadow-sm space-y-5 h-full overflow-y-auto">
                                 <div className="flex items-center justify-between border-b pb-3">
                                     <div className="space-y-1">
@@ -1624,6 +1986,15 @@ export function CodeProjectInspector({
                                         </p>
                                     </div>
                                     <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                                        {submission && (
+                                            <ExportFeedbackButtons
+                                                activity={activity}
+                                                submission={submission}
+                                                studentName={student?.name || student?.email || "Estudiante"}
+                                                studentEmail={student?.email}
+                                                size="sm"
+                                            />
+                                        )}
                                         <div className="flex items-center gap-0.5 border border-border/80 rounded-lg p-0.5 bg-background/80 shadow-2xs">
                                             <Button
                                                 type="button"
@@ -1744,19 +2115,6 @@ export function CodeProjectInspector({
                                                     <Copy className="h-3 w-3" />
                                                     Copiar a Observaciones
                                                 </Button>
-
-                                                <Button
-                                                    type="button"
-                                                    size="sm"
-                                                    onClick={() => {
-                                                        setGradeInput(combinedFinalScore.toFixed(1));
-                                                        toast.success(`Nota final ponderada aplicada: ${combinedFinalScore.toFixed(1)} / 5.0 (${aiWeight}% IA + ${checklistWeight}% Sustentación)`);
-                                                    }}
-                                                    className="h-7 text-xs font-bold gap-1 bg-primary text-primary-foreground shadow-xs"
-                                                >
-                                                    <CheckCircle2 className="h-3.5 w-3.5" />
-                                                    Aplicar Nota Final ({combinedFinalScore.toFixed(1)})
-                                                </Button>
                                             </div>
                                         </div>
 
@@ -1801,10 +2159,9 @@ export function CodeProjectInspector({
                                                 <button
                                                     type="button"
                                                     onClick={() => {
-                                                        setManualSustentacionScore(null);
                                                         const allSabe: Record<string, number> = {};
                                                         checklistData.forEach((c: any) => { allSabe[c.id] = 1.0; });
-                                                        setCriteriaLevels(allSabe);
+                                                        handleUpdateCriteriaLevels(allSabe);
                                                     }}
                                                     className="text-primary hover:underline cursor-pointer"
                                                 >
@@ -1814,8 +2171,7 @@ export function CodeProjectInspector({
                                                 <button
                                                     type="button"
                                                     onClick={() => {
-                                                        setManualSustentacionScore(null);
-                                                        setCriteriaLevels({});
+                                                        handleUpdateCriteriaLevels({});
                                                     }}
                                                     className="hover:underline cursor-pointer"
                                                 >
@@ -1888,11 +2244,12 @@ export function CodeProjectInspector({
                                                                         key={lvl.key}
                                                                         type="button"
                                                                         onClick={() => {
-                                                                            setManualSustentacionScore(null);
-                                                                            setCriteriaLevels(prev => ({
-                                                                                ...prev,
-                                                                                [crit.id]: isSelected ? undefined : lvl.factor
-                                                                            }));
+                                                                            const isCurrentSelected = currentFactor === lvl.factor;
+                                                                            const nextLevels = {
+                                                                                ...criteriaLevels,
+                                                                                [crit.id]: isCurrentSelected ? undefined : lvl.factor
+                                                                            };
+                                                                            handleUpdateCriteriaLevels(nextLevels);
                                                                         }}
                                                                         className={cn(
                                                                             "text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer select-none",
@@ -1983,9 +2340,7 @@ export function CodeProjectInspector({
                                                             });
                                                             setCriteriaLevels(updatedLevels);
 
-                                                            const aiPart = aiGrade * (aiWeight / 100);
-                                                            const teacherPart = num * (checklistWeight / 100);
-                                                            const combined = Math.min(5.0, Math.max(0.0, aiPart + teacherPart));
+                                                            const combined = calculateCombinedFinalGrade(aiGrade, num, aiWeight, checklistWeight);
                                                             setGradeInput(combined.toFixed(1));
                                                             toast.info(`Sustentación asignada: ${num.toFixed(1)} / 5.0 (${checklistWeight}%). Nota final ponderada con IA: ${combined.toFixed(1)}`);
                                                         } else {
@@ -2042,7 +2397,14 @@ export function CodeProjectInspector({
                                 {/* Grade input */}
                                 <div className="space-y-4">
                                     <div className="space-y-1">
-                                        <Label htmlFor="grade-input" className="text-xs">Nota Final (0.0 - 5.0)</Label>
+                                        <div className="flex items-center justify-between">
+                                            <Label htmlFor="grade-input" className="text-xs font-semibold">Nota Final (0.0 - 5.0)</Label>
+                                            {checklistConfig && (
+                                                <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20 font-mono">
+                                                    Ponderada automática: {aiWeight}% IA + {checklistWeight}% Sustentación
+                                                </span>
+                                            )}
+                                        </div>
                                         <Input
                                             id="grade-input"
                                             type="number"
@@ -2123,7 +2485,14 @@ export function CodeProjectInspector({
                                             className="flex-1 font-bold shadow-sm"
                                         >
                                             {isSavingGrade ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle className="h-4 w-4 mr-2" />}
-                                            {submission?.grade !== null && submission?.grade !== undefined ? "Actualizar Nota" : "Guardar Nota"}
+                                            {checklistConfig 
+                                                ? (submission?.grade !== null && submission?.grade !== undefined 
+                                                    ? `Actualizar Nota (${combinedFinalScore.toFixed(1)})` 
+                                                    : `Guardar Nota (${combinedFinalScore.toFixed(1)})`)
+                                                : (submission?.grade !== null && submission?.grade !== undefined 
+                                                    ? "Actualizar Nota" 
+                                                    : "Guardar Nota")
+                                            }
                                         </Button>
 
                                         {submission && (
@@ -2141,12 +2510,13 @@ export function CodeProjectInspector({
                                 </div>
                             </div>
                         </TabsContent>
+                        )}
 
                         {/* Tab 4: GitHub MCP Inspector */}
-                        <TabsContent value="mcp_chat" className="mt-3 flex-1 min-h-0 overflow-hidden flex flex-col h-full">
+                        <TabsContent value="mcp_chat" className="mt-1 flex-1 min-h-0 overflow-hidden flex flex-col h-full">
                             {submission?.url ? (
                                 <GitHubRepoChatInspector
-                                    repoUrl={submission.url}
+                                    repoUrl={effectiveRepoUrl || submission.url}
                                     studentName={student?.name}
                                     activityId={activity?.id}
                                     studentId={student?.id}
@@ -2162,11 +2532,11 @@ export function CodeProjectInspector({
                         </TabsContent>
 
                         {/* Tab 5: GitHub Repo Audit */}
-                        <TabsContent value="git_audit" className="mt-3 flex-1 min-h-0 overflow-hidden flex flex-col h-full">
+                        <TabsContent value="git_audit" className="mt-1 flex-1 min-h-0 overflow-hidden flex flex-col h-full">
                             {submission?.url ? (
                                 <div className="rounded-xl border bg-card text-card-foreground shadow-xs overflow-hidden flex flex-col h-full flex-1 min-h-0">
                                     <GithubRepoAudit
-                                        repoUrl={submission.url}
+                                        repoUrl={effectiveRepoUrl || submission.url}
                                         activityId={activity?.id}
                                         isFullscreen={fullscreenSection === "content"}
                                         onToggleFullscreen={() => setFullscreenSection(prev => prev === "content" ? "none" : "content")}
@@ -2184,11 +2554,13 @@ export function CodeProjectInspector({
             </div>
 
             {/* Modal de Selección de Exigencia IA y Ejecución */}
-            <Dialog open={isAIGradingDialogOpen} onOpenChange={setIsAIGradingDialogOpen}>
-                <DialogContent className="max-w-md w-full p-6">
-                    <DialogHeader>
+            <Dialog open={isAIGradingDialogOpen} onOpenChange={(open) => {
+                if (!isEvaluating) setIsAIGradingDialogOpen(open);
+            }}>
+                <DialogContent className="sm:max-w-xl md:max-w-2xl w-full max-h-[90vh] flex flex-col p-6 overflow-hidden">
+                    <DialogHeader className="shrink-0">
                         <DialogTitle className="flex items-center gap-2 text-lg font-bold">
-                            <Sparkles className="h-5 w-5 text-purple-600" />
+                            <Sparkles className="h-5 w-5 text-purple-600 shrink-0" />
                             Evaluación con IA (Gemini)
                         </DialogTitle>
                         <DialogDescription className="text-xs">
@@ -2196,14 +2568,14 @@ export function CodeProjectInspector({
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="space-y-4 py-2">
-                        <div className="space-y-2">
+                    <div className="space-y-4 py-2 flex-1 min-h-0 overflow-y-auto pr-1 min-w-0">
+                        <div className="space-y-2 min-w-0">
                             <Label className="text-xs font-semibold">Nivel de Exigencia</Label>
                             <GradingModeSelector gradingMode={gradingMode} setGradingMode={setGradingMode} />
                         </div>
 
                         {/* Ordered Evaluation Files List */}
-                        <div className="space-y-2">
+                        <div className="space-y-2 min-w-0">
                             <div className="flex items-center justify-between">
                                 <Label className="text-xs font-semibold flex items-center gap-1.5">
                                     <ListOrdered className="h-3.5 w-3.5 text-primary" />
@@ -2213,10 +2585,10 @@ export function CodeProjectInspector({
                                     Arrastra o usa flechas
                                 </span>
                             </div>
-                            <div className="max-h-44 overflow-y-auto rounded-xl border p-1.5 bg-muted/20 space-y-1 scrollbar-thin">
+                            <div className="max-h-44 overflow-y-auto rounded-xl border p-1.5 bg-muted/20 space-y-1 scrollbar-thin min-w-0">
                                 <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEndOrder}>
                                     <SortableContext items={selectedFiles} strategy={verticalListSortingStrategy}>
-                                        <div className="flex flex-col gap-1 w-full">
+                                        <div className="flex flex-col gap-1 w-full min-w-0">
                                             {selectedFiles.map((filePath, index) => (
                                                 <SortableEvaluationFileItem
                                                     key={filePath}
@@ -2242,7 +2614,7 @@ export function CodeProjectInspector({
 
                         {/* Progress logs stream console */}
                         {gradingLogs.length > 0 && (
-                            <div className="space-y-2 pt-2 border-t">
+                            <div className="space-y-2 pt-2 border-t min-w-0">
                                 <div className="flex items-center justify-between text-xs font-mono text-muted-foreground">
                                     <span className="flex items-center gap-1.5 font-bold">
                                         {isEvaluating && <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-600" />}
@@ -2252,10 +2624,10 @@ export function CodeProjectInspector({
                                 </div>
                                 <div 
                                     ref={logRef}
-                                    className="max-h-36 overflow-y-auto bg-slate-950 text-slate-300 font-mono text-[10px] p-2.5 rounded-lg border border-slate-800 space-y-1"
+                                    className="max-h-40 overflow-y-auto overflow-x-hidden bg-slate-950 text-slate-300 font-mono text-[10.5px] p-2.5 rounded-lg border border-slate-800 space-y-1 w-full min-w-0 select-text"
                                 >
                                     {gradingLogs.map((log, index) => (
-                                        <div key={index} className="border-b border-slate-800/50 pb-0.5">
+                                        <div key={index} className="border-b border-slate-800/50 pb-0.5 break-all whitespace-pre-wrap leading-relaxed">
                                             {log}
                                         </div>
                                     ))}
@@ -2264,7 +2636,7 @@ export function CodeProjectInspector({
                         )}
                     </div>
 
-                    <DialogFooter className="gap-2 sm:gap-0">
+                    <DialogFooter className="gap-2 sm:gap-0 shrink-0 pt-2 border-t">
                         <Button
                             type="button"
                             variant="outline"

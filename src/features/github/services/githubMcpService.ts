@@ -54,6 +54,7 @@ export async function askGitHubMcpQuestion(params: {
                 const files = await githubService.getRepoStructure(
                     repoInfo.owner,
                     repoInfo.repo,
+                    repoInfo.branch,
                     token
                 );
                 return { totalFiles: files.length, files };
@@ -68,7 +69,8 @@ export async function askGitHubMcpQuestion(params: {
             execute: async ({ limit }) => {
                 try {
                     const limitVal = limit || 15;
-                    const url = `https://api.github.com/repos/${repoInfo.owner}/${repoInfo.repo}/commits?per_page=${Math.min(limitVal, 30)}`;
+                    const branchQuery = repoInfo.branch && repoInfo.branch !== "HEAD" ? `&sha=${encodeURIComponent(repoInfo.branch)}` : "";
+                    const url = `https://api.github.com/repos/${repoInfo.owner}/${repoInfo.repo}/commits?per_page=${Math.min(limitVal, 30)}${branchQuery}`;
                     const headers: HeadersInit = {
                         Accept: "application/vnd.github.v3+json",
                     };

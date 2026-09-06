@@ -19,25 +19,25 @@ Font.register({
 });
 
 const COLORS = {
-    primary: '#1f2937', // gray-800 for titles
-    secondary: '#374151', // gray-700
-    gray500: '#6b7280',
-    gray200: '#e5e7eb',
-    gray50: '#f9fafb',
-    blue50: '#eff6ff',
-    blue100: '#dbeafe',
-    blue600: '#2563eb',
-    blue900: '#1e3a8a',
+    primary: '#0f172a', // Deep Executive Slate
+    secondary: '#1e3a5f', // Rich Corporate Navy
+    gray500: '#64748b', // Slate-500
+    gray200: '#cbd5e1', // Slate-300
+    gray50: '#f8fafc', // Slate-50
+    blue50: '#f0f9ff', // Soft corporate cyan
+    blue100: '#e0f2fe',
+    blue600: '#0284c7',
+    blue900: '#0c4a6e',
     emerald50: '#ecfdf5',
-    emerald100: '#d1fae5',
-    emerald600: '#059669',
+    emerald100: '#a7f3d0',
+    emerald600: '#047857',
     emerald800: '#065f46',
-    green100: '#dcfce3',
-    green800: '#166534',
-    yellow100: '#fef9c3',
-    yellow800: '#854d0e',
-    red100: '#fee2e2',
-    red800: '#991b1b',
+    green100: '#ecfdf5',
+    green800: '#065f46',
+    yellow100: '#fffbeb',
+    yellow800: '#92400e',
+    red100: '#fff1f2',
+    red800: '#9f1239',
 };
 
 const styles = StyleSheet.create({
