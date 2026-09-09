@@ -24,6 +24,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { ModeToggle } from "@/components/theme/ModeToggle";
 import { CreditsModal } from "@/components/CreditsModal";
 import { ThemeSelector } from "@/components/theme/ThemeSelector";
+import { CodeThemeSelector } from "@/components/theme/CodeThemeSelector";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { UserDocsList } from "@/features/documentation/components/student/UserDocsList";
 import { AICanvasCard } from "@/components/ui/ai-canvas-card";
@@ -346,6 +347,7 @@ export function MyEnrollments({
                                         <div className="flex items-center h-full px-2.5 border-l border-border/40">
                                             <div className="flex items-center gap-0.5 bg-muted/60 dark:bg-muted/30 p-0.5 rounded-xl border border-border/70 shadow-2xs backdrop-blur-md">
                                                 <ThemeSelector themes={themes} />
+                                                <CodeThemeSelector />
                                                 <ModeToggle />
                                                 <div className="h-3.5 w-[1px] bg-border/80 mx-0.5" />
                                                 <CreditsModal />

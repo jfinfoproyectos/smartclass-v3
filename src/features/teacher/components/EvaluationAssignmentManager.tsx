@@ -6,7 +6,7 @@ import { formatDateTime } from "@/lib/dateUtils";
 import { 
     Plus, Trash2, CalendarClock, Link as LinkIcon, FileText, Users, Edit, LayoutGrid, List,
     Shield, ShieldAlert, ShieldCheck, Monitor, Eye, Copy, Lock, AlertTriangle, Clock, Calendar,
-    Settings2, Info, Bot, Sparkles, BookOpen
+    Settings2, Info, Bot, Sparkles, BookOpen, UserCheck, Search
 } from "lucide-react";
 import { AICanvasCard } from "@/components/ui/ai-canvas-card";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import {
@@ -93,6 +94,8 @@ interface AssignmentModalProps {
     courseId: string;
     teacherEvaluations: any[];
     courseHelpOptions?: CourseHelpOption[];
+    enrolledStudents?: any[];
+    attempts?: any[];
     onSubmit: (formData: FormData) => Promise<void>;
 }
 
@@ -103,6 +106,8 @@ function AssignmentModal({
     courseId,
     teacherEvaluations,
     courseHelpOptions = [],
+    enrolledStudents = [],
+    attempts = [],
     onSubmit,
 }: AssignmentModalProps) {
     const [activeTab, setActiveTab] = useState<string>("schedule");
@@ -121,6 +126,11 @@ function AssignmentModal({
     const [wildcardAiHints, setWildcardAiHints] = useState<number>(attempt?.wildcardAiHints ?? 0);
     const [isPending, setIsPending] = useState(false);
 
+    // Selección de estudiantes (Todos o específicos)
+    const [assignmentTarget, setAssignmentTarget] = useState<"all" | "selective">("all");
+    const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+    const [studentSearchQuery, setStudentSearchQuery] = useState("");
+
     useEffect(() => {
         if (attempt) {
             setSelectedEvaluationId(attempt.evaluationId || "");
@@ -136,6 +146,20 @@ function AssignmentModal({
             setMaxSupportAttempts(attempt.maxSupportAttempts ?? 3);
             setAiSupportDelaySeconds(attempt.aiSupportDelaySeconds ?? 60);
             setWildcardAiHints(attempt.wildcardAiHints ?? 0);
+
+            const initialAssigned = Array.isArray(attempt.assignedStudentIds)
+                ? attempt.assignedStudentIds
+                : typeof attempt.assignedStudentIds === 'string'
+                    ? JSON.parse(attempt.assignedStudentIds)
+                    : [];
+            if (initialAssigned && initialAssigned.length > 0) {
+                setAssignmentTarget("selective");
+                setSelectedStudentIds(initialAssigned);
+            } else {
+                setAssignmentTarget("all");
+                setSelectedStudentIds([]);
+            }
+            setStudentSearchQuery("");
             setActiveTab("schedule");
         } else {
             setSelectedEvaluationId(teacherEvaluations.length > 0 ? teacherEvaluations[0].id : "");
@@ -152,9 +176,71 @@ function AssignmentModal({
             setMaxSupportAttempts(3);
             setAiSupportDelaySeconds(60);
             setWildcardAiHints(0);
+            setAssignmentTarget("all");
+            setSelectedStudentIds([]);
+            setStudentSearchQuery("");
             setActiveTab("schedule");
         }
     }, [attempt, isOpen, teacherEvaluations]);
+
+    // Normalización de estudiantes matriculados
+    const normalizedStudents = enrolledStudents.map((s: any) => {
+        const user = s.user || s;
+        const profile = user.profile || {};
+        const fullName = (profile.nombres && profile.apellido)
+            ? `${profile.nombres} ${profile.apellido}`
+            : user.name || "Estudiante";
+        const email = user.email || "";
+        const identificacion = profile.identificacion || "";
+        const id = user.id || s.userId || s.id;
+        return { id, fullName, email, identificacion, image: user.image };
+    });
+
+    // Identificar qué estudiantes ya presentaron esta evaluación previamente en la ficha
+    const previousSubmissionsForEval = (attempts || [])
+        .filter((att: any) => (att.evaluationId === selectedEvaluationId || att.evaluation?.id === selectedEvaluationId) && att.id !== attempt?.id)
+        .flatMap((att: any) => att.submissions || []);
+
+    const submittedUserIds = new Set(
+        previousSubmissionsForEval
+            .filter((sub: any) => sub.submittedAt != null)
+            .map((sub: any) => sub.userId)
+    );
+
+    const unsubmittedStudents = normalizedStudents.filter(s => !submittedUserIds.has(s.id));
+
+    const filteredStudents = normalizedStudents.filter(s => {
+        if (!studentSearchQuery.trim()) return true;
+        const q = studentSearchQuery.toLowerCase();
+        return s.fullName.toLowerCase().includes(q) ||
+               s.email.toLowerCase().includes(q) ||
+               s.identificacion.toLowerCase().includes(q);
+    });
+
+    const handleSelectAll = () => {
+        setSelectedStudentIds(normalizedStudents.map(s => s.id));
+    };
+
+    const handleDeselectAll = () => {
+        setSelectedStudentIds([]);
+    };
+
+    const handleSelectUnsubmitted = () => {
+        const ids = unsubmittedStudents.map(s => s.id);
+        setSelectedStudentIds(ids);
+        setAssignmentTarget("selective");
+        if (ids.length === 0) {
+            toast.info("Todos los estudiantes ya tienen una entrega registrada para esta evaluación.");
+        } else {
+            toast.success(`Se seleccionaron ${ids.length} estudiantes que no han presentado la evaluación.`);
+        }
+    };
+
+    const toggleStudent = (id: string) => {
+        setSelectedStudentIds(prev => 
+            prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+        );
+    };
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -179,6 +265,11 @@ function AssignmentModal({
             setActiveTab("schedule");
             return;
         }
+        if (assignmentTarget === "selective" && selectedStudentIds.length === 0) {
+            toast.error("Has seleccionado 'Estudiantes específicos' pero no has marcado ningún estudiante en la pestaña Estudiantes.");
+            setActiveTab("students");
+            return;
+        }
 
         setIsPending(true);
         try {
@@ -199,6 +290,10 @@ function AssignmentModal({
             formData.set("aiSupportDelaySeconds", String(aiSupportDelaySeconds));
             formData.set("wildcardAiHints", String(wildcardAiHints));
             formData.set("wildcardSecondChance", "0");
+
+            const assignedIdsToSave = assignmentTarget === "selective" ? selectedStudentIds : [];
+            formData.set("assignedStudentIds", JSON.stringify(assignedIdsToSave));
+
             await onSubmit(formData);
         } finally {
             setIsPending(false);
@@ -207,8 +302,8 @@ function AssignmentModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && !isPending && onClose()}>
-            <DialogContent className="sm:max-w-[620px] p-0 overflow-hidden bg-background text-foreground border border-border shadow-2xl rounded-2xl">
-                <form onSubmit={handleSubmit}>
+            <DialogContent className="w-[95vw] sm:max-w-[620px] max-h-[88vh] p-0 flex flex-col overflow-hidden bg-background text-foreground border border-border shadow-2xl rounded-2xl">
+                <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1 overflow-hidden">
                     {attempt && <input type="hidden" name="attemptId" value={attempt.id} />}
                     <input type="hidden" name="courseId" value={courseId} />
                     <input type="hidden" name="evaluationId" value={selectedEvaluationId} />
@@ -216,47 +311,60 @@ function AssignmentModal({
                     <input type="hidden" name="endTime" value={endTime} />
 
                     {/* Cabecera estilizada y sólida */}
-                    <div className="bg-muted/40 px-6 py-5 border-b border-border/70">
+                    <div className="bg-muted/40 px-5 sm:px-6 py-3.5 border-b border-border/70 shrink-0">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center shrink-0 shadow-2xs">
-                                <Settings2 className="h-5 w-5" />
+                            <div className="w-9 h-9 rounded-xl bg-primary/15 text-primary flex items-center justify-center shrink-0 shadow-2xs">
+                                <Settings2 className="h-4.5 w-4.5" />
                             </div>
-                            <div className="min-w-0 flex-1">
-                                <DialogTitle className="text-lg font-bold text-foreground">
+                            <div className="min-w-0 flex-1 pr-6">
+                                <DialogTitle className="text-base font-bold text-foreground truncate">
                                     {attempt ? "Configurar Asignación de Evaluación" : "Asignar Evaluación al Curso"}
                                 </DialogTitle>
-                                <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                                <DialogDescription className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
                                     {attempt 
-                                        ? "Ajusta las fechas, reglas de IA, comodines y supervisión para este grupo."
-                                        : "Selecciona una evaluación, define el horario, comodines y restricciones de seguridad."}
+                                        ? "Ajusta las fechas, estudiantes destinatarios, reglas de IA y supervisión."
+                                        : "Selecciona una evaluación, define el horario y estudiantes asignados."}
                                 </DialogDescription>
                             </div>
                         </div>
                     </div>
 
                     {/* Pestañas de configuración */}
-                    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                        <div className="px-6 pt-3 border-b border-border/40 bg-muted/20 overflow-x-auto scrollbar-none">
-                            <TabsList className="inline-flex w-max min-w-full sm:grid sm:grid-cols-3 h-auto min-h-9 bg-muted/60 p-1 gap-1">
-                                <TabsTrigger value="schedule" className="text-xs gap-1.5 font-semibold shrink-0 px-3 py-1.5 whitespace-nowrap">
-                                    <Calendar className="h-3.5 w-3.5" />
-                                    <span>Horario</span>
+                    <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col min-h-0 flex-1 w-full overflow-hidden">
+                        <div className="px-5 sm:px-6 pt-2 pb-1.5 border-b border-border/40 bg-muted/20 shrink-0">
+                            <TabsList className="grid grid-cols-4 w-full h-9 bg-muted/60 p-1 gap-1">
+                                <TabsTrigger value="schedule" className="text-xs gap-1 font-semibold px-1 py-1 truncate">
+                                    <Calendar className="h-3.5 w-3.5 shrink-0" />
+                                    <span className="truncate">Horario</span>
                                 </TabsTrigger>
-                                <TabsTrigger value="rules" className="text-xs gap-1.5 font-semibold shrink-0 px-3 py-1.5 whitespace-nowrap">
-                                    <Sparkles className="h-3.5 w-3.5 text-primary" />
-                                    <span>Reglas e IA</span>
+                                <TabsTrigger value="students" className="text-xs gap-1 font-semibold px-1 py-1 truncate">
+                                    <Users className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                                    <span className="truncate">Alumnos</span>
+                                    {assignmentTarget === "selective" ? (
+                                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 shrink-0">
+                                            {selectedStudentIds.length}
+                                        </span>
+                                    ) : (
+                                        <span className="text-[10px] text-muted-foreground px-1.5 py-0.2 rounded-full bg-muted shrink-0">
+                                            Todos
+                                        </span>
+                                    )}
                                 </TabsTrigger>
-                                <TabsTrigger value="surveillance" className="text-xs gap-1.5 font-semibold shrink-0 px-3 py-1.5 whitespace-nowrap">
-                                    <ShieldAlert className="h-3.5 w-3.5" />
-                                    <span>Vigilancia</span>
+                                <TabsTrigger value="rules" className="text-xs gap-1 font-semibold px-1 py-1 truncate">
+                                    <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
+                                    <span className="truncate">Reglas</span>
+                                </TabsTrigger>
+                                <TabsTrigger value="surveillance" className="text-xs gap-1 font-semibold px-1 py-1 truncate">
+                                    <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
+                                    <span className="truncate">Vigilancia</span>
                                     {enableSurveillance && (
-                                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse ml-0.5" />
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse ml-0.5 shrink-0" />
                                     )}
                                 </TabsTrigger>
                             </TabsList>
                         </div>
 
-                        <div className="p-6 max-h-[62vh] overflow-y-auto space-y-4">
+                        <div className="flex-1 min-h-0 overflow-y-auto p-5 sm:p-6 space-y-4">
                             {/* Pestaña 1: Programación */}
                             <TabsContent value="schedule" className="space-y-4 m-0">
                                 <div className="space-y-2">
@@ -322,6 +430,190 @@ function AssignmentModal({
                                         Los estudiantes solo podrán iniciar y presentar la evaluación dentro de este intervalo de tiempo estricto.
                                     </p>
                                 </div>
+                            </TabsContent>
+
+                            {/* Pestaña: Estudiantes */}
+                            <TabsContent value="students" className="space-y-4 m-0">
+                                <div className="space-y-3">
+                                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                                        ¿A quiénes va dirigida esta evaluación?
+                                    </Label>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => setAssignmentTarget("all")}
+                                            className={cn(
+                                                "p-3 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer",
+                                                assignmentTarget === "all"
+                                                    ? "border-primary bg-primary/10 shadow-xs ring-1 ring-primary/40"
+                                                    : "border-border/70 hover:border-border hover:bg-muted/30"
+                                            )}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2 font-bold text-xs text-foreground">
+                                                    <Users className="h-4 w-4 text-primary shrink-0" />
+                                                    <span className="truncate">Toda la ficha / curso</span>
+                                                </div>
+                                                {assignmentTarget === "all" && (
+                                                    <span className="w-2.5 h-2.5 rounded-full bg-primary shrink-0" />
+                                                )}
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                                                Aplica a los <strong>{normalizedStudents.length}</strong> estudiantes matriculados en la ficha.
+                                            </p>
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => setAssignmentTarget("selective")}
+                                            className={cn(
+                                                "p-3 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer",
+                                                assignmentTarget === "selective"
+                                                    ? "border-primary bg-primary/10 shadow-xs ring-1 ring-primary/40"
+                                                    : "border-border/70 hover:border-border hover:bg-muted/30"
+                                            )}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2 font-bold text-xs text-foreground">
+                                                    <UserCheck className="h-4 w-4 text-blue-500 shrink-0" />
+                                                    <span className="truncate">Estudiantes específicos</span>
+                                                </div>
+                                                {assignmentTarget === "selective" && (
+                                                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0" />
+                                                )}
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                                                Para reprogramar a quienes no presentaron o recuperaciones.
+                                            </p>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {assignmentTarget === "selective" ? (
+                                    <div className="space-y-3 pt-2 border-t border-border/50">
+                                        {/* Botón inteligente para seleccionar estudiantes que no han presentado */}
+                                        {previousSubmissionsForEval.length > 0 && (
+                                            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                                                <div className="flex items-center gap-2 text-xs">
+                                                    <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+                                                    <span>
+                                                        Hay <strong>{unsubmittedStudents.length}</strong> de {normalizedStudents.length} estudiantes que <strong>no han presentado</strong> esta evaluación previamente.
+                                                    </span>
+                                                </div>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={handleSelectUnsubmitted}
+                                                    className="h-8 text-xs font-bold border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 gap-1.5 shrink-0 w-full sm:w-auto cursor-pointer"
+                                                >
+                                                    <UserCheck className="h-3.5 w-3.5" />
+                                                    <span>Marcar no presentados ({unsubmittedStudents.length})</span>
+                                                </Button>
+                                            </div>
+                                        )}
+
+                                        {/* Barra de búsqueda y acciones masivas */}
+                                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                                            <div className="relative flex-1">
+                                                <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                                                <Input
+                                                    type="text"
+                                                    placeholder="Buscar por nombre, correo o CC..."
+                                                    value={studentSearchQuery}
+                                                    onChange={(e) => setStudentSearchQuery(e.target.value)}
+                                                    className="h-9 pl-9 text-xs bg-background"
+                                                />
+                                            </div>
+                                            <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
+                                                <div className="text-[11px] font-semibold text-muted-foreground">
+                                                    <span className="font-mono text-primary font-bold">{selectedStudentIds.length}</span>/{normalizedStudents.length} marcados
+                                                </div>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={handleSelectAll}
+                                                    className="h-8 px-2 text-[11px] font-semibold text-primary hover:text-primary cursor-pointer"
+                                                >
+                                                    Todos
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={handleDeselectAll}
+                                                    className="h-8 px-2 text-[11px] font-semibold text-muted-foreground hover:text-foreground cursor-pointer"
+                                                >
+                                                    Ninguno
+                                                </Button>
+                                            </div>
+                                        </div>
+
+                                        {/* Lista de estudiantes */}
+                                        <div className="rounded-xl border border-border/70 max-h-[220px] overflow-y-auto divide-y divide-border/40 bg-background">
+                                            {filteredStudents.length === 0 ? (
+                                                <div className="p-6 text-center text-xs text-muted-foreground">
+                                                    No se encontraron estudiantes con ese criterio de búsqueda.
+                                                </div>
+                                            ) : (
+                                                filteredStudents.map((st) => {
+                                                    const isSelected = selectedStudentIds.includes(st.id);
+                                                    const hasSubmitted = submittedUserIds.has(st.id);
+
+                                                    return (
+                                                        <label
+                                                            key={st.id}
+                                                            className={cn(
+                                                                "flex items-center justify-between gap-3 p-2.5 px-3 transition-colors cursor-pointer hover:bg-muted/40",
+                                                                isSelected && "bg-primary/5 dark:bg-primary/10"
+                                                            )}
+                                                        >
+                                                            <div className="flex items-center gap-3 min-w-0">
+                                                                <Checkbox
+                                                                    checked={isSelected}
+                                                                    onCheckedChange={() => toggleStudent(st.id)}
+                                                                />
+                                                                <div className="min-w-0">
+                                                                    <div className="text-xs font-semibold text-foreground truncate">
+                                                                        {st.fullName}
+                                                                    </div>
+                                                                    <div className="text-[10px] text-muted-foreground truncate flex items-center gap-1.5">
+                                                                        {st.identificacion && <span>CC: {st.identificacion}</span>}
+                                                                        {st.identificacion && st.email && <span>•</span>}
+                                                                        {st.email && <span>{st.email}</span>}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            {previousSubmissionsForEval.length > 0 && (
+                                                                <div className="shrink-0">
+                                                                    {hasSubmitted ? (
+                                                                        <Badge variant="outline" className="text-[10px] bg-muted/60 text-muted-foreground font-normal">
+                                                                            Presentó antes
+                                                                        </Badge>
+                                                                    ) : (
+                                                                        <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 font-semibold">
+                                                                            Sin presentar
+                                                                        </Badge>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </label>
+                                                    );
+                                                })
+                                            )}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="rounded-xl border border-dashed border-border/80 p-5 text-center text-muted-foreground space-y-1">
+                                        <Users className="h-6 w-6 text-primary/60 mx-auto mb-1.5" />
+                                        <p className="text-xs font-bold text-foreground">Asignación para toda la ficha</p>
+                                        <p className="text-[11px]">
+                                            Todos los {normalizedStudents.length} estudiantes del grupo podrán acceder a la evaluación dentro del horario definido.
+                                        </p>
+                                    </div>
+                                )}
                             </TabsContent>
 
                             {/* Pestaña 2: Reglas e IA */}
@@ -646,7 +938,7 @@ function AssignmentModal({
                             </TabsContent>
                         </div>
 
-                        <div className="px-6 py-4 border-t border-border/70 bg-muted/30 flex items-center justify-between gap-3">
+                        <div className="shrink-0 px-5 sm:px-6 py-3.5 border-t border-border/70 bg-muted/30 flex items-center justify-between gap-3">
                             <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
                                 Cancelar
                             </Button>
@@ -665,12 +957,14 @@ export function EvaluationAssignmentManager({
     courseId,
     attempts,
     teacherEvaluations,
-    courseHelpOptions = []
+    courseHelpOptions = [],
+    enrolledStudents = []
 }: {
     courseId: string;
     attempts: any[];
     teacherEvaluations: any[];
     courseHelpOptions?: CourseHelpOption[];
+    enrolledStudents?: any[];
 }) {
     const [isAssigning, setIsAssigning] = useState(false);
     const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
@@ -755,6 +1049,8 @@ export function EvaluationAssignmentManager({
                 courseId={courseId}
                 teacherEvaluations={teacherEvaluations}
                 courseHelpOptions={courseHelpOptions}
+                enrolledStudents={enrolledStudents}
+                attempts={attempts}
                 onSubmit={handleAssign}
             />
 
@@ -766,6 +1062,8 @@ export function EvaluationAssignmentManager({
                 courseId={courseId}
                 teacherEvaluations={teacherEvaluations}
                 courseHelpOptions={courseHelpOptions}
+                enrolledStudents={enrolledStudents}
+                attempts={attempts}
                 onSubmit={handleUpdate}
             />
 
@@ -818,6 +1116,13 @@ export function EvaluationAssignmentManager({
 
                         const isSurveilled = attempt.enableSurveillance !== false;
 
+                        const assignedIds: string[] = Array.isArray(attempt.assignedStudentIds)
+                            ? attempt.assignedStudentIds
+                            : typeof attempt.assignedStudentIds === 'string'
+                                ? JSON.parse(attempt.assignedStudentIds)
+                                : [];
+                        const isSelective = assignedIds.length > 0;
+
                         return (
                             <AICanvasCard
                                 key={attempt.id}
@@ -839,6 +1144,22 @@ export function EvaluationAssignmentManager({
                                             <CalendarClock className="h-3.5 w-3.5 text-primary shrink-0" />
                                             <span>{formatDateTime(start, "dd/MM/yy HH:mm")} hasta {formatDateTime(end, "dd/MM/yy HH:mm")}</span>
                                         </div>
+                                    </div>
+
+                                    {/* Destinatarios */}
+                                    <div className="flex items-center justify-between text-xs">
+                                        <span>Destinatarios:</span>
+                                        {isSelective ? (
+                                            <span className="inline-flex items-center gap-1 font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/25">
+                                                <UserCheck className="h-3 w-3 text-blue-500" />
+                                                <span>{assignedIds.length} {assignedIds.length === 1 ? 'estudiante' : 'estudiantes'}</span>
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center gap-1 text-muted-foreground bg-muted px-2 py-0.5 rounded-md border border-border/40">
+                                                <Users className="h-3 w-3" />
+                                                <span>Toda la ficha ({enrolledStudents.length || 'Todos'})</span>
+                                            </span>
+                                        )}
                                     </div>
 
                                     {/* Indicador de Vigilancia */}
@@ -877,7 +1198,7 @@ export function EvaluationAssignmentManager({
                                         variant="outline"
                                         size="sm"
                                         className="h-9 w-9 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/30 cursor-pointer"
-                                        title="Editar Configuración y Vigilancia"
+                                        title="Editar Configuración y Destinatarios"
                                         onClick={() => setEditingAttempt(attempt)}
                                     >
                                         <Edit className="h-4 w-4" />
@@ -925,14 +1246,35 @@ export function EvaluationAssignmentManager({
                                 const isFinished = now > end;
                                 const isSurveilled = attempt.enableSurveillance !== false;
 
+                                const assignedIds: string[] = Array.isArray(attempt.assignedStudentIds)
+                                    ? attempt.assignedStudentIds
+                                    : typeof attempt.assignedStudentIds === 'string'
+                                        ? JSON.parse(attempt.assignedStudentIds)
+                                        : [];
+                                const isSelective = assignedIds.length > 0;
+
                                 return (
                                     <TableRow key={attempt.id} className="hover:bg-muted/20 transition-colors border-border/30">
                                         <TableCell className="font-medium">
                                             <div className="flex flex-col">
                                                 <span className="font-bold text-sm text-foreground">{attempt.evaluation.title}</span>
-                                                <span className="text-xs text-muted-foreground">
-                                                    {attempt.evaluation._count?.questions || 0} preguntas
-                                                </span>
+                                                <div className="flex items-center gap-1.5 mt-0.5">
+                                                    <span className="text-xs text-muted-foreground">
+                                                        {attempt.evaluation._count?.questions || 0} preguntas
+                                                    </span>
+                                                    <span className="text-muted-foreground text-xs">•</span>
+                                                    {isSelective ? (
+                                                        <Badge variant="outline" className="text-[10px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 gap-1 px-1.5 py-0">
+                                                            <UserCheck className="h-3 w-3" />
+                                                            <span>{assignedIds.length} {assignedIds.length === 1 ? 'estudiante' : 'estudiantes'}</span>
+                                                        </Badge>
+                                                    ) : (
+                                                        <Badge variant="outline" className="text-[10px] text-muted-foreground px-1.5 py-0 gap-1">
+                                                            <Users className="h-3 w-3" />
+                                                            <span>Toda la ficha</span>
+                                                        </Badge>
+                                                    )}
+                                                </div>
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-center text-xs">

@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ThemeSelector } from "@/components/theme/ThemeSelector";
+import { CodeThemeSelector } from "@/components/theme/CodeThemeSelector";
 import { ModeToggle } from "@/components/theme/ModeToggle";
 import { PaperModeToggle } from "@/components/theme/PaperModeToggle";
 import { CreditsModal } from "@/components/CreditsModal";
@@ -51,6 +52,8 @@ export function MobileSettingsMenu({ themes, showThemeSelector, showModeToggle }
         {showThemeSelector && (
           <ThemeSelector themes={themes} asSubMenu={true} />
         )}
+
+        <CodeThemeSelector asSubMenu={true} />
         
         {showModeToggle && (
           <ModeToggle asMenuItem={true} />

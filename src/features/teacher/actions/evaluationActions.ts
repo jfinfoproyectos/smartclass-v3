@@ -262,6 +262,16 @@ export async function assignEvaluationAction(formData: FormData) {
     const wildcardAiHints = wildcardAiHintsStr ? parseInt(wildcardAiHintsStr, 10) : 0;
     const wildcardSecondChance = wildcardSecondChanceStr ? parseInt(wildcardSecondChanceStr, 10) : 0;
 
+    const assignedStudentIdsStr = formData.get("assignedStudentIds") as string;
+    let assignedStudentIds: string[] | undefined = undefined;
+    if (assignedStudentIdsStr) {
+        try {
+            assignedStudentIds = JSON.parse(assignedStudentIdsStr);
+        } catch {
+            assignedStudentIds = [];
+        }
+    }
+
     if (!evaluationId || !courseId || !startTimeStr || !endTimeStr) {
         throw new Error("Faltan datos requeridos: debes seleccionar una evaluación y definir el horario de inicio y fin.");
     }
@@ -284,6 +294,7 @@ export async function assignEvaluationAction(formData: FormData) {
         aiSupportDelaySeconds,
         wildcardAiHints,
         wildcardSecondChance,
+        assignedStudentIds,
     });
 
     // 🎯 AUDIT LOG
@@ -527,6 +538,16 @@ export async function updateEvaluationAssignmentAction(formData: FormData) {
     const wildcardAiHints = wildcardAiHintsStr ? parseInt(wildcardAiHintsStr, 10) : undefined;
     const wildcardSecondChance = wildcardSecondChanceStr ? parseInt(wildcardSecondChanceStr, 10) : undefined;
 
+    const assignedStudentIdsStr = formData.has("assignedStudentIds") ? (formData.get("assignedStudentIds") as string) : undefined;
+    let assignedStudentIds: string[] | undefined = undefined;
+    if (assignedStudentIdsStr !== undefined) {
+        try {
+            assignedStudentIds = JSON.parse(assignedStudentIdsStr);
+        } catch {
+            assignedStudentIds = [];
+        }
+    }
+
     const { evaluationService } = await import("../services/evaluationService");
     const attempt = await evaluationService.updateEvaluationAssignment(attemptId, {
         evaluationId,
@@ -543,6 +564,7 @@ export async function updateEvaluationAssignmentAction(formData: FormData) {
         aiSupportDelaySeconds,
         wildcardAiHints,
         wildcardSecondChance,
+        assignedStudentIds,
     });
 
     // 🎯 AUDIT LOG

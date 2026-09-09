@@ -487,6 +487,9 @@ model EvaluationAttempt {
   wildcardAiHints       Int                    @default(0)
   wildcardSecondChance  Int                    @default(0)
 
+  // Asignación de estudiantes: vacío/[] o null = todos los estudiantes del curso; array de IDs = estudiantes específicos
+  assignedStudentIds    Json?                  @default("[]")
+
   @@map("evaluation_attempt")
 }
 

@@ -42,7 +42,6 @@ import { useTheme } from "next-themes";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import Prism from "prismjs";
-import "prismjs/themes/prism-tomorrow.css";
 import "prismjs/components/prism-clike";
 import "prismjs/components/prism-markup";
 import "prismjs/components/prism-javascript";
@@ -646,8 +645,8 @@ export function CodeBlock({
       
       <div 
         className={cn(
-          "flex font-mono leading-relaxed overflow-auto custom-scrollbar select-text p-4 relative",
-          isFullscreen ? "flex-1" : "max-h-[500px]"
+          "flex font-mono leading-relaxed select-text p-4 relative",
+          isFullscreen ? "flex-1 overflow-auto custom-scrollbar min-h-0" : ""
         )}
         style={{ fontSize: `${fontSize}px` }}
       >
@@ -670,7 +669,7 @@ export function CodeBlock({
           })}
         </div>
 
-        <div className={cn("text-right pr-4 border-r select-none hidden sm:block relative z-10", activeStyle.lines)}>
+        <div className={cn("text-right pr-4 border-r select-none hidden sm:block relative z-10 shrink-0", activeStyle.lines)}>
           {Array.from({ length: lineCount }).map((_, i) => {
             const lineNum = i + 1;
             const isHighlighted = highlightedLinesSet.has(lineNum);
@@ -686,13 +685,15 @@ export function CodeBlock({
           })}
         </div>
 
-        <pre className="pl-4 flex-1 whitespace-pre relative z-10">
-          <code 
-            className={`language-${currentTab.language} theme-${theme}`}
-            style={{ lineHeight: `${fontSize * 1.5}px` }}
-            dangerouslySetInnerHTML={{ __html: highlighted }}
-          />
-        </pre>
+        <div className="flex-1 min-w-0 overflow-x-auto custom-scrollbar relative z-10">
+          <pre className="pl-4 whitespace-pre m-0">
+            <code 
+              className={`language-${currentTab.language} theme-${theme}`}
+              style={{ lineHeight: `${fontSize * 1.5}px` }}
+              dangerouslySetInnerHTML={{ __html: highlighted }}
+            />
+          </pre>
+        </div>
       </div>
     </div>
   );
@@ -930,7 +931,7 @@ export function CodeExplainBlock({
             })}
           </div>
 
-          <div className={cn("text-right pr-4 border-r select-none hidden sm:block relative z-10", activeStyle.lines)}>
+          <div className={cn("text-right pr-4 border-r select-none hidden sm:block relative z-10 shrink-0", activeStyle.lines)}>
             {Array.from({ length: lineCount }).map((_, i) => {
               const lineNum = i + 1;
               const isHighlighted = highlightedLinesSet.has(lineNum);
@@ -946,13 +947,15 @@ export function CodeExplainBlock({
             })}
           </div>
 
-          <pre className="pl-4 flex-1 whitespace-pre relative z-10">
-            <code 
-              className={`language-${currentTab.language} theme-${theme}`}
-              style={{ lineHeight: `${fontSize * 1.5}px` }}
-              dangerouslySetInnerHTML={{ __html: highlighted }}
-            />
-          </pre>
+          <div className="flex-1 min-w-0 overflow-x-auto custom-scrollbar relative z-10">
+            <pre className="pl-4 whitespace-pre m-0">
+              <code 
+                className={`language-${currentTab.language} theme-${theme}`}
+                style={{ lineHeight: `${fontSize * 1.5}px` }}
+                dangerouslySetInnerHTML={{ __html: highlighted }}
+              />
+            </pre>
+          </div>
         </div>
       </div>
 

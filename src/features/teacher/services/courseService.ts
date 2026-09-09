@@ -357,8 +357,23 @@ export const courseService = {
             const remarks = allRemarks.filter(r => r.courseId === enrollment.courseId);
             const attendances = allAttendances.filter(a => a.courseId === enrollment.courseId);
 
+            // Filter evaluationAttempts to only those assigned to all students or this specific student
+            const filteredEvaluationAttempts = (enrollment.course.evaluationAttempts || []).filter((att: any) => {
+                const assignedIds = Array.isArray(att.assignedStudentIds)
+                    ? att.assignedStudentIds
+                    : typeof att.assignedStudentIds === 'string'
+                        ? JSON.parse(att.assignedStudentIds)
+                        : [];
+                if (!assignedIds || assignedIds.length === 0) return true;
+                return assignedIds.includes(userId);
+            });
+
             return {
                 ...enrollment,
+                course: {
+                    ...enrollment.course,
+                    evaluationAttempts: filteredEvaluationAttempts
+                },
                 averageGrade: average,
                 remarks,
                 attendances

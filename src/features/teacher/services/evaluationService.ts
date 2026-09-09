@@ -198,6 +198,20 @@ export const evaluationService = {
                     select: {
                         id: true,
                         title: true,
+                        description: true,
+                        _count: {
+                            select: {
+                                questions: true,
+                            }
+                        }
+                    }
+                },
+                submissions: {
+                    select: {
+                        id: true,
+                        userId: true,
+                        submittedAt: true,
+                        score: true,
                     }
                 },
                 _count: {
@@ -226,6 +240,7 @@ export const evaluationService = {
         aiSupportDelaySeconds?: number;
         wildcardAiHints?: number;
         wildcardSecondChance?: number;
+        assignedStudentIds?: string[];
     }) {
         return await prisma.evaluationAttempt.create({
             data: {
@@ -244,6 +259,7 @@ export const evaluationService = {
                 aiSupportDelaySeconds: data.aiSupportDelaySeconds ?? 60,
                 wildcardAiHints: data.wildcardAiHints ?? 0,
                 wildcardSecondChance: data.wildcardSecondChance ?? 0,
+                assignedStudentIds: data.assignedStudentIds ?? [],
             }
         });
     },
@@ -269,6 +285,7 @@ export const evaluationService = {
         aiSupportDelaySeconds?: number;
         wildcardAiHints?: number;
         wildcardSecondChance?: number;
+        assignedStudentIds?: string[];
     }) {
         const updateData: any = {};
 
@@ -314,6 +331,9 @@ export const evaluationService = {
         if (data.wildcardSecondChance !== undefined) {
             updateData.wildcardSecondChance = data.wildcardSecondChance;
         }
+        if (data.assignedStudentIds !== undefined) {
+            updateData.assignedStudentIds = data.assignedStudentIds;
+        }
 
         return await prisma.evaluationAttempt.update({
             where: { id: attemptId },
@@ -343,6 +363,23 @@ export const evaluationService = {
     },
 
     async getOrCreateSubmission(attemptId: string, userId: string) {
+        // Find attempt to verify student authorization
+        const attempt = await prisma.evaluationAttempt.findUnique({
+            where: { id: attemptId },
+            select: { assignedStudentIds: true }
+        });
+
+        if (attempt?.assignedStudentIds) {
+            const assignedIds = Array.isArray(attempt.assignedStudentIds)
+                ? (attempt.assignedStudentIds as string[])
+                : typeof attempt.assignedStudentIds === 'string'
+                    ? JSON.parse(attempt.assignedStudentIds)
+                    : [];
+            if (assignedIds.length > 0 && !assignedIds.includes(userId)) {
+                throw new Error("No tienes asignada esta evaluación.");
+            }
+        }
+
         // Find existing
         let submission = await prisma.evaluationSubmission.findFirst({
             where: {

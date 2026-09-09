@@ -2,6 +2,7 @@
 
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { ModeToggle } from "@/components/theme/ModeToggle";
+import { CodeThemeSelector } from "@/components/theme/CodeThemeSelector";
 import { CreditsModal } from "@/components/CreditsModal";
 import { useRouter, usePathname, useSearchParams, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -97,6 +98,7 @@ export function TeacherCourseHeader({
                     <div className="flex items-center h-full px-2.5 border-l border-border/40">
                         <div className="flex items-center gap-0.5 bg-muted/60 dark:bg-muted/30 p-0.5 rounded-xl border border-border/70 shadow-2xs backdrop-blur-md">
                             {showThemeSelector && <ThemeSelector themes={themes} />}
+                            <CodeThemeSelector />
                             {showModeToggle && <ModeToggle />}
                             <div className="h-3.5 w-[1px] bg-border/80 mx-0.5" />
                             <CreditsModal />

@@ -399,7 +399,10 @@
   /* --- LIGHT MODE defaults (replicate markdown.css light vars) --- */
   .wmde-markdown,
   .wmde-markdown-var,
-  .w-md-editor {
+  .w-md-editor,
+  [data-color-mode*="light"] .wmde-markdown,
+  [data-color-mode*="light"] .wmde-markdown-var,
+  [data-color-mode*="light"] .w-md-editor {
     --color-prettylights-syntax-comment: #6e7781;
     --color-prettylights-syntax-constant: #0550ae;
     --color-prettylights-syntax-entity: #8250df;
@@ -431,9 +434,9 @@
     --color-fg-default: #24292f;
     --color-fg-muted: #57606a;
     --color-fg-subtle: #6e7781;
-    --color-canvas-default: var(--background, #f4f5f9);
-    --color-canvas-subtle: var(--muted, #edf0f5);
-    --color-border-default: var(--border, #c8d0de);
+    --color-canvas-default: var(--background, #ffffff);
+    --color-canvas-subtle: #f6f8fa;
+    --color-border-default: var(--border, #d0d7de);
     --color-border-muted: hsl(210, 18%, 87%);
     --color-neutral-muted: rgba(175, 184, 193, 0.2);
     --color-accent-fg: #0969da;
@@ -442,10 +445,13 @@
     --color-danger-fg: #cf222e;
   }
 
-  /* --- DARK MODE overrides (via Tailwind .dark class) --- */
+  /* --- DARK MODE overrides (via Tailwind .dark class or data-color-mode="dark") --- */
   .dark .wmde-markdown,
   .dark .wmde-markdown-var,
-  .dark .w-md-editor {
+  .dark .w-md-editor,
+  [data-color-mode*="dark"] .wmde-markdown,
+  [data-color-mode*="dark"] .wmde-markdown-var,
+  [data-color-mode*="dark"] .w-md-editor {
     --color-prettylights-syntax-comment: #8b949e;
     --color-prettylights-syntax-constant: #79c0ff;
     --color-prettylights-syntax-entity: #d2a8ff;
@@ -479,9 +485,9 @@
     --color-fg-default: #c9d1d9;
     --color-fg-muted: #8b949e;
     --color-fg-subtle: #484f58;
-    --color-canvas-default: var(--background, #1e2535);
-    --color-canvas-subtle: var(--muted, #1a2030);
-    --color-border-default: var(--border, #2d3a52);
+    --color-canvas-default: var(--background, #0d1117);
+    --color-canvas-subtle: #161b22;
+    --color-border-default: var(--border, #30363d);
     --color-border-muted: #21262d;
     --color-neutral-muted: rgba(110, 118, 129, 0.4);
     --color-accent-fg: #58a6ff;
@@ -510,35 +516,45 @@
     background-color: var(--accent) !important;
   }
 
-  /* --- Markdown inline code - using primary color from theme (scoped to preview) --- */
-  .w-md-editor-preview .wmde-markdown code,
-  .wmde-markdown-var code {
+  /* --- Markdown inline code - using primary color from theme --- */
+  .wmde-markdown :not(pre) > code,
+  .w-md-editor-preview .wmde-markdown :not(pre) > code,
+  .wmde-markdown-var :not(pre) > code {
     background-color: oklch(from var(--primary) l c h / 0.12) !important;
     color: var(--primary) !important;
-    border: 1px solid oklch(from var(--primary) l c h / 0.3) !important;
-    border-radius: 0.2rem !important;
-    padding: 0.05rem 0.2rem !important;
-    font-size: 0.825em !important;
+    border: 1px solid oklch(from var(--primary) l c h / 0.25) !important;
+    border-radius: 0.25rem !important;
+    padding: 0.1rem 0.35rem !important;
+    font-size: 0.85em !important;
     font-weight: 600 !important;
     font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace !important;
   }
 
-  /* --- Markdown code blocks (scoped to preview) --- */
+  /* --- Markdown code blocks (Adaptive Light & Dark Mode) --- */
+  .wmde-markdown pre,
   .w-md-editor-preview .wmde-markdown pre,
-  .wmde-markdown-var pre {
-    background-color: var(--muted) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: 0.5rem !important;
-    padding: 1rem !important;
+  .wmde-markdown-var pre,
+  .wmde-markdown pre[class*="language-"] {
+    background-color: var(--color-canvas-subtle) !important;
+    border: 1px solid var(--color-border-default) !important;
+    border-radius: 0.75rem !important;
+    padding: 1rem 1.25rem !important;
+    color: var(--color-fg-default) !important;
   }
 
+  .wmde-markdown pre code,
   .w-md-editor-preview .wmde-markdown pre code,
-  .wmde-markdown-var pre code {
+  .wmde-markdown-var pre code,
+  .wmde-markdown pre [class*="language-"],
+  .wmde-markdown pre code[class*="language-"],
+  .wmde-markdown code[class*="language-"] {
     background-color: transparent !important;
-    color: var(--foreground) !important;
+    background: transparent !important;
+    color: inherit !important;
     border: none !important;
     padding: 0 !important;
     font-weight: 400 !important;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace !important;
   }
 
   /* --- Strict @uiw/react-md-editor Text Selection Alignment Fix --- */

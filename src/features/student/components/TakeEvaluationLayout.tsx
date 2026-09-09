@@ -50,6 +50,7 @@ import { submitEvaluationAction, saveAnswerAction, evaluateAnswerWithAIAction, r
 import { differenceInSeconds } from "date-fns";
 import { ModeToggle } from "@/components/theme/ModeToggle";
 import { ThemeSelector } from "@/components/theme/ThemeSelector";
+import { CodeThemeSelector } from "@/components/theme/CodeThemeSelector";
 import { cn } from "@/lib/utils";
 
 function getScoreColorClass(score: number): string {
@@ -944,6 +945,7 @@ export function TakeEvaluationLayout({
                     {/* Controles de Tema y Modo Claro/Oscuro */}
                     <div className="flex items-center h-8 bg-muted/50 px-0.5 rounded-lg border border-border/60 gap-0.5">
                         <ThemeSelector themes={themes} className="h-7 w-7 rounded-md" />
+                        <CodeThemeSelector className="h-7 w-7 rounded-md" />
                         <ModeToggle className="h-7 w-7 rounded-md" />
                     </div>
 

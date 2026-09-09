@@ -132,6 +132,7 @@ export default async function Page({
                     attempts={evaluationAssignments}
                     teacherEvaluations={teacherEvaluations}
                     courseHelpOptions={courseHelpOptions}
+                    enrolledStudents={students}
                 />
             </TabsContent>
             <TabsContent value="grades" className="mt-0 outline-none">

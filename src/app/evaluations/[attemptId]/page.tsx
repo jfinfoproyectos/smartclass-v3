@@ -21,6 +21,16 @@ export default async function EvaluationPage({ params }: { params: Promise<{ att
         redirect("/dashboard/student");
     }
 
+    // Verify student is assigned to this attempt
+    const assignedIds = Array.isArray(attempt.assignedStudentIds)
+        ? (attempt.assignedStudentIds as string[])
+        : typeof attempt.assignedStudentIds === 'string'
+            ? JSON.parse(attempt.assignedStudentIds)
+            : [];
+    if (assignedIds.length > 0 && !assignedIds.includes(session.user.id)) {
+        redirect("/dashboard/student");
+    }
+
     // Initialize or fetch existing submission
     const submission = await evaluationService.getOrCreateSubmission(attemptId, session.user.id);
 

@@ -6,6 +6,7 @@ import { getRoleFromUser } from "@/features/auth/services/authService";
 import { CreditsModal } from "@/components/CreditsModal";
 import { ModeToggle } from "@/components/theme/ModeToggle";
 import { ThemeSelector } from "@/components/theme/ThemeSelector";
+import { CodeThemeSelector } from "@/components/theme/CodeThemeSelector";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { Footer } from "@/components/Footer";
 import { ProfileCompletionCheck } from "@/components/profile/ProfileCompletionCheck";
@@ -63,6 +64,7 @@ export default async function DashboardLayout({
               {/* Desktop Header Action Bar */}
               <div className="hidden md:flex items-center gap-0.5 bg-muted/60 dark:bg-muted/30 p-0.5 rounded-xl border border-border/70 shadow-2xs backdrop-blur-md">
                 {showThemeSelector && <ThemeSelector themes={themes} />}
+                <CodeThemeSelector />
                 {showModeToggle && <ModeToggle />}
                 <div className="h-3.5 w-[1px] bg-border/80 mx-0.5" />
                 <CreditsModal />

@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { formatDateTime } from "@/lib/dateUtils";
-import { Trash2, AlertCircle, ArrowLeft, Eye, ShieldAlert, MonitorPlay } from "lucide-react";
+import { Trash2, AlertCircle, ArrowLeft, Eye, ShieldAlert, MonitorPlay, Users, UserCheck } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
     Table,
     TableBody,
@@ -59,9 +60,22 @@ export function SubmissionsManager({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-6">
                 <div className="flex-1 min-w-0">
                     <h2 className="text-2xl font-bold tracking-tight">{attempt.evaluation.title}</h2>
-                    <p className="text-sm text-muted-foreground mt-1">
-                        {formatDateTime(attempt.startTime)} - {formatDateTime(attempt.endTime)}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                        <p className="text-sm text-muted-foreground">
+                            {formatDateTime(attempt.startTime)} - {formatDateTime(attempt.endTime)}
+                        </p>
+                        {Array.isArray(attempt.assignedStudentIds) && attempt.assignedStudentIds.length > 0 ? (
+                            <Badge variant="outline" className="text-[10px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 gap-1">
+                                <UserCheck className="h-3 w-3" />
+                                <span>Asignada a {attempt.assignedStudentIds.length} {attempt.assignedStudentIds.length === 1 ? 'estudiante' : 'estudiantes'}</span>
+                            </Badge>
+                        ) : (
+                            <Badge variant="outline" className="text-[10px] text-muted-foreground gap-1">
+                                <Users className="h-3 w-3" />
+                                <span>Asignada a toda la ficha</span>
+                            </Badge>
+                        )}
+                    </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                     {submittedCount > 0 && (
