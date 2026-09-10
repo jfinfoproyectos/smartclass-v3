@@ -1429,7 +1429,8 @@ function ActivityFormDialog({
         }
     };
 
-    const handleAddCriterion = () => {
+    const handleAddCriterion = (insertAtIndex?: number | unknown) => {
+        const targetIndex = typeof insertAtIndex === "number" ? insertAtIndex : undefined;
         const remaining = Math.max(0, 100 - criteriaSum);
         const newCrit: EvaluationCriterion = {
             id: `crit_${Date.now()}_${criteria.length + 1}`,
@@ -1439,7 +1440,15 @@ function ActivityFormDialog({
             description: "Aspectos técnicos y componentes de código a verificar en la entrega.",
             percentage: remaining > 0 ? remaining : 10,
         };
-        setCriteria([...criteria, newCrit]);
+        if (typeof targetIndex === "number" && targetIndex >= 0 && targetIndex <= criteria.length) {
+            const next = [...criteria];
+            next.splice(targetIndex, 0, newCrit);
+            setCriteria(next);
+            toast.success(`Celda de criterio #${targetIndex + 1} insertada.`);
+        } else {
+            setCriteria([...criteria, newCrit]);
+            toast.success(`Criterio #${criteria.length + 1} añadido.`);
+        }
     };
 
     const handleUpdateCriterion = (index: number, field: keyof EvaluationCriterion, val: any) => {
@@ -4026,7 +4035,7 @@ function ActivityFormDialog({
                                             <Button
                                                 type="button"
                                                 size="sm"
-                                                onClick={handleAddCriterion}
+                                                onClick={() => handleAddCriterion()}
                                                 className="text-xs h-8 gap-1.5 font-bold shadow-xs bg-primary text-primary-foreground"
                                             >
                                                 <Plus className="h-3.5 w-3.5" />
@@ -4060,7 +4069,7 @@ function ActivityFormDialog({
                                                 <Button
                                                     type="button"
                                                     variant="outline"
-                                                    onClick={handleAddCriterion}
+                                                    onClick={() => handleAddCriterion()}
                                                     className="text-xs font-semibold gap-1.5"
                                                 >
                                                     <Plus className="h-3.5 w-3.5" />
@@ -4069,144 +4078,190 @@ function ActivityFormDialog({
                                             </div>
                                         </div>
                                     ) : (
-                                        <div className="space-y-4 flex-1 pb-4">
-                                            {criteria.map((crit, idx) => (
-                                                <div 
-                                                    key={crit.id || idx}
-                                                    className="p-4 sm:p-5 bg-card rounded-2xl border border-border/80 shadow-xs hover:border-primary/40 transition-colors space-y-4"
+                                        <div className="space-y-3 flex-1 pb-4">
+                                            {/* Divisor estilo Notebook antes de la primera celda */}
+                                            <div className="relative py-2 my-0.5 group flex items-center justify-center">
+                                                <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                                                    <div className="w-full border-t border-dashed border-border/50 group-hover:border-primary/60 transition-colors" />
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleAddCriterion(0)}
+                                                    className="relative inline-flex items-center gap-1.5 px-3 py-1 text-[11px] font-semibold rounded-full bg-card border border-border/80 text-muted-foreground shadow-2xs hover:text-primary hover:border-primary hover:bg-primary/5 hover:scale-105 active:scale-95 transition-all cursor-pointer opacity-70 group-hover:opacity-100 focus:opacity-100"
+                                                    title="Insertar celda de criterio al inicio (estilo Notebook)"
                                                 >
-                                                    {/* Cabecera: Número, Título y Ponderación */}
-                                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/50">
-                                                        <div className="flex items-center gap-2 flex-1">
-                                                            <Badge variant="outline" className="font-mono text-xs px-2.5 py-1 bg-primary/5 text-primary border-primary/20 shrink-0 font-bold">
-                                                                #{idx + 1}
-                                                            </Badge>
-                                                            <Input
-                                                                value={crit.name}
-                                                                onChange={(e) => handleUpdateCriterion(idx, "name", e.target.value)}
-                                                                placeholder="Concepto o Criterio a evaluar (ej: Dominio de POO y Herencia)"
-                                                                className="h-8 font-bold text-xs flex-1 bg-background"
-                                                            />
-                                                        </div>
+                                                    <Plus className="h-3.5 w-3.5 text-primary group-hover:rotate-90 transition-transform duration-200" />
+                                                    <span>+ Celda arriba</span>
+                                                </button>
+                                            </div>
 
-                                                        <div className="flex items-center gap-3 shrink-0">
-                                                            <div className="flex items-center gap-1.5">
-                                                                <Label className="text-xs font-semibold text-muted-foreground">Ponderación:</Label>
-                                                                <div className="relative w-20">
-                                                                    <Input
-                                                                        type="number"
-                                                                        min="1"
-                                                                        max="100"
-                                                                        value={crit.percentage}
-                                                                        onChange={(e) => handleUpdateCriterion(idx, "percentage", parseInt(e.target.value, 10) || 0)}
-                                                                        className="h-8 pr-6 text-xs font-mono font-bold text-right bg-background"
-                                                                    />
-                                                                    <span className="absolute right-2 top-2 text-xs text-muted-foreground font-mono font-bold">%</span>
+                                            {criteria.map((crit, idx) => (
+                                                <div key={crit.id || idx} className="space-y-3">
+                                                    <div 
+                                                        className="p-4 sm:p-5 bg-card rounded-2xl border border-border/80 shadow-xs hover:border-primary/40 transition-colors space-y-4"
+                                                    >
+                                                        {/* Cabecera: Número, Título y Ponderación */}
+                                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/50">
+                                                            <div className="flex items-center gap-2 flex-1">
+                                                                <Badge variant="outline" className="font-mono text-xs px-2.5 py-1 bg-primary/5 text-primary border-primary/20 shrink-0 font-bold">
+                                                                    #{idx + 1}
+                                                                </Badge>
+                                                                <Input
+                                                                    value={crit.name}
+                                                                    onChange={(e) => handleUpdateCriterion(idx, "name", e.target.value)}
+                                                                    placeholder="Concepto o Criterio a evaluar (ej: Dominio de POO y Herencia)"
+                                                                    className="h-8 font-bold text-xs flex-1 bg-background"
+                                                                />
+                                                            </div>
+
+                                                            <div className="flex items-center gap-2 sm:gap-3 shrink-0 flex-wrap">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <Label className="text-xs font-semibold text-muted-foreground">Ponderación:</Label>
+                                                                    <div className="relative w-20">
+                                                                        <Input
+                                                                            type="number"
+                                                                            min="1"
+                                                                            max="100"
+                                                                            value={crit.percentage}
+                                                                            onChange={(e) => handleUpdateCriterion(idx, "percentage", parseInt(e.target.value, 10) || 0)}
+                                                                            className="h-8 pr-6 text-xs font-mono font-bold text-right bg-background"
+                                                                        />
+                                                                        <span className="absolute right-2 top-2 text-xs text-muted-foreground font-mono font-bold">%</span>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="flex items-center border-l pl-2 gap-1 border-border/70">
+                                                                    {/* Botón estilo Notebook para insertar celda debajo */}
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        onClick={() => handleAddCriterion(idx + 1)}
+                                                                        className="h-7 px-2 gap-1 text-[10px] font-semibold text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg"
+                                                                        title="Insertar una nueva celda de criterio debajo de esta (estilo Notebook)"
+                                                                    >
+                                                                        <Plus className="h-3.5 w-3.5" />
+                                                                        <span className="hidden sm:inline">Insertar Celda</span>
+                                                                    </Button>
+
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        disabled={idx === 0}
+                                                                        onClick={() => handleMoveCriterion(idx, "up")}
+                                                                        className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                                                                        title="Subir criterio"
+                                                                    >
+                                                                        <ChevronUp className="h-3.5 w-3.5" />
+                                                                    </Button>
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        disabled={idx === criteria.length - 1}
+                                                                        onClick={() => handleMoveCriterion(idx, "down")}
+                                                                        className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                                                                        title="Bajar criterio"
+                                                                    >
+                                                                        <ChevronDown className="h-3.5 w-3.5" />
+                                                                    </Button>
+                                                                    {/* Botón tipo icono al lado de eliminar para verificar relación con el enunciado con IA */}
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        disabled={verifyingCriterionIndex !== null}
+                                                                        onClick={() => handleVerifyCriterion(idx)}
+                                                                        className={`h-7 w-7 p-0 transition-all ${
+                                                                            verifiedMap[crit.id || idx]
+                                                                                ? "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20"
+                                                                                : "text-purple-600 dark:text-purple-400 hover:text-purple-700 hover:bg-purple-500/10"
+                                                                        }`}
+                                                                        title="Verificar si esta pregunta tiene relación con el enunciado usando IA"
+                                                                    >
+                                                                        {verifyingCriterionIndex === idx ? (
+                                                                            <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-600" />
+                                                                        ) : verifiedMap[crit.id || idx] ? (
+                                                                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                                                        ) : (
+                                                                            <Sparkles className="h-3.5 w-3.5" />
+                                                                        )}
+                                                                    </Button>
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        onClick={() => handleRemoveCriterion(idx)}
+                                                                        className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                                                                        title="Eliminar criterio"
+                                                                    >
+                                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                                    </Button>
                                                                 </div>
                                                             </div>
-
-                                                            <div className="flex items-center border-l pl-2 gap-1 border-border/70">
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="ghost"
-                                                                    size="sm"
-                                                                    disabled={idx === 0}
-                                                                    onClick={() => handleMoveCriterion(idx, "up")}
-                                                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-                                                                    title="Subir criterio"
-                                                                >
-                                                                    <ChevronUp className="h-3.5 w-3.5" />
-                                                                </Button>
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="ghost"
-                                                                    size="sm"
-                                                                    disabled={idx === criteria.length - 1}
-                                                                    onClick={() => handleMoveCriterion(idx, "down")}
-                                                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-                                                                    title="Bajar criterio"
-                                                                >
-                                                                    <ChevronDown className="h-3.5 w-3.5" />
-                                                                </Button>
-                                                                {/* Botón tipo icono al lado de eliminar para verificar relación con el enunciado con IA */}
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="ghost"
-                                                                    size="sm"
-                                                                    disabled={verifyingCriterionIndex !== null}
-                                                                    onClick={() => handleVerifyCriterion(idx)}
-                                                                    className={`h-7 w-7 p-0 transition-all ${
-                                                                        verifiedMap[crit.id || idx]
-                                                                            ? "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20"
-                                                                            : "text-purple-600 dark:text-purple-400 hover:text-purple-700 hover:bg-purple-500/10"
-                                                                    }`}
-                                                                    title="Verificar si esta pregunta tiene relación con el enunciado usando IA"
-                                                                >
-                                                                    {verifyingCriterionIndex === idx ? (
-                                                                        <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-600" />
-                                                                    ) : verifiedMap[crit.id || idx] ? (
-                                                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                                                                    ) : (
-                                                                        <Sparkles className="h-3.5 w-3.5" />
-                                                                    )}
-                                                                </Button>
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="ghost"
-                                                                    size="sm"
-                                                                    onClick={() => handleRemoveCriterion(idx)}
-                                                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                                                                    title="Eliminar criterio"
-                                                                >
-                                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                                </Button>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Bloque de Preguntas de Sustentación para el Docente */}
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                                                        <div className="space-y-1.5 p-3 rounded-xl bg-primary/[0.03] border border-primary/15">
-                                                            <div className="flex items-center gap-1.5 text-xs font-bold text-primary">
-                                                                <HelpCircle className="h-3.5 w-3.5" />
-                                                                <span>Preguntas de Sustentación (para interrogar al estudiante)</span>
-                                                            </div>
-                                                            <Textarea
-                                                                value={crit.question || ""}
-                                                                onChange={(e) => handleUpdateCriterion(idx, "question", e.target.value)}
-                                                                placeholder="Ej: ¿Por qué utilizaste herencia en esta clase? Explica cómo aplicas el polimorfismo y encapsulamiento..."
-                                                                rows={3}
-                                                                className="text-xs resize-y bg-background font-normal leading-relaxed"
-                                                            />
                                                         </div>
 
-                                                        <div className="space-y-1.5 p-3 rounded-xl bg-emerald-500/[0.03] border border-emerald-500/20">
-                                                            <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                                                                <CheckCircle2 className="h-3.5 w-3.5" />
-                                                                <span>Respuesta Esperada / Conceptos Clave a Demostrar</span>
+                                                        {/* Bloque de Preguntas de Sustentación para el Docente */}
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                                                            <div className="space-y-1.5 p-3 rounded-xl bg-primary/[0.03] border border-primary/15">
+                                                                <div className="flex items-center gap-1.5 text-xs font-bold text-primary">
+                                                                    <HelpCircle className="h-3.5 w-3.5" />
+                                                                    <span>Preguntas de Sustentación (para interrogar al estudiante)</span>
+                                                                </div>
+                                                                <Textarea
+                                                                    value={crit.question || ""}
+                                                                    onChange={(e) => handleUpdateCriterion(idx, "question", e.target.value)}
+                                                                    placeholder="Ej: ¿Por qué utilizaste herencia en esta clase? Explica cómo aplicas el polimorfismo y encapsulamiento..."
+                                                                    rows={3}
+                                                                    className="text-xs resize-y bg-background font-normal leading-relaxed"
+                                                                />
                                                             </div>
+
+                                                            <div className="space-y-1.5 p-3 rounded-xl bg-emerald-500/[0.03] border border-emerald-500/20">
+                                                                <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                                                                    <CheckCircle2 className="h-3.5 w-3.5" />
+                                                                    <span>Respuesta Esperada / Conceptos Clave a Demostrar</span>
+                                                                </div>
+                                                                <Textarea
+                                                                    value={crit.expectedAnswer || ""}
+                                                                    onChange={(e) => handleUpdateCriterion(idx, "expectedAnswer", e.target.value)}
+                                                                    placeholder="Ej: El estudiante debe justificar la abstracción, explicar el rol de la clase base y demostrar dominio de POO..."
+                                                                    rows={3}
+                                                                    className="text-xs resize-y bg-background font-normal leading-relaxed"
+                                                                />
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Aspectos técnicos de código */}
+                                                        <div className="space-y-1">
+                                                            <Label className="text-[11px] font-semibold text-muted-foreground">
+                                                                Aspectos técnicos a verificar en el código / repositorio:
+                                                            </Label>
                                                             <Textarea
-                                                                value={crit.expectedAnswer || ""}
-                                                                onChange={(e) => handleUpdateCriterion(idx, "expectedAnswer", e.target.value)}
-                                                                placeholder="Ej: El estudiante debe justificar la abstracción, explicar el rol de la clase base y demostrar dominio de POO..."
-                                                                rows={3}
-                                                                className="text-xs resize-y bg-background font-normal leading-relaxed"
+                                                                value={crit.description}
+                                                                onChange={(e) => handleUpdateCriterion(idx, "description", e.target.value)}
+                                                                placeholder="Descripción de los archivos, clases o componentes de código que sustentan este criterio..."
+                                                                rows={2}
+                                                                className="text-xs resize-y bg-background/60"
                                                             />
                                                         </div>
                                                     </div>
 
-                                                    {/* Aspectos técnicos de código */}
-                                                    <div className="space-y-1">
-                                                        <Label className="text-[11px] font-semibold text-muted-foreground">
-                                                            Aspectos técnicos a verificar en el código / repositorio:
-                                                        </Label>
-                                                        <Textarea
-                                                            value={crit.description}
-                                                            onChange={(e) => handleUpdateCriterion(idx, "description", e.target.value)}
-                                                            placeholder="Descripción de los archivos, clases o componentes de código que sustentan este criterio..."
-                                                            rows={2}
-                                                            className="text-xs resize-y bg-background/60"
-                                                        />
+                                                    {/* Divisor estilo Notebook entre celdas y al final */}
+                                                    <div className="relative py-2 my-0.5 group flex items-center justify-center">
+                                                        <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                                                            <div className="w-full border-t border-dashed border-border/50 group-hover:border-primary/60 transition-colors" />
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleAddCriterion(idx + 1)}
+                                                            className="relative inline-flex items-center gap-1.5 px-3 py-1 text-[11px] font-semibold rounded-full bg-card border border-border/80 text-muted-foreground shadow-2xs hover:text-primary hover:border-primary hover:bg-primary/5 hover:scale-105 active:scale-95 transition-all cursor-pointer opacity-70 group-hover:opacity-100 focus:opacity-100"
+                                                            title={`Insertar celda de criterio ${idx === criteria.length - 1 ? "al final" : "aquí"} (estilo Notebook)`}
+                                                        >
+                                                            <Plus className="h-3.5 w-3.5 text-primary group-hover:rotate-90 transition-transform duration-200" />
+                                                            <span>+ Celda {idx === criteria.length - 1 ? "al final" : "aquí"}</span>
+                                                        </button>
                                                     </div>
                                                 </div>
                                             ))}

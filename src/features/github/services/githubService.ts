@@ -191,7 +191,15 @@ export const githubService = {
         return [];
     },
 
-    async getRepoCommits(owner: string, repo: string, branch: string = "HEAD", token?: string, maxPages: number = 2): Promise<any[]> {
+    async getRepoCommits(
+        owner: string, 
+        repo: string, 
+        branch: string = "HEAD", 
+        token?: string, 
+        maxPages: number = 10,
+        since?: string,
+        until?: string
+    ): Promise<any[]> {
         const headers: HeadersInit = {
             'Accept': 'application/vnd.github.v3+json'
         };
@@ -207,6 +215,12 @@ export const githubService = {
                 let url = `https://api.github.com/repos/${owner}/${repo}/commits?per_page=100&page=${page}`;
                 if (effectiveBranch) {
                     url += `&sha=${encodeURIComponent(effectiveBranch)}`;
+                }
+                if (since) {
+                    url += `&since=${encodeURIComponent(since)}`;
+                }
+                if (until) {
+                    url += `&until=${encodeURIComponent(until)}`;
                 }
 
                 const response = await fetch(url, { headers });

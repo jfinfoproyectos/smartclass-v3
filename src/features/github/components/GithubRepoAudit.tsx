@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { 
     GitCommit, Users, Calendar, Clock, Crown, ExternalLink, Search, RotateCcw, 
     Loader2, AlertCircle, ArrowUpRight, BarChart3, PieChart as PieIcon, Check, Copy,
-    TrendingUp, ShieldCheck, Sun, Moon, CalendarDays, Filter, Maximize2, Minimize2
+    TrendingUp, ShieldCheck, Sun, Moon, CalendarDays, Filter, Maximize2, Minimize2, X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,12 @@ import {
     TooltipTrigger 
 } from "@/components/ui/tooltip";
 import { getRepoAuditAction } from "@/features/github/actions/githubActions";
+import { 
+    getRegionalDateOnly, 
+    getRegionalHour, 
+    getRegionalDayOfWeek, 
+    formatDayMonthDate 
+} from "@/lib/dateUtils";
 import { 
     ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip, 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend 
@@ -109,6 +115,11 @@ export function GithubRepoAudit({ repoUrl, activityId, title, isFullscreen, onTo
     const [error, setError] = useState<string | null>(null);
     const [copiedSha, setCopiedSha] = useState<string | null>(null);
 
+    // Filtros de fecha
+    const [datePreset, setDatePreset] = useState<"all" | "7d" | "15d" | "30d" | "custom">("all");
+    const [startDate, setStartDate] = useState<string>("");
+    const [endDate, setEndDate] = useState<string>("");
+
     // Filtros de búsqueda en commits
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedContributor, setSelectedContributor] = useState<string | null>(null);
@@ -140,10 +151,64 @@ export function GithubRepoAudit({ repoUrl, activityId, title, isFullscreen, onTo
         setTimeout(() => setCopiedSha(null), 2000);
     };
 
-    // Commits filtrados
-    const filteredCommits = useMemo(() => {
+    const handlePresetChange = (preset: "all" | "7d" | "15d" | "30d" | "custom") => {
+        setDatePreset(preset);
+        if (preset === "all") {
+            setStartDate("");
+            setEndDate("");
+            return;
+        }
+        if (preset === "custom") {
+            return;
+        }
+        const today = new Date();
+        const todayStr = getRegionalDateOnly(today);
+        setEndDate(todayStr);
+
+        let daysAgo = 7;
+        if (preset === "15d") daysAgo = 15;
+        if (preset === "30d") daysAgo = 30;
+
+        const past = new Date(today);
+        past.setDate(past.getDate() - daysAgo);
+        setStartDate(getRegionalDateOnly(past));
+    };
+
+    const handleStartDateChange = (val: string) => {
+        setStartDate(val);
+        setDatePreset("custom");
+    };
+
+    const handleEndDateChange = (val: string) => {
+        setEndDate(val);
+        setDatePreset("custom");
+    };
+
+    const handleResetDateFilter = () => {
+        setDatePreset("all");
+        setStartDate("");
+        setEndDate("");
+    };
+
+    const isDateFiltered = datePreset !== "all" || Boolean(startDate || endDate);
+
+    // Commits dentro del rango de fechas
+    const commitsInDateRange = useMemo(() => {
         if (!data?.commits) return [];
-        let list = data.commits;
+        if (!isDateFiltered) {
+            return data.commits;
+        }
+        return data.commits.filter((c: any) => {
+            const cDate = c.regionalDate || getRegionalDateOnly(c.date);
+            if (startDate && cDate < startDate) return false;
+            if (endDate && cDate > endDate) return false;
+            return true;
+        });
+    }, [data?.commits, isDateFiltered, startDate, endDate]);
+
+    // Commits filtrados por autor y búsqueda dentro del rango de fechas
+    const filteredCommits = useMemo(() => {
+        let list = commitsInDateRange;
 
         if (selectedContributor) {
             list = list.filter((c: any) => 
@@ -164,26 +229,170 @@ export function GithubRepoAudit({ repoUrl, activityId, title, isFullscreen, onTo
         }
 
         return list;
-    }, [data?.commits, selectedContributor, searchQuery]);
+    }, [commitsInDateRange, selectedContributor, searchQuery]);
 
-    // Datos formateados para el gráfico de torta de colaboradores
-    const pieData = useMemo(() => {
-        if (!data?.contributors) return [];
-        return data.contributors.map((c: any) => ({
+    // Recálculo reactivo de métricas y gráficos según el período de fechas seleccionado
+    const activeStats = useMemo(() => {
+        if (!data) return null;
+        if (!isDateFiltered) {
+            return {
+                summary: data.summary,
+                contributors: data.contributors,
+                pieData: (data.contributors || []).map((c: any) => ({
+                    name: c.login || c.name,
+                    value: c.commitsCount,
+                    percentage: c.percentage
+                })),
+                timeline: (data.timeline || []).map((item: any) => ({
+                    ...item,
+                    formattedDate: formatDayMonthDate(item.date)
+                })),
+                dayOfWeekStats: data.dayOfWeekStats,
+                hourStats: data.hourStats
+            };
+        }
+
+        const totalInRange = commitsInDateRange.length;
+        const contribMap = new Map<string, any>();
+        const activeDays = new Set<string>();
+        const timeMap = new Map<string, any>();
+        const dayCounts = [0, 0, 0, 0, 0, 0, 0];
+        const dayContribs: Map<string, any>[] = Array.from({ length: 7 }, () => new Map());
+        const hoursMap = {
+            madrugada: 0,
+            manana: 0,
+            tarde: 0,
+            noche: 0
+        };
+        const hourContribs = {
+            madrugada: new Map<string, any>(),
+            manana: new Map<string, any>(),
+            tarde: new Map<string, any>(),
+            noche: new Map<string, any>()
+        };
+
+        for (const c of commitsInDateRange) {
+            const key = (c.authorLogin || c.authorEmail || c.authorName).toLowerCase();
+            const dStr = c.regionalDate || getRegionalDateOnly(c.date);
+            activeDays.add(dStr);
+
+            let cItem = contribMap.get(key);
+            if (!cItem) {
+                cItem = {
+                    name: c.authorName,
+                    login: c.authorLogin,
+                    avatar: c.authorAvatar,
+                    profileUrl: c.authorHtmlUrl,
+                    email: c.authorEmail,
+                    commitsCount: 0,
+                    activeDates: new Set<string>(),
+                    lastCommitDate: c.date
+                };
+                contribMap.set(key, cItem);
+            }
+            cItem.commitsCount += 1;
+            cItem.activeDates.add(dStr);
+            if (new Date(c.date) > new Date(cItem.lastCommitDate)) {
+                cItem.lastCommitDate = c.date;
+            }
+
+            let tEntry = timeMap.get(dStr);
+            if (!tEntry) {
+                tEntry = { date: dStr, total: 0, contribs: new Map<string, any>() };
+                timeMap.set(dStr, tEntry);
+            }
+            tEntry.total += 1;
+            const authorKey = c.authorLogin || c.authorName;
+            const existT = tEntry.contribs.get(authorKey);
+            if (existT) existT.count += 1;
+            else tEntry.contribs.set(authorKey, { name: c.authorName, login: c.authorLogin, count: 1 });
+
+            const dObj = new Date(c.date);
+            const dayIdx = getRegionalDayOfWeek(dObj);
+            dayCounts[dayIdx] += 1;
+            const existD = dayContribs[dayIdx].get(authorKey);
+            if (existD) existD.count += 1;
+            else dayContribs[dayIdx].set(authorKey, { name: c.authorName, login: c.authorLogin, count: 1 });
+
+            const hour = getRegionalHour(dObj);
+            let slot: "madrugada" | "manana" | "tarde" | "noche";
+            if (hour >= 0 && hour < 6) { hoursMap.madrugada += 1; slot = "madrugada"; }
+            else if (hour >= 6 && hour < 12) { hoursMap.manana += 1; slot = "manana"; }
+            else if (hour >= 12 && hour < 18) { hoursMap.tarde += 1; slot = "tarde"; }
+            else { hoursMap.noche += 1; slot = "noche"; }
+
+            const existH = hourContribs[slot].get(authorKey);
+            if (existH) existH.count += 1;
+            else hourContribs[slot].set(authorKey, { name: c.authorName, login: c.authorLogin, count: 1 });
+        }
+
+        const contributorsList = Array.from(contribMap.values()).map(contrib => {
+            const pct = totalInRange > 0 ? (contrib.commitsCount / totalInRange) * 100 : 0;
+            return {
+                name: contrib.name,
+                login: contrib.login,
+                avatar: contrib.avatar,
+                profileUrl: contrib.profileUrl,
+                email: contrib.email,
+                commitsCount: contrib.commitsCount,
+                percentage: Number(pct.toFixed(1)),
+                activeDaysCount: contrib.activeDates.size,
+                lastCommitDate: contrib.lastCommitDate
+            };
+        }).sort((a, b) => b.commitsCount - a.commitsCount);
+
+        const pieDataList = contributorsList.map(c => ({
             name: c.login || c.name,
             value: c.commitsCount,
             percentage: c.percentage
         }));
-    }, [data?.contributors]);
 
-    // Formatear fechas para el timeline
-    const timelineData = useMemo(() => {
-        if (!data?.timeline) return [];
-        return data.timeline.map((item: any) => ({
-            ...item,
-            formattedDate: format(new Date(item.date), "dd MMM", { locale: es })
-        }));
-    }, [data?.timeline]);
+        const sortedTimelineDates = Array.from(timeMap.keys()).sort();
+        const timelineList = sortedTimelineDates.map(dStr => {
+            const entry = timeMap.get(dStr)!;
+            return {
+                date: dStr,
+                formattedDate: formatDayMonthDate(dStr),
+                total: entry.total,
+                contributors: Array.from(entry.contribs.values()).sort((a: any, b: any) => b.count - a.count)
+            };
+        });
+
+        const reorderedDays = [
+            { day: "Lun", fullName: "Lunes", count: dayCounts[1], contributors: Array.from(dayContribs[1].values()).sort((a, b) => b.count - a.count) },
+            { day: "Mar", fullName: "Martes", count: dayCounts[2], contributors: Array.from(dayContribs[2].values()).sort((a, b) => b.count - a.count) },
+            { day: "Mié", fullName: "Miércoles", count: dayCounts[3], contributors: Array.from(dayContribs[3].values()).sort((a, b) => b.count - a.count) },
+            { day: "Jue", fullName: "Jueves", count: dayCounts[4], contributors: Array.from(dayContribs[4].values()).sort((a, b) => b.count - a.count) },
+            { day: "Vie", fullName: "Viernes", count: dayCounts[5], contributors: Array.from(dayContribs[5].values()).sort((a, b) => b.count - a.count) },
+            { day: "Sáb", fullName: "Sábado", count: dayCounts[6], contributors: Array.from(dayContribs[6].values()).sort((a, b) => b.count - a.count) },
+            { day: "Dom", fullName: "Domingo", count: dayCounts[0], contributors: Array.from(dayContribs[0].values()).sort((a, b) => b.count - a.count) }
+        ];
+
+        const hourSlotStats = [
+            { slot: "Madrugada", range: "00:00 - 06:00", count: hoursMap.madrugada, contributors: Array.from(hourContribs.madrugada.values()).sort((a, b) => b.count - a.count) },
+            { slot: "Mañana", range: "06:00 - 12:00", count: hoursMap.manana, contributors: Array.from(hourContribs.manana.values()).sort((a, b) => b.count - a.count) },
+            { slot: "Tarde", range: "12:00 - 18:00", count: hoursMap.tarde, contributors: Array.from(hourContribs.tarde.values()).sort((a, b) => b.count - a.count) },
+            { slot: "Noche", range: "18:00 - 24:00", count: hoursMap.noche, contributors: Array.from(hourContribs.noche.values()).sort((a, b) => b.count - a.count) }
+        ];
+
+        const summaryObj = {
+            totalCommits: totalInRange,
+            totalContributors: contributorsList.length,
+            activeDaysCount: activeDays.size,
+            daysSpan: activeDays.size > 0 ? (sortedTimelineDates.length > 1 ? Math.max(1, Math.ceil((new Date(sortedTimelineDates[sortedTimelineDates.length - 1]).getTime() - new Date(sortedTimelineDates[0]).getTime()) / (1000 * 60 * 60 * 24))) : 1) : 0,
+            topContributor: contributorsList[0] || null,
+            repoInfo: data.summary.repoInfo
+        };
+
+        return {
+            summary: summaryObj,
+            contributors: contributorsList,
+            pieData: pieDataList,
+            timeline: timelineList,
+            dayOfWeekStats: reorderedDays,
+            hourStats: hourSlotStats
+        };
+    }, [data, isDateFiltered, commitsInDateRange]);
 
     if (isLoading) {
         return (
@@ -228,7 +437,13 @@ export function GithubRepoAudit({ repoUrl, activityId, title, isFullscreen, onTo
         );
     }
 
-    const { summary, contributors, dayOfWeekStats, hourStats, warning } = data;
+    const warning = data.warning;
+    const summary = activeStats?.summary || data.summary;
+    const contributors = activeStats?.contributors || data.contributors || [];
+    const dayOfWeekStats = activeStats?.dayOfWeekStats || data.dayOfWeekStats || [];
+    const hourStats = activeStats?.hourStats || data.hourStats || [];
+    const pieData = activeStats?.pieData || [];
+    const timelineData = activeStats?.timeline || [];
 
     return (
         <div className="w-full h-full min-h-0 flex flex-col overflow-hidden">
@@ -244,12 +459,12 @@ export function GithubRepoAudit({ repoUrl, activityId, title, isFullscreen, onTo
                                 Auditoría Git de Colaboración y Commits
                             </h2>
                             <Badge variant="outline" className="text-[10px] font-mono bg-primary/5 text-primary border-primary/20">
-                                Rama: {summary.repoInfo.branch || "HEAD"}
+                                Rama: {summary.repoInfo?.branch || "HEAD"}
                             </Badge>
                         </div>
                         <p className="text-xs text-muted-foreground truncate">
-                            Repositorio: <a href={summary.repoInfo.repoUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline font-mono inline-flex items-center gap-1">
-                                {summary.repoInfo.owner}/{summary.repoInfo.repo}
+                            Repositorio: <a href={summary.repoInfo?.repoUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline font-mono inline-flex items-center gap-1">
+                                {summary.repoInfo?.owner}/{summary.repoInfo?.repo}
                                 <ExternalLink className="h-2.5 w-2.5 opacity-70" />
                             </a>
                         </p>
@@ -274,7 +489,7 @@ export function GithubRepoAudit({ repoUrl, activityId, title, isFullscreen, onTo
                             size="sm"
                             className="h-8 px-2.5 text-xs gap-1.5 rounded-lg shadow-2xs font-semibold"
                         >
-                            <a href={summary.repoInfo.repoUrl} target="_blank" rel="noreferrer">
+                            <a href={summary.repoInfo?.repoUrl} target="_blank" rel="noreferrer">
                                 <ArrowUpRight className="h-3.5 w-3.5" />
                                 <span>Ver en GitHub</span>
                             </a>
@@ -292,6 +507,120 @@ export function GithubRepoAudit({ repoUrl, activityId, title, isFullscreen, onTo
                             </Button>
                         )}
                     </div>
+                </div>
+
+                {/* Barra de Filtro de Fechas y Conteo de Commits */}
+                <div className="p-2 sm:p-2.5 rounded-xl border border-border/80 bg-card text-card-foreground shadow-2xs space-y-2">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                            <div className="flex items-center gap-1 text-xs font-bold text-foreground mr-1">
+                                <Calendar className="h-3.5 w-3.5 text-primary" />
+                                <span>Período:</span>
+                            </div>
+
+                            {/* Presets rápidos */}
+                            <div className="flex items-center gap-1 flex-wrap">
+                                <Button
+                                    type="button"
+                                    variant={datePreset === "all" ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => handlePresetChange("all")}
+                                    className="h-7 px-2.5 text-[11px] rounded-lg cursor-pointer"
+                                >
+                                    Todos los commits ({data.commits?.length || 0})
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant={datePreset === "7d" ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => handlePresetChange("7d")}
+                                    className="h-7 px-2 text-[11px] rounded-lg cursor-pointer"
+                                >
+                                    Últimos 7 días
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant={datePreset === "15d" ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => handlePresetChange("15d")}
+                                    className="h-7 px-2 text-[11px] rounded-lg cursor-pointer"
+                                >
+                                    Últimos 15 días
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant={datePreset === "30d" ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => handlePresetChange("30d")}
+                                    className="h-7 px-2 text-[11px] rounded-lg cursor-pointer"
+                                >
+                                    Últimos 30 días
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Controles de Rango de Fechas (Desde / Hasta) */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <div className="flex items-center gap-1 text-xs">
+                                <span className="text-[11px] text-muted-foreground font-medium">Desde:</span>
+                                <Input
+                                    type="date"
+                                    value={startDate}
+                                    onChange={(e) => handleStartDateChange(e.target.value)}
+                                    className="h-7 text-xs w-32 bg-background border-border/80 px-2 py-0"
+                                />
+                            </div>
+                            <div className="flex items-center gap-1 text-xs">
+                                <span className="text-[11px] text-muted-foreground font-medium">Hasta:</span>
+                                <Input
+                                    type="date"
+                                    value={endDate}
+                                    onChange={(e) => handleEndDateChange(e.target.value)}
+                                    className="h-7 text-xs w-32 bg-background border-border/80 px-2 py-0"
+                                />
+                            </div>
+
+                            {isDateFiltered && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleResetDateFilter}
+                                    className="h-7 px-2 text-xs text-primary hover:bg-primary/10 gap-1 rounded-lg"
+                                    title="Restablecer y ver todos los commits"
+                                >
+                                    <RotateCcw className="h-3 w-3" />
+                                    <span>Ver todos</span>
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Detalle del filtro activo */}
+                    {isDateFiltered && (
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pt-1.5 border-t border-border/50 text-[11px]">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <Badge variant="secondary" className="gap-1 font-normal bg-primary/10 text-primary border-primary/20">
+                                    <Filter className="h-3 w-3" />
+                                    <span>
+                                        Mostrando <strong>{commitsInDateRange.length}</strong> de {data.commits?.length || 0} commits
+                                        {startDate ? ` a partir del ${startDate}` : ""}
+                                        {endDate ? ` hasta el ${endDate}` : ""}
+                                    </span>
+                                </Badge>
+                                <span className="text-muted-foreground text-[10px]">
+                                    (Métricas, gráficos y colaboradores recalculados para este período)
+                                </span>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleResetDateFilter}
+                                className="text-[11px] text-primary hover:underline font-semibold flex items-center gap-1 cursor-pointer self-start sm:self-auto"
+                            >
+                                Quitar filtro de fecha ✕
+                            </button>
+                        </div>
+                    )}
                 </div>
 
             {/* Aviso opcional */}
@@ -717,14 +1046,20 @@ export function GithubRepoAudit({ repoUrl, activityId, title, isFullscreen, onTo
                         <div>
                             <CardTitle className="text-sm font-bold flex items-center gap-2">
                                 <GitCommit className="h-4 w-4 text-primary" />
-                                Historial Detallado de Commits ({filteredCommits.length})
+                                <span>
+                                    Historial Detallado de Commits ({filteredCommits.length}
+                                    {isDateFiltered && filteredCommits.length !== (data.commits?.length || 0)
+                                        ? ` de ${data.commits?.length || 0}`
+                                        : ""}
+                                    )
+                                </span>
                             </CardTitle>
                             <CardDescription className="text-xs">
-                                Cada commit incluye su identificador único y enlace directo al aporte en GitHub
+                                Cada commit incluye su identificador único, fecha regional calibrada y enlace directo en GitHub
                             </CardDescription>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                             {/* Buscador de commits */}
                             <div className="relative w-full sm:w-64">
                                 <Search className="h-3.5 w-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
@@ -746,6 +1081,18 @@ export function GithubRepoAudit({ repoUrl, activityId, title, isFullscreen, onTo
                                     Filtro: {selectedContributor} ✕
                                 </Badge>
                             )}
+
+                            {isDateFiltered && (
+                                <Badge 
+                                    variant="outline" 
+                                    onClick={handleResetDateFilter}
+                                    className="cursor-pointer gap-1 text-[10px] h-8 px-2 shrink-0 bg-primary/5 text-primary border-primary/20 hover:bg-primary/10"
+                                    title="Quitar filtro de fecha y ver todos los commits"
+                                >
+                                    <Calendar className="h-3 w-3" />
+                                    <span>Filtro fecha activo ✕</span>
+                                </Badge>
+                            )}
                         </div>
                     </div>
                 </CardHeader>
@@ -755,6 +1102,17 @@ export function GithubRepoAudit({ repoUrl, activityId, title, isFullscreen, onTo
                         <div className="text-center py-12 text-muted-foreground">
                             <GitCommit className="h-8 w-8 mx-auto mb-2 opacity-30" />
                             <p className="text-sm font-medium">No se encontraron commits coincidentes con los filtros.</p>
+                            {isDateFiltered && (
+                                <Button
+                                    type="button"
+                                    variant="link"
+                                    size="sm"
+                                    onClick={handleResetDateFilter}
+                                    className="mt-1 text-xs text-primary"
+                                >
+                                    Restablecer y ver todos los commits
+                                </Button>
+                            )}
                         </div>
                     ) : (
                         <div className="divide-y divide-border/60 max-h-[500px] overflow-y-auto">
@@ -812,6 +1170,14 @@ export function GithubRepoAudit({ repoUrl, activityId, title, isFullscreen, onTo
                                                     {commit.authorLogin && (
                                                         <span className="opacity-75 font-mono">(@{commit.authorLogin})</span>
                                                     )}
+                                                    <span>•</span>
+                                                    <span 
+                                                        className="font-semibold text-foreground/90 font-mono bg-muted/60 px-1 py-0.5 rounded border border-border/40" 
+                                                        title={`Fecha regional: ${commit.regionalDate || getRegionalDateOnly(commit.date)} ${commit.regionalTime || ""}`}
+                                                    >
+                                                        {commit.regionalDate || getRegionalDateOnly(commit.date)}
+                                                        {commit.regionalTime ? ` ${commit.regionalTime}` : ""}
+                                                    </span>
                                                     <span>•</span>
                                                     <span title={format(new Date(commit.date), "PPpp", { locale: es })}>
                                                         {formatDistanceToNow(new Date(commit.date), { addSuffix: true, locale: es })}

@@ -169,3 +169,68 @@ export function getCourseClassDates(
     }
     return dates;
 }
+
+/**
+ * Retorna la fecha en formato "YYYY-MM-DD" en la zona horaria regional.
+ * Evita que en servidores UTC (Vercel) un commit nocturno (ej. 21:00 UTC-5)
+ * se atribuya al día siguiente.
+ */
+export function getRegionalDateOnly(date: Date | string, timeZone: string = DEFAULT_TIMEZONE): string {
+    const d = typeof date === "string" ? new Date(date) : date;
+    if (isNaN(d.getTime())) return "";
+    return new Intl.DateTimeFormat("en-CA", {
+        timeZone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+    }).format(d);
+}
+
+/**
+ * Retorna la hora (0-23) de una fecha según la zona horaria regional.
+ * Garantiza que franjas como "Madrugada", "Mañana", "Tarde" y "Noche"
+ * coincidan exactamente en local y en servidores UTC.
+ */
+export function getRegionalHour(date: Date | string, timeZone: string = DEFAULT_TIMEZONE): number {
+    const d = typeof date === "string" ? new Date(date) : date;
+    if (isNaN(d.getTime())) return 0;
+    const str = new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        hour: "numeric",
+        hour12: false
+    }).format(d);
+    const val = parseInt(str, 10);
+    return isNaN(val) ? 0 : val % 24;
+}
+
+/**
+ * Retorna el índice del día de la semana (0 = Domingo, 1 = Lunes, ..., 6 = Sábado)
+ * según la zona horaria regional, independientemente de la zona horaria del servidor.
+ */
+export function getRegionalDayOfWeek(date: Date | string, timeZone: string = DEFAULT_TIMEZONE): number {
+    const d = typeof date === "string" ? new Date(date) : date;
+    if (isNaN(d.getTime())) return 0;
+    const dayStr = new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        weekday: "short"
+    }).format(d);
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const idx = days.indexOf(dayStr);
+    return idx >= 0 ? idx : 0;
+}
+
+/**
+ * Formatea de forma segura un string "YYYY-MM-DD" a "dd MMM" en español
+ * evitando el desfase de medianoche UTC en los navegadores del cliente.
+ */
+export function formatDayMonthDate(dateStr: string): string {
+    if (!dateStr) return "";
+    const parts = dateStr.split("-").map(Number);
+    if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+        const visual = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+        return format(visual, "dd MMM", { locale: es });
+    }
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? dateStr : format(d, "dd MMM", { locale: es });
+}
+

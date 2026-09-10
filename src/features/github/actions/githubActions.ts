@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import prisma from "@/lib/prisma";
+import { getRegionalDateOnly, getRegionalHour, getRegionalDayOfWeek, formatTimeRegional } from "@/lib/dateUtils";
 
 async function getSession() {
     return await auth.api.getSession({ headers: await headers() });
@@ -156,7 +157,13 @@ export async function getRepoStructureAction(repoUrl: string, teacherId?: string
     return files;
 }
 
-export async function getRepoAuditAction(repoUrl: string, activityId?: string, branch?: string) {
+export async function getRepoAuditAction(
+    repoUrl: string, 
+    activityId?: string, 
+    branch?: string,
+    since?: string,
+    until?: string
+) {
     const session = await getSession();
     if (!session || (session.user.role !== "student" && session.user.role !== "teacher")) {
         throw new Error("No autorizado");
@@ -184,13 +191,15 @@ export async function getRepoAuditAction(repoUrl: string, activityId?: string, b
     const token = await getGithubToken(teacherId);
     const effectiveBranch = branch || repoInfo.branch;
 
-    // 1. Obtener lista de commits del repositorio
+    // 1. Obtener lista de commits del repositorio (hasta 15 páginas = 1500 commits para abarcar todo el historial)
     const rawCommits = await githubService.getRepoCommits(
         repoInfo.owner,
         repoInfo.repo,
         effectiveBranch,
         token || undefined,
-        3 // Hasta 300 commits
+        15,
+        since,
+        until
     );
 
     // 2. Intentar obtener estadísticas de contribuyentes (adiciones/eliminaciones)
@@ -216,7 +225,7 @@ export async function getRepoAuditAction(repoUrl: string, activityId?: string, b
         }
     }
 
-    // 3. Procesar y normalizar commits
+    // 3. Procesar y normalizar commits con fecha regional uniforme (America/Bogota)
     const processedCommits = rawCommits.map((c: any) => {
         const sha = c.sha || "";
         const shortSha = sha.substring(0, 7);
@@ -227,6 +236,8 @@ export async function getRepoAuditAction(repoUrl: string, activityId?: string, b
 
         const rawDate = c.commit?.author?.date || c.commit?.committer?.date || "";
         const commitDate = rawDate ? new Date(rawDate) : new Date();
+        const regionalDate = getRegionalDateOnly(commitDate);
+        const regionalTime = formatTimeRegional(commitDate);
 
         const authorName = c.commit?.author?.name || c.author?.login || "Anónimo";
         const authorEmail = c.commit?.author?.email || "";
@@ -241,6 +252,8 @@ export async function getRepoAuditAction(repoUrl: string, activityId?: string, b
             title,
             body,
             date: commitDate.toISOString(),
+            regionalDate,
+            regionalTime,
             authorName,
             authorEmail,
             authorLogin,
@@ -269,7 +282,7 @@ export async function getRepoAuditAction(repoUrl: string, activityId?: string, b
     for (const commit of processedCommits) {
         const key = (commit.authorLogin || commit.authorEmail || commit.authorName).toLowerCase();
         const commitTime = new Date(commit.date);
-        const dateStr = commit.date.substring(0, 10); // YYYY-MM-DD
+        const dateStr = commit.regionalDate || getRegionalDateOnly(commit.date);
 
         let item = contributorMap.get(key);
         if (!item) {
@@ -325,7 +338,7 @@ export async function getRepoAuditAction(repoUrl: string, activityId?: string, b
         };
     }).sort((a, b) => b.commitsCount - a.commitsCount);
 
-    // 5. Timeline cronológico (commits por fecha YYYY-MM-DD)
+    // 5. Timeline cronológico (commits por fecha YYYY-MM-DD usando fecha regional)
     const timelineMap = new Map<string, { date: string; total: number; contributors: { name: string; login?: string; count: number }[]; [key: string]: any }>();
     const timelineContribMaps = new Map<string, Map<string, { name: string; login?: string; count: number }>>();
 
@@ -333,7 +346,7 @@ export async function getRepoAuditAction(repoUrl: string, activityId?: string, b
     const chronologicalCommits = [...processedCommits].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     for (const commit of chronologicalCommits) {
-        const dateKey = commit.date.substring(0, 10);
+        const dateKey = commit.regionalDate || getRegionalDateOnly(commit.date);
         let entry = timelineMap.get(dateKey);
         let cMap = timelineContribMaps.get(dateKey);
         if (!entry || !cMap) {
@@ -368,11 +381,11 @@ export async function getRepoAuditAction(repoUrl: string, activityId?: string, b
 
     const timeline = Array.from(timelineMap.values());
 
-    // 6. Periodicidad por Día de la Semana
+    // 6. Periodicidad por Día de la Semana (consistente en local y servidor UTC)
     const dayOfWeekCounts = [0, 0, 0, 0, 0, 0, 0];
     const dayOfWeekContribMaps: Map<string, { name: string; login?: string; count: number }>[] = Array.from({ length: 7 }, () => new Map());
 
-    // 7. Periodicidad por Franja Horaria
+    // 7. Periodicidad por Franja Horaria (consistente en local y servidor UTC)
     const timeSlots = {
         madrugada: 0, // 00:00 - 05:59
         manana: 0,    // 06:00 - 11:59
@@ -390,8 +403,10 @@ export async function getRepoAuditAction(repoUrl: string, activityId?: string, b
 
     for (const commit of processedCommits) {
         const d = new Date(commit.date);
-        allActiveDays.add(commit.date.substring(0, 10));
-        const dayIdx = d.getDay();
+        const dateStr = commit.regionalDate || getRegionalDateOnly(commit.date);
+        allActiveDays.add(dateStr);
+        
+        const dayIdx = getRegionalDayOfWeek(d);
         dayOfWeekCounts[dayIdx] += 1;
 
         const authorKey = commit.authorLogin || commit.authorName;
@@ -406,8 +421,8 @@ export async function getRepoAuditAction(repoUrl: string, activityId?: string, b
             dMap.set(authorKey, { name: authorDisplayName, login: commit.authorLogin, count: 1 });
         }
 
-        // Hour slot contrib record
-        const hour = d.getHours();
+        // Hour slot contrib record (calculado en zona regional, no en la hora del servidor)
+        const hour = getRegionalHour(d);
         let slotKey: "madrugada" | "manana" | "tarde" | "noche";
         if (hour >= 0 && hour < 6) {
             timeSlots.madrugada += 1;
