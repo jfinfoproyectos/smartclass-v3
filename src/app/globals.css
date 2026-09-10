@@ -5,6 +5,12 @@
 
 @custom-variant dark (&:is(.dark *));
 
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 :root {
   --background: oklch(0.99 0.003 190.0);
   --foreground: oklch(0.18 0.012 190.0);

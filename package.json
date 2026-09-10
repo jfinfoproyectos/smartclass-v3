@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate",
-    "create-admin": "npx tsx scripts/create-admin.ts"
+    "create-admin": "npx tsx scripts/create-admin.ts",
+    "admin": "npx tsx scripts/create-admin.ts",
+    "seed:admin": "npx tsx scripts/create-admin.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.74",

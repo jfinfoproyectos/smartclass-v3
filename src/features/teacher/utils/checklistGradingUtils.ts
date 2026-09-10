@@ -30,13 +30,38 @@ export interface ActivityChecklistConfig {
 const METADATA_START = "<!-- EVAL_METADATA_START";
 const METADATA_END = "EVAL_METADATA_END -->";
 
+import { CheckCircle2, Check, MinusCircle, XCircle } from "lucide-react";
+
+export const RUBRIC_LEVELS = [
+    { key: "sabe", label: "Sabe", factor: 1.0, pct: "100%", icon: CheckCircle2 },
+    { key: "aceptable", label: "Aceptable", factor: 0.75, pct: "75%", icon: Check },
+    { key: "parcial", label: "Parcial", factor: 0.50, pct: "50%", icon: MinusCircle },
+    { key: "no_sabe", label: "No Sabe", factor: 0.0, pct: "0%", icon: XCircle },
+] as const;
+
 /**
- * Obtiene la configuración de lista de chequeo / sustentación oral de una actividad a partir de su descripción JSON.
+ * Obtiene la configuración de lista de chequeo / sustentación oral de una actividad a partir de su descripción JSON o del objeto actividad.
  */
-export function getActivityChecklistConfig(description: string | null | undefined): ActivityChecklistConfig | null {
-    if (!description) return null;
+export function getActivityChecklistConfig(descriptionOrActivity: any): ActivityChecklistConfig | null {
+    if (!descriptionOrActivity) return null;
     try {
-        const data = typeof description === "string" ? JSON.parse(description) : description;
+        let raw = descriptionOrActivity;
+        // Si pasaron el objeto activity completo, obtener la propiedad description
+        if (typeof raw === "object" && raw !== null && "description" in raw) {
+            raw = raw.description;
+        }
+
+        let data: any = null;
+        if (typeof raw === "string") {
+            try {
+                data = JSON.parse(raw);
+            } catch {
+                return null;
+            }
+        } else if (typeof raw === "object" && raw !== null) {
+            data = raw;
+        }
+
         if (data && typeof data === "object" && data.hasChecklist && Array.isArray(data.criteria) && data.criteria.length > 0) {
             const aiWeight = typeof data.aiWeight === "number" ? data.aiWeight : 30;
             const checklistWeight = typeof data.checklistWeight === "number" ? data.checklistWeight : 70;

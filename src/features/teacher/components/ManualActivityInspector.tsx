@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,13 +19,24 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { formatName } from "@/lib/utils";
+import { formatName, cn } from "@/lib/utils";
 import { format } from "date-fns";
 import MDEditor from '@uiw/react-md-editor';
 import '@uiw/react-md-editor/markdown-editor.css';
 import '@uiw/react-markdown-preview/markdown.css';
 import { useTheme } from "next-themes";
 import { improveFeedbackAction } from "@/features/teacher/actions/gradingActions";
+import { TeacherEvaluationHeaderBadges } from "./TeacherEvaluationHeaderBadges";
+import { TeacherChecklistEvaluationPanel } from "./TeacherChecklistEvaluationPanel";
+import {
+    getActivityChecklistConfig,
+    extractEvaluationMetadata,
+    stripEvaluationMetadata,
+    embedEvaluationMetadata,
+    calculateChecklistScore,
+    calculateCombinedFinalGrade,
+    EvaluationMetadata
+} from "@/features/teacher/utils/checklistGradingUtils";
 
 interface ManualActivityInspectorProps {
     student: any;
@@ -53,16 +64,24 @@ export function ManualActivityInspector({
     const { resolvedTheme } = useTheme();
     const mode = resolvedTheme === "dark" ? "dark" : resolvedTheme === "light" ? "light" : "auto";
 
+    // Extraer Lista de Chequeo y Ponderaciones si están configuradas
+    const checklistConfig = useMemo(() => {
+        return getActivityChecklistConfig(activity);
+    }, [activity]);
+
+    const checklistData = checklistConfig?.criteria ?? null;
+    const aiWeight = checklistConfig?.aiWeight ?? 50;
+    const checklistWeight = checklistConfig?.checklistWeight ?? 50;
+
+    const [criteriaLevels, setCriteriaLevels] = useState<Record<string, number | undefined>>({});
+    const [manualSustentacionScore, setManualSustentacionScore] = useState<number | null>(null);
+
     const [gradeInput, setGradeInput] = useState<string>(
         submission?.grade !== null && submission?.grade !== undefined
             ? String(submission.grade)
             : ""
     );
-    const [feedbackInput, setFeedbackInput] = useState<string>(
-        submission?.feedback
-            ? submission.feedback.replace("[ENTREGA RECHAZADA]\n", "").replace("[ENTREGA RECHAZADA]", "")
-            : (!submission && activity.deadline && new Date(activity.deadline) < new Date() ? "No realizó entrega" : "")
-    );
+    const [feedbackInput, setFeedbackInput] = useState<string>("");
     const [isSaving, setIsSaving] = useState(false);
     const [isImprovingAI, setIsImprovingAI] = useState(false);
     const [copiedLink, setCopiedLink] = useState(false);
@@ -70,17 +89,42 @@ export function ManualActivityInspector({
 
     // Sincronizar estado al cambiar de estudiante
     useEffect(() => {
+        const meta = extractEvaluationMetadata(submission?.feedback);
+        const rawFeedback = submission?.feedback
+            ? submission.feedback.replace("[ENTREGA RECHAZADA]\n", "").replace("[ENTREGA RECHAZADA]", "")
+            : (!submission && activity.deadline && new Date(activity.deadline) < new Date() ? "No realizó entrega" : "");
+        const cleanFeedback = stripEvaluationMetadata(rawFeedback);
+
+        setCriteriaLevels(meta?.criteriaLevels || {});
+        setManualSustentacionScore(meta?.manualSustentacionScore ?? null);
+        setFeedbackInput(cleanFeedback);
         setGradeInput(
             submission?.grade !== null && submission?.grade !== undefined
                 ? String(submission.grade)
                 : ""
         );
-        setFeedbackInput(
-            submission?.feedback
-                ? submission.feedback.replace("[ENTREGA RECHAZADA]\n", "").replace("[ENTREGA RECHAZADA]", "")
-                : (!submission && activity.deadline && new Date(activity.deadline) < new Date() ? "No realizó entrega" : "")
-        );
     }, [student?.id, submission, activity.deadline]);
+
+    // Nota de sustentación oral
+    const checklistScore = useMemo(() => {
+        return calculateChecklistScore(checklistData, criteriaLevels, manualSustentacionScore);
+    }, [checklistData, criteriaLevels, manualSustentacionScore]);
+
+    // Nota final combinada ponderada
+    const combinedFinalScore = useMemo(() => {
+        if (!checklistConfig) return checklistScore;
+        const aiScoreVal = 0;
+        return calculateCombinedFinalGrade(aiScoreVal, checklistScore, aiWeight, checklistWeight);
+    }, [checklistConfig, aiWeight, checklistScore, checklistWeight]);
+
+    const handleUpdateCriteriaLevels = (nextLevels: Record<string, number | undefined>) => {
+        setCriteriaLevels(nextLevels);
+        setManualSustentacionScore(null);
+        if (checklistConfig) {
+            const nextChecklist = calculateChecklistScore(checklistData, nextLevels, null);
+            setGradeInput(nextChecklist.toFixed(1));
+        }
+    };
 
     // Navegación entre estudiantes
     const currentIndex = studentsList.findIndex(s => s.student.id === student?.id);
@@ -142,7 +186,17 @@ export function ManualActivityInspector({
 
         setIsSaving(true);
         try {
-            await onGradeManual(gradeInput, feedbackInput, student.id, activity.id);
+            let fullFeedback = feedbackInput;
+            if (checklistConfig) {
+                const metadata: EvaluationMetadata = {
+                    aiGrade: 0,
+                    checklistScore: checklistScore,
+                    criteriaLevels: criteriaLevels,
+                    manualSustentacionScore: manualSustentacionScore,
+                };
+                fullFeedback = embedEvaluationMetadata(fullFeedback, metadata);
+            }
+            await onGradeManual(gradeInput, fullFeedback, student.id, activity.id);
             toast.success("Calificación guardada correctamente");
             if (andNext && currentIndex < totalStudents - 1 && onSelectStudent) {
                 onSelectStudent(studentsList[currentIndex + 1].student.id);
@@ -309,7 +363,14 @@ export function ManualActivityInspector({
                         </div>
                     )}
 
-                    {currentGrade !== null ? (
+                    {checklistConfig ? (
+                        <TeacherEvaluationHeaderBadges
+                            checklistConfig={checklistConfig}
+                            aiGrade={null}
+                            checklistScore={checklistScore}
+                            combinedFinalScore={checklistScore}
+                        />
+                    ) : currentGrade !== null ? (
                         <div className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 px-2.5 py-0.5 rounded-lg text-xs shrink-0 font-bold animate-in fade-in">
                             <span className="text-[10px] uppercase font-bold opacity-80">Nota:</span>
                             <span className="text-sm font-black">{currentGrade.toFixed(1)}</span>
@@ -343,7 +404,7 @@ export function ManualActivityInspector({
             {/* Main Split-Screen Inspector Body */}
             <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 overflow-hidden min-h-0">
                 {/* Left Panel: Statement, Rubric & Delivery Details */}
-                <div className="lg:col-span-7 flex flex-col rounded-xl border bg-card shadow-xs overflow-hidden min-h-0">
+                <div className={cn("flex flex-col rounded-xl border bg-card shadow-xs overflow-hidden min-h-0", checklistConfig ? "lg:col-span-6" : "lg:col-span-7")}>
                     <div className="border-b px-4 py-2 bg-muted/30 flex items-center justify-between shrink-0">
                         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-auto">
                             <TabsList className="h-7 p-0.5 bg-background border">
@@ -498,160 +559,183 @@ export function ManualActivityInspector({
                     </div>
                 </div>
 
-                {/* Right Panel: Grading Form and AI Feedback */}
-                <div className="lg:col-span-5 flex flex-col rounded-xl border bg-card shadow-xs overflow-hidden min-h-0">
-                    <div className="border-b px-4 py-2.5 bg-muted/30 flex items-center justify-between shrink-0">
-                        <span className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
-                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                            Panel de Calificación
-                        </span>
-                        {currentGrade !== null && (
-                            <span className="text-xs text-muted-foreground font-mono">
-                                Actual: <strong className="text-foreground">{currentGrade.toFixed(1)} / 5.0</strong>
-                            </span>
-                        )}
-                    </div>
+                {/* Right Panel: Grading Form and Checklist / AI Feedback */}
+                <div className={cn("flex flex-col min-h-0 overflow-hidden", checklistConfig ? "lg:col-span-6" : "lg:col-span-5")}>
+                    {checklistConfig ? (
+                        <TeacherChecklistEvaluationPanel
+                            activity={activity}
+                            student={student}
+                            submission={submission}
+                            aiGrade={null}
+                            checklistConfig={checklistConfig}
+                            criteriaLevels={criteriaLevels}
+                            onUpdateCriteriaLevels={handleUpdateCriteriaLevels}
+                            manualSustentacionScore={manualSustentacionScore}
+                            onSetManualSustentacionScore={setManualSustentacionScore}
+                            gradeInput={gradeInput}
+                            onSetGradeInput={setGradeInput}
+                            teacherNotesInput={feedbackInput}
+                            onSetTeacherNotesInput={setFeedbackInput}
+                            isSavingGrade={isSaving}
+                            onSaveGrade={() => handleSave(false)}
+                            onReject={handleReject}
+                        />
+                    ) : (
+                        <div className="flex flex-col rounded-xl border bg-card shadow-xs overflow-hidden h-full min-h-0">
+                            <div className="border-b px-4 py-2.5 bg-muted/30 flex items-center justify-between shrink-0">
+                                <span className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
+                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                                    Panel de Calificación
+                                </span>
+                                {currentGrade !== null && (
+                                    <span className="text-xs text-muted-foreground font-mono">
+                                        Actual: <strong className="text-foreground">{currentGrade.toFixed(1)} / 5.0</strong>
+                                    </span>
+                                )}
+                            </div>
 
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                        {/* Grade Input Section */}
-                        <div className="space-y-2">
-                            <Label htmlFor="grade-input" className="text-xs font-bold uppercase tracking-wider flex items-center justify-between">
-                                <span>Nota Final (0.0 a 5.0)</span>
-                                <span className="text-[11px] font-normal text-muted-foreground">Escala 0.0 - 5.0</span>
-                            </Label>
-                            <div className="flex items-center gap-2">
-                                <Input
-                                    id="grade-input"
-                                    type="number"
-                                    step="0.1"
-                                    min="0"
-                                    max="5"
-                                    placeholder="4.5"
-                                    value={gradeInput}
-                                    onChange={(e) => setGradeInput(e.target.value)}
-                                    className="h-10 text-lg font-bold font-mono tracking-tight text-primary w-28 text-center bg-background border-primary/30 focus-visible:ring-primary"
-                                />
-                                <div className="flex flex-wrap items-center gap-1 flex-1">
-                                    {["5.0", "4.5", "4.0", "3.5", "3.0", "0.0"].map((quickGrade) => (
+                            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                                {/* Grade Input Section */}
+                                <div className="space-y-2">
+                                    <Label htmlFor="grade-input" className="text-xs font-bold uppercase tracking-wider flex items-center justify-between">
+                                        <span>Nota Final (0.0 a 5.0)</span>
+                                        <span className="text-[11px] font-normal text-muted-foreground">Escala 0.0 - 5.0</span>
+                                    </Label>
+                                    <div className="flex items-center gap-2">
+                                        <Input
+                                            id="grade-input"
+                                            type="number"
+                                            step="0.1"
+                                            min="0"
+                                            max="5"
+                                            placeholder="4.5"
+                                            value={gradeInput}
+                                            onChange={(e) => setGradeInput(e.target.value)}
+                                            className="h-10 text-lg font-bold font-mono tracking-tight text-primary w-28 text-center bg-background border-primary/30 focus-visible:ring-primary"
+                                        />
+                                        <div className="flex flex-wrap items-center gap-1 flex-1">
+                                            {["5.0", "4.5", "4.0", "3.5", "3.0", "0.0"].map((quickGrade) => (
+                                                <Button
+                                                    key={quickGrade}
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => setGradeInput(quickGrade)}
+                                                    className={`h-7 px-2 text-xs font-bold transition-all ${
+                                                        gradeInput === quickGrade
+                                                            ? "bg-primary text-primary-foreground border-primary"
+                                                            : "hover:bg-primary/10 hover:text-primary"
+                                                    }`}
+                                                >
+                                                    {quickGrade}
+                                                </Button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Feedback Section */}
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <Label htmlFor="feedback-input" className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                                            <Sparkles className="h-3.5 w-3.5 text-purple-600" />
+                                            Retroalimentación
+                                        </Label>
                                         <Button
-                                            key={quickGrade}
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={handleImproveWithAI}
+                                            disabled={isImprovingAI || !feedbackInput.trim()}
+                                            className="h-6 text-xs text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/30 gap-1 px-2 font-semibold"
+                                        >
+                                            {isImprovingAI ? <Sparkles className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                                            <span>Mejorar con IA</span>
+                                        </Button>
+                                    </div>
+                                    <Textarea
+                                        id="feedback-input"
+                                        rows={7}
+                                        placeholder="Escribe observaciones detalladas, fortalezas o sugerencias de mejora para el estudiante..."
+                                        value={feedbackInput}
+                                        onChange={(e) => setFeedbackInput(e.target.value)}
+                                        className="text-xs leading-relaxed bg-background resize-none border-border/80 focus-visible:ring-primary"
+                                    />
+                                    {/* Fast Feedback Templates */}
+                                    <div className="flex flex-wrap items-center gap-1 pt-1">
+                                        <span className="text-[10px] text-muted-foreground uppercase font-semibold mr-1">Rápidas:</span>
+                                        {[
+                                            "Excelente trabajo, cumple con todos los objetivos solicitados.",
+                                            "Buen trabajo en general, se recomienda revisar detalles de presentación.",
+                                            "La entrega está incompleta según los criterios del enunciado.",
+                                        ].map((template, idx) => (
+                                            <button
+                                                key={idx}
+                                                type="button"
+                                                onClick={() => setFeedbackInput(prev => prev ? `${prev}\n\n${template}` : template)}
+                                                className="text-[10px] px-2 py-0.5 rounded-md bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/40 transition-colors truncate max-w-[200px]"
+                                                title={template}
+                                            >
+                                                + {template}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {activity.isGroupActivity && (
+                                    <div className="rounded-lg p-3 bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                                        <Info className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
+                                        <p className="leading-relaxed">
+                                            <strong>Actividad Grupal:</strong> Al guardar la calificación se actualizará la misma nota ({gradeInput || "0.0"}) y comentarios para todos los integrantes del grupo automáticamente.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Bottom Actions Bar */}
+                            <div className="border-t p-4 bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-2 shrink-0">
+                                <div className="flex items-center gap-2 w-full sm:w-auto">
+                                    {submission && (
+                                        <Button
                                             type="button"
                                             variant="outline"
                                             size="sm"
-                                            onClick={() => setGradeInput(quickGrade)}
-                                            className={`h-7 px-2 text-xs font-bold transition-all ${
-                                                gradeInput === quickGrade
-                                                    ? "bg-primary text-primary-foreground border-primary"
-                                                    : "hover:bg-primary/10 hover:text-primary"
-                                            }`}
+                                            onClick={handleReject}
+                                            disabled={isSaving}
+                                            className="h-9 px-3 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 border-rose-200 dark:border-rose-900 font-semibold"
                                         >
-                                            {quickGrade}
+                                            Rechazar Entrega
                                         </Button>
-                                    ))}
+                                    )}
+                                </div>
+
+                                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleSave(false)}
+                                        disabled={isSaving}
+                                        className="h-9 px-4 text-xs font-bold shadow-xs"
+                                    >
+                                        {isSaving ? "Guardando..." : "Guardar Nota"}
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="default"
+                                        size="sm"
+                                        onClick={() => handleSave(true)}
+                                        disabled={isSaving}
+                                        className="h-9 px-4 text-xs font-bold gap-1.5 shadow-sm"
+                                    >
+                                        <CheckCircle2 className="h-3.5 w-3.5" />
+                                        {isSaving ? "Guardando..." : "Guardar y Siguiente"}
+                                        <ChevronRight className="h-3.5 w-3.5" />
+                                    </Button>
                                 </div>
                             </div>
                         </div>
-
-                        {/* Feedback Section */}
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                                <Label htmlFor="feedback-input" className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
-                                    <Sparkles className="h-3.5 w-3.5 text-purple-600" />
-                                    Retroalimentación
-                                </Label>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={handleImproveWithAI}
-                                    disabled={isImprovingAI || !feedbackInput.trim()}
-                                    className="h-6 text-xs text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/30 gap-1 px-2 font-semibold"
-                                >
-                                    {isImprovingAI ? <Sparkles className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                                    <span>Mejorar con IA</span>
-                                </Button>
-                            </div>
-                            <Textarea
-                                id="feedback-input"
-                                rows={7}
-                                placeholder="Escribe observaciones detalladas, fortalezas o sugerencias de mejora para el estudiante..."
-                                value={feedbackInput}
-                                onChange={(e) => setFeedbackInput(e.target.value)}
-                                className="text-xs leading-relaxed bg-background resize-none border-border/80 focus-visible:ring-primary"
-                            />
-                            {/* Fast Feedback Templates */}
-                            <div className="flex flex-wrap items-center gap-1 pt-1">
-                                <span className="text-[10px] text-muted-foreground uppercase font-semibold mr-1">Rápidas:</span>
-                                {[
-                                    "Excelente trabajo, cumple con todos los objetivos solicitados.",
-                                    "Buen trabajo en general, se recomienda revisar detalles de presentación.",
-                                    "La entrega está incompleta según los criterios del enunciado.",
-                                ].map((template, idx) => (
-                                    <button
-                                        key={idx}
-                                        type="button"
-                                        onClick={() => setFeedbackInput(prev => prev ? `${prev}\n\n${template}` : template)}
-                                        className="text-[10px] px-2 py-0.5 rounded-md bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/40 transition-colors truncate max-w-[200px]"
-                                        title={template}
-                                    >
-                                        + {template}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {activity.isGroupActivity && (
-                            <div className="rounded-lg p-3 bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
-                                <Info className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
-                                <p className="leading-relaxed">
-                                    <strong>Actividad Grupal:</strong> Al guardar la calificación se actualizará la misma nota ({gradeInput || "0.0"}) y comentarios para todos los integrantes del grupo automáticamente.
-                                </p>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Bottom Actions Bar */}
-                    <div className="border-t p-4 bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-2 shrink-0">
-                        <div className="flex items-center gap-2 w-full sm:w-auto">
-                            {submission && (
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={handleReject}
-                                    disabled={isSaving}
-                                    className="h-9 px-3 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 border-rose-200 dark:border-rose-900 font-semibold"
-                                >
-                                    Rechazar Entrega
-                                </Button>
-                            )}
-                        </div>
-
-                        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleSave(false)}
-                                disabled={isSaving}
-                                className="h-9 px-4 text-xs font-bold shadow-xs"
-                            >
-                                {isSaving ? "Guardando..." : "Guardar Nota"}
-                            </Button>
-                            <Button
-                                type="button"
-                                variant="default"
-                                size="sm"
-                                onClick={() => handleSave(true)}
-                                disabled={isSaving}
-                                className="h-9 px-4 text-xs font-bold gap-1.5 shadow-sm"
-                            >
-                                <CheckCircle2 className="h-3.5 w-3.5" />
-                                {isSaving ? "Guardando..." : "Guardar y Siguiente"}
-                                <ChevronRight className="h-3.5 w-3.5" />
-                            </Button>
-                        </div>
-                    </div>
+                    )}
                 </div>
             </div>
         </div>

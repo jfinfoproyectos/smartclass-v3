@@ -383,7 +383,7 @@ export function UserManagement({ initialUsers, totalCount }: UserManagementProps
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 w-full min-w-0 max-w-full">
             {/* Header */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
@@ -417,14 +417,14 @@ export function UserManagement({ initialUsers, totalCount }: UserManagementProps
             </div>
 
             {/* Role Tabs & Users Table */}
-            <Tabs value={roleFilter} onValueChange={(val) => onFilterChange('role', val)} className="w-full">
+            <Tabs value={roleFilter} onValueChange={(val) => onFilterChange('role', val)} className="w-full min-w-0 max-w-full">
                 <TabsList className="grid w-full grid-cols-3 max-w-xl">
                     <TabsTrigger value="student">Estudiantes</TabsTrigger>
                     <TabsTrigger value="teacher">Profesores</TabsTrigger>
                     <TabsTrigger value="admin">Administradores</TabsTrigger>
                 </TabsList>
 
-                <Card>
+                <Card className="w-full min-w-0 max-w-full overflow-hidden">
                 <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div>
                         <CardTitle>Usuarios ({users.length})</CardTitle>

@@ -47,7 +47,7 @@ export default async function DashboardLayout({
       <ProfileCompletionCheck />
       
       <AppSidebar />
-      <SidebarInset className="h-svh overflow-hidden flex flex-col bg-background">
+      <SidebarInset className="h-svh overflow-hidden flex flex-col bg-background min-w-0 max-w-full">
         {/* Top Header Bar matching AppIdentity height (h-12), background and bottom border */}
         <header className="shrink-0 sticky top-0 z-40 flex h-12 w-full items-center bg-background/80 backdrop-blur-xl border-b border-border/80 transition-all shadow-none">
           <div className="flex h-full w-full items-center justify-between px-3 sm:px-4">
@@ -82,10 +82,10 @@ export default async function DashboardLayout({
           </div>
         </header>
 
-        <div className="flex flex-1 flex-col overflow-hidden relative">
+        <div className="flex flex-1 flex-col overflow-hidden relative min-w-0 max-w-full">
           {/* Subtle Grid Background */}
           <div className="absolute inset-0 bg-grid-pattern [mask-image:radial-gradient(ellipse_at_center,white,transparent)] pointer-events-none -z-10 opacity-60" />
-          <div className="flex-1 flex flex-col p-0.5 sm:p-1.5 min-h-0 overflow-y-auto">
+          <div className="flex-1 flex flex-col p-0.5 sm:p-1.5 min-h-0 overflow-y-auto overflow-x-hidden min-w-0 max-w-full">
             {children}
           </div>
         </div>

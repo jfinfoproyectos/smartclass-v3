@@ -63,7 +63,7 @@ export default async function RootLayout({
           />
         )}
       </head>
-      <body>
+      <body className="overflow-x-hidden max-w-full min-h-screen">
         <NextTopLoader 
           color="var(--primary, #3b82f6)" 
           initialPosition={0.08} 

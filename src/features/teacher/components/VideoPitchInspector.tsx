@@ -23,7 +23,8 @@ import { useTheme } from "next-themes";
 import { gradeVideoPitchAction } from "@/features/teacher/actions/gradingActions";
 import { GradingModeSelector } from "./GradingModeSelector";
 import { FeedbackViewer } from "@/features/student/components/FeedbackViewer";
-import { RUBRIC_LEVELS } from "./CodeProjectInspector";
+import { TeacherEvaluationHeaderBadges } from "./TeacherEvaluationHeaderBadges";
+import { TeacherChecklistEvaluationPanel } from "./TeacherChecklistEvaluationPanel";
 import {
     getActivityChecklistConfig,
     extractEvaluationMetadata,
@@ -294,8 +295,7 @@ export function VideoPitchInspector({
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-2 sm:p-4">
-            <div className="flex flex-col w-full h-full max-w-7xl bg-card border border-border rounded-2xl shadow-2xl overflow-hidden">
+        <div className="flex flex-col h-full w-full bg-background text-foreground overflow-hidden">
                 {/* Header Inspector */}
                 <div className="flex items-center justify-between p-3 sm:px-5 border-b bg-muted/40">
                     <div className="flex items-center gap-3 min-w-0">
@@ -314,6 +314,15 @@ export function VideoPitchInspector({
                     </div>
 
                     <div className="flex items-center gap-2">
+                        {checklistConfig && (
+                            <TeacherEvaluationHeaderBadges
+                                checklistConfig={checklistConfig}
+                                aiGrade={aiGrade}
+                                checklistScore={checklistScore}
+                                combinedFinalScore={combinedFinalScore}
+                            />
+                        )}
+
                         {/* Navegación anterior / siguiente */}
                         {studentsList && onSelectStudent && (
                             <div className="flex items-center gap-1 mr-2">
@@ -356,8 +365,8 @@ export function VideoPitchInspector({
 
                 {/* Contenido Principal: Dos Columnas */}
                 <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 min-h-0 overflow-hidden">
-                    {/* Columna Izquierda: Reproductor de Video y Notas (7 cols) */}
-                    <div className="lg:col-span-7 flex flex-col border-r border-border min-h-0 overflow-hidden">
+                    {/* Columna Izquierda: Reproductor de Video */}
+                    <div className={cn("flex flex-col border-r border-border min-h-0 overflow-hidden", checklistConfig ? "lg:col-span-6" : "lg:col-span-7")}>
                         <div className="flex items-center justify-between p-2 border-b bg-muted/20">
                             <Tabs value={leftTab} onValueChange={(v) => setLeftTab(v as any)}>
                                 <TabsList className="h-7 p-0.5">
@@ -430,8 +439,8 @@ export function VideoPitchInspector({
                         </div>
                     </div>
 
-                    {/* Columna Derecha: Panel de Evaluación (5 cols) */}
-                    <div className="lg:col-span-5 flex flex-col min-h-0 overflow-hidden bg-background">
+                    {/* Columna Derecha: Panel de Evaluación */}
+                    <div className={cn("flex flex-col min-h-0 overflow-hidden bg-background", checklistConfig ? "lg:col-span-6" : "lg:col-span-5")}>
                         <Tabs value={rightTab} onValueChange={(v) => setRightTab(v as any)} className="flex-1 flex flex-col min-h-0">
                             <div className="border-b p-2 bg-muted/20 overflow-x-auto scrollbar-none">
                                 <TabsList className="inline-flex w-max min-w-full sm:grid sm:grid-cols-2 h-auto min-h-8 p-1 gap-1">
@@ -439,7 +448,13 @@ export function VideoPitchInspector({
                                         <Bot className="h-3.5 w-3.5 shrink-0" /> <span>IA Multimodal</span>
                                     </TabsTrigger>
                                     <TabsTrigger value="teacher_grade" className="text-xs font-semibold gap-1 shrink-0 px-3 py-1.5 whitespace-nowrap">
-                                        <CheckCircle className="h-3.5 w-3.5 shrink-0" /> <span>Calificación</span>
+                                        <CheckCircle className="h-3.5 w-3.5 shrink-0" />
+                                        <span>Evaluación Docente</span>
+                                        {checklistConfig && (
+                                            <Badge variant="secondary" className="ml-1 text-[10px] px-1 py-0 h-4 bg-primary/20 text-primary">
+                                                {checklistScore.toFixed(1)}
+                                            </Badge>
+                                        )}
                                     </TabsTrigger>
                                 </TabsList>
                             </div>
@@ -526,167 +541,85 @@ export function VideoPitchInspector({
                             </TabsContent>
 
                             {/* TAB 2: Calificación Docente y Sustentación */}
-                            <TabsContent value="teacher_grade" className="flex-1 p-4 overflow-y-auto m-0 space-y-4">
-                                {/* Checklist de Sustentación Docente */}
-                                {checklistConfig && checklistData && checklistData.length > 0 && (
-                                    <div className="p-3.5 rounded-xl border border-primary/20 bg-muted/20 space-y-3">
-                                        <div className="flex items-center justify-between border-b pb-2">
-                                            <div className="flex items-center gap-1.5">
-                                                <ListChecks className="h-4 w-4 text-primary" />
-                                                <span className="text-xs font-bold text-foreground">Sustentación Docente ({checklistWeight}%)</span>
-                                            </div>
+                            <TabsContent value="teacher_grade" className="flex-1 p-0 overflow-y-auto m-0">
+                                {checklistConfig ? (
+                                    <div className="p-4">
+                                        <TeacherChecklistEvaluationPanel
+                                            activity={activity}
+                                            student={student}
+                                            submission={submission}
+                                            aiGrade={aiGrade}
+                                            aiFeedbackInput={aiFeedbackInput}
+                                            gradingResult={aiResult}
+                                            checklistConfig={checklistConfig}
+                                            criteriaLevels={criteriaLevels}
+                                            onUpdateCriteriaLevels={handleUpdateCriteriaLevels}
+                                            manualSustentacionScore={manualSustentacionScore}
+                                            onSetManualSustentacionScore={setManualSustentacionScore}
+                                            gradeInput={gradeInput}
+                                            onSetGradeInput={setGradeInput}
+                                            teacherNotesInput={teacherNotesInput}
+                                            onSetTeacherNotesInput={setTeacherNotesInput}
+                                            isSavingGrade={isSaving}
+                                            onSaveGrade={handleSaveGrade}
+                                            onReject={onReject ? () => onReject(student.id, teacherNotesInput || undefined) : undefined}
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="p-4 space-y-4">
+                                        {/* Entrada de Nota Final */}
+                                        <div className="space-y-2">
+                                            <Label htmlFor="grade-input" className="text-xs font-bold uppercase tracking-wider flex justify-between">
+                                                <span>Nota Final (0.0 a 5.0)</span>
+                                                <span className="text-[11px] font-normal text-muted-foreground">Escala 0.0 - 5.0</span>
+                                            </Label>
                                             <div className="flex items-center gap-2">
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => {
-                                                        const allFull: Record<string, number> = {};
-                                                        checklistData.forEach((c: any) => { allFull[c.id] = 1.0; });
-                                                        handleUpdateCriteriaLevels(allFull);
-                                                    }}
-                                                    className="h-6 px-1.5 text-[10px] text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
-                                                >
-                                                    Todos Sabe
-                                                </Button>
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => handleUpdateCriteriaLevels({})}
-                                                    className="h-6 px-1.5 text-[10px] text-muted-foreground hover:bg-muted"
-                                                >
-                                                    Limpiar
-                                                </Button>
-                                                <span className="text-xs font-bold font-mono text-primary ml-1">
-                                                    {checklistScore.toFixed(1)} / 5.0
-                                                </span>
+                                                <Input
+                                                    id="grade-input"
+                                                    type="number"
+                                                    step="0.1"
+                                                    min="0"
+                                                    max="5"
+                                                    value={gradeInput}
+                                                    onChange={(e) => setGradeInput(e.target.value)}
+                                                    className="h-10 text-lg font-bold font-mono tracking-tight text-primary w-24 text-center"
+                                                />
+                                                <div className="flex flex-wrap items-center gap-1 flex-1">
+                                                    {["5.0", "4.5", "4.0", "3.5", "3.0", "0.0"].map((qg) => (
+                                                        <Button
+                                                            key={qg}
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => setGradeInput(qg)}
+                                                            className={`h-7 px-2 text-xs font-bold ${gradeInput === qg ? "bg-primary text-primary-foreground" : ""}`}
+                                                        >
+                                                            {qg}
+                                                        </Button>
+                                                    ))}
+                                                </div>
                                             </div>
                                         </div>
 
-                                        <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
-                                            {checklistData.map((crit: any, idx: number) => {
-                                                const currentFactor = criteriaLevels[crit.id];
-                                                return (
-                                                    <div key={crit.id || idx} className="p-2.5 rounded-lg border bg-card space-y-1.5 text-xs">
-                                                        <div className="flex items-center justify-between">
-                                                            <span className="font-bold text-[11px]">#{idx + 1} {crit.name}</span>
-                                                            <Badge variant="outline" className="text-[9px] font-mono">{crit.percentage}%</Badge>
-                                                        </div>
-                                                        <div className="flex items-center gap-1">
-                                                            {RUBRIC_LEVELS.map((lvl) => (
-                                                                <button
-                                                                    key={lvl.key}
-                                                                    type="button"
-                                                                    onClick={() => {
-                                                                        const nextLevels = { ...criteriaLevels, [crit.id]: currentFactor === lvl.factor ? undefined : lvl.factor };
-                                                                        handleUpdateCriteriaLevels(nextLevels);
-                                                                    }}
-                                                                    className={cn(
-                                                                        "text-[10px] font-bold px-2 py-0.5 rounded border transition-all",
-                                                                        currentFactor === lvl.factor
-                                                                            ? "bg-primary text-primary-foreground border-primary"
-                                                                            : "bg-muted/40 hover:bg-muted text-muted-foreground"
-                                                                    )}
-                                                                >
-                                                                    {lvl.label}
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-
-                                        {/* Presets rápidos de nota de sustentación */}
-                                        <div className="flex items-center justify-between gap-1 pt-1 border-t border-dashed">
-                                            <span className="text-[10px] text-muted-foreground font-medium">Nota Rápida Sustentación:</span>
-                                            <div className="flex items-center gap-1">
-                                                {[5.0, 4.0, 3.0, 0.0].map((score) => (
-                                                    <Button
-                                                        key={score}
-                                                        type="button"
-                                                        variant={manualSustentacionScore === score ? "default" : "outline"}
-                                                        size="sm"
-                                                        onClick={() => handleQuickSustentacionPreset(score)}
-                                                        className="h-5 px-1.5 text-[10px] font-mono"
-                                                    >
-                                                        {score.toFixed(1)}
-                                                    </Button>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        {/* Ponderación combinada */}
-                                        <div className="p-2 rounded-lg bg-background/80 border text-[11px] space-y-1">
-                                            <div className="flex items-center justify-between font-mono">
-                                                <span className="text-muted-foreground">
-                                                    (IA {aiWeight}%: {(aiGrade ?? 0).toFixed(1)}) + (Docente {checklistWeight}%: {checklistScore.toFixed(1)})
-                                                </span>
-                                                <span className="font-bold text-primary">
-                                                    = {combinedFinalScore.toFixed(1)} / 5.0
-                                                </span>
-                                            </div>
-                                            <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden flex">
-                                                <div className="bg-purple-500 h-full" style={{ width: `${aiWeight}%` }} title={`IA: ${aiWeight}%`} />
-                                                <div className="bg-blue-500 h-full" style={{ width: `${checklistWeight}%` }} title={`Docente: ${checklistWeight}%`} />
-                                            </div>
+                                        {/* Observaciones del Profesor */}
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-bold uppercase tracking-wider">
+                                                Observaciones y Retroalimentación
+                                            </Label>
+                                            <Textarea
+                                                value={teacherNotesInput}
+                                                onChange={(e) => setTeacherNotesInput(e.target.value)}
+                                                rows={6}
+                                                className="text-xs leading-relaxed"
+                                                placeholder="Comentarios sobre fluidez, lenguaje técnico y respuesta a preguntas..."
+                                            />
                                         </div>
                                     </div>
                                 )}
-
-                                {/* Entrada de Nota Final */}
-                                <div className="space-y-2">
-                                    <Label htmlFor="grade-input" className="text-xs font-bold uppercase tracking-wider flex justify-between">
-                                        <span>Nota Final (0.0 a 5.0)</span>
-                                        <span className="text-[11px] font-normal text-muted-foreground">Escala 0.0 - 5.0</span>
-                                    </Label>
-                                    <div className="flex items-center gap-2">
-                                        <Input
-                                            id="grade-input"
-                                            type="number"
-                                            step="0.1"
-                                            min="0"
-                                            max="5"
-                                            value={gradeInput}
-                                            onChange={(e) => setGradeInput(e.target.value)}
-                                            className="h-10 text-lg font-bold font-mono tracking-tight text-primary w-24 text-center"
-                                        />
-                                        <div className="flex flex-wrap items-center gap-1 flex-1">
-                                            {["5.0", "4.5", "4.0", "3.5", "3.0", "0.0"].map((qg) => (
-                                                <Button
-                                                    key={qg}
-                                                    type="button"
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() => setGradeInput(qg)}
-                                                    className={`h-7 px-2 text-xs font-bold ${gradeInput === qg ? "bg-primary text-primary-foreground" : ""}`}
-                                                >
-                                                    {qg}
-                                                </Button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Observaciones del Profesor */}
-                                <div className="space-y-1.5">
-                                    <Label className="text-xs font-bold uppercase tracking-wider">
-                                        Observaciones y Retroalimentación
-                                    </Label>
-                                    <Textarea
-                                        value={teacherNotesInput}
-                                        onChange={(e) => setTeacherNotesInput(e.target.value)}
-                                        rows={6}
-                                        className="text-xs leading-relaxed"
-                                        placeholder="Comentarios sobre fluidez, lenguaje técnico y respuesta a preguntas..."
-                                    />
-                                </div>
                             </TabsContent>
                         </Tabs>
                     </div>
                 </div>
             </div>
-        </div>
-    );
-}
+        );
+    }
