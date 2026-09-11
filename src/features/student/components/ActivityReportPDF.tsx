@@ -2,6 +2,7 @@ import { Page, Text, View, Document, StyleSheet, Link } from '@react-pdf/rendere
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { getActivityChecklistConfig, extractEvaluationMetadata, stripEvaluationMetadata } from '@/features/teacher/utils/checklistGradingUtils';
+import { formatEvidenceUrl } from '@/lib/utils';
 
 // Colores corporativos
 const COLORS = {
@@ -447,13 +448,16 @@ export const ActivityReportPDF = ({ activity, submission, studentName }: Activit
                     </View>
                     <View style={styles.metaItem}>
                         <Text style={styles.metaLabel}>Repositorio / URL</Text>
-                        {submission?.url ? (
-                            <Link src={submission.url} style={[styles.metaValue, { color: COLORS.accent, fontSize: 8 }]}>
-                                {submission.url}
-                            </Link>
-                        ) : (
-                            <Text style={styles.metaValue}>N/A</Text>
-                        )}
+                        {(() => {
+                            const evidenceUrl = formatEvidenceUrl(submission?.url);
+                            return evidenceUrl ? (
+                                <Link src={evidenceUrl} style={[styles.metaValue, { color: COLORS.accent, fontSize: 8 }]}>
+                                    {evidenceUrl}
+                                </Link>
+                            ) : (
+                                <Text style={styles.metaValue}>{submission?.url || 'N/A'}</Text>
+                            );
+                        })()}
                     </View>
                 </View>
 

@@ -29,7 +29,11 @@ import {
     AlertTriangle,
     Info,
     Calendar as CalendarIcon,
-    BrainCircuit
+    BrainCircuit,
+    BarChart3,
+    TrendingDown,
+    FileSpreadsheet,
+    FileText
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
@@ -42,7 +46,6 @@ import { format } from "date-fns";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AttendanceStatistics } from "./AttendanceStatistics";
 import { StudentAttendanceDashboard } from "./StudentAttendanceDashboard";
-import { BarChart3, Download, TrendingDown } from "lucide-react";
 import { exportToExcel } from "@/lib/export-utils";
 import { GroupAttendanceAnalytics } from "./GroupAttendanceAnalytics";
 
@@ -65,6 +68,8 @@ export function GroupAttendanceSheet({
     const [activeFilter, setActiveFilter] = useState<string | null>(null);
     const [selectedStudent, setSelectedStudent] = useState<any>(null);
     const [hoveredColumn, setHoveredColumn] = useState<string | null>(null);
+    const [isExportingExcel, setIsExportingExcel] = useState(false);
+    const [isExportingPDF, setIsExportingPDF] = useState(false);
 
     const loadData = async () => {
         setLoading(true);
@@ -115,35 +120,26 @@ export function GroupAttendanceSheet({
     }, [data, searchTerm, activeFilter, dateColumns]);
 
     const handleExportExcel = async () => {
+        setIsExportingExcel(true);
         try {
             const statusMap: Record<string, string> = {
-                'PRESENT': '', 'P': '',
+                'PRESENT': 'PRESENTE', 'P': 'PRESENTE',
                 'ABSENT': 'FALTA',  'A': 'FALTA',
                 'LATE':   'TARDE',  'L': 'TARDE',
                 'LEAVE_EARLY': 'RETIRO', 'R': 'RETIRO',
-                'EXCUSED': '', 'E': '',
+                'EXCUSED': 'JUSTIFICADA', 'E': 'JUSTIFICADA',
             };
 
-            // Only include date columns that have at least one F or T across all students
-            const relevantDateColumns = dateColumns.filter(date =>
-                data.some(row => {
-                    const cell = row[date];
-                    if (!cell || cell === '-' || !cell.status) return false;
-                    const mapped = statusMap[cell.status] ?? cell.status;
-                    return mapped === 'FALTA' || mapped === 'TARDE' || mapped === 'RETIRO';
-                })
-            );
-
-            const exportData = data.map(row => {
+            const exportData = filteredData.map(row => {
                 const base: any = {
                     'ID': row.ID,
                     'Estudiante': row.Estudiante,
                 };
 
-                relevantDateColumns.forEach(date => {
+                dateColumns.forEach(date => {
                     const cell = row[date];
                     if (cell === '-' || !cell || !cell.status) {
-                        base[date] = '';
+                        base[date] = '-';
                     } else {
                         base[date] = statusMap[cell.status] ?? cell.status;
                     }
@@ -152,11 +148,96 @@ export function GroupAttendanceSheet({
                 return base;
             });
 
-            await exportToExcel(exportData, `Asistencia_${courseTitle}_${format(new Date(), 'yyyy-MM-dd')}`, "Asistencia");
-            toast.success("Excel generado correctamente");
+            await exportToExcel(
+                exportData, 
+                `Asistencia_${courseTitle.replace(/\s+/g, '_')}_${format(new Date(), 'yyyy-MM-dd')}`, 
+                "Asistencia Grupal"
+            );
+            toast.success("Excel institucional generado correctamente");
         } catch (error) {
             console.error("Export error:", error);
             toast.error("Error al exportar a Excel");
+        } finally {
+            setIsExportingExcel(false);
+        }
+    };
+
+    const handleExportPDF = async () => {
+        setIsExportingPDF(true);
+        try {
+            const { pdf } = await import("@react-pdf/renderer");
+            const { CourseAttendanceHistoryPDF } = await import("@/features/attendance/components/AttendanceHistoryPDF");
+
+            const students = filteredData.map(row => ({
+                id: String(row.ID || ''),
+                name: String(row.Estudiante || 'Estudiante'),
+                email: String(row.Correo || ''),
+                profile: {
+                    identificacion: String(row.ID || ''),
+                    nombres: String(row.Estudiante || ''),
+                    apellido: ''
+                }
+            }));
+
+            const allStudentStats: Record<string, { absences: number; late: number; leaveEarly: number }> = {};
+            const records: Array<any> = [];
+
+            filteredData.forEach(row => {
+                const studentId = String(row.ID || '');
+                let absences = 0;
+                let late = 0;
+                let leaveEarly = 0;
+
+                dateColumns.forEach(date => {
+                    const cell = row[date];
+                    if (cell && cell !== '-' && cell.status) {
+                        const st = cell.status;
+                        if (st === 'ABSENT' || st === 'A' || st === 'FALTA') absences++;
+                        else if (st === 'LATE' || st === 'L' || st === 'TARDE' || cell.arrivalTime) late++;
+                        else if (st === 'LEAVE_EARLY' || st === 'R' || st === 'RETIRO' || cell.departureTime) leaveEarly++;
+
+                        records.push({
+                            id: `${studentId}_${date}`,
+                            userId: studentId,
+                            date,
+                            status: st,
+                            arrivalTime: cell.arrivalTime,
+                            departureTime: cell.departureTime,
+                            justification: cell.justification,
+                            justificationUrl: cell.justificationUrl
+                        });
+                    }
+                });
+
+                allStudentStats[studentId] = { absences, late, leaveEarly };
+            });
+
+            const doc = (
+                <CourseAttendanceHistoryPDF
+                    courseTitle={courseTitle}
+                    students={students}
+                    allStudentStats={allStudentStats}
+                    records={records}
+                    classDates={dateColumns}
+                    filterApplied={activeFilter ? `Filtro: ${activeFilter}` : (searchTerm ? `Búsqueda: "${searchTerm}"` : "General")}
+                />
+            );
+
+            const blob = await pdf(doc).toBlob();
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `Asistencia_Consolidada_${courseTitle.replace(/\s+/g, '_')}_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            toast.success("PDF institucional generado correctamente");
+        } catch (err) {
+            console.error("Error generating PDF:", err);
+            toast.error("Error al generar el reporte en PDF");
+        } finally {
+            setIsExportingPDF(false);
         }
     };
 
@@ -359,12 +440,31 @@ export function GroupAttendanceSheet({
                                     <Button 
                                         variant="outline" 
                                         size="sm" 
-                                        className="h-10 gap-2 text-xs" 
+                                        className="h-10 gap-2 text-xs font-semibold border-emerald-300 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400" 
                                         onClick={handleExportExcel}
-                                        disabled={loading || data.length === 0}
+                                        disabled={loading || filteredData.length === 0 || isExportingExcel}
                                     >
-                                        <Download className="h-4 w-4" />
+                                        {isExportingExcel ? (
+                                            <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
+                                        ) : (
+                                            <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+                                        )}
                                         Excel
+                                    </Button>
+
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        className="h-10 gap-2 text-xs font-semibold border-rose-300 dark:border-rose-800 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-rose-700 dark:text-rose-400" 
+                                        onClick={handleExportPDF}
+                                        disabled={loading || filteredData.length === 0 || isExportingPDF}
+                                    >
+                                        {isExportingPDF ? (
+                                            <Loader2 className="h-4 w-4 animate-spin text-rose-600" />
+                                        ) : (
+                                            <FileText className="h-4 w-4 text-rose-600" />
+                                        )}
+                                        PDF
                                     </Button>
 
                                     {(searchTerm || activeFilter) && (

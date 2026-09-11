@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,7 +32,7 @@ import {
     SheetTrigger,
     SheetFooter,
 } from "@/components/ui/sheet";
-import { Plus, Search, UserPlus, Trash2, UserCheck, Eye, Calendar, MoreHorizontal, ShieldAlert, ShieldCheck, FileSpreadsheet, ClipboardX, Clock, ChevronDown, Users, UserMinus, Upload, CheckCircle2, XCircle, AlertCircle, FolderKanban } from "lucide-react";
+import { Plus, Search, UserPlus, Trash2, UserCheck, Eye, Calendar, MoreHorizontal, ShieldAlert, ShieldCheck, FileSpreadsheet, ClipboardX, Users, UserMinus, Upload, CheckCircle2, XCircle, AlertCircle, FolderKanban, CalendarCheck2, Loader2, FolderArchive } from "lucide-react";
 import {
     Tooltip,
     TooltipContent,
@@ -41,28 +42,16 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { addStudentToCourseAction, searchStudentsAction, removeStudentFromCourseAction, bulkAddStudentsToCourseAction, createAndEnrollStudentAction } from "@/features/teacher/actions/studentActions";
 import { getStudentCourseEnrollmentAction, updateStudentStatusAction, getStudentMissingActivitiesAction } from "@/features/teacher/actions/studentActions";
-import { recordAttendanceAction, deleteAttendanceAction, getAbsentStudentsForTodayAction } from "@/features/teacher/actions/attendanceActions";
-import { getTodayDateString } from "@/lib/dateUtils";
-
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { StudentActivityDetails } from './StudentActivityDetails';
 import { AttendanceManagementSheet } from './AttendanceManagementSheet';
-import { GroupAttendanceSheet } from './GroupAttendanceSheet';
 import { CourseGroupsModal } from './CourseGroupsModal';
 import { CourseReportPDFDocument } from './CourseReportPDFDocument';
 import { toast } from "sonner";
 import { pdf } from "@react-pdf/renderer";
 import JSZip from "jszip";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { formatName, getInitials } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -75,6 +64,8 @@ export function StudentManager({
     initialStudents: any[],
     courseTitle: string
 }) {
+    const router = useRouter();
+    const searchParams = useSearchParams();
     const [isOpen, setIsOpen] = useState(false);
     const [isDetailsOpen, setIsDetailsOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
@@ -90,7 +81,6 @@ export function StudentManager({
 
     // Attendance Management Sheet State
     const [isAttendanceSheetOpen, setIsAttendanceSheetOpen] = useState(false);
-    const [isGroupAttendanceOpen, setIsGroupAttendanceOpen] = useState(false);
     const [isGroupsModalOpen, setIsGroupsModalOpen] = useState(false);
     const [studentForAttendance, setStudentForAttendance] = useState<any | null>(null);
 
@@ -726,43 +716,67 @@ export function StudentManager({
                                 </Tabs>
                             </DialogContent>
                         </Dialog>
-                        <LateArrivalsModal courseId={courseId} />
-                        <Button variant="outline" onClick={() => setIsGroupAttendanceOpen(true)}>
-                            <Users className="mr-2 h-4 w-4 text-primary" />
-                            Resumen de Asistencia
+                        <Button 
+                            variant="outline" 
+                            onClick={() => {
+                                const params = new URLSearchParams(searchParams?.toString() || "");
+                                params.set("tab", "attendance");
+                                router.replace(`/dashboard/teacher/courses/${courseId}?${params.toString()}`, { scroll: false });
+                            }}
+                        >
+                            <CalendarCheck2 className="mr-2 h-4 w-4 text-primary" />
+                            Asistencia
                         </Button>
                         <Button variant="outline" onClick={() => setIsGroupsModalOpen(true)}>
                             <FolderKanban className="mr-2 h-4 w-4 text-primary" />
                             Grupos de Trabajo
                         </Button>
+                        <Button 
+                            variant="outline" 
+                            onClick={handleExportReport} 
+                            disabled={isExporting}
+                            className="flex-1 sm:flex-none border-green-600/30 hover:bg-green-500/10 hover:text-green-700 dark:hover:text-green-400"
+                            title="Exportar calificaciones a Excel"
+                        >
+                            {isExporting ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin text-green-600" />
+                            ) : (
+                                <FileSpreadsheet className="mr-2 h-4 w-4 text-green-600" />
+                            )}
+                            <span className="hidden sm:inline">Calificaciones (Excel)</span>
+                            <span className="sm:hidden">Calificaciones</span>
+                        </Button>
+                        <Button 
+                            variant="outline" 
+                            onClick={handleExportAttendanceReport} 
+                            disabled={isExportingAttendance}
+                            className="flex-1 sm:flex-none border-emerald-600/30 hover:bg-emerald-500/10 hover:text-emerald-700 dark:hover:text-emerald-400"
+                            title="Exportar inasistencias a Excel"
+                        >
+                            {isExportingAttendance ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin text-emerald-600" />
+                            ) : (
+                                <Calendar className="mr-2 h-4 w-4 text-emerald-600" />
+                            )}
+                            <span className="hidden sm:inline">Inasistencias (Excel)</span>
+                            <span className="sm:hidden">Inasistencias</span>
+                        </Button>
+                        <Button 
+                            variant="outline" 
+                            onClick={handleExportZipReport} 
+                            disabled={isExportingZip}
+                            className="flex-1 sm:flex-none"
+                            title="Descargar reportes completos de los estudiantes en ZIP"
+                        >
+                            {isExportingZip ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin text-primary" />
+                            ) : (
+                                <FolderArchive className="mr-2 h-4 w-4 text-primary" />
+                            )}
+                            <span className="hidden sm:inline">Reportes Curso (ZIP)</span>
+                            <span className="sm:hidden">ZIP</span>
+                        </Button>
                     </div>
-
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="outline" className="flex-1 sm:flex-none">
-                                <FileSpreadsheet className="mr-2 h-4 w-4 text-green-600" />
-                                <span className="hidden sm:inline">Exportar Reportes</span>
-                                <span className="sm:hidden">Exportar</span>
-                                <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-[200px]">
-                            <DropdownMenuLabel>Opciones de Exportación</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={handleExportReport} disabled={isExporting}>
-                                <FileSpreadsheet className="mr-2 h-4 w-4 text-green-600" />
-                                Calificaciones (Excel)
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={handleExportAttendanceReport} disabled={isExportingAttendance}>
-                                <Calendar className="mr-2 h-4 w-4" />
-                                Inasistencias (Excel)
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={handleExportZipReport} disabled={isExportingZip}>
-                                <MoreHorizontal className="mr-2 h-4 w-4" />
-                                Todo el Curso (ZIP)
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
 
                     {/* Sheet for Viewing Student Activities */}
                     <Sheet open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
@@ -800,13 +814,6 @@ export function StudentManager({
                     onNavigate={handleNavigateAttendance}
                 />
             )}
-
-            <GroupAttendanceSheet
-                isOpen={isGroupAttendanceOpen}
-                onOpenChange={setIsGroupAttendanceOpen}
-                courseId={courseId}
-                courseTitle={courseTitle}
-            />
 
             <div className="w-full overflow-x-auto rounded-md border">
                 <Table className="min-w-[800px]">
@@ -962,107 +969,7 @@ export function StudentManager({
     );
 }
 
-function LateArrivalsModal({ courseId }: { courseId: string }) {
-    const [isOpen, setIsOpen] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const [students, setStudents] = useState<any[]>([]);
 
-    const fetchAbsentStudents = async () => {
-        setLoading(true);
-        try {
-            const data = await getAbsentStudentsForTodayAction(courseId);
-            setStudents(data);
-        } catch (error) {
-            console.error(error);
-            toast.error("Error al cargar estudiantes ausentes");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        if (isOpen) {
-            fetchAbsentStudents();
-        }
-    }, [isOpen, courseId]);
-
-    const handleMarkAsLate = async (studentId: string, name: string) => {
-        try {
-            const today = getTodayDateString();
-            await recordAttendanceAction(courseId, studentId, today, "LATE");
-            toast.success(`${name} marcado como tarde`);
-            fetchAbsentStudents(); // Refresh list
-        } catch (error) {
-            toast.error("Error al registrar llegada tarde");
-        }
-    };
-
-    return (
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogTrigger asChild>
-                <Button variant="outline" className="w-full sm:w-auto">
-                    <Clock className="mr-2 h-4 w-4 text-orange-500" />
-                    Llegadas Tardes
-                </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md">
-                <DialogHeader>
-                    <DialogTitle>Llegadas Tardes (Hoy)</DialogTitle>
-                    <DialogDescription>
-                        Estudiantes registrados como ausentes para el día de hoy.
-                    </DialogDescription>
-                </DialogHeader>
-
-                <div className="max-h-[400px] overflow-y-auto pr-2">
-                    {loading ? (
-                        <div className="flex justify-center p-8">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                        </div>
-                    ) : students.length > 0 ? (
-                        <div className="space-y-3">
-                            {students.map((attendance) => (
-                                <div key={attendance.id} className="flex items-center justify-between p-3 border rounded-md hover:bg-accent/50 transition-colors">
-                                    <div className="flex items-center gap-3">
-                                        <Avatar className="h-8 w-8">
-                                            <AvatarImage src={attendance.user?.image} />
-                                            <AvatarFallback>{attendance.user?.name?.[0]}</AvatarFallback>
-                                        </Avatar>
-                                        <div>
-                                            <p className="font-medium text-sm">
-                                                {formatName(attendance.user?.name, attendance.user?.profile)}
-                                            </p>
-                                            <p className="text-[10px] text-muted-foreground">
-                                                {attendance.user?.profile?.identificacion || "Sin ID"}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <Button 
-                                        size="sm" 
-                                        variant="outline" 
-                                        className="h-8 text-xs bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100 hover:text-orange-700"
-                                        onClick={() => handleMarkAsLate(attendance.userId, attendance.user?.name || "Estudiante")}
-                                    >
-                                        Llegó Tarde
-                                    </Button>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="text-center py-10 text-muted-foreground">
-                            <p className="text-sm">No hay estudiantes ausentes para el día de hoy.</p>
-                        </div>
-                    )}
-                </div>
-
-                <DialogFooter>
-                    <Button variant="secondary" onClick={() => setIsOpen(false)}>
-                        Cerrar
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
-}
 
 function MissingActivitiesDialog({ courseId, userId, studentName }: { courseId: string, userId: string, studentName: string }) {
     const [isOpen, setIsOpen] = useState(false);

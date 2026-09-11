@@ -16,17 +16,17 @@ export const attendanceService = {
         // Normalize date to start of day in UTC using regional timezone to avoid server/local shifts
         const normalizedDate = toUTCStartOfDayFromRegional(date);
 
-        // If status is LATE and no arrivalTime is provided, use current time
-        const finalArrivalTime = status === "LATE" 
+        // If status is LATE or arrivalTime is provided, save arrivalTime
+        const finalArrivalTime = (status === "LATE" || arrivalTime)
             ? (arrivalTime || new Date()) 
             : null;
 
-        // If status is LEAVE_EARLY and no departureTime is provided, use current time
-        const finalDepartureTime = status === "LEAVE_EARLY"
+        // If status is LEAVE_EARLY or departureTime is provided, save departureTime
+        const finalDepartureTime = (status === "LEAVE_EARLY" || departureTime)
             ? (departureTime || new Date())
             : null;
 
-        const finalJustification = (status === "EXCUSED" || status === "LATE" || status === "LEAVE_EARLY")
+        const finalJustification = (status === "EXCUSED" || status === "LATE" || status === "LEAVE_EARLY" || arrivalTime || departureTime)
             ? justification
             : null;
 
@@ -75,13 +75,13 @@ export const attendanceService = {
 
         return await prisma.$transaction(
             records.map(r => {
-                const finalArrivalTime = r.status === "LATE" 
+                const finalArrivalTime = (r.status === "LATE" || r.arrivalTime)
                     ? (r.arrivalTime || new Date()) 
                     : null;
-                const finalDepartureTime = r.status === "LEAVE_EARLY"
+                const finalDepartureTime = (r.status === "LEAVE_EARLY" || r.departureTime)
                     ? (r.departureTime || new Date())
                     : null;
-                const finalJustification = (r.status === "EXCUSED" || r.status === "LATE" || r.status === "LEAVE_EARLY")
+                const finalJustification = (r.status === "EXCUSED" || r.status === "LATE" || r.status === "LEAVE_EARLY" || r.arrivalTime || r.departureTime)
                     ? r.justification
                     : null;
 
@@ -356,13 +356,22 @@ export const attendanceService = {
         };
 
         studentRecords.forEach(r => {
-            if (r.status in counts) {
-                counts[r.status as keyof typeof counts]++;
+            if (r.status === "ABSENT") {
+                counts.ABSENT++;
+            } else if (r.status === "EXCUSED") {
+                counts.EXCUSED++;
+            } else {
+                const isLate = r.status === "LATE" || Boolean(r.arrivalTime);
+                const isLeaveEarly = r.status === "LEAVE_EARLY" || Boolean(r.departureTime);
+
+                if (isLate) counts.LATE++;
+                if (isLeaveEarly) counts.LEAVE_EARLY++;
+                if (!isLate && !isLeaveEarly) counts.PRESENT++;
             }
         });
 
-        // Calculate percentage: (Present + Excused + Late + Leave Early) / Total Sessions
-        const attendedSessions = counts.PRESENT + counts.EXCUSED + counts.LATE + counts.LEAVE_EARLY;
+        // Calculate percentage: (Attended Sessions / Total Sessions) * 100
+        const attendedSessions = studentRecords.filter(r => r.status !== "ABSENT").length;
         const attendancePercentage = sessionCount > 0 ? (attendedSessions / sessionCount) * 100 : 100;
 
         return {
@@ -407,24 +416,26 @@ export const attendanceService = {
 
     /**
      * Batch: returns a map of userId → { absences, late, leaveEarly }
-     * for all students in a course using a single GROUP BY query.
-     * Replaces the N individual getStudentAttendanceStats calls in the list view.
+     * for all students in a course.
+     * Takes both status and presence of arrivalTime/departureTime into account.
      */
     async getAllStudentsAttendanceStats(courseId: string): Promise<Record<string, { absences: number; late: number; leaveEarly: number }>> {
-        const rows = await prisma.attendance.groupBy({
-            by: ["userId", "status"],
+        const records = await prisma.attendance.findMany({
             where: { courseId },
-            _count: { _all: true },
+            select: { userId: true, status: true, arrivalTime: true, departureTime: true }
         });
 
         const result: Record<string, { absences: number; late: number; leaveEarly: number }> = {};
-        for (const row of rows) {
+        for (const row of records) {
             if (!result[row.userId]) {
                 result[row.userId] = { absences: 0, late: 0, leaveEarly: 0 };
             }
-            if (row.status === "ABSENT")      result[row.userId].absences   += row._count._all;
-            if (row.status === "LATE")         result[row.userId].late        += row._count._all;
-            if (row.status === "LEAVE_EARLY")  result[row.userId].leaveEarly  += row._count._all;
+            if (row.status === "ABSENT") {
+                result[row.userId].absences++;
+            } else {
+                if (row.status === "LATE" || row.arrivalTime) result[row.userId].late++;
+                if (row.status === "LEAVE_EARLY" || row.departureTime) result[row.userId].leaveEarly++;
+            }
         }
         return result;
     },

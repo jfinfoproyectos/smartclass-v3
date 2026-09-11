@@ -1010,34 +1010,36 @@ export function EvaluationAssignmentManager({
                     </p>
                 </div>
 
-                <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-                    <div className="flex items-center gap-1.5 p-1 bg-muted rounded-xl text-xs font-semibold shrink-0">
+                <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                    <div className="flex items-center gap-1 p-0.5 sm:p-1 bg-muted rounded-xl text-xs font-semibold shrink-0">
                         <Button
                             type="button"
                             variant={viewMode === "grid" ? "default" : "ghost"}
                             size="sm"
-                            className="h-8 px-3 rounded-lg text-xs cursor-pointer"
+                            className="h-8 px-2.5 sm:px-3 rounded-lg text-xs cursor-pointer"
                             onClick={() => setViewMode("grid")}
                             title="Vista de Tarjetas"
                         >
-                            <LayoutGrid className="h-4 w-4 mr-1.5" />
+                            <LayoutGrid className="h-4 w-4 mr-1 sm:mr-1.5 shrink-0" />
                             <span>Tarjetas</span>
                         </Button>
                         <Button
                             type="button"
                             variant={viewMode === "table" ? "default" : "ghost"}
                             size="sm"
-                            className="h-8 px-3 rounded-lg text-xs cursor-pointer"
+                            className="h-8 px-2.5 sm:px-3 rounded-lg text-xs cursor-pointer"
                             onClick={() => setViewMode("table")}
                             title="Vista de Tabla"
                         >
-                            <List className="h-4 w-4 mr-1.5" />
+                            <List className="h-4 w-4 mr-1 sm:mr-1.5 shrink-0" />
                             <span>Tabla</span>
                         </Button>
                     </div>
 
-                    <Button className="w-full sm:w-auto cursor-pointer" onClick={() => setIsAssigning(true)}>
-                        <Plus className="mr-2 h-4 w-4" /> Asignar Evaluación
+                    <Button size="sm" className="h-8 px-3 rounded-lg font-semibold shrink-0 cursor-pointer" onClick={() => setIsAssigning(true)}>
+                        <Plus className="mr-1.5 h-4 w-4 shrink-0" />
+                        <span className="hidden sm:inline">Asignar Evaluación</span>
+                        <span className="sm:hidden">Asignar</span>
                     </Button>
                 </div>
             </div>

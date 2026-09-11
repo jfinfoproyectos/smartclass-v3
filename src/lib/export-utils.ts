@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs';
 import { getActivityChecklistConfig, extractEvaluationMetadata, stripEvaluationMetadata } from '@/features/teacher/utils/checklistGradingUtils';
+import { formatEvidenceUrl } from '@/lib/utils';
 
 /**
  * Export data to Excel file with styling
@@ -8,11 +9,11 @@ export async function exportToExcel(data: any[], filename: string, sheetName: st
     if (!data || data.length === 0) return;
 
     const workbook = new ExcelJS.Workbook();
-    workbook.creator = 'SmartClass';
+    workbook.creator = 'SmartClass Academic Suite';
     workbook.created = new Date();
 
     const worksheet = workbook.addWorksheet(sheetName);
-    setupWorksheetComp(worksheet, data);
+    setupWorksheetComp(worksheet, data, sheetName);
 
     // Buffer and Download
     const buffer = await workbook.xlsx.writeBuffer();
@@ -24,11 +25,13 @@ export async function exportToExcel(data: any[], filename: string, sheetName: st
  */
 export async function exportMultiSheetExcel(sheets: { name: string; data: any[] }[], filename: string) {
     const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'SmartClass Academic Suite';
+    workbook.created = new Date();
 
     sheets.forEach(sheetData => {
         if (sheetData.data.length > 0) {
             const worksheet = workbook.addWorksheet(sheetData.name);
-            setupWorksheetComp(worksheet, sheetData.data);
+            setupWorksheetComp(worksheet, sheetData.data, sheetData.name);
         }
     });
 
@@ -43,24 +46,23 @@ export async function exportHierarchicalGradesToExcel(data: any[], filename: str
     if (data.length === 0) return;
 
     const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'SmartClass Academic Suite';
+    workbook.created = new Date();
     const worksheet = workbook.addWorksheet(sheetName);
 
     // 1. Prepare Columns and Hierarchical Headers
-    // Base columns: ID, Estudiante, Correo
     const baseHeaders = ['ID', 'Estudiante', 'Correo'];
     const hierarchy = data[0]._hierarchy || [];
     
-    // Row 1: Categories
-    // Row 2: Groups / Totals
+    // Row 4: Categories
+    // Row 5: Groups / Totals
     const headerRow1: string[] = [...baseHeaders];
     const headerRow2: string[] = ['', '', ''];
 
     hierarchy.forEach((cat: any) => {
-        // Add Category Total Column
         headerRow1.push(`${cat.name} (${cat.weight}%)`);
         headerRow2.push('PROMEDIO CORTE');
 
-        // Add Group Columns
         cat.groups.forEach((group: any) => {
             headerRow1.push(''); // Will be merged later
             headerRow2.push(`${group.name} (${group.weight}%)`);
@@ -70,16 +72,35 @@ export async function exportHierarchicalGradesToExcel(data: any[], filename: str
     headerRow1.push('NOTA FINAL');
     headerRow2.push('');
 
-    // Add headers to worksheet
+    const totalCols = headerRow1.length;
+
+    // BANNER INSTITUCIONAL CORPORATIVO (Row 1 & 2)
+    const titleRow = worksheet.addRow(['SMARTCLASS ACADEMIC SUITE • CONSOLIDADO OFICIAL DE CALIFICACIONES']);
+    worksheet.mergeCells(1, 1, 1, totalCols);
+    titleRow.height = 34;
+    titleRow.font = { name: 'Calibri', size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
+    titleRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+    titleRow.alignment = { vertical: 'middle', horizontal: 'center' };
+
+    const subTitleRow = worksheet.addRow([`Reporte Jerárquico de Calificaciones por Categorías y Cortes — Emisión: ${new Date().toLocaleDateString('es-ES')} ${new Date().toLocaleTimeString('es-ES')}`]);
+    worksheet.mergeCells(2, 1, 2, totalCols);
+    subTitleRow.height = 20;
+    subTitleRow.font = { name: 'Calibri', size: 9.5, bold: true, italic: true, color: { argb: 'FFFFFFFF' } };
+    subTitleRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+    subTitleRow.alignment = { vertical: 'middle', horizontal: 'center' };
+
+    const blankRow = worksheet.addRow([]); // Row 3: Blank spacing
+    blankRow.height = 8;
+
+    // Headers at Rows 4 and 5
     worksheet.addRow(headerRow1);
     worksheet.addRow(headerRow2);
 
-    // 2. Add Data Rows
+    // 2. Add Data Rows (Row 6+)
     data.forEach(student => {
         const rowData: any[] = [student['ID'], student['Estudiante'], student['Correo']];
         
         hierarchy.forEach((cat: any) => {
-            // Find student's grade for this category in the hierarchy
             const studentCat = student._hierarchy.find((c: any) => c.id === cat.id);
             rowData.push(studentCat ? studentCat.grade.toFixed(2) : '0.00');
 
@@ -94,61 +115,77 @@ export async function exportHierarchicalGradesToExcel(data: any[], filename: str
     });
 
     // 3. Styling and Merging
-    // Merge Category headers
     let currentCol = baseHeaders.length + 1;
     hierarchy.forEach((cat: any) => {
         const groupCount = cat.groups.length;
         const endCol = currentCol + groupCount;
         if (groupCount > 0) {
-            worksheet.mergeCells(1, currentCol, 1, endCol);
+            worksheet.mergeCells(4, currentCol, 4, endCol);
         }
         currentCol = endCol + 1;
     });
 
-    // Merge Base headers and Nota Final vertically
+    // Merge Base headers and Nota Final vertically across Rows 4 and 5
     [1, 2, 3, currentCol].forEach(colIndex => {
-        worksheet.mergeCells(1, colIndex, 2, colIndex);
+        worksheet.mergeCells(4, colIndex, 5, colIndex);
     });
 
-    // Style both header rows
-    [1, 2].forEach(rowNum => {
+    // Style both header rows (Rows 4 & 5)
+    [4, 5].forEach(rowNum => {
         const row = worksheet.getRow(rowNum);
-        row.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        row.font = { name: 'Calibri', bold: true, color: { argb: 'FFFFFFFF' }, size: 9.5 };
         row.fill = {
             type: 'pattern',
             pattern: 'solid',
-            fgColor: { argb: rowNum === 1 ? 'FF1F2937' : 'FF374151' }
+            fgColor: { argb: rowNum === 4 ? 'FF0F172A' : 'FF1E3A5F' }
         };
         row.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
     });
 
-    worksheet.getRow(1).height = 35;
-    worksheet.getRow(2).height = 30;
+    worksheet.getRow(4).height = 32;
+    worksheet.getRow(5).height = 28;
 
     // Set column widths
     worksheet.columns.forEach((col, i) => {
-        if (i < 3) col.width = i === 1 ? 35 : 15;
-        else col.width = 12;
+        if (i < 3) col.width = i === 1 ? 34 : 16;
+        else col.width = 14;
     });
 
-    // Style data cells
+    // Style data cells (Row 6+)
     worksheet.eachRow((row, rowNumber) => {
-        if (rowNumber <= 2) return;
+        if (rowNumber <= 5) return;
         
+        const rowBg = rowNumber % 2 === 0 ? 'FFFFFFFF' : 'FFF8FAFC';
+        row.height = 22;
+
         row.eachCell((cell, colNumber) => {
             cell.border = {
-                top: { style: 'thin', color: { argb: 'FFD1D5DB' } },
-                left: { style: 'thin', color: { argb: 'FFD1D5DB' } },
-                bottom: { style: 'thin', color: { argb: 'FFD1D5DB' } },
-                right: { style: 'thin', color: { argb: 'FFD1D5DB' } }
+                top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
             };
-            
-            // Grade coloring logic (similar to setupWorksheetComp)
-            const val = parseFloat(cell.value?.toString() || '');
-            if (!isNaN(val)) {
-                if (val < 3.0) cell.font = { color: { argb: 'FFEF4444' } };
-                else if (val >= 4.5) cell.font = { color: { argb: 'FF15803D' }, bold: true };
-                cell.alignment = { horizontal: 'center' };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowBg } };
+            cell.font = { name: 'Calibri', size: 9.5 };
+
+            if (colNumber === 1) {
+                cell.alignment = { horizontal: 'center', vertical: 'middle' };
+            } else if (colNumber === 2) {
+                cell.alignment = { horizontal: 'left', vertical: 'middle' };
+                cell.font = { name: 'Calibri', size: 9.5, bold: true };
+            } else if (colNumber === 3) {
+                cell.alignment = { horizontal: 'left', vertical: 'middle' };
+            } else {
+                cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                const val = parseFloat(cell.value?.toString() || '');
+                if (!isNaN(val)) {
+                    if (val < 3.0) {
+                        cell.font = { name: 'Calibri', size: 9.5, color: { argb: 'FFDC2626' }, bold: true };
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE4E6' } };
+                    } else if (val >= 4.5) {
+                        cell.font = { name: 'Calibri', size: 9.5, color: { argb: 'FF15803D' }, bold: true };
+                    }
+                }
             }
         });
     });
@@ -156,10 +193,17 @@ export async function exportHierarchicalGradesToExcel(data: any[], filename: str
     // Last Column (Nota Final) Bold
     const lastColIndex = baseHeaders.length + hierarchy.reduce((acc: number, cat: any) => acc + cat.groups.length + 1, 0) + 1;
     worksheet.getColumn(lastColIndex).eachCell((cell, rowNum) => {
-        if (rowNum > 2) {
-            cell.font = { ...cell.font, bold: true };
+        if (rowNum > 5) {
+            cell.font = { ...cell.font, bold: true, size: 10.5 };
         }
     });
+
+    // Freeze panes on row 5 and auto-filter
+    worksheet.views = [{ state: 'frozen', ySplit: 5 }];
+    worksheet.autoFilter = {
+        from: { row: 5, column: 1 },
+        to: { row: worksheet.rowCount, column: totalCols }
+    };
 
     // Buffer and Download
     const buffer = await workbook.xlsx.writeBuffer();
@@ -597,14 +641,50 @@ export async function exportSingleSubmissionToExcel(
 /**
  * Helper to setup worksheet columns and styles
  */
-function setupWorksheetComp(worksheet: ExcelJS.Worksheet, data: any[]) {
+function setupWorksheetComp(worksheet: ExcelJS.Worksheet, data: any[], reportTitle?: string) {
     if (!data || data.length === 0) return;
 
-    // Get headers
     const headers = Object.keys(data[0]);
+    const totalCols = headers.length;
 
-    // Calculate maximum content length per column to ensure no text gets truncated
-    const columns = headers.map(header => {
+    // 1. BANNER INSTITUCIONAL CORPORATIVO (Row 1)
+    const titleRow = worksheet.addRow(['SMARTCLASS ACADEMIC SUITE • REPORTE OFICIAL']);
+    worksheet.mergeCells(1, 1, 1, totalCols);
+    titleRow.height = 34;
+    titleRow.font = { name: 'Calibri', size: 12.5, bold: true, color: { argb: 'FFFFFFFF' } };
+    titleRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+    titleRow.alignment = { vertical: 'middle', horizontal: 'center' };
+
+    // Subtitle / Date (Row 2)
+    const displayTitle = reportTitle || worksheet.name || 'Datos';
+    const subRow = worksheet.addRow([`Documento Institucional: ${displayTitle} — Emisión: ${new Date().toLocaleDateString('es-ES')} ${new Date().toLocaleTimeString('es-ES')}`]);
+    worksheet.mergeCells(2, 1, 2, totalCols);
+    subRow.height = 20;
+    subRow.font = { name: 'Calibri', size: 9, bold: true, italic: true, color: { argb: 'FFFFFFFF' } };
+    subRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+    subRow.alignment = { vertical: 'middle', horizontal: 'center' };
+
+    // Row 3: Blank spacing
+    const blankRow = worksheet.addRow([]);
+    blankRow.height = 8;
+
+    // Row 4: Column Headers
+    const headerRow = worksheet.addRow(headers);
+    headerRow.height = 26;
+    headerRow.eachCell((cell) => {
+        cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+        cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+        cell.border = {
+            top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+        };
+    });
+
+    // Compute column widths
+    headers.forEach((header, i) => {
         let maxLen = header.length;
         for (const row of data) {
             const val = row[header];
@@ -613,73 +693,76 @@ function setupWorksheetComp(worksheet: ExcelJS.Worksheet, data: any[]) {
                 if (len > maxLen) maxLen = len;
             }
         }
-        return {
-            header: header,
-            key: header,
-            width: Math.min(Math.max(maxLen + 4, 15), 60),
-        };
+        worksheet.getColumn(i + 1).width = Math.min(Math.max(maxLen + 4, 15), 55);
     });
 
-    worksheet.columns = columns;
-    worksheet.addRows(data);
+    // Add data rows starting row 5
+    data.forEach((item, idx) => {
+        const rowVals = headers.map(h => item[h] ?? '');
+        const dataRow = worksheet.addRow(rowVals);
+        dataRow.height = 21;
 
-    // Freeze top header row so it stays visible while scrolling
-    worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+        const rowBg = idx % 2 === 0 ? 'FFFFFFFF' : 'FFF8FAFC';
 
-    // 1. Header Row Style
-    const headerRow = worksheet.getRow(1);
-    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11, name: 'Calibri' };
-    headerRow.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FF1E293B' } // Dark Slate
-    };
-    headerRow.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-    headerRow.height = 32;
-
-    // 2. Data Rows Style
-    worksheet.eachRow((row, rowNumber) => {
-        if (rowNumber === 1) return;
-
-        row.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
-
-        row.eachCell((cell, colNumber) => {
-            const columnKey = columns[colNumber - 1]?.key;
-
-            // Subtle clean borders
+        dataRow.eachCell((cell, colNumber) => {
             cell.border = {
                 top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
                 left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
                 bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
                 right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
             };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowBg } };
+            cell.font = { name: 'Calibri', size: 9.5 };
 
-            const val = cell.value?.toString()?.trim();
+            const columnKey = headers[colNumber - 1];
+            const rawVal = cell.value?.toString()?.trim();
 
-            if (val) {
-                // Grade Styling & Highlight
-                if (val === '0.0' || val === '0,0' || val === '0') {
-                    cell.font = { color: { argb: 'FFDC2626' }, bold: true };
+            if (columnKey === 'ID' || columnKey === 'No.' || columnKey === 'Fecha' || columnKey === 'Código') {
+                cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            } else {
+                cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+            }
+
+            const isPotentialLink = /url|link|enlace|evidencia|soporte|repositorio|entrega/i.test(columnKey) || 
+                                   Boolean(rawVal && (rawVal.startsWith('http://') || rawVal.startsWith('https://') || rawVal.includes('github.com') || rawVal.includes('drive.google.com')));
+            const evidenceUrl = isPotentialLink ? formatEvidenceUrl(rawVal) : null;
+
+            if (evidenceUrl) {
+                cell.value = { text: evidenceUrl, hyperlink: evidenceUrl };
+                cell.font = { name: 'Calibri', size: 9.5, color: { argb: 'FF2563EB' }, underline: true };
+                cell.alignment = { vertical: 'middle', horizontal: 'left' };
+            } else if (rawVal) {
+                if (rawVal === '0.0' || rawVal === '0,0' || rawVal === '0') {
+                    cell.font = { name: 'Calibri', size: 9.5, color: { argb: 'FFDC2626' }, bold: true };
                     cell.alignment = { horizontal: 'center', vertical: 'middle' };
-                } else if (/^[0-5][.,]\d+$/.test(val) || /^[0-5]$/.test(val)) {
+                } else if (/^[0-5][.,]\d+$/.test(rawVal) || /^[0-5]$/.test(rawVal)) {
                     cell.alignment = { horizontal: 'center', vertical: 'middle' };
-                    const numGrade = parseFloat(val.replace(',', '.'));
+                    const numGrade = parseFloat(rawVal.replace(',', '.'));
                     if (numGrade < 3.0) {
-                        cell.font = { color: { argb: 'FFDC2626' }, bold: true };
+                        cell.font = { name: 'Calibri', size: 9.5, color: { argb: 'FFDC2626' }, bold: true };
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE4E6' } };
                     } else if (numGrade >= 4.5) {
-                        cell.font = { color: { argb: 'FF15803D' }, bold: true };
+                        cell.font = { name: 'Calibri', size: 9.5, color: { argb: 'FF15803D' }, bold: true };
                     }
-                } else if (val === 'PRESENTE' || val === 'Presente') {
-                    cell.font = { color: { argb: 'FF15803D' }, bold: true };
+                } else if (rawVal === 'PRESENTE' || rawVal === 'Presente' || rawVal === 'P') {
+                    cell.font = { name: 'Calibri', size: 9, color: { argb: 'FF065F46' }, bold: true };
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
                     cell.alignment = { horizontal: 'center', vertical: 'middle' };
-                } else if (val === 'AUSENTE' || val === 'Ausente') {
-                    cell.font = { color: { argb: 'FFDC2626' }, bold: true };
+                } else if (rawVal === 'AUSENTE' || rawVal === 'Ausente' || rawVal === 'FALTA' || rawVal === 'Falta' || rawVal === 'A') {
+                    cell.font = { name: 'Calibri', size: 9, color: { argb: 'FF9F1239' }, bold: true };
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE4E6' } };
                     cell.alignment = { horizontal: 'center', vertical: 'middle' };
-                } else if (val === 'TARDANZA' || val === 'Tardanza') {
-                    cell.font = { color: { argb: 'FFD97706' }, bold: true };
+                } else if (rawVal === 'TARDANZA' || rawVal === 'Tardanza' || rawVal === 'TARDE' || rawVal === 'Tarde' || rawVal === 'L') {
+                    cell.font = { name: 'Calibri', size: 9, color: { argb: 'FF92400E' }, bold: true };
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
                     cell.alignment = { horizontal: 'center', vertical: 'middle' };
-                } else if (val === 'JUSTIFICADO' || val === 'Justificado') {
-                    cell.font = { color: { argb: 'FF2563EB' }, bold: true };
+                } else if (rawVal === 'RETIRO' || rawVal === 'Retiro' || rawVal === 'R') {
+                    cell.font = { name: 'Calibri', size: 9, color: { argb: 'FF3730A3' }, bold: true };
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E7FF' } };
+                    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                } else if (rawVal === 'JUSTIFICADO' || rawVal === 'Justificado' || rawVal === 'EXCUSADO' || rawVal === 'E') {
+                    cell.font = { name: 'Calibri', size: 9, color: { argb: 'FF0369A1' }, bold: true };
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0F2FE' } };
                     cell.alignment = { horizontal: 'center', vertical: 'middle' };
                 }
             }
@@ -690,10 +773,13 @@ function setupWorksheetComp(worksheet: ExcelJS.Worksheet, data: any[]) {
         });
     });
 
-    // Auto-filter
+    // Freeze header row
+    worksheet.views = [{ state: 'frozen', ySplit: 4 }];
+
+    // Auto-filter on row 4
     worksheet.autoFilter = {
-        from: { row: 1, column: 1 },
-        to: { row: 1, column: columns.length }
+        from: { row: 4, column: 1 },
+        to: { row: worksheet.rowCount, column: totalCols }
     };
 }
 

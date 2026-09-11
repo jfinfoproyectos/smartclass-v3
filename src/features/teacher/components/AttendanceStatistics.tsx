@@ -303,48 +303,52 @@ export function AttendanceStatistics({ data, dateColumns, onFilter }: Attendance
     };
 
     return (
-        <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card className="bg-green-50/30 dark:bg-green-950/10 border-green-100 dark:border-green-900/50">
-                    <CardHeader className="p-4 pb-0">
-                        <CardTitle className="text-xs font-medium text-green-700 dark:text-green-400 flex items-center gap-2">
-                            <Users className="h-3 w-3" /> Promedio de Asistencia
+        <div className="space-y-4 sm:space-y-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+                <Card className="bg-green-50/30 dark:bg-green-950/10 border-green-100 dark:border-green-900/50 p-1">
+                    <CardHeader className="p-3 pb-0">
+                        <CardTitle className="text-[11px] sm:text-xs font-medium text-green-700 dark:text-green-400 flex items-center gap-1.5 sm:gap-2">
+                            <Users className="h-3 w-3 shrink-0" />
+                            <span className="truncate">Asistencia</span>
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="p-4 pt-1">
-                        <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                    <CardContent className="p-3 pt-1">
+                        <p className="text-xl sm:text-2xl font-bold text-green-600 dark:text-green-400">
                             {globalStats.p > 0 ? ((globalStats.p + globalStats.l) / (globalStats.p + globalStats.a + globalStats.l + globalStats.e) * 100).toFixed(1) : "0"}%
                         </p>
                     </CardContent>
                 </Card>
-                <Card className="bg-red-50/30 dark:bg-red-950/10 border-red-100 dark:border-red-900/50">
-                    <CardHeader className="p-4 pb-0">
-                        <CardTitle className="text-xs font-medium text-red-700 dark:text-red-400 flex items-center gap-2">
-                            <Calendar className="h-3 w-3" /> Total Inasistencias
+                <Card className="bg-red-50/30 dark:bg-red-950/10 border-red-100 dark:border-red-900/50 p-1">
+                    <CardHeader className="p-3 pb-0">
+                        <CardTitle className="text-[11px] sm:text-xs font-medium text-red-700 dark:text-red-400 flex items-center gap-1.5 sm:gap-2">
+                            <Calendar className="h-3 w-3 shrink-0" />
+                            <span className="truncate">Inasistencias</span>
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="p-4 pt-1">
-                        <p className="text-2xl font-bold text-red-600 dark:text-red-400">{globalStats.a}</p>
+                    <CardContent className="p-3 pt-1">
+                        <p className="text-xl sm:text-2xl font-bold text-red-600 dark:text-red-400">{globalStats.a}</p>
                     </CardContent>
                 </Card>
-                <Card className="bg-amber-50/30 dark:bg-amber-950/10 border-amber-100 dark:border-amber-900/50">
-                    <CardHeader className="p-4 pb-0">
-                        <CardTitle className="text-xs font-medium text-amber-700 dark:text-amber-400 flex items-center gap-2">
-                            <AlertTriangle className="h-3 w-3" /> Atenciones
+                <Card className="bg-amber-50/30 dark:bg-amber-950/10 border-amber-100 dark:border-amber-900/50 p-1">
+                    <CardHeader className="p-3 pb-0">
+                        <CardTitle className="text-[11px] sm:text-xs font-medium text-amber-700 dark:text-amber-400 flex items-center gap-1.5 sm:gap-2">
+                            <AlertTriangle className="h-3 w-3 shrink-0" />
+                            <span className="truncate">Atenciones</span>
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="p-4 pt-1">
-                        <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{remarkStats.attention}</p>
+                    <CardContent className="p-3 pt-1">
+                        <p className="text-xl sm:text-2xl font-bold text-amber-600 dark:text-amber-400">{remarkStats.attention}</p>
                     </CardContent>
                 </Card>
-                <Card className="bg-purple-50/30 dark:bg-purple-950/10 border-purple-100 dark:border-purple-900/50">
-                    <CardHeader className="p-4 pb-0">
-                        <CardTitle className="text-xs font-medium text-purple-700 dark:text-purple-400 flex items-center gap-2">
-                            <Award className="h-3 w-3" /> Felicitaciones
+                <Card className="bg-purple-50/30 dark:bg-purple-950/10 border-purple-100 dark:border-purple-900/50 p-1">
+                    <CardHeader className="p-3 pb-0">
+                        <CardTitle className="text-[11px] sm:text-xs font-medium text-purple-700 dark:text-purple-400 flex items-center gap-1.5 sm:gap-2">
+                            <Award className="h-3 w-3 shrink-0" />
+                            <span className="truncate">Felicitaciones</span>
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="p-4 pt-1">
-                        <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{remarkStats.commendation}</p>
+                    <CardContent className="p-3 pt-1">
+                        <p className="text-xl sm:text-2xl font-bold text-purple-600 dark:text-purple-400">{remarkStats.commendation}</p>
                     </CardContent>
                 </Card>
             </div>

@@ -326,7 +326,65 @@ export function CodeChallengeActivityDetails({
 
     const [activeFileId, setActiveFileId] = useState<string>(files[0]?.id || "1");
     const [activeRightTab, setActiveRightTab] = useState<"statement" | "results">("statement");
+    const [mobileTab, setMobileTab] = useState<"statement" | "code" | "results">(
+        isGraded ? "results" : "statement"
+    );
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+    const editorRef = useRef<any>(null);
+
+    // Suprimir advertencias benignas de cancelación interna de Monaco Editor
+    useEffect(() => {
+        const isCanceledReason = (val: any): boolean => {
+            if (!val) return false;
+            if (typeof val === "string") return val.toLowerCase().includes("canceled");
+            if (typeof val === "object") {
+                const msg = val.message || "";
+                const name = val.name || "";
+                const str = String(val);
+                return (
+                    (typeof msg === "string" && msg.toLowerCase().includes("canceled")) ||
+                    (typeof name === "string" && name.toLowerCase().includes("canceled")) ||
+                    str.toLowerCase().includes("canceled")
+                );
+            }
+            return false;
+        };
+
+        const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+            if (isCanceledReason(event.reason)) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+        };
+
+        const originalConsoleError = console.error;
+        console.error = (...args: any[]) => {
+            const hasCanceled = args.some(isCanceledReason);
+            if (hasCanceled) {
+                return;
+            }
+            originalConsoleError.apply(console, args);
+        };
+
+        window.addEventListener("unhandledrejection", handleUnhandledRejection);
+        return () => {
+            window.removeEventListener("unhandledrejection", handleUnhandledRejection);
+        };
+    }, []);
+
+    // Redimensionar Monaco de forma segura cuando el estudiante entra a la pestaña de código en móvil
+    useEffect(() => {
+        if (mobileTab === "code") {
+            const timer = setTimeout(() => {
+                try {
+                    editorRef.current?.layout();
+                } catch {
+                    // Editor no montado aún
+                }
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [mobileTab]);
 
     // Sincronizar automáticamente si el docente actualiza los archivos de plantilla y el alumno aún no ha entregado
     useEffect(() => {
@@ -356,6 +414,7 @@ export function CodeChallengeActivityDetails({
 
     // Bloquear pegado y copiado de contenido para forzar digitación manual
     const handleEditorDidMount = (editor: any, monaco: any) => {
+        editorRef.current = editor;
         if (isTeacherPreview) return; // Permitir al profesor pegar y probar libremente
 
         // 1. Bloquear atajos de teclado de pegado (Ctrl+V, Cmd+V, Shift+Insert) y copiado (Ctrl+C, Cmd+C)
@@ -512,52 +571,53 @@ export function CodeChallengeActivityDetails({
     };
 
     return (
-        <div ref={containerRef} className="w-full h-full flex flex-col min-h-0 overflow-hidden gap-3">
-            {/* Header Bar: Compacta, Moderna y Elegante */}
-            <div className="shrink-0 flex items-center justify-between gap-3 px-3.5 py-2 rounded-xl border bg-card text-card-foreground shadow-xs">
-                <div className="flex items-center gap-2.5 min-w-0 flex-1 flex-wrap">
-                    <div className="flex items-center gap-2 truncate">
-                        <span className="font-semibold text-xs text-foreground tracking-tight truncate">
-                            {activity.title}
-                        </span>
-                        <Badge variant="outline" className="text-[10px] font-bold gap-1 shrink-0 bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 py-0 px-2 h-5">
-                            <Terminal className="h-3 w-3" />
-                            <span>Taller de Código</span>
-                        </Badge>
-                    </div>
+        <div ref={containerRef} className="w-full h-full flex flex-col min-h-0 overflow-hidden gap-2.5 sm:gap-3">
+            {/* Header Bar: Compacta, Moderna y Responsiva */}
+            <div className="shrink-0 flex items-center justify-between gap-2 px-3 py-2 sm:px-3.5 rounded-xl border bg-card text-card-foreground shadow-xs">
+                <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
+                    <span className="font-semibold text-xs sm:text-sm text-foreground tracking-tight truncate shrink min-w-0" title={activity.title}>
+                        {activity.title}
+                    </span>
+                    <Badge variant="outline" className="text-[10px] font-bold gap-1 shrink-0 bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 py-0 px-1.5 sm:px-2 h-5">
+                        <Terminal className="h-3 w-3" />
+                        <span className="hidden sm:inline">Taller de Código</span>
+                        <span className="sm:hidden">Taller</span>
+                    </Badge>
 
-                    <Badge variant="secondary" className="text-[10px] font-mono h-5 py-0 px-2 shrink-0">
+                    <Badge variant="secondary" className="text-[10px] font-mono h-5 py-0 px-1.5 sm:px-2 shrink-0 hidden xs:inline-flex">
                         {files.length} {files.length === 1 ? 'archivo' : 'archivos'}
                     </Badge>
 
                     {activity.deadline && (
-                        <span className="text-[11px] text-muted-foreground hidden sm:inline-flex items-center gap-1.5 shrink-0">
+                        <span className="text-[11px] text-muted-foreground hidden md:inline-flex items-center gap-1.5 shrink-0">
                             <Clock className="h-3 w-3 text-primary/70" />
                             <span>Vence: {format(new Date(activity.deadline), "PPp", { locale: es })}</span>
                         </span>
                     )}
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                     {/* Status Badge */}
                     {isTeacherPreview ? (
-                        <Badge variant="outline" className="bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 text-[10px] px-2.5 py-0.5 font-bold gap-1 shadow-2xs whitespace-nowrap shrink-0">
+                        <Badge variant="outline" className="bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 text-[10px] px-2 py-0.5 font-bold gap-1 shadow-2xs whitespace-nowrap shrink-0">
                             <Sparkles className="h-3 w-3 text-amber-500 shrink-0" />
-                            Modo Prueba Docente
+                            <span className="hidden sm:inline">Modo Prueba Docente</span>
+                            <span className="sm:hidden">Prueba</span>
                         </Badge>
                     ) : isGraded ? (
-                        <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 px-2.5 py-0.5 rounded-md text-[11px] font-bold">
+                        <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-md text-[11px] font-bold shrink-0">
                             <span className="text-[9px] uppercase font-bold opacity-80">Nota:</span>
                             <span className="text-xs font-black">{submission.grade.toFixed(1)}</span>
                             <span className="text-[9px] font-bold opacity-75">/ 5.0</span>
                         </div>
                     ) : isSubmitted ? (
-                        <Badge variant="secondary" className="bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30 text-[10px] px-2.5 py-0.5 font-bold">
+                        <Badge variant="secondary" className="bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30 text-[10px] px-2 py-0.5 font-bold shrink-0">
                             Entregado
                         </Badge>
                     ) : (
-                        <Badge variant="outline" className="text-[10px] px-2.5 py-0.5 font-bold text-muted-foreground border-border/70">
-                            Pendiente de Entrega
+                        <Badge variant="outline" className="text-[10px] px-2 py-0.5 font-bold text-muted-foreground border-border/70 shrink-0">
+                            <span className="hidden sm:inline">Pendiente de Entrega</span>
+                            <span className="sm:hidden">Pendiente</span>
                         </Badge>
                     )}
 
@@ -568,11 +628,12 @@ export function CodeChallengeActivityDetails({
                                 variant="outline"
                                 size="sm"
                                 onClick={onClosePreview}
-                                className="h-6 sm:h-7 px-2.5 text-xs font-semibold shrink-0 gap-1 rounded-md border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300 shadow-2xs cursor-pointer"
+                                className="h-6 sm:h-7 px-2 text-xs font-semibold shrink-0 gap-1 rounded-md border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300 shadow-2xs cursor-pointer"
                                 title="Cerrar el modo estudiante y volver a la edición"
                             >
                                 <ChevronLeft className="h-3.5 w-3.5" />
-                                <span>Salir de Modo Estudiante</span>
+                                <span className="hidden sm:inline">Salir de Modo Estudiante</span>
+                                <span className="sm:hidden">Salir</span>
                             </Button>
                         )
                     ) : activity.courseId && (
@@ -581,7 +642,7 @@ export function CodeChallengeActivityDetails({
                             type="button"
                             variant="outline"
                             size="sm"
-                            className="h-6 sm:h-7 px-2.5 text-xs font-semibold shrink-0 gap-1 rounded-md border-border/80 hover:bg-accent hover:text-accent-foreground shadow-xs cursor-pointer"
+                            className="h-6 sm:h-7 px-2 text-xs font-semibold shrink-0 gap-1 rounded-md border-border/80 hover:bg-accent hover:text-accent-foreground shadow-xs cursor-pointer"
                             title="Volver a la lista de actividades"
                         >
                             <Link href={`/dashboard/student?courseId=${activity.courseId}&tab=activities`}>
@@ -593,12 +654,83 @@ export function CodeChallengeActivityDetails({
                 </div>
             </div>
 
-            {/* Layout principal adaptado al alto de la pantalla */}
+            {/* Selector de Vistas para Móvil (< lg) */}
+            <div className="lg:hidden shrink-0 grid grid-cols-3 gap-1 bg-muted/60 p-1 rounded-xl border border-border/70 shadow-2xs">
+                <button
+                    type="button"
+                    onClick={() => {
+                        setMobileTab("statement");
+                        setActiveRightTab("statement");
+                    }}
+                    className={cn(
+                        "flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+                        mobileTab === "statement"
+                            ? "bg-background text-foreground shadow-xs font-bold border border-border/80 text-primary"
+                            : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                    )}
+                >
+                    <FileText className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                    <span className="truncate">Enunciado</span>
+                </button>
+
+                <button
+                    type="button"
+                    onClick={() => setMobileTab("code")}
+                    className={cn(
+                        "flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all cursor-pointer relative",
+                        mobileTab === "code"
+                            ? "bg-background text-foreground shadow-xs font-bold border border-border/80 text-primary"
+                            : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                    )}
+                >
+                    <Code2 className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                    <span className="truncate">Editor</span>
+                    <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4 font-mono ml-0.5 shrink-0">
+                        {files.length}
+                    </Badge>
+                </button>
+
+                <button
+                    type="button"
+                    onClick={() => {
+                        setMobileTab("results");
+                        setActiveRightTab("results");
+                    }}
+                    className={cn(
+                        "flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all cursor-pointer relative",
+                        mobileTab === "results"
+                            ? "bg-background text-foreground shadow-xs font-bold border border-border/80 text-primary"
+                            : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                    )}
+                >
+                    <Award className="h-3.5 w-3.5 text-purple-500 shrink-0" />
+                    <span className="truncate">Feedback</span>
+                    {isGraded && (
+                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 shrink-0">
+                            {submission.grade.toFixed(1)}
+                        </Badge>
+                    )}
+                </button>
+            </div>
+
+            {/* Layout principal adaptado: en desktop 2 columnas, en móvil vista única a pantalla completa */}
             <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-3 overflow-hidden">
-                {/* Columna Izquierda: Enunciado e Instrucciones / Calificación y Feedback (5 columnas) */}
-                <div className="lg:col-span-5 flex flex-col h-full min-h-0 bg-card rounded-xl border border-border/70 overflow-hidden shadow-xs order-2 lg:order-1">
-                    <Tabs value={activeRightTab} onValueChange={(v) => setActiveRightTab(v as any)} className="flex-1 min-h-0 flex flex-col h-full overflow-hidden">
-                        <div className="border-b p-2 bg-muted/30 shrink-0">
+                {/* Columna Izquierda: Enunciado e Instrucciones / Calificación y Feedback (5 columnas en desktop, visible en móvil en pestañas 'statement' o 'results') */}
+                <div className={cn(
+                    "lg:col-span-5 flex flex-col h-full min-h-0 bg-card rounded-xl border border-border/70 overflow-hidden shadow-xs order-2 lg:order-1",
+                    mobileTab === "code" ? "hidden lg:flex" : "flex"
+                )}>
+                    <Tabs
+                        value={activeRightTab}
+                        onValueChange={(v) => {
+                            setActiveRightTab(v as any);
+                            if (v === "statement" || v === "results") {
+                                setMobileTab(v);
+                            }
+                        }}
+                        className="flex-1 min-h-0 flex flex-col h-full overflow-hidden"
+                    >
+                        <div className="border-b p-2 bg-muted/30 shrink-0 hidden lg:block">
                             <TabsList className="grid grid-cols-2 w-full h-auto min-h-8 p-1 gap-1">
                                 <TabsTrigger value="statement" className="text-xs font-semibold gap-1.5 px-3 py-1.5 whitespace-nowrap justify-center cursor-pointer">
                                     <FileText className="h-3.5 w-3.5 shrink-0" /> <span>Enunciado e Instrucciones</span>
@@ -612,7 +744,7 @@ export function CodeChallengeActivityDetails({
                         {/* Pestaña 1: Enunciado con SCROLL INDEPENDIENTE y Protección Anti-Copia */}
                         <TabsContent
                             value="statement"
-                            className="flex-1 min-h-0 p-4 overflow-y-auto m-0 space-y-4 select-none [&_*]:select-none"
+                            className="flex-1 min-h-0 p-3 sm:p-4 overflow-y-auto m-0 space-y-4 select-none [&_*]:select-none"
                             style={{ userSelect: "none", WebkitUserSelect: "none" }}
                             onCopy={(e) => {
                                 e.preventDefault();
@@ -665,10 +797,22 @@ export function CodeChallengeActivityDetails({
                                     disableCopy={true}
                                 />
                             </div>
+
+                            {/* Botón para pasar al editor directamente en móvil */}
+                            <div className="pt-2 pb-2 lg:hidden">
+                                <Button
+                                    type="button"
+                                    onClick={() => setMobileTab("code")}
+                                    className="w-full text-xs font-bold gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-xs py-2 h-9 cursor-pointer"
+                                >
+                                    <Code2 className="h-4 w-4" />
+                                    <span>Ir al Editor de Código ({files.length} archivos)</span>
+                                </Button>
+                            </div>
                         </TabsContent>
 
                         {/* Pestaña 2: Calificación con SCROLL INDEPENDIENTE */}
-                        <TabsContent value="results" className="flex-1 min-h-0 p-4 overflow-y-auto m-0 space-y-4">
+                        <TabsContent value="results" className="flex-1 min-h-0 p-3 sm:p-4 overflow-y-auto m-0 space-y-4">
                             {isTeacherPreview ? (
                                 testGradingResult ? (
                                     <div className="space-y-4">
@@ -749,36 +893,49 @@ export function CodeChallengeActivityDetails({
                             ) : (
                                 <div className="flex flex-col items-center justify-center h-48 text-center space-y-2 text-muted-foreground">
                                     <Info className="h-8 w-8" />
-                                    <p className="text-xs">Aún no has entregado la actividad</p>
+                                    <p className="text-xs font-semibold">Aún no has entregado la actividad</p>
                                     <p className="text-[11px] max-w-xs">
                                         Resuelve los archivos en el editor Monaco y haz clic en el botón inferior para entregar.
                                     </p>
+                                    <Button
+                                        type="button"
+                                        onClick={() => setMobileTab("code")}
+                                        className="mt-2 text-xs font-bold gap-1.5 bg-blue-600 hover:bg-blue-700 text-white shadow-xs cursor-pointer lg:hidden"
+                                    >
+                                        <Code2 className="h-3.5 w-3.5" />
+                                        <span>Abrir Editor de Código</span>
+                                    </Button>
                                 </div>
                             )}
                         </TabsContent>
                     </Tabs>
                 </div>
 
-                {/* Columna Derecha: Monaco Code Editor (7 columnas) */}
-                <div className="lg:col-span-7 flex flex-col h-full min-h-0 bg-card rounded-xl border border-border/70 overflow-hidden shadow-xs order-1 lg:order-2">
+                {/* Columna Derecha: Monaco Code Editor (7 columnas en desktop, visible en móvil en pestaña 'code') */}
+                <div className={cn(
+                    "lg:col-span-7 flex flex-col h-full min-h-0 bg-card rounded-xl border border-border/70 overflow-hidden shadow-xs order-1 lg:order-2",
+                    mobileTab !== "code" ? "hidden lg:flex" : "flex"
+                )}>
                     {/* Barra de Control / Estado (Fila 1) */}
-                    <div className="px-3 py-2 border-b bg-muted/40 flex flex-wrap items-center justify-between gap-2 shrink-0">
-                        <div className="flex items-center gap-2">
-                            <Code2 className="h-4 w-4 text-primary" />
-                            <span className="text-xs font-bold text-foreground">Archivos de la Solución</span>
-                            <Badge variant="outline" className="text-[10px] font-mono">{files.length} {files.length === 1 ? "archivo" : "archivos"}</Badge>
+                    <div className="px-3 py-2 border-b bg-muted/40 flex items-center justify-between gap-2 shrink-0">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                            <Code2 className="h-4 w-4 text-primary shrink-0" />
+                            <span className="text-xs font-bold text-foreground truncate">Archivos de la Solución</span>
+                            <Badge variant="outline" className="text-[10px] font-mono shrink-0 hidden sm:inline-flex">{files.length} {files.length === 1 ? "archivo" : "archivos"}</Badge>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-2 ml-auto">
+                        <div className="flex items-center gap-1.5 shrink-0 ml-auto">
                             {!isTeacherPreview ? (
-                                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 text-[10px] font-bold shrink-0 whitespace-nowrap select-none" title="En este taller no está permitido copiar ni pegar código. Debes digitar la solución manualmente.">
+                                <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 text-[10px] font-bold shrink-0 whitespace-nowrap select-none" title="En este taller no está permitido copiar ni pegar código. Debes digitar la solución manualmente.">
                                     <Lock className="h-3 w-3 text-amber-500 shrink-0" />
-                                    <span>Digitación obligatoria (Copia y pegado bloqueados)</span>
+                                    <span className="hidden sm:inline">Digitación obligatoria (Copia y pegado bloqueados)</span>
+                                    <span className="sm:hidden">Digitación manual</span>
                                 </div>
                             ) : (
-                                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-500/10 border border-purple-500/30 text-purple-700 dark:text-purple-400 text-[10px] font-bold shrink-0 whitespace-nowrap select-none" title="El docente puede editar, pegar o generar código con IA para probar el comportamiento.">
+                                <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-500/10 border border-purple-500/30 text-purple-700 dark:text-purple-400 text-[10px] font-bold shrink-0 whitespace-nowrap select-none" title="El docente puede editar, pegar o generar código con IA para probar el comportamiento.">
                                     <Sparkles className="h-3 w-3 text-purple-500 shrink-0" />
-                                    <span>Modo Prueba (Edición y pegado habilitados)</span>
+                                    <span className="hidden sm:inline">Modo Prueba (Edición libre)</span>
+                                    <span className="sm:hidden">Modo Prueba</span>
                                 </div>
                             )}
 
@@ -797,29 +954,31 @@ export function CodeChallengeActivityDetails({
                                         toast.success("Plantillas originales restauradas");
                                     }
                                 }}
-                                className="h-6 text-[10px] font-semibold gap-1 px-2 border-border/80 hover:bg-accent text-muted-foreground hover:text-foreground cursor-pointer shadow-2xs"
+                                className="h-6 text-[10px] font-semibold gap-1 px-2 border-border/80 hover:bg-accent text-muted-foreground hover:text-foreground cursor-pointer shadow-2xs shrink-0"
                                 title="Cargar o restaurar la plantilla de código asignada por el docente para este archivo"
                             >
                                 <RotateCcw className="h-3 w-3" />
-                                <span>Restaurar Plantilla</span>
+                                <span className="hidden sm:inline">Restaurar Plantilla</span>
+                                <span className="sm:hidden">Restaurar</span>
                             </Button>
 
                             {activeFile && (
-                                <Badge variant="secondary" className="text-[10px] font-mono capitalize h-6 px-2.5 shrink-0 border border-border/60">
+                                <Badge variant="secondary" className="text-[10px] font-mono capitalize h-6 px-2 shrink-0 border border-border/60">
                                     {getLanguageFromFileName(activeFile.name)}
                                 </Badge>
                             )}
                         </div>
                     </div>
 
-                    {/* Barra de pestañas de archivos horizontal multilínea */}
-                    <div className="p-2 border-b bg-muted/20 flex flex-wrap items-center gap-1.5 w-full shrink-0 max-h-24 overflow-y-auto">
+                    {/* Barra de pestañas de archivos horizontal scrollable sin saltos de línea */}
+                    <div className="px-2 py-1.5 border-b bg-muted/20 flex items-center gap-1.5 w-full shrink-0 overflow-x-auto scrollbar-none no-scrollbar flex-nowrap">
                         {files.map((file) => (
-                            <div
+                            <button
                                 key={file.id}
+                                type="button"
                                 onClick={() => setActiveFileId(file.id)}
                                 className={cn(
-                                    "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono font-medium cursor-pointer border transition-all select-none whitespace-nowrap shrink-0",
+                                    "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono font-medium cursor-pointer border transition-all select-none whitespace-nowrap shrink-0",
                                     activeFileId === file.id
                                         ? "bg-background text-foreground border-border shadow-2xs font-bold ring-1 ring-primary/30"
                                         : "bg-muted/30 hover:bg-muted/60 text-muted-foreground border-border/40"
@@ -827,7 +986,7 @@ export function CodeChallengeActivityDetails({
                             >
                                 <FileCode className="h-3.5 w-3.5 text-blue-500 shrink-0" />
                                 <span>{file.name}</span>
-                            </div>
+                            </button>
                         ))}
                     </div>
 
@@ -835,7 +994,6 @@ export function CodeChallengeActivityDetails({
                     <div className="flex-1 min-h-0 w-full bg-background relative overflow-hidden">
                         {activeFile && (
                             <Editor
-                                key={`${activeFile.id}_${getLanguageFromFileName(activeFile.name)}`}
                                 path={activeFile.name}
                                 height="100%"
                                 language={getLanguageFromFileName(activeFile.name)}
@@ -845,8 +1003,9 @@ export function CodeChallengeActivityDetails({
                                 onMount={handleEditorDidMount}
                                 options={{
                                     minimap: { enabled: false },
-                                    fontSize: 13,
+                                    fontSize: 12,
                                     lineNumbers: "on",
+                                    lineNumbersMinChars: 3,
                                     scrollBeyondLastLine: false,
                                     automaticLayout: true,
                                     wordWrap: "on",
@@ -863,35 +1022,38 @@ export function CodeChallengeActivityDetails({
 
                     {/* Barra inferior de envío o simulación */}
                     {isTeacherPreview ? (
-                        <div className="p-2.5 border-t bg-card flex items-center justify-between gap-3 shrink-0">
+                        <div className="p-2 sm:p-2.5 border-t bg-card flex items-center justify-between gap-2 shrink-0">
                             <div
                                 className="flex items-center gap-1.5 text-xs text-muted-foreground whitespace-nowrap shrink-0"
                                 title="Prueba docente: genera soluciones con IA o simula la calificación en tiempo real sin guardar en base de datos"
                             >
                                 <Sparkles className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                                <span className="font-semibold text-foreground/85">Modo Prueba Docente</span>
+                                <span className="font-semibold text-foreground/85 hidden sm:inline">Modo Prueba Docente</span>
+                                <span className="font-semibold text-foreground/85 sm:hidden">Prueba</span>
                                 <span className="text-[11px] text-muted-foreground hidden lg:inline">(Sin guardar en BD)</span>
                             </div>
 
-                            <div className="flex items-center gap-2 shrink-0 ml-auto">
+                            <div className="flex items-center gap-1.5 shrink-0 ml-auto">
                                 <Button
                                     type="button"
                                     variant="outline"
                                     size="sm"
                                     onClick={handleGenerateAllSolutions}
                                     disabled={isGeneratingAllSolutions || isTestGradingAI}
-                                    className="font-bold text-xs gap-1.5 border-purple-500/30 text-purple-700 dark:text-purple-300 hover:bg-purple-500/10 shadow-xs cursor-pointer"
+                                    className="font-bold text-xs gap-1 border-purple-500/30 text-purple-700 dark:text-purple-300 hover:bg-purple-500/10 shadow-xs cursor-pointer h-8 px-2.5"
                                     title="Genera la solución completa para todos los archivos del taller usando la IA"
                                 >
                                     {isGeneratingAllSolutions ? (
                                         <>
                                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                            <span>Generando Respuestas...</span>
+                                            <span className="hidden sm:inline">Generando Respuestas...</span>
+                                            <span className="sm:hidden">Generando...</span>
                                         </>
                                     ) : (
                                         <>
                                             <Sparkles className="h-3.5 w-3.5 text-purple-500" />
-                                            <span>Generar Respuestas con IA</span>
+                                            <span className="hidden sm:inline">Generar Respuestas con IA</span>
+                                            <span className="sm:hidden">Solución IA</span>
                                         </>
                                     )}
                                 </Button>
@@ -901,41 +1063,45 @@ export function CodeChallengeActivityDetails({
                                     size="sm"
                                     onClick={handleTestGradeWithAI}
                                     disabled={isTestGradingAI || isGeneratingAllSolutions}
-                                    className="font-bold text-xs gap-1.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white shadow-xs cursor-pointer"
+                                    className="font-bold text-xs gap-1 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white shadow-xs cursor-pointer h-8 px-2.5"
                                     title="Evalúa el código actual con IA sin guardar en base de datos"
                                 >
                                     {isTestGradingAI ? (
                                         <>
                                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                            <span>Calificando con IA...</span>
+                                            <span className="hidden sm:inline">Calificando con IA...</span>
+                                            <span className="sm:hidden">Calificando...</span>
                                         </>
                                     ) : (
                                         <>
                                             <Award className="h-3.5 w-3.5" />
-                                            <span>Calificar con IA (Test)</span>
+                                            <span className="hidden sm:inline">Calificar con IA (Test)</span>
+                                            <span className="sm:hidden">Calificar (Test)</span>
                                         </>
                                     )}
                                 </Button>
                             </div>
                         </div>
                     ) : (
-                        <div className="p-2.5 border-t bg-card flex items-center justify-between gap-3 shrink-0">
+                        <div className="p-2 sm:p-2.5 border-t bg-card flex items-center justify-between gap-2 shrink-0">
                             <span
-                                className="text-xs text-muted-foreground whitespace-nowrap shrink-0"
+                                className="text-[11px] sm:text-xs text-muted-foreground truncate"
                                 title={isSubmitted ? "Código enviado. Puedes seguir editando y actualizar tu entrega antes del límite." : "Resuelve el código solicitado en el editor y haz clic en entregar."}
                             >
-                                {isSubmitted
-                                    ? "✓ Código entregado (editable antes del límite)"
-                                    : "Resuelve y entrega tu solución"}
+                                {isSubmitted ? (
+                                    <span className="text-emerald-600 dark:text-emerald-400 font-medium">✓ Entregado (actualizable)</span>
+                                ) : (
+                                    <span>Resuelve y entrega tu solución</span>
+                                )}
                             </span>
                             <Button
                                 type="button"
                                 onClick={handleSubmit}
                                 disabled={isSubmitting || isDeadlinePassed}
-                                className="font-bold text-xs gap-1.5 bg-blue-600 hover:bg-blue-700 text-white shadow-xs shrink-0"
+                                className="font-bold text-xs gap-1.5 bg-blue-600 hover:bg-blue-700 text-white shadow-xs shrink-0 h-8 sm:h-9 px-3 cursor-pointer"
                             >
                                 {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                                {isSubmitted ? "Actualizar Entrega" : "Entregar Actividad"}
+                                <span>{isSubmitted ? "Actualizar Entrega" : "Entregar Actividad"}</span>
                             </Button>
                         </div>
                     )}

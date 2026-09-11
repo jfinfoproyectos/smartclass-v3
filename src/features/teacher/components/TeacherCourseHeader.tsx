@@ -24,8 +24,8 @@ import {
 } from "lucide-react";
 import { useTransition } from "react";
 import Link from "next/link";
-import { AttendanceTaker } from "@/features/attendance/components/AttendanceTaker";
 import { ThemeSelector, ThemeInfo } from "@/components/theme/ThemeSelector";
+import { MobileSettingsMenu } from "@/components/MobileSettingsMenu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface TeacherCourseHeaderProps {
@@ -44,12 +44,16 @@ export function TeacherCourseHeader({
     userName, 
     themes, 
     activeTab, 
-    themeMode = "STUDENT",
+    themeMode = "STUDENT", 
     allowThemeColorChange = true 
 }: TeacherCourseHeaderProps) {
     const showModeToggle = true;
     const showThemeSelector = true;
-     return (
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const currentTab = searchParams.get("tab") || "activities";
+
+    return (
         <div className="flex-none bg-background/95 backdrop-blur-xl w-full border-b border-border/50 shadow-sm transition-all duration-300">
             <style jsx global>{`
                 main[data-slot="sidebar-inset"] > header {
@@ -66,12 +70,12 @@ export function TeacherCourseHeader({
                 {/* Row 1: Primary Controls & Identity (h-12 to match AppIdentity sidebar header and dashboard layout) */}
                 <div className="flex items-center h-12 border-b border-border/40 bg-background/80 backdrop-blur-xl">
                     {/* Left: Sidebar trigger */}
-                    <div className="flex items-center h-full px-2.5 sm:px-3 border-r border-border/40">
+                    <div className="flex items-center h-full px-2 sm:px-3 border-r border-border/40">
                         <SidebarTrigger className="h-8 w-8 hover:bg-muted/80 rounded-xl transition-colors" />
                     </div>
 
                     {/* Middle: Course details */}
-                    <div className="flex-1 flex items-center gap-2 h-full px-3 sm:px-4 min-w-0">
+                    <div className="flex-1 flex items-center gap-2 h-full px-2.5 sm:px-4 min-w-0">
                         <h2 className="text-xs sm:text-sm font-semibold tracking-tight text-foreground truncate">
                             {courseTitle}
                         </h2>
@@ -82,21 +86,18 @@ export function TeacherCourseHeader({
                         </div>
                     </div>
 
-                    {/* Right: Asistencia & utilities */}
-                    <div className="flex items-center h-full px-2 sm:px-3 border-l border-border/40">
-                        <AttendanceTaker 
-                            courseId={courseId} 
-                            trigger={
-                                <Button variant="ghost" size="sm" className="h-7 text-xs font-semibold px-2.5 gap-1.5 hover:bg-muted/80 rounded-lg transition-all">
-                                    <CalendarCheck2 className="h-3.5 w-3.5 text-primary" />
-                                    <span className="hidden sm:inline">Asistencia</span>
-                                </Button>
-                            }
-                        />
-                    </div>
+                    <div className="flex items-center h-full px-1.5 sm:px-2.5 border-l border-border/40">
+                        {/* Mobile Settings dropdown */}
+                        <div className="flex md:hidden items-center">
+                            <MobileSettingsMenu 
+                                themes={themes} 
+                                showThemeSelector={showThemeSelector} 
+                                showModeToggle={showModeToggle} 
+                            />
+                        </div>
 
-                    <div className="flex items-center h-full px-2.5 border-l border-border/40">
-                        <div className="flex items-center gap-0.5 bg-muted/60 dark:bg-muted/30 p-0.5 rounded-xl border border-border/70 shadow-2xs backdrop-blur-md">
+                        {/* Desktop Settings pill */}
+                        <div className="hidden md:flex items-center gap-0.5 bg-muted/60 dark:bg-muted/30 p-0.5 rounded-xl border border-border/70 shadow-2xs backdrop-blur-md">
                             {showThemeSelector && <ThemeSelector themes={themes} />}
                             <CodeThemeSelector />
                             {showModeToggle && <ModeToggle />}
@@ -108,10 +109,11 @@ export function TeacherCourseHeader({
 
                 {/* Row 2: Content Navigation (Pestañas Reales) */}
                 <div className="bg-background border-b border-border/60">
-                    <div className="overflow-x-auto scrollbar-none w-full flex items-center justify-start lg:justify-center px-4">
-                        <TabsList className="!flex h-11 w-max lg:w-full lg:max-w-6xl lg:grid lg:grid-cols-7 !bg-transparent !p-0 !border-0 !rounded-none !shadow-none gap-0 sm:gap-1">
+                    <div className="overflow-x-auto scrollbar-none w-full flex items-center justify-start lg:justify-center px-1 sm:px-4 scroll-smooth">
+                        <TabsList className="!flex h-10 sm:h-11 w-max lg:w-full lg:max-w-6xl lg:grid lg:grid-cols-8 !bg-transparent !p-0 !border-0 !rounded-none !shadow-none gap-0 sm:gap-1">
                             <NavTab value="activities" icon={<ClipboardCheck className="h-4 w-4" />} label="Actividades" />
                             <NavTab value="students" icon={<Users className="h-4 w-4" />} label="Estudiantes" />
+                            <NavTab value="attendance" icon={<CalendarCheck2 className="h-4 w-4" />} label="Asistencia" />
                             <NavTab value="evaluations" icon={<FileCheck className="h-4 w-4" />} label="Evaluaciones" />
                             <NavTab value="grades" icon={<LayoutDashboard className="h-4 w-4" />} label="Calificaciones" />
                             <NavTab value="stats" icon={<BarChart3 className="h-4 w-4" />} label="Estadísticas" />
@@ -154,7 +156,7 @@ function NavTab({ value, icon, label }: { value: string, icon: React.ReactNode, 
             value={value} 
             onClick={handleClick}
             disabled={isPending}
-            className="group relative flex items-center justify-center gap-2 h-11 px-4 text-xs font-semibold !rounded-none !border-0 !border-b-2 !border-transparent transition-all text-muted-foreground hover:text-foreground hover:!border-border/80 data-[state=active]:!border-primary data-[state=active]:!text-primary data-[state=active]:font-bold data-[state=active]:!bg-transparent data-[state=active]:!shadow-none disabled:opacity-40 whitespace-nowrap shrink-0 cursor-pointer"
+            className="group relative flex items-center justify-center gap-1.5 sm:gap-2 h-10 sm:h-11 px-2.5 sm:px-4 text-xs font-semibold !rounded-none !border-0 !border-b-2 !border-transparent transition-all text-muted-foreground hover:text-foreground hover:!border-border/80 data-[state=active]:!border-primary data-[state=active]:!text-primary data-[state=active]:font-bold data-[state=active]:!bg-transparent data-[state=active]:!shadow-none disabled:opacity-40 whitespace-nowrap shrink-0 cursor-pointer"
         >
             <span className="transition-colors group-data-[state=active]:text-primary">
                 {isPending ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : icon}

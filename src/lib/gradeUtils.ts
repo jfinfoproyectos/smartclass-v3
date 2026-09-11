@@ -1,4 +1,6 @@
 
+import { formatEvidenceUrl } from "@/lib/utils";
+
 export interface GradeItem {
     id: string;
     activityId?: string | null;
@@ -39,14 +41,15 @@ export const calculateStudentGradeInGroup = (studentId: string, group: GradeGrou
             const submission = activity?.submissions?.find((s: any) => s.userId === studentId);
             grade = submission?.grade || 0;
             title = activity?.title || title;
-            link = submission?.url || null;
-            activityLink = activity?.statement || null;
+            const evidenceUrl = formatEvidenceUrl(submission?.url);
+            link = evidenceUrl;
+            activityLink = evidenceUrl;
         } else if (item.evaluationAttemptId) {
             const attempt = evaluations.find((e: any) => e.id === item.evaluationAttemptId);
             const submission = attempt?.submissions?.find((s: any) => s.userId === studentId);
             grade = submission?.score || 0; // Already in 0-5.0 scale
             title = attempt?.evaluation?.title || title;
-            // Evaluacions don't have a simple direct submission URL for now
+            // Evaluaciones don't have a simple direct submission URL for now
         }
         
         totalWeightedGrade += grade * item.weight;

@@ -219,11 +219,20 @@ export function StudentAttendanceSummary({ courseId, userId, readonly = false, h
                                                 <Badge variant="destructive" className="gap-1">
                                                     <AlertCircle className="h-3 w-3" /> Ausente
                                                 </Badge>
-                                            ) : record.status === "LATE" ? (
+                                            ) : (record.arrivalTime && record.departureTime) ? (
+                                                <div className="flex items-center justify-center gap-1">
+                                                    <Badge variant="warning" className="gap-1 bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border-yellow-200 text-[10px]">
+                                                        <Clock className="h-3 w-3" /> Tarde
+                                                    </Badge>
+                                                    <Badge className="gap-1 bg-indigo-100 text-indigo-800 hover:bg-indigo-200 border-indigo-200 text-[10px]">
+                                                        <LogOut className="h-3 w-3" /> Retiro
+                                                    </Badge>
+                                                </div>
+                                            ) : record.status === "LATE" || record.arrivalTime ? (
                                                 <Badge variant="warning" className="gap-1 bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border-yellow-200">
                                                     <Clock className="h-3 w-3" /> Tarde
                                                 </Badge>
-                                            ) : record.status === "LEAVE_EARLY" ? (
+                                            ) : record.status === "LEAVE_EARLY" || record.departureTime ? (
                                                 <Badge className="gap-1 bg-indigo-100 text-indigo-800 hover:bg-indigo-200 border-indigo-200">
                                                     <LogOut className="h-3 w-3" /> Retiro
                                                 </Badge>
@@ -234,10 +243,12 @@ export function StudentAttendanceSummary({ courseId, userId, readonly = false, h
                                             )}
                                         </TableCell>
                                         <TableCell className="text-sm text-muted-foreground">
-                                            {record.status === "LATE" && record.arrivalTime ? (
+                                            {record.arrivalTime && record.departureTime ? (
+                                                <span>Llegada: {formatTimeRegional(record.arrivalTime)} · Retiro: {formatTimeRegional(record.departureTime)}{record.justification ? " (Justificado)" : ""}</span>
+                                            ) : record.arrivalTime ? (
                                                 <span>Llegada: {formatTimeRegional(record.arrivalTime)}{record.justification ? " (Justificado)" : ""}</span>
-                                            ) : record.status === "LEAVE_EARLY" && record.departureTime ? (
-                                                <span>Salida: {formatTimeRegional(record.departureTime)}{record.justification ? " (Justificado)" : ""}</span>
+                                            ) : record.departureTime ? (
+                                                <span>Retiro: {formatTimeRegional(record.departureTime)}{record.justification ? " (Justificado)" : ""}</span>
                                             ) : record.status === "EXCUSED" ? (
                                                 <span className="font-medium">
                                                     {record.justificationUrl ? "Justificado con soporte" : "Justificado sin soporte"}

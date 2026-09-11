@@ -1,6 +1,7 @@
 import { Page, Text, View, Document, StyleSheet, Font, Link } from '@react-pdf/renderer';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { formatEvidenceUrl } from '@/lib/utils';
 
 // Ensure fonts are registered if not already globally available where this is rendered
 // The parent component or global setup might already handle this, but it's safe to have here if isolated.
@@ -500,13 +501,14 @@ export const CourseReportPDFDocument = ({
                                         {/* Items */}
                                         {group.items.map((item: any, itemIndex: number) => {
                                             const isGraded = item.grade > 0;
+                                            const evidenceUrl = formatEvidenceUrl(item.link || item.activityLink);
                                             
                                             return (
                                                 <View key={item.id || itemIndex} style={styles.tableRow} wrap={false}>
                                                     <Text style={styles.tdRowId}>{itemIndex + 1}</Text>
                                                     <View style={[styles.tdActivity, { paddingLeft: 20 }]}>
-                                                        {item.activityLink ? (
-                                                            <Link src={item.activityLink} style={{ color: COLORS.blue600, textDecoration: 'underline' }}>
+                                                        {evidenceUrl ? (
+                                                            <Link src={evidenceUrl} style={{ color: COLORS.blue600, textDecoration: 'underline' }}>
                                                                 <Text>{item.title}</Text>
                                                             </Link>
                                                         ) : (
@@ -523,8 +525,8 @@ export const CourseReportPDFDocument = ({
                                                         </Text>
                                                     </View>
                                                     <View style={styles.tdLinkContainer}>
-                                                        {item.link ? (
-                                                            <Link src={item.link} style={styles.linkText}>Link</Link>
+                                                        {evidenceUrl ? (
+                                                            <Link src={evidenceUrl} style={styles.linkText}>Link</Link>
                                                         ) : (
                                                             <Text style={styles.noLinkText}>-</Text>
                                                         )}
@@ -575,6 +577,8 @@ export const CourseReportPDFDocument = ({
                                     statusColor = COLORS.blue600;
                                 }
 
+                                const validJustificationUrl = formatEvidenceUrl(record.justificationUrl);
+
                                 return (
                                     <View key={record.id} style={styles.tableRow} wrap={false}>
                                         <Text style={styles.tdDate}>{format(new Date(record.date), "PPP", { locale: es })}</Text>
@@ -585,8 +589,8 @@ export const CourseReportPDFDocument = ({
                                         </View>
                                         <View style={{ width: '50%' }}>
                                             <Text style={styles.tdJustification}>{record.justification || "-"}</Text>
-                                            {record.justificationUrl && (
-                                                <Link src={record.justificationUrl} style={[styles.linkText, { marginTop: 2 }]}>Ver Soporte</Link>
+                                            {validJustificationUrl && (
+                                                <Link src={validJustificationUrl} style={[styles.linkText, { marginTop: 2 }]}>Ver Soporte</Link>
                                             )}
                                         </View>
                                     </View>

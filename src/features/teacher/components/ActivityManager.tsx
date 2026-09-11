@@ -1732,84 +1732,102 @@ function ActivityFormDialog({
 
                     <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0 overflow-hidden">
                         {/* Header del Modal con Título, Pestañas y Acciones */}
-                        <div className="px-5 py-2.5 border-b border-border bg-card flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-2xs">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-xl bg-primary/10 text-primary shrink-0">
-                                    {isEdit ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-                                </div>
-                                <div>
-                                    <div className="flex items-center gap-2">
-                                        <h2 className="text-base sm:text-lg font-bold tracking-tight text-foreground">
-                                            {isEdit ? "Editar Actividad" : "Crear Nueva Actividad"}
-                                        </h2>
-                                        {isEdit && (
-                                            <Badge variant="outline" className="font-mono text-[10px] hidden sm:inline-flex">
-                                                {activity.type}
-                                            </Badge>
-                                        )}
+                        {/* Header del Modal con Título, Pestañas y Acciones */}
+                        <div className="px-3 sm:px-5 py-2 sm:py-2.5 border-b border-border bg-card flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 shrink-0 shadow-2xs">
+                            {/* Fila 1 en móvil / Izquierda en desktop: Título y Cerrar */}
+                            <div className="flex items-center justify-between sm:justify-start gap-2 sm:gap-3 w-full sm:w-auto">
+                                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                                    <div className="p-1.5 sm:p-2 rounded-xl bg-primary/10 text-primary shrink-0">
+                                        {isEdit ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
                                     </div>
-                                    <p className="text-[11px] sm:text-xs text-muted-foreground hidden sm:block">
-                                        {isEdit ? "Modifica los parámetros y la rúbrica de la actividad." : "Configura los detalles y el contenido de la nueva actividad."}
-                                    </p>
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-1.5 sm:gap-2">
+                                            <h2 className="text-sm sm:text-lg font-bold tracking-tight text-foreground truncate">
+                                                {isEdit ? "Editar Actividad" : "Crear Nueva Actividad"}
+                                            </h2>
+                                            {isEdit && (
+                                                <Badge variant="outline" className="font-mono text-[10px] hidden sm:inline-flex shrink-0">
+                                                    {activity.type}
+                                                </Badge>
+                                            )}
+                                        </div>
+                                        <p className="text-[11px] sm:text-xs text-muted-foreground hidden sm:block">
+                                            {isEdit ? "Modifica los parámetros y la rúbrica de la actividad." : "Configura los detalles y el contenido de la nueva actividad."}
+                                        </p>
+                                    </div>
                                 </div>
+
+                                {/* Botón Cerrar en móvil (esquina superior derecha) */}
+                                <Button type="button" variant="ghost" size="sm" onClick={onClose} className="sm:hidden text-xs h-8 px-2 text-muted-foreground hover:text-foreground font-semibold shrink-0">
+                                    <X className="h-4 w-4 mr-1" />
+                                    Cerrar
+                                </Button>
                             </div>
 
-                            {/* Pestañas Shadcn en el Header */}
-                            <TabsList className="bg-muted/80 p-1 h-9 border border-border/50">
-                                <TabsTrigger value="config" className="text-xs px-3.5 font-semibold gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-xs">
-                                    <Settings2 className="h-3.5 w-3.5" />
-                                    Configuración
-                                </TabsTrigger>
-                                <TabsTrigger value="content" className="text-xs px-3.5 font-semibold gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-xs">
-                                    <FileText className="h-3.5 w-3.5" />
-                                    Contenido y Rúbrica
-                                </TabsTrigger>
-                                {(selectedType === "GITHUB" || selectedType === "PDF_REVIEW" || selectedType === "CODE_CHALLENGE" || selectedType === "VIDEO_PITCH" || selectedType === "AI_INTERVIEW" || selectedType === "DB_MODELING") && hasChecklist && (
-                                    <TabsTrigger value="checklist" className="text-xs px-3.5 font-semibold gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-xs">
-                                        <ListChecks className="h-3.5 w-3.5 text-primary" />
-                                        Lista de Chequeo
-                                        <Badge 
-                                            variant={criteriaSum === 100 ? "default" : "secondary"} 
-                                            className="text-[10px] px-1.5 py-0 h-4 ml-0.5 font-mono"
-                                        >
-                                            {criteriaSum}%
-                                        </Badge>
+                            {/* Fila 2 en móvil / Centro en desktop: Pestañas */}
+                            <div className="w-full sm:w-auto overflow-x-auto scrollbar-none py-0.5">
+                                <TabsList className="bg-muted/80 p-1 h-8 sm:h-9 border border-border/50 w-max sm:w-auto flex shrink-0">
+                                    <TabsTrigger value="config" className="text-xs px-2.5 sm:px-3.5 font-semibold gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-xs">
+                                        <Settings2 className="h-3.5 w-3.5 shrink-0" />
+                                        <span className="hidden sm:inline">Configuración</span>
+                                        <span className="sm:hidden">Ajustes</span>
                                     </TabsTrigger>
-                                )}
-                            </TabsList>
+                                    <TabsTrigger value="content" className="text-xs px-2.5 sm:px-3.5 font-semibold gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-xs">
+                                        <FileText className="h-3.5 w-3.5 shrink-0" />
+                                        <span className="hidden sm:inline">Contenido y Rúbrica</span>
+                                        <span className="sm:hidden">Contenido</span>
+                                    </TabsTrigger>
+                                    {(selectedType === "GITHUB" || selectedType === "PDF_REVIEW" || selectedType === "CODE_CHALLENGE" || selectedType === "VIDEO_PITCH" || selectedType === "AI_INTERVIEW" || selectedType === "DB_MODELING") && hasChecklist && (
+                                        <TabsTrigger value="checklist" className="text-xs px-2.5 sm:px-3.5 font-semibold gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-xs">
+                                            <ListChecks className="h-3.5 w-3.5 text-primary shrink-0" />
+                                            <span className="hidden sm:inline">Lista de Chequeo</span>
+                                            <span className="sm:hidden">Chequeo</span>
+                                            <Badge 
+                                                variant={criteriaSum === 100 ? "default" : "secondary"} 
+                                                className="text-[10px] px-1.5 py-0 h-4 ml-0.5 font-mono"
+                                            >
+                                                {criteriaSum}%
+                                            </Badge>
+                                        </TabsTrigger>
+                                    )}
+                                </TabsList>
+                            </div>
 
-                            <div className="flex items-center gap-2">
+                            {/* Fila 3 en móvil / Derecha en desktop: Botones de Acción */}
+                            <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto justify-between sm:justify-end shrink-0">
                                 {selectedType === "CODE_CHALLENGE" && (
                                     <Button
                                         type="button"
                                         variant="outline"
                                         size="sm"
                                         onClick={() => setShowStudentPreview(true)}
-                                        className="text-xs h-8 border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 font-bold gap-1.5 shadow-2xs cursor-pointer"
+                                        className="text-xs h-8 px-2 sm:px-2.5 border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 font-bold gap-1 sm:gap-1.5 shadow-2xs cursor-pointer shrink-0"
                                         title="Abrir vista interactiva de prueba idéntica a la que ve el estudiante"
                                     >
-                                        <Eye className="h-3.5 w-3.5 text-amber-500" />
-                                        <span>Modo Estudiante</span>
+                                        <Eye className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                                        <span className="hidden sm:inline">Modo Estudiante</span>
+                                        <span className="sm:hidden">Preview</span>
                                     </Button>
                                 )}
                                 <input type="file" accept=".json" className="hidden" ref={fileInputRef} onChange={handleImport} />
-                                <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="text-xs h-8">
-                                    <Upload className="h-3.5 w-3.5 mr-1.5" />
-                                    Importar
+                                <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="text-xs h-8 px-2 sm:px-3 shrink-0" title="Importar configuración">
+                                    <Upload className="h-3.5 w-3.5 sm:mr-1.5 shrink-0" />
+                                    <span className="hidden sm:inline">Importar</span>
                                 </Button>
-                                <Button type="button" variant="outline" size="sm" onClick={handleExport} className="text-xs h-8">
-                                    <Download className="h-3.5 w-3.5 mr-1.5" />
-                                    Exportar
+                                <Button type="button" variant="outline" size="sm" onClick={handleExport} className="text-xs h-8 px-2 sm:px-3 shrink-0" title="Exportar configuración">
+                                    <Download className="h-3.5 w-3.5 sm:mr-1.5 shrink-0" />
+                                    <span className="hidden sm:inline">Exportar</span>
                                 </Button>
                                 
-                                {/* Botón Guardar / Actualizar en la barra superior */}
-                                <Button type="submit" size="sm" disabled={isSubmitting} className="font-bold text-xs h-8 bg-primary text-primary-foreground shadow-xs">
-                                    {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}
-                                    {isEdit ? "Actualizar Actividad" : "Crear Actividad"}
+                                {/* Botón Guardar / Actualizar */}
+                                <Button type="submit" size="sm" disabled={isSubmitting} className="flex-1 sm:flex-none font-bold text-xs h-8 px-3 bg-primary text-primary-foreground shadow-xs shrink-0">
+                                    {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5 shrink-0" /> : <Save className="h-3.5 w-3.5 mr-1.5 shrink-0" />}
+                                    <span className="hidden sm:inline">{isEdit ? "Actualizar Actividad" : "Crear Actividad"}</span>
+                                    <span className="sm:hidden">{isEdit ? "Actualizar" : "Crear"}</span>
                                 </Button>
 
-                                {/* Botón Cerrar explícito */}
-                                <Button type="button" variant="ghost" size="sm" onClick={onClose} className="text-xs h-8 text-muted-foreground hover:text-foreground font-semibold ml-1">
+                                {/* Botón Cerrar en desktop */}
+                                <Button type="button" variant="ghost" size="sm" onClick={onClose} className="hidden sm:inline-flex text-xs h-8 text-muted-foreground hover:text-foreground font-semibold ml-1 shrink-0">
                                     <X className="h-4 w-4 mr-1" />
                                     Cerrar
                                 </Button>
@@ -1858,7 +1876,7 @@ function ActivityFormDialog({
                                         </div>
 
                                         <div className="space-y-2 pt-1">
-                                            <div className="flex items-center justify-between">
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                                                 <Label className="text-xs font-semibold">
                                                     Modalidad y Tipo de Evaluación <span className="text-destructive">*</span>
                                                 </Label>
@@ -4060,7 +4078,7 @@ function ActivityFormDialog({
                                             )}
                                         </p>
                                     </div>
-                                    <div className="flex items-center gap-2 shrink-0">
+                                    <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
                                         <Button
                                             type="button"
                                             size="sm"
@@ -4070,8 +4088,9 @@ function ActivityFormDialog({
                                             }}
                                             className="h-8 text-xs font-semibold gap-1.5 bg-gradient-to-r from-primary to-primary/85 hover:from-primary/95 hover:to-primary text-primary-foreground shadow-xs transition-all cursor-pointer"
                                         >
-                                            <Sparkles className="h-3.5 w-3.5" />
-                                            Generar Enunciado con IA
+                                            <Sparkles className="h-3.5 w-3.5 shrink-0" />
+                                            <span className="hidden sm:inline">Generar Enunciado con IA</span>
+                                            <span className="sm:hidden">Generar con IA</span>
                                         </Button>
                                         <Button
                                             type="button"
@@ -4085,8 +4104,9 @@ function ActivityFormDialog({
                                             className="h-8 text-xs font-semibold gap-1.5 border-primary/40 text-primary hover:bg-primary/10 hover:text-primary transition-all cursor-pointer shadow-2xs"
                                             title="Toma el enunciado actual del editor y abre el chat de IA para modificarlo, adaptarlo o mejorarlo interactivamente"
                                         >
-                                            <MessageSquare className="h-3.5 w-3.5 text-primary" />
-                                            Modificar con Chat IA
+                                            <MessageSquare className="h-3.5 w-3.5 text-primary shrink-0" />
+                                            <span className="hidden sm:inline">Modificar con Chat IA</span>
+                                            <span className="sm:hidden">Chat IA</span>
                                         </Button>
                                         <div className="text-[11px] text-muted-foreground items-center gap-1.5 hidden md:flex pl-2 border-l border-border/60">
                                             <Sparkles className="h-3.5 w-3.5 text-primary" />
@@ -4647,42 +4667,45 @@ export function ActivityManager({
 
     return (
         <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2 border-b border-border/40">
-                <div className="flex items-center gap-3">
-                    <h3 className="text-xl font-semibold">Actividades del Curso</h3>
-                    <Badge variant="secondary" className="font-semibold text-xs px-2.5 py-0.5 rounded-full">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3 pb-2 border-b border-border/40">
+                <div className="flex items-center gap-2 sm:gap-3">
+                    <h3 className="text-lg sm:text-xl font-semibold">Actividades del Curso</h3>
+                    <Badge variant="secondary" className="font-semibold text-xs px-2.5 py-0.5 rounded-full shrink-0">
                         {activities.length} {activities.length === 1 ? 'actividad' : 'actividades'}
                     </Badge>
                 </div>
 
-                <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-                    <div className="flex items-center gap-1.5 p-1 bg-muted rounded-xl text-xs font-semibold shrink-0">
+                <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                    <div className="flex items-center gap-1 p-0.5 sm:p-1 bg-muted rounded-xl text-xs font-semibold shrink-0">
                         <Button
                             type="button"
                             variant={viewMode === "grid" ? "default" : "ghost"}
                             size="sm"
-                            className="h-8 px-3 rounded-lg text-xs"
+                            className="h-8 px-2.5 sm:px-3 rounded-lg text-xs"
                             onClick={() => setViewMode("grid")}
                             title="Vista de Tarjetas AI Canvas"
                         >
-                            <LayoutGrid className="h-4 w-4 mr-1.5" />
-                            <span>Tarjetas AI Canvas</span>
+                            <LayoutGrid className="h-4 w-4 mr-1 sm:mr-1.5 shrink-0" />
+                            <span className="hidden sm:inline">Tarjetas AI Canvas</span>
+                            <span className="sm:hidden">Tarjetas</span>
                         </Button>
                         <Button
                             type="button"
                             variant={viewMode === "table" ? "default" : "ghost"}
                             size="sm"
-                            className="h-8 px-3 rounded-lg text-xs"
+                            className="h-8 px-2.5 sm:px-3 rounded-lg text-xs"
                             onClick={() => setViewMode("table")}
                             title="Vista de Tabla"
                         >
-                            <List className="h-4 w-4 mr-1.5" />
+                            <List className="h-4 w-4 mr-1 sm:mr-1.5 shrink-0" />
                             <span>Tabla</span>
                         </Button>
                     </div>
 
-                    <Button onClick={handleStartCreate}>
-                        <Plus className="mr-2 h-4 w-4" /> Nueva Actividad
+                    <Button onClick={handleStartCreate} size="sm" className="h-8 px-3 rounded-lg font-semibold shrink-0">
+                        <Plus className="mr-1.5 h-4 w-4 shrink-0" />
+                        <span className="hidden sm:inline">Nueva Actividad</span>
+                        <span className="sm:hidden">Nueva</span>
                     </Button>
                 </div>
             </div>

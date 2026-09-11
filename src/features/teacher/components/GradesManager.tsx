@@ -411,23 +411,24 @@ export function GradesManager({ courseId, courseTitle = "Curso", initialData }: 
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-border/40">
                 <div>
-                    <h2 className="text-2xl font-bold tracking-tight">Jerarquía de Calificaciones</h2>
-                    <p className="text-muted-foreground">
+                    <h2 className="text-lg sm:text-2xl font-bold tracking-tight">Jerarquía de Calificaciones</h2>
+                    <p className="text-xs sm:text-sm text-muted-foreground">
                         Organiza tus notas en Categorías (Cortes) y Grupos (Talleres, Exámenes).
                     </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap sm:flex-nowrap shrink-0">
                     {activeTab === "view" && (
                         <>
                             <Button 
                                 variant="outline" 
                                 size="sm"
                                 onClick={handleExportExcel}
-                                className="gap-2"
+                                className="h-8 px-2.5 sm:px-3 gap-1.5 text-xs shrink-0"
+                                title="Exportar a Excel"
                             >
-                                <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+                                <FileSpreadsheet className="h-4 w-4 text-emerald-600 shrink-0" />
                                 <span className="hidden sm:inline">Excel</span>
                             </Button>
                             <Button 
@@ -435,28 +436,33 @@ export function GradesManager({ courseId, courseTitle = "Curso", initialData }: 
                                 size="sm"
                                 disabled={isExportingPDF}
                                 onClick={handleExportPDF}
-                                className="gap-2"
+                                className="h-8 px-2.5 sm:px-3 gap-1.5 text-xs shrink-0"
+                                title="Exportar a PDF"
                             >
-                                <FileText className="h-4 w-4 text-rose-600" />
+                                <FileText className="h-4 w-4 text-rose-600 shrink-0" />
                                 <span className="hidden sm:inline">PDF</span>
                             </Button>
                         </>
                     )}
                     <Button 
                         variant={activeTab === "view" ? "default" : "outline"}
+                        size="sm"
                         onClick={() => setActiveTab("view")}
-                        className="gap-2"
+                        className="h-8 px-2.5 sm:px-3 gap-1.5 text-xs font-semibold shrink-0"
                     >
-                        <LayoutGrid className="h-4 w-4" />
-                        Vista de Notas
+                        <LayoutGrid className="h-4 w-4 shrink-0" />
+                        <span className="hidden sm:inline">Vista de Notas</span>
+                        <span className="sm:hidden">Notas</span>
                     </Button>
                     <Button 
                         variant={activeTab === "config" ? "default" : "outline"}
+                        size="sm"
                         onClick={() => setActiveTab("config")}
-                        className="gap-2"
+                        className="h-8 px-2.5 sm:px-3 gap-1.5 text-xs font-semibold shrink-0"
                     >
-                        <Settings className="h-4 w-4" />
-                        Configuración
+                        <Settings className="h-4 w-4 shrink-0" />
+                        <span className="hidden sm:inline">Configuración</span>
+                        <span className="sm:hidden">Ajustes</span>
                     </Button>
                 </div>
             </div>
@@ -473,116 +479,130 @@ export function GradesManager({ courseId, courseTitle = "Curso", initialData }: 
                         />
                     </div>
 
-                    <div className="rounded-md border bg-card overflow-x-auto" ref={printRef}>
-                        <div className="hidden print-header p-6">
-                            <h1>Reporte de Calificaciones</h1>
-                            <p>{courseTitle}</p>
-                            <p>Generado el: {new Date().toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                    {categories.length === 0 ? (
+                        <div className="p-8 text-center border-2 border-dashed rounded-xl bg-card space-y-3">
+                            <FolderTree className="h-8 w-8 text-muted-foreground mx-auto" />
+                            <p className="font-semibold text-sm">Aún no has configurado la jerarquía de notas para este curso.</p>
+                            <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                                Define los cortes de evaluación (ej: Corte 1 30%, Corte 2 30%, Corte 3 40%) y asocia las actividades para calcular la nota final de tus estudiantes.
+                            </p>
+                            <Button size="sm" onClick={() => setActiveTab("config")} className="gap-2">
+                                <Settings className="h-4 w-4" /> Configurar Cortes y Ponderaciones
+                            </Button>
                         </div>
-                        <Table className="min-w-[1000px]">
-                            <TableHeader>
-                                <TableRow className="bg-muted/50">
-                                    <TableHead className="w-[250px] font-bold" rowSpan={2}>Estudiante</TableHead>
-                                    {categories.map((cat: any, idx: number) => (
-                                        <TableHead 
-                                            key={cat.id} 
-                                            className={`text-center font-bold border-x ${getCategoryBgColor(idx)}`}
-                                            colSpan={cat.groups.length || 1}
-                                        >
-                                            <div className="flex flex-col items-center">
-                                                <span>{cat.name}</span>
-                                                <Badge variant="outline" className="mt-1 text-[9px] font-bold bg-primary/5">
-                                                    {cat.weight}% del Curso
-                                                </Badge>
-                                            </div>
-                                        </TableHead>
-                                    ))}
-                                    <TableHead className="text-right font-bold bg-primary/5" rowSpan={2}>Nota Final</TableHead>
-                                </TableRow>
-                                <TableRow className="bg-muted/30">
-                                    {categories.flatMap((cat: any, idx: number) => 
-                                        cat.groups.length > 0 ? (
-                                            cat.groups.map((group: any) => (
-                                                <TableHead key={group.id} className={`text-center text-[10px] min-w-[80px] border-x ${getCategoryBgColor(idx)}`}>
-                                                    <div className="flex flex-col items-center">
-                                                        <span className="truncate w-full text-center">{group.name}</span>
-                                                        <span className="text-muted-foreground">({group.weight}%)</span>
-                                                    </div>
-                                                </TableHead>
-                                            ))
-                                        ) : (
-                                            <TableHead key={cat.id + "-empty"} className={`text-center text-[10px] text-muted-foreground italic border-x ${getCategoryBgColor(idx)}`}>
-                                                Sin grupos
-                                            </TableHead>
-                                        )
-                                    )}
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {students.map((student: any) => {
-                                    const finalGrade = calculateFinalGrade(student.id);
-                                    return (
-                                        <TableRow key={student.id}>
-                                            <TableCell className="font-medium">
-                                                <div className="flex items-center gap-3">
-                                                    <UserAvatar 
-                                                        src={student.image}
-                                                        alt={formatName(student.name, student.profile)}
-                                                        fallbackText={formatName(student.name, student.profile)}
-                                                        className="h-8 w-8"
-                                                    />
-                                                    <div className="flex flex-col">
-                                                        <span className="text-sm font-semibold">
-                                                            {formatName(student.name, student.profile)}
-                                                        </span>
-                                                        <span className="text-[10px] text-muted-foreground">
-                                                            ID: {student.profile?.identificacion || "---"}
-                                                        </span>
-                                                    </div>
+                    ) : (
+                        <div className="rounded-md border bg-card overflow-x-auto shadow-2xs" ref={printRef}>
+                            <div className="hidden print-header p-6">
+                                <h1>Reporte de Calificaciones</h1>
+                                <p>{courseTitle}</p>
+                                <p>Generado el: {new Date().toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                            </div>
+                            <Table className="min-w-[650px]">
+                                <TableHeader>
+                                    <TableRow className="bg-muted/50">
+                                        <TableHead className="w-[200px] sm:w-[250px] font-bold" rowSpan={2}>Estudiante</TableHead>
+                                        {categories.map((cat: any, idx: number) => (
+                                            <TableHead 
+                                                key={cat.id} 
+                                                className={`text-center font-bold border-x ${getCategoryBgColor(idx)}`}
+                                                colSpan={cat.groups.length || 1}
+                                            >
+                                                <div className="flex flex-col items-center">
+                                                    <span>{cat.name}</span>
+                                                    <Badge variant="outline" className="mt-1 text-[9px] font-bold bg-primary/5">
+                                                        {cat.weight}% del Curso
+                                                    </Badge>
                                                 </div>
-                                            </TableCell>
-                                            {categories.flatMap((cat: any, idx: number) => 
-                                                cat.groups.length > 0 ? (
-                                                    cat.groups.map((group: any) => {
-                                                        const grade = calculateStudentGradeInGroup(student.id, group);
-                                                        return (
-                                                            <TableCell key={group.id} className={`text-center tabular-nums border-x ${getCategoryBgColor(idx)}`}>
-                                                                <span className={getGradeColor(grade)}>
-                                                                    {grade.toFixed(2)}
-                                                                </span>
-                                                            </TableCell>
-                                                        );
-                                                    })
-                                                ) : (
-                                                    <TableCell key={cat.id + "-empty"} className={`text-center text-muted-foreground italic text-xs border-x ${getCategoryBgColor(idx)}`}>
-                                                        -
-                                                    </TableCell>
-                                                )
-                                            )}
-                                            <TableCell className="text-right tabular-nums font-bold bg-primary/5">
-                                                <span className={getGradeColor(finalGrade)}>
-                                                    {finalGrade.toFixed(2)}
-                                                </span>
-                                            </TableCell>
-                                        </TableRow>
-                                    );
-                                })}
-                            </TableBody>
-                        </Table>
-                    </div>
+                                            </TableHead>
+                                        ))}
+                                        <TableHead className="text-right font-bold bg-primary/5" rowSpan={2}>Nota Final</TableHead>
+                                    </TableRow>
+                                    <TableRow className="bg-muted/30">
+                                        {categories.flatMap((cat: any, idx: number) => 
+                                            cat.groups.length > 0 ? (
+                                                cat.groups.map((group: any) => (
+                                                    <TableHead key={group.id} className={`text-center text-[10px] min-w-[80px] border-x ${getCategoryBgColor(idx)}`}>
+                                                        <div className="flex flex-col items-center">
+                                                            <span className="truncate w-full text-center">{group.name}</span>
+                                                            <span className="text-muted-foreground">({group.weight}%)</span>
+                                                        </div>
+                                                    </TableHead>
+                                                ))
+                                            ) : (
+                                                <TableHead key={cat.id + "-empty"} className={`text-center text-[10px] text-muted-foreground italic border-x ${getCategoryBgColor(idx)}`}>
+                                                    Sin grupos
+                                                </TableHead>
+                                            )
+                                        )}
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {students.map((student: any) => {
+                                        const finalGrade = calculateFinalGrade(student.id);
+                                        return (
+                                            <TableRow key={student.id}>
+                                                <TableCell className="font-medium">
+                                                    <div className="flex items-center gap-3">
+                                                        <UserAvatar 
+                                                            src={student.image}
+                                                            alt={formatName(student.name, student.profile)}
+                                                            fallbackText={formatName(student.name, student.profile)}
+                                                            className="h-8 w-8"
+                                                        />
+                                                        <div className="flex flex-col">
+                                                            <span className="text-sm font-semibold">
+                                                                {formatName(student.name, student.profile)}
+                                                            </span>
+                                                            <span className="text-[10px] text-muted-foreground">
+                                                                ID: {student.profile?.identificacion || "---"}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </TableCell>
+                                                {categories.flatMap((cat: any, idx: number) => 
+                                                    cat.groups.length > 0 ? (
+                                                        cat.groups.map((group: any) => {
+                                                            const grade = calculateStudentGradeInGroup(student.id, group);
+                                                            return (
+                                                                <TableCell key={group.id} className={`text-center tabular-nums border-x ${getCategoryBgColor(idx)}`}>
+                                                                    <span className={getGradeColor(grade)}>
+                                                                        {grade.toFixed(2)}
+                                                                    </span>
+                                                                </TableCell>
+                                                            );
+                                                        })
+                                                    ) : (
+                                                        <TableCell key={cat.id + "-empty"} className={`text-center text-muted-foreground italic text-xs border-x ${getCategoryBgColor(idx)}`}>
+                                                            -
+                                                        </TableCell>
+                                                    )
+                                                )}
+                                                <TableCell className="text-right tabular-nums font-bold bg-primary/5">
+                                                    <span className={getGradeColor(finalGrade)}>
+                                                        {finalGrade.toFixed(2)}
+                                                    </span>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
                 </div>
             ) : (
                 <div className="grid grid-cols-1 gap-6">
                     {/* Categories Config */}
                     <div className="flex flex-col gap-6">
                         <div className="flex items-center justify-between">
-                            <h3 className="text-xl font-bold flex items-center gap-2">
+                            <h3 className="text-lg sm:text-xl font-bold flex items-center gap-2">
                                 <FolderTree className="h-5 w-5 text-primary" />
                                 Estructura de Calificación
                             </h3>
-                            <Button onClick={() => setIsCreateCategoryOpen(true)} className="gap-2">
-                                <Plus className="h-4 w-4" />
-                                Nueva Categoría (Corte)
+                            <Button size="sm" onClick={() => setIsCreateCategoryOpen(true)} className="gap-1.5 h-8 px-2.5 sm:px-3 text-xs sm:text-sm font-semibold shrink-0">
+                                <Plus className="h-4 w-4 shrink-0" />
+                                <span className="hidden sm:inline">Nueva Categoría (Corte)</span>
+                                <span className="sm:hidden">Nuevo Corte</span>
                             </Button>
                         </div>
 
@@ -605,19 +625,19 @@ export function GradesManager({ courseId, courseTitle = "Curso", initialData }: 
                             <div className="grid grid-cols-1 gap-8">
                                 {categories.map((cat: any) => (
                                     <div key={cat.id} className="space-y-4">
-                                        <div className="flex items-center justify-between bg-muted/20 p-4 rounded-xl border border-muted">
-                                            <div className="flex items-center gap-4">
-                                                <div className="bg-primary/10 p-2 rounded-md">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-muted/20 p-3 sm:p-4 rounded-xl border border-muted">
+                                            <div className="flex items-center gap-3">
+                                                <div className="bg-primary/10 p-2 rounded-md shrink-0">
                                                     <FolderTree className="h-5 w-5 text-primary" />
                                                 </div>
-                                                <div>
-                                                    <h4 className="text-lg font-bold">{cat.name}</h4>
+                                                <div className="min-w-0">
+                                                    <h4 className="text-base sm:text-lg font-bold truncate">{cat.name}</h4>
                                                     <Badge variant="secondary" className="text-xs">
                                                         Peso en Curso: {cat.weight}%
                                                     </Badge>
                                                 </div>
                                             </div>
-                                            <div className="flex gap-2">
+                                            <div className="flex items-center gap-2 justify-end shrink-0">
                                                 <Button 
                                                     onClick={() => {
                                                         setSelectedCategoryForGroup(cat);
@@ -625,15 +645,15 @@ export function GradesManager({ courseId, courseTitle = "Curso", initialData }: 
                                                     }}
                                                     size="sm"
                                                     variant="outline"
-                                                    className="gap-2 h-9"
+                                                    className="gap-1.5 h-8 text-xs shrink-0"
                                                 >
-                                                    <Plus className="h-4 w-4" />
-                                                    Añadir Grupo
+                                                    <Plus className="h-3.5 w-3.5" />
+                                                    <span>Añadir Grupo</span>
                                                 </Button>
                                                 <Button 
                                                     size="icon" 
                                                     variant="ghost" 
-                                                    className="h-9 w-9"
+                                                    className="h-8 w-8 shrink-0"
                                                     onClick={() => {
                                                         setEditingCategory(cat);
                                                         setIsEditCategoryOpen(true);
@@ -644,7 +664,7 @@ export function GradesManager({ courseId, courseTitle = "Curso", initialData }: 
                                                 <Button 
                                                     size="icon" 
                                                     variant="ghost" 
-                                                    className="h-9 w-9 text-muted-foreground hover:text-destructive"
+                                                    className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
                                                     onClick={() => handleDeleteCategory(cat.id)}
                                                 >
                                                     <Trash2 className="h-4 w-4" />

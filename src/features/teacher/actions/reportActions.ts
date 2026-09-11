@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { courseService } from "../services/courseService";
 import prisma from "@/lib/prisma";
-import { formatName } from "@/lib/utils";
+import { formatName, formatEvidenceUrl } from "@/lib/utils";
 import { toUTCStartOfDayFromLocal } from "@/lib/dateUtils";
 
 async function getSession() {
@@ -346,11 +346,17 @@ export async function getStudentCompleteDataAction(studentId: string, courseId: 
             const itemsWithGrades = group.items.map(item => {
                 let grade = 0;
                 let title = "S/N";
+                let link: string | null = null;
+                let activityLink: string | null = null;
+
                 if (item.activityId) {
                     const activity = course.activities.find(a => a.id === item.activityId);
                     const submission = activity?.submissions[0];
                     grade = submission?.grade || 0;
                     title = activity?.title || title;
+                    const evidenceUrl = formatEvidenceUrl(submission?.url);
+                    link = evidenceUrl;
+                    activityLink = evidenceUrl;
                 } else if (item.evaluationAttemptId) {
                     const submission = item.evaluationAttempt?.submissions.find(s => s.userId === studentId);
                     grade = submission?.score || 0;
@@ -364,7 +370,9 @@ export async function getStudentCompleteDataAction(studentId: string, courseId: 
                     id: item.id,
                     title,
                     weight: item.weight,
-                    grade
+                    grade,
+                    link,
+                    activityLink
                 };
             });
 

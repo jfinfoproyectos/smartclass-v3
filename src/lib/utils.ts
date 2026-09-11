@@ -63,6 +63,62 @@ export function normalizeUrl(url: string): string {
         return trimmed.replace(/\/$/, '');
     }
 }
+
+/**
+ * Robustly extract and normalize any student evidence URL (raw URL, JSON payload, or domain without protocol).
+ * Ensures it starts with https:// or http:// so PDF readers and Excel hyperlinks launch properly.
+ */
+export function formatEvidenceUrl(rawUrl: string | null | undefined): string | null {
+    if (!rawUrl || typeof rawUrl !== 'string') return null;
+    let trimmed = rawUrl.trim();
+    if (!trimmed || trimmed === '-' || trimmed.toUpperCase() === 'MANUAL' || trimmed === 'null' || trimmed === 'undefined') {
+        return null;
+    }
+
+    // Handle JSON payloads (e.g. VideoPitch, AudioDefense, or structured submission objects)
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        try {
+            const parsed = JSON.parse(trimmed);
+            if (parsed && typeof parsed === 'object') {
+                const candidate = parsed.videoUrl || parsed.url || parsed.repoUrl || parsed.link || parsed.fileUrl || parsed.evidenceUrl;
+                if (candidate && typeof candidate === 'string') {
+                    trimmed = candidate.trim();
+                } else {
+                    return null;
+                }
+            }
+        } catch {
+            // Not valid JSON, continue with trimmed string
+        }
+    }
+
+    if (!trimmed || trimmed === '-' || trimmed.toUpperCase() === 'MANUAL' || trimmed === 'null' || trimmed === 'undefined') {
+        return null;
+    }
+
+    // Must not be a markdown statement or sentence with multiple spaces
+    if (trimmed.includes(' ') && !/^https?:\/\//i.test(trimmed)) {
+        return null;
+    }
+
+    // If it already has http:// or https://
+    if (/^https?:\/\//i.test(trimmed)) {
+        return trimmed;
+    }
+
+    // If it has domain structure like github.com/..., drive.google.com/..., etc.
+    if (/^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(\/.*)?$/i.test(trimmed)) {
+        return `https://${trimmed}`;
+    }
+
+    // Fallback: if it has a period, no spaces, and no linebreaks
+    if (trimmed.includes('.') && !trimmed.includes(' ') && !trimmed.includes('\n')) {
+        return `https://${trimmed}`;
+    }
+
+    return null;
+}
+
 export function isValidPdfUrl(url: string): boolean {
     if (!url) return false;
     const lowerUrl = url.toLowerCase();

@@ -207,63 +207,69 @@ export function CourseStatistics({
     }, [attendanceData, attendanceDateColumns]);
 
     return (
-        <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Promedio Académico</CardTitle>
-                        <GraduationCap className="h-4 w-4 text-muted-foreground" />
+        <div className="space-y-4 sm:space-y-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+                <Card className="p-1">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 pb-1">
+                        <CardTitle className="text-xs sm:text-sm font-medium">Promedio</CardTitle>
+                        <GraduationCap className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{averageGrade.toFixed(2)}</div>
-                        <p className="text-xs text-muted-foreground">Sobre 5.0</p>
+                    <CardContent className="p-3 pt-0">
+                        <div className="text-xl sm:text-2xl font-bold">{averageGrade.toFixed(2)}</div>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">Sobre 5.0</p>
                     </CardContent>
                 </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Asistencia General</CardTitle>
-                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                <Card className="p-1">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 pb-1">
+                        <CardTitle className="text-xs sm:text-sm font-medium">Asistencia</CardTitle>
+                        <TrendingUp className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{attendanceRate.toFixed(1)}%</div>
-                        <p className="text-xs text-muted-foreground">Presencia efectiva</p>
+                    <CardContent className="p-3 pt-0">
+                        <div className="text-xl sm:text-2xl font-bold">{attendanceRate.toFixed(1)}%</div>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">Presencia efectiva</p>
                     </CardContent>
                 </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Estudiantes Activos</CardTitle>
-                        <Users className="h-4 w-4 text-muted-foreground" />
+                <Card className="p-1">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 pb-1">
+                        <CardTitle className="text-xs sm:text-sm font-medium">Activos</CardTitle>
+                        <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{gradesData.students?.length || 0}</div>
-                        <p className="text-xs text-muted-foreground">Enrolados en el curso</p>
+                    <CardContent className="p-3 pt-0">
+                        <div className="text-xl sm:text-2xl font-bold">{gradesData.students?.length || 0}</div>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">Enrolados</p>
                     </CardContent>
                 </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Rendimiento</CardTitle>
-                        {averageGrade >= 3.0 ? <Award className="h-4 w-4 text-green-500" /> : <AlertCircle className="h-4 w-4 text-red-500" />}
+                <Card className="p-1">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 pb-1">
+                        <CardTitle className="text-xs sm:text-sm font-medium">Rendimiento</CardTitle>
+                        {averageGrade >= 3.0 ? <Award className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-500" /> : <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-red-500" />}
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{averageGrade >= 3.0 ? "Satisfactorio" : "Bajo"}</div>
-                        <p className="text-xs text-muted-foreground">Estado general del grupo</p>
+                    <CardContent className="p-3 pt-0">
+                        <div className="text-xl sm:text-2xl font-bold">{averageGrade >= 3.0 ? "Satisfactorio" : "Bajo"}</div>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">Estado general</p>
                     </CardContent>
                 </Card>
             </div>
 
             <Tabs defaultValue="grades" className="space-y-4">
-                <TabsList>
-                    <TabsTrigger value="grades">Rendimiento Académico</TabsTrigger>
-                    <TabsTrigger value="attendance">Asistencia y Observaciones</TabsTrigger>
+                <TabsList className="w-full sm:w-auto grid grid-cols-2 sm:flex h-9">
+                    <TabsTrigger value="grades" className="text-xs">
+                        <span className="hidden sm:inline">Rendimiento Académico</span>
+                        <span className="sm:hidden">Académico</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="attendance" className="text-xs">
+                        <span className="hidden sm:inline">Asistencia y Observaciones</span>
+                        <span className="sm:hidden">Asistencia</span>
+                    </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="grades" className="space-y-4">
                     <Card>
-                        <CardHeader>
-                            <CardTitle>Distribución de Calificaciones</CardTitle>
-                            <CardDescription>Visualización del rendimiento consolidado de los estudiantes</CardDescription>
+                        <CardHeader className="p-4 sm:p-6 pb-2">
+                            <CardTitle className="text-base sm:text-lg">Distribución de Calificaciones</CardTitle>
+                            <CardDescription className="text-xs">Visualización del rendimiento consolidado de los estudiantes</CardDescription>
                         </CardHeader>
-                        <CardContent className="h-[400px] mt-4">
+                        <CardContent className="h-[260px] sm:h-[400px] mt-2 sm:mt-4 px-2 sm:px-6">
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={gradeDistribution}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />

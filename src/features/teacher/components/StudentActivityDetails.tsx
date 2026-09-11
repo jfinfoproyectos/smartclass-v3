@@ -32,6 +32,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { ExportButton } from "@/components/ui/export-button";
 import { formatDateForExport, formatGradeForExport, exportHierarchicalGradesToExcel } from "@/lib/export-utils";
+import { formatEvidenceUrl } from "@/lib/utils";
 import { AttendanceManagementSheet } from "./AttendanceManagementSheet";
 import { pdf } from "@react-pdf/renderer";
 import { CourseReportPDFDocument } from "./CourseReportPDFDocument";
@@ -320,13 +321,16 @@ export function StudentActivityDetails({ enrollment }: StudentActivityDetailsPro
                                             )}
                                         </TableCell>
                                         <TableCell>
-                                            {submission?.url && (submission.url.startsWith('http://') || submission.url.startsWith('https://')) ? (
-                                                <a href={submission.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm block truncate max-w-[200px]" title={submission.url}>
-                                                    Ver Entrega
-                                                </a>
-                                            ) : (
-                                                <span className="text-muted-foreground">-</span>
-                                            )}
+                                            {(() => {
+                                                const evidenceUrl = formatEvidenceUrl(submission?.url);
+                                                return evidenceUrl ? (
+                                                    <a href={evidenceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm block truncate max-w-[200px]" title={evidenceUrl}>
+                                                        Ver Entrega
+                                                    </a>
+                                                ) : (
+                                                    <span className="text-muted-foreground">-</span>
+                                                );
+                                            })()}
                                         </TableCell>
                                         <TableCell>
                                             <div className="text-sm text-muted-foreground">

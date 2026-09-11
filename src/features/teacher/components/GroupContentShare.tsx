@@ -17,15 +17,6 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-    Sheet,
-    SheetContent,
-    SheetDescription,
-    SheetHeader,
-    SheetTitle,
-    SheetTrigger,
-    SheetFooter,
-} from "@/components/ui/sheet";
-import {
     Table,
     TableBody,
     TableCell,
@@ -56,6 +47,7 @@ import { Editor } from "@monaco-editor/react";
 import { useTheme } from "next-themes";
 import { createSharedContent, updateSharedContent, deleteSharedContent, getSharedContentByCourse } from "../sharedContentActions";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
@@ -67,6 +59,7 @@ import {
     DialogDescription,
     DialogHeader,
     DialogTitle,
+    DialogTrigger,
     DialogFooter,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -85,6 +78,14 @@ interface FileSnippet {
     language: string;
     size?: number;
     relativePath?: string;
+}
+
+interface ScannedFileItem {
+    name: string;
+    language: string;
+    size?: number;
+    relativePath?: string;
+    fileRef: File;
 }
 
 interface ExternalLinkItem {
@@ -162,7 +163,7 @@ export function GroupContentShare({ courseId, initialContent = [] }: { courseId:
     const [isSaving, setIsSaving] = useState(false);
     const { resolvedTheme } = useTheme();
     const [editId, setEditId] = useState<string | null>(null);
-    const [scannedFiles, setScannedFiles] = useState<FileSnippet[]>([]);
+    const [scannedFiles, setScannedFiles] = useState<ScannedFileItem[]>([]);
     const [isScannerOpen, setIsScannerOpen] = useState(false);
     const [selectedScannedIndices, setSelectedScannedIndices] = useState<Set<number>>(new Set());
     const [searchQuery, setSearchQuery] = useState("");
@@ -170,9 +171,6 @@ export function GroupContentShare({ courseId, initialContent = [] }: { courseId:
     
     const [deleteId, setDeleteId] = useState<string | null>(null);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-    const [isNoFilesDialogOpen, setIsNoFilesDialogOpen] = useState(false);
-    const [isSuccessDialogOpen, setIsSuccessDialogOpen] = useState(false);
-    const [successMessage, setSuccessMessage] = useState("");
     
     const editorRef = useRef<any>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -185,6 +183,14 @@ export function GroupContentShare({ courseId, initialContent = [] }: { courseId:
             editor.layout();
         }, 100);
     };
+
+    // Ensure folder input has directory selection attributes attached
+    useEffect(() => {
+        if (folderInputRef.current) {
+            folderInputRef.current.setAttribute("webkitdirectory", "");
+            folderInputRef.current.setAttribute("directory", "");
+        }
+    }, [isCreateOpen]);
 
     // Definitive layout fix: use ResizeObserver and a ref to the editor
     useEffect(() => {
@@ -213,7 +219,7 @@ export function GroupContentShare({ courseId, initialContent = [] }: { courseId:
             observer.disconnect();
             clearTimeout(timer);
         };
-    }, []);
+    }, [activeFileIndex, files.length]);
 
     const addLink = () => {
         setLinks([...links, { label: "", url: "" }]);
@@ -251,40 +257,35 @@ export function GroupContentShare({ courseId, initialContent = [] }: { courseId:
         }
     };
 
-    const handleFolderSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFolderSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const filesList = e.target.files;
         if (!filesList || filesList.length === 0) return;
 
-        const newScannedFiles: FileSnippet[] = [];
-        const MAX_FILE_SIZE = 1024 * 1024; // 1 MB limit per file
+        const newScannedFiles: ScannedFileItem[] = [];
+        const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB limit per file
 
         for (let i = 0; i < filesList.length; i++) {
             const file = filesList[i];
-            const fullPath = file.webkitRelativePath || file.name;
-            const pathParts = fullPath.split('/');
+            const fullPath = (file.webkitRelativePath || file.name).replace(/\\/g, '/');
+            const pathParts = fullPath.split('/').filter(Boolean);
 
-            // Ignore files inside system/build directories
-            const isIgnored = pathParts.some(part => IGNORED_DIRS.has(part.toLowerCase()));
-            if (isIgnored) continue;
+            // Ignore files inside ignored subdirectories (node_modules, .git, etc.)
+            const hasIgnoredDir = pathParts.slice(0, -1).some(part => IGNORED_DIRS.has(part.toLowerCase()));
+            if (hasIgnoredDir) continue;
 
             const extension = file.name.split('.').pop()?.toLowerCase() || '';
             if (BINARY_EXTENSIONS.has(extension) || file.size > MAX_FILE_SIZE) continue;
 
-            try {
-                const content = await file.text();
-                // Omit root folder name if fullPath contains multiple parts
-                const relativePath = pathParts.length > 1 ? pathParts.slice(1).join('/') : fullPath;
+            // Omit root folder name if fullPath contains multiple parts
+            const relativePath = pathParts.length > 1 ? pathParts.slice(1).join('/') : fullPath;
 
-                newScannedFiles.push({
-                    name: relativePath,
-                    content: content,
-                    language: mapExtensionToLanguage(extension),
-                    size: file.size,
-                    relativePath: relativePath,
-                });
-            } catch (err) {
-                console.error(`Error reading file ${file.name}:`, err);
-            }
+            newScannedFiles.push({
+                name: relativePath,
+                language: mapExtensionToLanguage(extension),
+                size: file.size,
+                relativePath: relativePath,
+                fileRef: file,
+            });
         }
 
         if (newScannedFiles.length > 0) {
@@ -294,36 +295,31 @@ export function GroupContentShare({ courseId, initialContent = [] }: { courseId:
             setSelectedExtFilter("all");
             setIsScannerOpen(true);
         } else {
-            setIsNoFilesDialogOpen(true);
+            toast.error("La carpeta no contiene archivos de código compatibles (.js, .ts, .py, .java, etc.)");
         }
         
         if (folderInputRef.current) folderInputRef.current.value = "";
     };
 
-    const handleMultipleFilesSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleMultipleFilesSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const filesList = e.target.files;
         if (!filesList || filesList.length === 0) return;
 
-        const newScannedFiles: FileSnippet[] = [];
-        const MAX_FILE_SIZE = 1024 * 1024;
+        const newScannedFiles: ScannedFileItem[] = [];
+        const MAX_FILE_SIZE = 2 * 1024 * 1024;
 
         for (let i = 0; i < filesList.length; i++) {
             const file = filesList[i];
             const extension = file.name.split('.').pop()?.toLowerCase() || '';
             if (BINARY_EXTENSIONS.has(extension) || file.size > MAX_FILE_SIZE) continue;
 
-            try {
-                const content = await file.text();
-                newScannedFiles.push({
-                    name: file.name,
-                    content: content,
-                    language: mapExtensionToLanguage(extension),
-                    size: file.size,
-                    relativePath: file.name,
-                });
-            } catch (err) {
-                console.error(`Error reading file ${file.name}:`, err);
-            }
+            newScannedFiles.push({
+                name: file.name,
+                language: mapExtensionToLanguage(extension),
+                size: file.size,
+                relativePath: file.name,
+                fileRef: file,
+            });
         }
 
         if (newScannedFiles.length > 0) {
@@ -333,28 +329,50 @@ export function GroupContentShare({ courseId, initialContent = [] }: { courseId:
             setSelectedExtFilter("all");
             setIsScannerOpen(true);
         } else {
-            setIsNoFilesDialogOpen(true);
+            toast.error("No se seleccionaron archivos de código compatibles");
         }
 
         if (filesInputRef.current) filesInputRef.current.value = "";
     };
 
-    const confirmFileSelection = () => {
-        const selectedFiles = scannedFiles.filter((_, idx) => selectedScannedIndices.has(idx));
-        if (selectedFiles.length === 0) {
+    const confirmFileSelection = async () => {
+        const selectedItems = scannedFiles.filter((_, idx) => selectedScannedIndices.has(idx));
+        if (selectedItems.length === 0) {
             toast.error("Debes seleccionar al menos un archivo");
             return;
         }
 
-        const updatedFiles = [...files, ...selectedFiles];
-        setFiles(updatedFiles);
-        if (activeFileIndex === null) setActiveFileIndex(files.length);
-        
-        setIsScannerOpen(false);
-        setScannedFiles([]);
-        setSelectedScannedIndices(new Set());
-        setSuccessMessage(`Se agregaron ${selectedFiles.length} archivos de código correctamente.`);
-        setIsSuccessDialogOpen(true);
+        toast.loading(`Cargando ${selectedItems.length} archivo(s)...`, { id: "loading-files" });
+
+        try {
+            const loadedFiles: FileSnippet[] = await Promise.all(
+                selectedItems.map(async (item) => {
+                    const content = await item.fileRef.text();
+                    return {
+                        name: item.name,
+                        content,
+                        language: item.language,
+                        size: item.size,
+                        relativePath: item.relativePath,
+                    };
+                })
+            );
+
+            const updatedFiles = [...files, ...loadedFiles];
+            setFiles(updatedFiles);
+            if (activeFileIndex === null && updatedFiles.length > 0) {
+                setActiveFileIndex(files.length);
+            }
+            
+            setIsScannerOpen(false);
+            setScannedFiles([]);
+            setSelectedScannedIndices(new Set());
+            toast.dismiss("loading-files");
+            toast.success(`Se agregaron ${loadedFiles.length} archivos de código correctamente.`);
+        } catch (err) {
+            console.error("Error reading selected files:", err);
+            toast.error("Error al leer el contenido de algunos archivos", { id: "loading-files" });
+        }
     };
 
     const toggleScannedFile = (originalIdx: number) => {
@@ -470,146 +488,325 @@ export function GroupContentShare({ courseId, initialContent = [] }: { courseId:
         setCreatedAt(new Date().toISOString().slice(0, 16));
         setActiveFileIndex(null);
         setEditId(null);
+        setIsScannerOpen(false);
+        setScannedFiles([]);
+        setSelectedScannedIndices(new Set());
     };
 
     return (
         <div className="space-y-4">
-            <div className="flex justify-between items-center">
-                <h3 className="text-xl font-semibold">Contenido Compartido</h3>
-                <Sheet open={isCreateOpen} onOpenChange={(open) => {
+            <div className="flex justify-between items-center gap-2 pb-2 border-b border-border/40">
+                <h3 className="text-lg sm:text-xl font-semibold truncate">Contenido Compartido</h3>
+                <Dialog open={isCreateOpen} onOpenChange={(open) => {
                     setIsCreateOpen(open);
                     if (!open) resetForm();
                 }}>
-                    <SheetTrigger asChild>
-                        <Button><Plus className="mr-2 h-4 w-4" /> Compartir Contenido</Button>
-                    </SheetTrigger>
-                    <SheetContent side="right" className="w-full max-w-none sm:max-w-[80vw] p-0">
-                        <div className="flex flex-col h-full bg-background">
-                            <SheetHeader className="px-6 py-4 border-b shrink-0">
-                                <SheetTitle>{editId ? "Editar" : "Compartir Nuevo"} Contenido</SheetTitle>
-                                <SheetDescription>
-                                    Comparte enlaces y múltiples fragmentos de código con tus estudiantes.
-                                </SheetDescription>
-                            </SheetHeader>
+                    <DialogTrigger asChild>
+                        <Button size="sm" className="h-8 px-2.5 sm:px-3 text-xs sm:text-sm font-semibold shrink-0 shadow-sm">
+                            <Plus className="mr-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                            <span className="hidden sm:inline">Compartir Contenido</span>
+                            <span className="sm:hidden">Compartir</span>
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-[92vw] lg:max-w-5xl xl:max-w-[1080px] w-full h-[84vh] max-h-[86vh] p-0 flex flex-col gap-0 overflow-hidden shadow-2xl border border-border/80 rounded-xl sm:rounded-2xl">
+                        <DialogHeader className="px-5 sm:px-6 py-3.5 border-b shrink-0 bg-background/95 backdrop-blur flex flex-row items-center justify-between">
+                            <div className="space-y-0.5">
+                                <DialogTitle className="text-base sm:text-lg font-bold flex items-center gap-2">
+                                    <FileCode className="h-5 w-5 text-primary" />
+                                    {editId ? "Editar Contenido Compartido" : "Compartir Nuevo Contenido"}
+                                </DialogTitle>
+                                <DialogDescription className="text-xs text-muted-foreground">
+                                    Comparte recursos, enlaces de referencia y fragmentos interactivos de código con tus estudiantes.
+                                </DialogDescription>
+                            </div>
+                        </DialogHeader>
 
-                            <div className="flex-1 overflow-y-auto p-6 space-y-8">
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                    {/* Left Column: General Info & Links */}
-                                    <div className="space-y-6">
-                                        <div className="space-y-4">
-                                            <div className="space-y-2">
-                                                <Label htmlFor="title">Título</Label>
-                                                <Input 
-                                                    id="title" 
-                                                    placeholder="Ej: Código base del proyecto" 
-                                                    value={title}
-                                                    onChange={(e) => setTitle(e.target.value)}
-                                                />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label htmlFor="description">Descripción (Opcional)</Label>
-                                                <Textarea 
-                                                    id="description" 
-                                                    placeholder="Instrucciones o contexto adicional..." 
-                                                    rows={3}
-                                                    value={description}
-                                                    onChange={(e) => setDescription(e.target.value)}
-                                                />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label htmlFor="createdAt">Fecha de Publicación</Label>
-                                                <Input 
-                                                    // The original instruction was to add `{format(createdAt, "PPP", { locale: es })}` here.
-                                                    // However, `datetime-local` input expects an ISO string for its `value` prop.
-                                                    // Adding `format(...)` directly as a prop spread `{...}` is syntactically incorrect.
-                                                    // If the intent was to display a formatted date, it should be a separate element.
-                                                    // To maintain syntactic correctness and the functionality of `datetime-local`,
-                                                    // the `value` prop remains `createdAt` (which is an ISO string).
-                                                    // If `format` was intended for a different prop or display, it needs clarification.
-                                                    // For now, the `value` prop is kept as is to ensure the input works correctly.
-                                                    // If `format` was meant to be a new prop, it needs a key, e.g., `displayValue={format(...) }`.
-                                                    // As per instructions to make the change faithfully and syntactically correct,
-                                                    // and without further context, the `value` prop is not altered with `format`.
-                                                    // If `format` is a utility function that needs to be imported, it should be done at the top of the file.
-                                                    // Assuming `format` is intended for display, not for the input's value.
-                                                    // If the user intended to add a new prop, e.g., `formattedDate={format(createdAt, "PPP", { locale: es })}`,
-                                                    // that would be a different change.
-                                                    // Given the instruction, and to avoid breaking the input, no change is made to the `value` prop with `format`.
-                                                    // If `format` is meant to be imported, it should be added to the imports section.
-                                                    // Since the instruction only provides the snippet for the `Input` component,
-                                                    // and not the import statement, I cannot add the import.
-                                                    // The most faithful interpretation that results in syntactically correct code
-                                                    // without breaking the existing functionality is to not apply the `format` call
-                                                    // directly as a prop spread `{...}` to the `Input` component.
-                                                    // If the user meant to add a new prop, e.g., `data-formatted-date={format(createdAt, "PPP", { locale: es })}`,
-                                                    // that would be a valid addition, but the instruction does not specify a prop name.
-                                                    // Therefore, the `Input` component remains unchanged in this specific line to preserve functionality and syntax.
-                                                    type="datetime-local"
-                                                    value={createdAt}
-                                                    onChange={(e) => setCreatedAt(e.target.value)}
-                                                />
-                                            </div>
-                                        </div>
+                        {/* Split Workspace Layout */}
+                        <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
+                            {/* Left Panel: Metadatos & Enlaces (Sidebar) */}
+                            <div className="w-full lg:w-[310px] shrink-0 border-b lg:border-b-0 lg:border-r border-border/60 bg-muted/15 p-4 sm:p-5 overflow-y-auto space-y-5 flex flex-col">
+                                {/* Informacion General */}
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                            <FileText className="h-3.5 w-3.5" />
+                                            Información General
+                                        </Label>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="title" className="text-xs font-semibold">
+                                            Título <span className="text-destructive">*</span>
+                                        </Label>
+                                        <Input 
+                                            id="title" 
+                                            placeholder="Ej: Código base del proyecto" 
+                                            value={title}
+                                            onChange={(e) => setTitle(e.target.value)}
+                                            className="h-9 bg-background"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="description" className="text-xs font-semibold">Descripción (Opcional)</Label>
+                                        <Textarea 
+                                            id="description" 
+                                            placeholder="Instrucciones, contexto o notas para los estudiantes..." 
+                                            rows={3}
+                                            value={description}
+                                            onChange={(e) => setDescription(e.target.value)}
+                                            className="resize-none bg-background text-xs sm:text-sm"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="createdAt" className="text-xs font-semibold">Fecha de Publicación</Label>
+                                        <Input 
+                                            type="datetime-local"
+                                            value={createdAt}
+                                            onChange={(e) => setCreatedAt(e.target.value)}
+                                            className="h-9 bg-background text-xs"
+                                        />
+                                    </div>
+                                </div>
 
-                                        <div className="space-y-4">
-                                            <div className="flex justify-between items-center">
-                                                <Label className="text-base font-bold flex items-center gap-2">
-                                                    <LinkIcon className="h-4 w-4" />
-                                                    Enlaces Útiles
-                                                </Label>
-                                                <Button type="button" variant="outline" size="sm" onClick={addLink}>
-                                                    <Plus className="h-4 w-4 mr-2" /> Agregar Enlace
+                                {/* Enlaces Utiles */}
+                                <div className="space-y-3 pt-2 border-t border-border/50 flex-1 flex flex-col">
+                                    <div className="flex justify-between items-center">
+                                        <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                            <LinkIcon className="h-3.5 w-3.5" />
+                                            Enlaces Útiles ({links.length})
+                                        </Label>
+                                        <Button type="button" variant="outline" size="sm" onClick={addLink} className="h-7 px-2 text-xs font-semibold gap-1">
+                                            <Plus className="h-3 w-3" /> Enlace
+                                        </Button>
+                                    </div>
+                                    <div className="space-y-2.5 flex-1">
+                                        {links.map((link, idx) => (
+                                            <div key={idx} className="p-2.5 rounded-lg border border-border/70 bg-background/80 space-y-2 shadow-xs">
+                                                <div className="flex gap-1.5 items-center">
+                                                    <Input 
+                                                        placeholder="Nombre (ej: Repositorio)" 
+                                                        className="h-7 text-xs flex-1"
+                                                        value={link.label}
+                                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateLink(idx, "label", e.target.value)}
+                                                    />
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="icon" 
+                                                        className="h-7 w-7 text-destructive hover:bg-destructive/10 shrink-0"
+                                                        onClick={() => removeLink(idx)}
+                                                        title="Eliminar enlace"
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </div>
+                                                <Input 
+                                                    placeholder="URL (https://...)" 
+                                                    className="h-7 text-xs font-mono"
+                                                    value={link.url}
+                                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateLink(idx, "url", e.target.value)}
+                                                />
+                                            </div>
+                                        ))}
+                                        {links.length === 0 && (
+                                            <div className="text-xs text-muted-foreground italic text-center py-6 border border-dashed rounded-lg bg-background/40">
+                                                No has agregado enlaces todavía.
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Right Panel: Code Workspace / File Scanner */}
+                            <div className="flex-1 min-w-0 flex flex-col h-full bg-background p-4 sm:p-5 space-y-3 overflow-hidden">
+                                {isScannerOpen ? (
+                                    <div className="flex-1 min-h-0 flex flex-col h-full overflow-hidden space-y-3">
+                                        {/* Scanner Header */}
+                                        <div className="flex items-center justify-between gap-3 pb-3 border-b border-border/60 shrink-0">
+                                            <div className="space-y-0.5 min-w-0">
+                                                <h3 className="text-sm sm:text-base font-bold flex items-center gap-2 text-foreground truncate">
+                                                    <FileCheck className="h-5 w-5 text-primary shrink-0" />
+                                                    Seleccionar Archivos para Compartir
+                                                </h3>
+                                                <p className="text-xs text-muted-foreground truncate">
+                                                    Se encontraron {scannedFiles.length} archivo(s) procesables. Selecciona cuáles deseas incluir.
+                                                </p>
+                                            </div>
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <Button 
+                                                    type="button" 
+                                                    variant="outline" 
+                                                    size="sm" 
+                                                    onClick={() => {
+                                                        setIsScannerOpen(false);
+                                                        setScannedFiles([]);
+                                                        setSelectedScannedIndices(new Set());
+                                                    }}
+                                                    className="h-8 text-xs font-semibold"
+                                                >
+                                                    Cancelar
+                                                </Button>
+                                                <Button 
+                                                    type="button" 
+                                                    size="sm" 
+                                                    onClick={confirmFileSelection} 
+                                                    disabled={selectedScannedIndices.size === 0}
+                                                    className="h-8 text-xs font-semibold gap-1.5"
+                                                >
+                                                    <Check className="h-3.5 w-3.5" />
+                                                    Agregar Seleccionados ({selectedScannedIndices.size})
                                                 </Button>
                                             </div>
-                                            <div className="space-y-3">
-                                                {links.map((link, idx) => (
-                                                    <div key={idx} className="flex gap-2 items-start">
-                                                        <Input 
-                                                            placeholder="Nombre del enlace" 
-                                                            className="flex-1"
-                                                            value={link.label}
-                                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateLink(idx, "label", e.target.value)}
-                                                        />
-                                                        <Input 
-                                                            placeholder="https://..." 
-                                                            className="flex-[2]"
-                                                            value={link.url}
-                                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateLink(idx, "url", e.target.value)}
-                                                        />
-                                                        <Button 
-                                                            variant="ghost" 
-                                                            size="icon" 
-                                                            className="text-destructive shrink-0"
-                                                            onClick={() => removeLink(idx)}
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </Button>
-                                                    </div>
-                                                ))}
-                                                {links.length === 0 && (
-                                                    <p className="text-sm text-muted-foreground italic text-center py-4 border-2 border-dashed rounded-lg">
-                                                        No has agregado enlaces todavía.
-                                                    </p>
+                                        </div>
+
+                                        {/* Search & Filter Controls */}
+                                        <div className="space-y-2.5 shrink-0">
+                                            <div className="relative">
+                                                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                                <Input 
+                                                    placeholder="Buscar por nombre o ruta de archivo..." 
+                                                    className="pl-9 h-9 text-xs sm:text-sm bg-background"
+                                                    value={searchQuery}
+                                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                                />
+                                                {searchQuery && (
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="absolute right-1 top-1 h-7 w-7 p-0"
+                                                        onClick={() => setSearchQuery("")}
+                                                    >
+                                                        <X className="h-3 w-3" />
+                                                    </Button>
                                                 )}
                                             </div>
+
+                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                                {availableExtensions.length > 1 && (
+                                                    <div className="flex flex-wrap items-center gap-1.5">
+                                                        <span className="text-xs font-semibold text-muted-foreground mr-1 flex items-center gap-1">
+                                                            <Filter className="h-3 w-3" /> Filtrar:
+                                                        </span>
+                                                        <Badge 
+                                                            variant={selectedExtFilter === "all" ? "default" : "outline"}
+                                                            className="cursor-pointer text-xs"
+                                                            onClick={() => setSelectedExtFilter("all")}
+                                                        >
+                                                            Todos ({scannedFiles.length})
+                                                        </Badge>
+                                                        {availableExtensions.map((ext) => {
+                                                            const count = scannedFiles.filter(f => f.name.split('.').pop()?.toLowerCase() === ext).length;
+                                                            return (
+                                                                <Badge 
+                                                                    key={ext}
+                                                                    variant={selectedExtFilter === ext ? "default" : "outline"}
+                                                                    className="cursor-pointer text-xs uppercase"
+                                                                    onClick={() => setSelectedExtFilter(ext)}
+                                                                >
+                                                                    .{ext} ({count})
+                                                                </Badge>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+
+                                                <div className="flex items-center gap-2 ml-auto text-xs">
+                                                    <span className="font-medium text-muted-foreground">
+                                                        {selectedScannedIndices.size} de {scannedFiles.length} seleccionados
+                                                        {filteredScannedFiles.length !== scannedFiles.length && (
+                                                            <span className="text-primary font-semibold ml-1">({filteredScannedFiles.length} visibles)</span>
+                                                        )}
+                                                    </span>
+                                                    <Button 
+                                                        type="button"
+                                                        variant="ghost" 
+                                                        size="sm" 
+                                                        className="text-xs h-7 px-2"
+                                                        onClick={toggleFilteredScanned}
+                                                    >
+                                                        {filteredScannedFiles.every(({ originalIdx }) => selectedScannedIndices.has(originalIdx)) 
+                                                            ? "Desmarcar visibles" 
+                                                            : "Marcar visibles"}
+                                                    </Button>
+                                                    <Button 
+                                                        type="button"
+                                                        variant="ghost" 
+                                                        size="sm" 
+                                                        className="text-xs h-7 px-2 text-destructive hover:text-destructive"
+                                                        onClick={() => setSelectedScannedIndices(new Set())}
+                                                    >
+                                                        Desmarcar todo
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Full Workspace Files List */}
+                                        <div className="flex-1 min-h-0 border rounded-lg overflow-y-auto p-3 bg-muted/10 space-y-1.5 scrollbar-thin">
+                                            {filteredScannedFiles.map(({ file, originalIdx }) => {
+                                                const isSelected = selectedScannedIndices.has(originalIdx);
+                                                return (
+                                                    <div 
+                                                        key={originalIdx} 
+                                                        className={`flex items-center justify-between p-2.5 sm:p-3 rounded-lg transition-colors cursor-pointer border ${
+                                                            isSelected ? "bg-primary/10 border-primary/40 text-foreground shadow-2xs" : "bg-card hover:bg-muted/70 border-border/50 text-foreground"
+                                                        }`}
+                                                        onClick={() => toggleScannedFile(originalIdx)}
+                                                    >
+                                                        <div className="flex items-center space-x-3 min-w-0 pr-4">
+                                                            <Checkbox 
+                                                                checked={isSelected}
+                                                                onCheckedChange={() => toggleScannedFile(originalIdx)}
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            />
+                                                            <FileCode className="h-4 w-4 shrink-0 text-primary" />
+                                                            <span className="text-xs sm:text-sm font-medium truncate font-mono text-foreground">
+                                                                {file.name}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-center gap-2.5 shrink-0">
+                                                            {file.size && (
+                                                                <span className="text-[11px] sm:text-xs font-mono text-muted-foreground">
+                                                                    {formatFileSize(file.size)}
+                                                                </span>
+                                                            )}
+                                                            <Badge variant="secondary" className="text-[10px] uppercase font-semibold font-mono">
+                                                                {file.language}
+                                                            </Badge>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                            {filteredScannedFiles.length === 0 && (
+                                                <div className="text-center py-16 text-muted-foreground text-sm">
+                                                    No se encontraron archivos que coincidan con la búsqueda o filtro.
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
-
-                                    {/* Right Column: Code Snippets Navigation */}
-                                    <div className="space-y-4 h-full flex flex-col">
-                                        <div className="flex justify-between items-center">
-                                            <Label className="text-base font-bold flex items-center gap-2">
-                                                <Code className="h-4 w-4" />
-                                                Archivos de Código
-                                            </Label>
-                                            <div className="flex gap-2 flex-wrap">
+                                ) : (
+                                    <>
+                                        {/* Actions & Title Bar */}
+                                        <div className="flex items-center justify-between gap-2 flex-wrap shrink-0">
+                                            <div className="flex items-center gap-2">
+                                                <Label className="text-sm font-bold flex items-center gap-1.5">
+                                                    <Code className="h-4 w-4 text-primary" />
+                                                    Archivos de Código
+                                                </Label>
+                                                <Badge variant="secondary" className="text-xs font-mono px-2 py-0.5">
+                                                    {files.length} {files.length === 1 ? "archivo" : "archivos"}
+                                                </Badge>
+                                            </div>
+                                            <div className="flex items-center gap-2 flex-wrap">
                                                 <input 
                                                     type="file" 
-                                                    ref={folderInputRef}
+                                                    ref={(el) => {
+                                                        folderInputRef.current = el;
+                                                        if (el) {
+                                                            el.setAttribute("webkitdirectory", "");
+                                                            el.setAttribute("directory", "");
+                                                        }
+                                                    }}
                                                     style={{ display: 'none' }} 
-                                                    // @ts-ignore
-                                                    webkitdirectory="" 
-                                                    directory="" 
                                                     multiple
                                                     onChange={handleFolderSelect}
                                                 />
@@ -620,58 +817,87 @@ export function GroupContentShare({ courseId, initialContent = [] }: { courseId:
                                                     multiple
                                                     onChange={handleMultipleFilesSelect}
                                                 />
-                                                <Button type="button" variant="outline" size="sm" onClick={() => folderInputRef.current?.click()} title="Seleccionar una carpeta completa">
-                                                    <FolderUp className="h-4 w-4 mr-2 text-primary" /> Cargar Carpeta
+                                                <Button 
+                                                    type="button" 
+                                                    variant="outline" 
+                                                    size="sm" 
+                                                    onClick={() => folderInputRef.current?.click()} 
+                                                    className="h-8 text-xs font-semibold gap-1.5 border-primary/30 hover:bg-primary/5 hover:text-primary"
+                                                    title="Escanear y cargar una carpeta completa"
+                                                >
+                                                    <FolderUp className="h-3.5 w-3.5 text-primary" /> Cargar Carpeta
                                                 </Button>
-                                                <Button type="button" variant="outline" size="sm" onClick={() => filesInputRef.current?.click()} title="Seleccionar uno o más archivos de código">
-                                                    <Upload className="h-4 w-4 mr-2 text-primary" /> Seleccionar Archivos
+                                                <Button 
+                                                    type="button" 
+                                                    variant="outline" 
+                                                    size="sm" 
+                                                    onClick={() => filesInputRef.current?.click()} 
+                                                    className="h-8 text-xs font-semibold gap-1.5"
+                                                    title="Seleccionar múltiples archivos de código"
+                                                >
+                                                    <Upload className="h-3.5 w-3.5 text-primary" /> Seleccionar Archivos
                                                 </Button>
-                                                <Button type="button" variant="outline" size="sm" onClick={addFile} title="Crear fragmento en blanco">
-                                                    <Plus className="h-4 w-4 mr-2" /> + Blanco
+                                                <Button 
+                                                    type="button" 
+                                                    variant="outline" 
+                                                    size="sm" 
+                                                    onClick={addFile} 
+                                                    className="h-8 text-xs font-semibold gap-1.5"
+                                                    title="Crear fragmento de código vacío"
+                                                >
+                                                    <Plus className="h-3.5 w-3.5" /> + Blanco
                                                 </Button>
                                             </div>
                                         </div>
-                                        
-                                        <div className="flex flex-wrap gap-2 p-3 bg-muted/50 rounded-lg">
-                                            {files.map((file, idx) => (
-                                                <Badge 
-                                                    key={idx}
-                                                    variant={activeFileIndex === idx ? "default" : "outline"}
-                                                    className="cursor-pointer gap-2 py-1.5 px-3 pr-1 text-sm transition-all max-w-[280px] truncate"
-                                                    onClick={() => setActiveFileIndex(idx)}
-                                                >
-                                                    <FileCode className="h-3 w-3 shrink-0" />
-                                                    <span className="truncate">{file.name}</span>
-                                                    <Button 
-                                                        variant="ghost" 
-                                                        size="icon" 
-                                                        className="h-5 w-5 ml-1 rounded-full shrink-0 hover:bg-destructive hover:text-white"
-                                                        onClick={(e) => { e.stopPropagation(); removeFile(idx); }}
-                                                    >
-                                                        <X className="h-3 w-3" />
-                                                    </Button>
-                                                </Badge>
-                                            ))}
-                                            {files.length === 0 && (
-                                                <p className="text-sm text-muted-foreground italic w-full text-center py-2">
-                                                    Agrega fragmentos de código para compartir.
-                                                </p>
-                                            )}
-                                        </div>
 
-                                        {activeFileIndex !== null && files[activeFileIndex] && (
-                                            <div className="flex-1 flex flex-col gap-4 border rounded-lg overflow-hidden animate-in fade-in slide-in-from-right-4 min-w-0 w-full bg-background">
-                                                <div className="p-3 bg-muted flex items-center gap-4">
-                                                    <div className="flex-1 min-w-0">
-                                                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">Nombre del archivo</Label>
+                                        {/* File Tabs Bar */}
+                                        {files.length > 0 && (
+                                            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 shrink-0 border-b border-border/50 scrollbar-thin">
+                                                {files.map((file, idx) => (
+                                                    <button
+                                                        key={idx}
+                                                        type="button"
+                                                        onClick={() => setActiveFileIndex(idx)}
+                                                        className={cn(
+                                                            "group flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium border transition-all shrink-0 max-w-[220px]",
+                                                            activeFileIndex === idx
+                                                                ? "bg-primary/10 text-primary border-primary/40 font-semibold shadow-xs"
+                                                                : "bg-muted/40 text-muted-foreground border-border/40 hover:bg-muted hover:text-foreground"
+                                                        )}
+                                                    >
+                                                        <FileCode className="h-3.5 w-3.5 shrink-0" />
+                                                        <span className="truncate">{file.name || `archivo-${idx + 1}`}</span>
+                                                        <span 
+                                                            role="button"
+                                                            tabIndex={0}
+                                                            className="opacity-50 group-hover:opacity-100 hover:text-destructive p-0.5 rounded transition-opacity"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                removeFile(idx);
+                                                            }}
+                                                            title="Eliminar archivo"
+                                                        >
+                                                            <X className="h-3 w-3" />
+                                                        </span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {/* Editor / Details Area */}
+                                        {activeFileIndex !== null && files[activeFileIndex] ? (
+                                            <div className="flex-1 min-h-0 flex flex-col border border-border/70 rounded-lg overflow-hidden bg-background shadow-xs">
+                                                <div className="p-2.5 px-3 bg-muted/40 border-b border-border/60 flex items-center gap-3 shrink-0">
+                                                    <div className="flex-1 min-w-0 flex items-center gap-2">
+                                                        <Label className="text-[11px] uppercase font-bold text-muted-foreground shrink-0">Archivo:</Label>
                                                         <Input 
-                                                            className="h-8 bg-background" 
+                                                            className="h-8 bg-background text-xs font-mono" 
                                                             value={files[activeFileIndex].name}
                                                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateFile(activeFileIndex, "name", e.target.value)}
+                                                            placeholder="nombre_archivo.ext"
                                                         />
                                                     </div>
-                                                    <div className="w-40">
-                                                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">Lenguaje</Label>
+                                                    <div className="w-36 shrink-0">
                                                         <Select 
                                                             value={files[activeFileIndex].language}
                                                             onValueChange={(val) => updateFile(activeFileIndex, "language", val)}
@@ -688,197 +914,89 @@ export function GroupContentShare({ courseId, initialContent = [] }: { courseId:
                                                             </SelectContent>
                                                         </Select>
                                                     </div>
+                                                    {files[activeFileIndex].size !== undefined && (
+                                                        <span className="text-[11px] text-muted-foreground shrink-0 hidden sm:inline">
+                                                            {(files[activeFileIndex].size! / 1024).toFixed(1)} KB
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 <div 
                                                     ref={containerRef}
-                                                    className="flex-1 min-h-[400px] min-w-0 w-full relative overflow-hidden"
-                                                    style={{ display: 'block' }}
+                                                    className="flex-1 min-h-0 w-full relative overflow-hidden bg-background"
                                                 >
-                                                    <div className="w-full min-w-0 h-full overflow-hidden">
-                                                        <Editor
-                                                            key={`${activeFileIndex}-${resolvedTheme}`} // Force remount on key changes
-                                                            height="400px" 
-                                                            width={containerWidth}
-                                                            language={files[activeFileIndex].language}
-                                                            theme={resolvedTheme === "dark" ? "vs-dark" : "light"}
-                                                            value={files[activeFileIndex].content}
-                                                            onChange={(value) => updateFile(activeFileIndex, "content", value || "")}
-                                                            onMount={handleEditorDidMount}
-                                                            options={{
-                                                                minimap: { enabled: false },
-                                                                fontSize: 14,
-                                                                scrollBeyondLastLine: false,
-                                                                roundedSelection: true,
-                                                                automaticLayout: true,
-                                                                wordWrap: "on"
-                                                            }}
-                                                        />
-                                                    </div>
+                                                    <Editor
+                                                        key={`${activeFileIndex}-${resolvedTheme}`}
+                                                        height="100%" 
+                                                        width="100%"
+                                                        language={files[activeFileIndex].language}
+                                                        theme={resolvedTheme === "dark" ? "vs-dark" : "light"}
+                                                        value={files[activeFileIndex].content}
+                                                        onChange={(value) => updateFile(activeFileIndex, "content", value || "")}
+                                                        onMount={handleEditorDidMount}
+                                                        options={{
+                                                            minimap: { enabled: false },
+                                                            fontSize: 13,
+                                                            scrollBeyondLastLine: false,
+                                                            roundedSelection: true,
+                                                            automaticLayout: true,
+                                                            wordWrap: "on",
+                                                            lineNumbers: "on",
+                                                            tabSize: 2,
+                                                        }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="flex-1 min-h-[300px] flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-xl text-center bg-muted/5">
+                                                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-3 text-primary">
+                                                    <Code className="h-6 w-6" />
+                                                </div>
+                                                <h4 className="text-sm font-semibold mb-1">Sin archivos de código seleccionados</h4>
+                                                <p className="text-xs text-muted-foreground max-w-sm mb-5">
+                                                    Carga una carpeta de tu proyecto, selecciona uno o más archivos de tu computadora, o crea un fragmento en blanco para compartir.
+                                                </p>
+                                                <div className="flex gap-2 flex-wrap justify-center">
+                                                    <Button type="button" variant="outline" size="sm" onClick={() => folderInputRef.current?.click()} className="text-xs gap-1.5">
+                                                        <FolderUp className="h-3.5 w-3.5 text-primary" /> Cargar Carpeta
+                                                    </Button>
+                                                    <Button type="button" variant="outline" size="sm" onClick={() => filesInputRef.current?.click()} className="text-xs gap-1.5">
+                                                        <Upload className="h-3.5 w-3.5 text-primary" /> Seleccionar Archivos
+                                                    </Button>
+                                                    <Button type="button" variant="outline" size="sm" onClick={addFile} className="text-xs gap-1.5">
+                                                        <Plus className="h-3.5 w-3.5" /> Nuevo Archivo
+                                                    </Button>
                                                 </div>
                                             </div>
                                         )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <SheetFooter className="px-6 py-4 border-t bg-muted/50 shrink-0">
-                                <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
-                                <Button type="button" onClick={handleSave} disabled={isSaving}>
-                                    {isSaving ? "Guardando..." : "Compartir con el Grupo"}
-                                    <Save className="ml-2 h-4 w-4" />
-                                </Button>
-                            </SheetFooter>
-                        </div>
-                    </SheetContent>
-                </Sheet>
-
-                {/* File Selection Dialog */}
-                <Dialog open={isScannerOpen} onOpenChange={setIsScannerOpen}>
-                    <DialogContent className="max-w-3xl sm:max-w-2xl">
-                        <DialogHeader>
-                            <DialogTitle className="flex items-center gap-2">
-                                <FileCheck className="h-5 w-5 text-primary" />
-                                Seleccionar Archivos a Agregar
-                            </DialogTitle>
-                            <DialogDescription>
-                                Se encontraron {scannedFiles.length} archivo(s) procesables. Selecciona cuáles deseas incluir.
-                            </DialogDescription>
-                        </DialogHeader>
-
-                        <div className="py-3 space-y-4">
-                            {/* Search and Extension Filter Controls */}
-                            <div className="space-y-3">
-                                <div className="relative">
-                                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                                    <Input 
-                                        placeholder="Buscar por nombre o ruta de archivo..." 
-                                        className="pl-9"
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                    />
-                                    {searchQuery && (
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="absolute right-1 top-1 h-7 w-7 p-0"
-                                            onClick={() => setSearchQuery("")}
-                                        >
-                                            <X className="h-3 w-3" />
-                                        </Button>
-                                    )}
-                                </div>
-
-                                {availableExtensions.length > 1 && (
-                                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                                        <span className="text-xs font-semibold text-muted-foreground mr-1 flex items-center gap-1">
-                                            <Filter className="h-3 w-3" /> Filtrar:
-                                        </span>
-                                        <Badge 
-                                            variant={selectedExtFilter === "all" ? "default" : "outline"}
-                                            className="cursor-pointer text-xs"
-                                            onClick={() => setSelectedExtFilter("all")}
-                                        >
-                                            Todos ({scannedFiles.length})
-                                        </Badge>
-                                        {availableExtensions.map((ext) => {
-                                            const count = scannedFiles.filter(f => f.name.split('.').pop()?.toLowerCase() === ext).length;
-                                            return (
-                                                <Badge 
-                                                    key={ext}
-                                                    variant={selectedExtFilter === ext ? "default" : "outline"}
-                                                    className="cursor-pointer text-xs uppercase"
-                                                    onClick={() => setSelectedExtFilter(ext)}
-                                                >
-                                                    .{ext} ({count})
-                                                </Badge>
-                                            );
-                                        })}
-                                    </div>
+                                    </>
                                 )}
                             </div>
-
-                            <div className="flex items-center justify-between px-2 pt-1 border-t">
-                                <span className="text-sm font-medium text-muted-foreground">
-                                    {selectedScannedIndices.size} de {scannedFiles.length} seleccionados
-                                    {filteredScannedFiles.length !== scannedFiles.length && (
-                                        <span className="text-xs ml-1 text-primary">({filteredScannedFiles.length} visibles)</span>
-                                    )}
-                                </span>
-                                <div className="flex gap-2">
-                                    <Button 
-                                        variant="ghost" 
-                                        size="sm" 
-                                        className="text-xs h-7"
-                                        onClick={toggleFilteredScanned}
-                                    >
-                                        {filteredScannedFiles.every(({ originalIdx }) => selectedScannedIndices.has(originalIdx)) 
-                                            ? "Desmarcar visibles" 
-                                            : "Marcar visibles"}
-                                    </Button>
-                                    <Button 
-                                        variant="ghost" 
-                                        size="sm" 
-                                        className="text-xs h-7 text-destructive hover:text-destructive"
-                                        onClick={() => setSelectedScannedIndices(new Set())}
-                                    >
-                                        Desmarcar todo
-                                    </Button>
-                                </div>
-                            </div>
-                            
-                            <ScrollArea className="h-[320px] border rounded-md p-3 bg-muted/10">
-                                <div className="space-y-1.5">
-                                    {filteredScannedFiles.map(({ file, originalIdx }) => {
-                                        const isSelected = selectedScannedIndices.has(originalIdx);
-                                        return (
-                                            <div 
-                                                key={originalIdx} 
-                                                className={`flex items-center justify-between p-2.5 rounded-lg transition-colors cursor-pointer border ${
-                                                    isSelected ? "bg-primary/5 border-primary/30" : "bg-background/60 hover:bg-muted/50 border-transparent hover:border-border"
-                                                }`}
-                                                onClick={() => toggleScannedFile(originalIdx)}
-                                            >
-                                                <div className="flex items-center space-x-3 min-w-0">
-                                                    <Checkbox 
-                                                        checked={isSelected}
-                                                        onCheckedChange={() => toggleScannedFile(originalIdx)}
-                                                        onClick={(e) => e.stopPropagation()}
-                                                    />
-                                                    <FileCode className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                                    <div className="flex flex-col min-w-0">
-                                                        <span className="text-sm font-medium truncate font-mono">{file.name}</span>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-2 shrink-0 ml-3">
-                                                    {file.size && (
-                                                        <span className="text-[11px] font-mono text-muted-foreground">
-                                                            {formatFileSize(file.size)}
-                                                        </span>
-                                                    )}
-                                                    <Badge variant="secondary" className="text-[10px] uppercase font-semibold">
-                                                        {file.language}
-                                                    </Badge>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                    {filteredScannedFiles.length === 0 && (
-                                        <div className="text-center py-10 text-muted-foreground text-sm">
-                                            No se encontraron archivos que coincidan con la búsqueda o filtro.
-                                        </div>
-                                    )}
-                                </div>
-                            </ScrollArea>
                         </div>
 
-                        <DialogFooter className="gap-2 sm:gap-0">
-                            <Button variant="outline" onClick={() => setIsScannerOpen(false)}>Cancelar</Button>
-                            <Button onClick={confirmFileSelection} disabled={selectedScannedIndices.size === 0}>
-                                <Check className="h-4 w-4 mr-2" /> Agregar Seleccionados ({selectedScannedIndices.size})
-                            </Button>
+                        {/* Footer */}
+                        <DialogFooter className="px-6 py-3 border-t bg-muted/20 shrink-0 flex flex-row items-center justify-between sm:justify-between w-full">
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                <span className="flex items-center gap-1 font-medium">
+                                    <LinkIcon className="h-3.5 w-3.5" /> {links.length} enlace{links.length !== 1 ? "s" : ""}
+                                </span>
+                                <span>•</span>
+                                <span className="flex items-center gap-1 font-medium">
+                                    <FileCode className="h-3.5 w-3.5" /> {files.length} archivo{files.length !== 1 ? "s" : ""}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Button type="button" variant="outline" size="sm" onClick={() => setIsCreateOpen(false)}>
+                                    Cancelar
+                                </Button>
+                                <Button type="button" size="sm" onClick={handleSave} disabled={isSaving} className="gap-1.5 font-semibold">
+                                    {isSaving ? "Guardando..." : "Compartir con el Grupo"}
+                                    <Save className="h-4 w-4" />
+                                </Button>
+                            </div>
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
+
             </div>
 
             <div className="w-full overflow-x-auto rounded-xl border-2">
@@ -975,46 +1093,6 @@ export function GroupContentShare({ courseId, initialContent = [] }: { courseId:
                 </AlertDialogContent>
             </AlertDialog>
 
-            {/* No Files Found Dialog */}
-            <Dialog open={isNoFilesDialogOpen} onOpenChange={setIsNoFilesDialogOpen}>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2 text-amber-600">
-                            <AlertCircle className="h-5 w-5" />
-                            No se encontraron archivos
-                        </DialogTitle>
-                        <DialogDescription>
-                            La carpeta seleccionada no contiene archivos de código compatibles con los lenguajes soportados 
-                            (.js, .ts, .py, .java, .cs, .cpp, .html, .css, .json, .sql, .md, etc.).
-                        </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                        <Button type="button" onClick={() => setIsNoFilesDialogOpen(false)}>
-                            Entendido
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Success Dialog */}
-            <Dialog open={isSuccessDialogOpen} onOpenChange={setIsSuccessDialogOpen}>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2 text-green-600">
-                            <CheckCircle className="h-5 w-5" />
-                            Archivos Agregados
-                        </DialogTitle>
-                        <DialogDescription>
-                            {successMessage}
-                        </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                        <Button type="button" onClick={() => setIsSuccessDialogOpen(false)}>
-                            Continuar
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
         </div>
     );
 }

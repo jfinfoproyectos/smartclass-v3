@@ -62,6 +62,53 @@ export default async function RootLayout({
             }}
           />
         )}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                function isCanceled(val) {
+                  if (!val) return false;
+                  try {
+                    if (typeof val === "string") return val.toLowerCase().indexOf("canceled") !== -1;
+                    if (typeof val === "object") {
+                      var msg = val.message || "";
+                      var name = val.name || "";
+                      var str = String(val);
+                      return (
+                        (typeof msg === "string" && msg.toLowerCase().indexOf("canceled") !== -1) ||
+                        (typeof name === "string" && name.toLowerCase().indexOf("canceled") !== -1) ||
+                        str.toLowerCase().indexOf("canceled") !== -1
+                      );
+                    }
+                  } catch(e) {}
+                  return false;
+                }
+
+                var originalConsoleError = console.error;
+                console.error = function() {
+                  for (var i = 0; i < arguments.length; i++) {
+                    if (isCanceled(arguments[i])) return;
+                  }
+                  return originalConsoleError.apply(console, arguments);
+                };
+
+                window.addEventListener("unhandledrejection", function(e) {
+                  if (isCanceled(e.reason)) {
+                    e.preventDefault();
+                    if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+                  }
+                }, true);
+
+                window.addEventListener("error", function(e) {
+                  if (isCanceled(e.error) || isCanceled(e.message)) {
+                    e.preventDefault();
+                    if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+                  }
+                }, true);
+              })();
+            `,
+          }}
+        />
       </head>
       <body className="overflow-x-hidden max-w-full min-h-screen">
         <NextTopLoader 

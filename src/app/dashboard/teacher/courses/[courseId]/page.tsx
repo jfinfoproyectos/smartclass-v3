@@ -18,6 +18,7 @@ import { gradeService } from "@/features/teacher/services/gradeService";
 
 import { CourseStatistics } from "@/features/teacher/components/CourseStatistics";
 import { getCourseAttendanceReportAction } from "@/features/teacher/actions/reportActions";
+import { AttendanceTaker } from "@/features/attendance/components/AttendanceTaker";
 import { ProjectAnalytics } from "@/features/documentation/components/admin/ProjectAnalytics";
 import { getTeacherDocProjectsAction } from "@/features/documentation/actions/adminDocsActions";
 
@@ -119,6 +120,9 @@ export default async function Page({
                     initialStudents={students} 
                     courseTitle={course.title}
                 />
+            </TabsContent>
+            <TabsContent value="attendance" className="mt-0 outline-none flex-1 flex flex-col min-h-0">
+                <AttendanceTaker courseId={courseId} />
             </TabsContent>
             <TabsContent value="roulette" className="mt-0 outline-none">
                 <Roulette students={students} courseId={courseId} />

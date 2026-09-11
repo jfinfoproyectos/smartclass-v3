@@ -1,6 +1,7 @@
 import React from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { formatEvidenceUrl } from "@/lib/utils";
 
 interface CourseReportTemplateProps {
     studentName: string;
@@ -187,13 +188,16 @@ export const CourseReportTemplate = React.forwardRef<HTMLDivElement, CourseRepor
                                                 )}
                                             </td>
                                             <td className="py-3 px-2 text-center">
-                                                {submission?.url && (submission.url.startsWith('http://') || submission.url.startsWith('https://')) ? (
-                                                    <a href={submission.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs block truncate max-w-[200px] mx-auto" title={submission.url}>
-                                                        Ver Entrega
-                                                    </a>
-                                                ) : (
-                                                    <span className="text-gray-400">-</span>
-                                                )}
+                                                {(() => {
+                                                    const evidenceUrl = formatEvidenceUrl(submission?.url);
+                                                    return evidenceUrl ? (
+                                                        <a href={evidenceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs block truncate max-w-[200px] mx-auto" title={evidenceUrl}>
+                                                            Ver Entrega
+                                                        </a>
+                                                    ) : (
+                                                        <span className="text-gray-400">-</span>
+                                                    );
+                                                })()}
                                             </td>
                                             <td className="py-3 px-2 text-right font-bold text-gray-900">
                                                 {isGraded ? submission.grade.toFixed(1) : (!isSubmitted && activity.deadline && new Date(activity.deadline) < new Date() && activity.type !== 'MANUAL') ? "0.0" : "-"}
