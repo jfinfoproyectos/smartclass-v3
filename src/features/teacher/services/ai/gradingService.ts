@@ -8,6 +8,7 @@ export interface GradingResult {
     grade: number;
     feedback: string;
     apiRequestsCount?: number;
+    processedPagesInfo?: string;
 }
 
 /**

@@ -25,7 +25,7 @@ import {
 import { createActivityAction, updateActivityAction, deleteActivityAction, generateChecklistCriteriaAction, verifyCriterionRelationAction, balanceCriteriaPercentagesAction, generateCodeFileTemplateAction } from "@/features/teacher/actions/activityActions";
 import { scanRepositoryAction } from "@/features/github/actions/githubActions";
 import { getMissingSubmissionsAction } from "@/features/teacher/actions/studentActions";
-import { Plus, Calendar, FileText, MessageSquare, Pencil, Trash2, Eye, X, ChevronUp, ChevronDown, AlertCircle, Sparkles, Upload, Download, Loader2, Search, UserX, GripVertical, LayoutGrid, List, Save, Settings2, Code2, FolderGit2, CheckCircle2, Clock, SlidersHorizontal, Info, ListChecks, CheckSquare, RefreshCw, Bot, Cpu, HelpCircle, MessageSquareQuote, Shuffle, Scale, Crown, Users, Terminal, Video, Database, Mic, Headphones, FileCode, Target } from "lucide-react";
+import { Plus, Calendar, FileText, MessageSquare, Pencil, Trash2, Eye, X, ChevronUp, ChevronDown, AlertCircle, Sparkles, Upload, Download, Loader2, Search, UserX, GripVertical, LayoutGrid, List, Save, Settings2, Code2, FolderGit2, CheckCircle2, Clock, SlidersHorizontal, Info, ListChecks, CheckSquare, RefreshCw, Bot, Cpu, HelpCircle, MessageSquareQuote, Shuffle, Scale, Crown, Users, Terminal, Video, Database, Mic, Headphones, FileCode, Target, Layers, FileCheck, BookOpen } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -1040,6 +1040,11 @@ function ActivityFormDialog({
     const [aiInitialContent, setAiInitialContent] = useState<string | undefined>(undefined);
     const [showStudentPreview, setShowStudentPreview] = useState(false);
 
+    // Configuración específica para PDF_REVIEW (Optimización de páginas para IA)
+    const [pdfReviewMode, setPdfReviewMode] = useState<"first_n" | "range" | "all">("first_n");
+    const [pdfMaxPages, setPdfMaxPages] = useState<number>(5);
+    const [pdfPageRange, setPdfPageRange] = useState<string>("1-5");
+
     const previewActivity = useMemo(() => {
         const titleVal = typeof document !== "undefined" ? (document.querySelector('input[name="title"]') as HTMLInputElement)?.value : "";
         const deadlineVal = typeof document !== "undefined" ? (document.querySelector('input[name="deadlineLocal"]') as HTMLInputElement)?.value : "";
@@ -1233,9 +1238,23 @@ function ActivityFormDialog({
                             }
                         } else {
                             setHasChecklist(false);
-                            if (Array.isArray(parsedDesc.criteria)) {
-                                setCriteria(parsedDesc.criteria);
+                        }
+
+                        // 7. PDF Review (Optimización de páginas para IA)
+                        if (parsedDesc.pdfReviewConfig) {
+                            if (parsedDesc.pdfReviewConfig.mode) {
+                                setPdfReviewMode(parsedDesc.pdfReviewConfig.mode);
                             }
+                            if (typeof parsedDesc.pdfReviewConfig.maxPages === "number") {
+                                setPdfMaxPages(parsedDesc.pdfReviewConfig.maxPages);
+                            }
+                            if (parsedDesc.pdfReviewConfig.pageRange) {
+                                setPdfPageRange(parsedDesc.pdfReviewConfig.pageRange);
+                            }
+                        } else {
+                            setPdfReviewMode("first_n");
+                            setPdfMaxPages(5);
+                            setPdfPageRange("1-5");
                         }
                     }
                 } catch {
@@ -1634,7 +1653,19 @@ function ActivityFormDialog({
                         files: challengeFiles,
                     }
                 }));
-            } else if (hasChecklist && (selectedType === "GITHUB" || selectedType === "PDF_REVIEW")) {
+            } else if (selectedType === "PDF_REVIEW") {
+                formData.set("description", JSON.stringify({
+                    hasChecklist: hasChecklist,
+                    aiWeight: aiWeight,
+                    checklistWeight: checklistWeight,
+                    criteria: criteria,
+                    pdfReviewConfig: {
+                        mode: pdfReviewMode,
+                        maxPages: pdfMaxPages,
+                        pageRange: pdfPageRange,
+                    }
+                }));
+            } else if (hasChecklist && selectedType === "GITHUB") {
                 formData.set("description", JSON.stringify({
                     hasChecklist: true,
                     aiWeight: aiWeight,
@@ -2365,6 +2396,148 @@ function ActivityFormDialog({
                                                     <p className="text-[11px] text-muted-foreground leading-relaxed">
                                                         El estudiante entregará un enlace a su documento PDF. El asistente de IA procesará el contenido del informe y te preparará un resumen de cumplimiento criterio por criterio.
                                                     </p>
+                                                </div>
+
+                                                {/* Optimización de Páginas con IA */}
+                                                <div className="p-4 rounded-xl border border-emerald-500/25 bg-emerald-500/5 dark:bg-emerald-950/10 space-y-3.5 text-xs">
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <div className="space-y-0.5">
+                                                            <div className="flex items-center gap-1.5 font-bold text-foreground text-xs">
+                                                                <Sparkles className="h-4 w-4 text-emerald-500" />
+                                                                <span>Optimización de IA: Páginas a Evaluar</span>
+                                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-semibold">
+                                                                    Ahorro de Tokens
+                                                                </Badge>
+                                                            </div>
+                                                            <p className="text-[11px] text-muted-foreground leading-snug">
+                                                                Configura qué páginas del documento debe procesar la inteligencia artificial para acelerar la respuesta y optimizar el consumo de tokens.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Selector de Modos */}
+                                                    <div className="grid grid-cols-3 gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setPdfReviewMode("first_n")}
+                                                            className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+                                                                pdfReviewMode === "first_n"
+                                                                    ? "border-emerald-500 bg-emerald-500/10 text-foreground font-semibold shadow-xs"
+                                                                    : "border-border bg-background/50 hover:bg-muted/40 text-muted-foreground"
+                                                            }`}
+                                                        >
+                                                            <div className="flex items-center gap-1.5 text-xs mb-1">
+                                                                <Layers className="h-3.5 w-3.5 text-emerald-500" />
+                                                                <span>Primeras páginas</span>
+                                                            </div>
+                                                            <p className="text-[10px] opacity-80 line-clamp-1">Las primeras N páginas</p>
+                                                        </button>
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setPdfReviewMode("range")}
+                                                            className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+                                                                pdfReviewMode === "range"
+                                                                    ? "border-emerald-500 bg-emerald-500/10 text-foreground font-semibold shadow-xs"
+                                                                    : "border-border bg-background/50 hover:bg-muted/40 text-muted-foreground"
+                                                            }`}
+                                                        >
+                                                            <div className="flex items-center gap-1.5 text-xs mb-1">
+                                                                <FileCheck className="h-3.5 w-3.5 text-emerald-500" />
+                                                                <span>Rango de páginas</span>
+                                                            </div>
+                                                            <p className="text-[10px] opacity-80 line-clamp-1">Ej: 2-6, 3-10</p>
+                                                        </button>
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setPdfReviewMode("all")}
+                                                            className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+                                                                pdfReviewMode === "all"
+                                                                    ? "border-emerald-500 bg-emerald-500/10 text-foreground font-semibold shadow-xs"
+                                                                    : "border-border bg-background/50 hover:bg-muted/40 text-muted-foreground"
+                                                            }`}
+                                                        >
+                                                            <div className="flex items-center gap-1.5 text-xs mb-1">
+                                                                <BookOpen className="h-3.5 w-3.5 text-emerald-500" />
+                                                                <span>Completo</span>
+                                                            </div>
+                                                            <p className="text-[10px] opacity-80 line-clamp-1">100% del documento</p>
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Controles según el modo seleccionado */}
+                                                    {pdfReviewMode === "first_n" && (
+                                                        <div className="space-y-2 pt-1">
+                                                            <div className="flex items-center justify-between text-[11px]">
+                                                                <span className="font-medium text-foreground">Número de páginas iniciales:</span>
+                                                                <span className="font-bold text-emerald-600 dark:text-emerald-400">{pdfMaxPages} páginas</span>
+                                                            </div>
+
+                                                            <div className="flex flex-wrap items-center gap-1.5">
+                                                                {[3, 5, 10, 15].map((pages) => (
+                                                                    <button
+                                                                        key={pages}
+                                                                        type="button"
+                                                                        onClick={() => setPdfMaxPages(pages)}
+                                                                        className={`px-2.5 py-1 rounded-md text-xs border transition-colors cursor-pointer ${
+                                                                            pdfMaxPages === pages
+                                                                                ? "bg-emerald-500 text-white border-emerald-600 font-semibold"
+                                                                                : "bg-background hover:bg-muted border-border text-foreground"
+                                                                        }`}
+                                                                    >
+                                                                        ⚡ {pages} págs {pages === 5 ? "(Recomendado)" : ""}
+                                                                    </button>
+                                                                ))}
+                                                                <div className="flex items-center gap-1 ml-auto">
+                                                                    <span className="text-[10px] text-muted-foreground">Otro:</span>
+                                                                    <Input
+                                                                        type="number"
+                                                                        min={1}
+                                                                        max={100}
+                                                                        value={pdfMaxPages}
+                                                                        onChange={(e) => setPdfMaxPages(Math.max(1, parseInt(e.target.value) || 1))}
+                                                                        className="h-7 w-16 text-xs text-center"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {pdfReviewMode === "range" && (
+                                                        <div className="space-y-1.5 pt-1">
+                                                            <Label className="text-[11px] font-medium text-foreground">
+                                                                Intervalo de páginas a extraer (ej. omitir portada e índice):
+                                                            </Label>
+                                                            <Input
+                                                                value={pdfPageRange}
+                                                                onChange={(e) => setPdfPageRange(e.target.value)}
+                                                                placeholder="Ej. 2-6 o 3-10"
+                                                                className="h-8 text-xs font-mono"
+                                                            />
+                                                            <p className="text-[10px] text-muted-foreground">
+                                                                Usa formato &quot;inicio-fin&quot; (ej: 2-8). Solo se recortarán y enviarán esas páginas específicas a la IA.
+                                                            </p>
+                                                        </div>
+                                                    )}
+
+                                                    {pdfReviewMode === "all" && (
+                                                        <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-300">
+                                                            ⚠️ Se evaluará el documento completo sin recorte. Asegúrate de que los estudiantes entreguen PDFs concisos para evitar agotar la cuota de tokens.
+                                                        </div>
+                                                    )}
+
+                                                    {/* Badge resumen de optimización */}
+                                                    <div className="flex items-center gap-2 p-2 rounded-lg bg-background/60 border border-border text-[11px] text-muted-foreground">
+                                                        <FileText className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                                        <span>
+                                                            {pdfReviewMode === "first_n"
+                                                                ? `La IA procesará únicamente las primeras ${pdfMaxPages} páginas del informe del estudiante.`
+                                                                : pdfReviewMode === "range"
+                                                                ? `La IA procesará el rango de páginas ${pdfPageRange || "1-5"} del informe.`
+                                                                : "La IA procesará todo el documento sin filtrar páginas."}
+                                                        </span>
+                                                    </div>
                                                 </div>
 
                                                 {/* Opción para Activar Lista de Chequeo (PDF Review) */}

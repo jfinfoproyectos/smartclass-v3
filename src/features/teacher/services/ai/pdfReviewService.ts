@@ -2,6 +2,7 @@ import { getAIModel, repairFeedbackText } from "./client";
 import type { GradingResult } from "./gradingService";
 import { generateObject } from "ai";
 import { z } from "zod";
+import { slicePdfByConfig, PdfReviewConfig } from "../../utils/pdfPageUtils";
 
 /**
  * Attempts to fetch a PDF from a URL and return its text content.
@@ -62,7 +63,8 @@ export async function gradePdfReviewSubmission(
     criteria: string,
     pdfUrl: string,
     teacherId?: string,
-    gradingMode: string = "moderate"
+    gradingMode: string = "moderate",
+    pdfConfig?: PdfReviewConfig | null
 ): Promise<GradingResult> {
     const model = await getAIModel(teacherId);
 
@@ -76,8 +78,12 @@ export async function gradePdfReviewSubmission(
         );
     }
 
+    // 1.1 Recorte optimizado de páginas
+    const sliceResult = await slicePdfByConfig(pdfData.data, pdfConfig);
+    console.log(`[PdfReviewService] Alcance de páginas evaluadas: ${sliceResult.pageDescription} (${sliceResult.extractedPagesCount} págs)`);
+
     // 2. Build prompt
-    const prompt = `Eres un evaluador académico experto. Tu tarea es evaluar el documento PDF adjunto basándote EXCLUSIVAMENTE en los criterios de evaluación proporcionados.
+    const prompt = `Eres un evaluador académico experto. Tu tarea es evaluar el documento PDF adjunto basándote EXCLUSIVAMENTE en los criterios de evaluación proporcionados.${sliceResult.isTrimmed ? `\n\n**ALCANCE DE PÁGINAS EVALUADAS**: Se ha extraído un segmento correspondiente a: ${sliceResult.pageDescription}. Enfoca tu evaluación técnica y retroalimentación en este contenido provisto.` : ""}
 
 **CRITERIOS DE EVALUACIÓN (Rúbrica)**:
 ${criteria}
@@ -135,7 +141,7 @@ IMPORTANTE: Responde ÚNICAMENTE con el JSON. No incluyas texto adicional, no us
                     content: [
                         {
                             type: "file",
-                            data: pdfData.data,
+                            data: sliceResult.slicedData,
                             mediaType: pdfData.mimeType,
                         },
                         {
@@ -155,6 +161,10 @@ IMPORTANTE: Responde ÚNICAMENTE con el JSON. No incluyas texto adicional, no us
         // Build structured markdown feedback
         const feedbackLines: string[] = [];
         feedbackLines.push(`## Evaluación de PDF — Nota: ${grade.toFixed(1)} / 5.0\n`);
+
+        if (sliceResult.isTrimmed) {
+            feedbackLines.push(`> ⚡ **Alcance de Evaluación con IA**: ${sliceResult.pageDescription} (Optimización de tokens activa).\n`);
+        }
 
         if (parsed.criteriaResults && Array.isArray(parsed.criteriaResults)) {
             feedbackLines.push("### Resultados por Criterio\n");
@@ -193,6 +203,7 @@ IMPORTANTE: Responde ÚNICAMENTE con el JSON. No incluyas texto adicional, no us
             grade,
             feedback,
             apiRequestsCount,
+            processedPagesInfo: sliceResult.pageDescription,
         };
     } catch (error: any) {
         console.error("[PdfReviewService] AI Error:", error);

@@ -1,16 +1,17 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, AlertCircle, CheckCircle, Download, FileText, ExternalLink, Info, Send, RotateCcw } from "lucide-react";
+import { Loader2, AlertCircle, CheckCircle, Download, FileText, ExternalLink, Info, Send, RotateCcw, Sparkles } from "lucide-react";
 import { format } from "date-fns";
 import { FeedbackViewer } from "./FeedbackViewer";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Clock } from "lucide-react";
+import { getPdfReviewConfig, PdfReviewConfig } from "@/features/teacher/utils/pdfPageUtils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRouter } from "next/navigation";
 import { submitPdfActivityAction } from "@/features/student/actions/submissionActions";
@@ -54,6 +55,9 @@ export function PdfReviewActivityDetails({ activity, userId, studentName }: PdfR
     const isDeadlinePassed = activity.deadline && new Date(activity.deadline) < new Date();
     // Un nuevo intento o reevaluación solo está disponible si ya se calificó el intento anterior o si fue rechazada, y no ha vencido la actividad
     const canAttemptAgain = isGraded && !isDeadlinePassed;
+
+    // Configuración de páginas de revisión PDF
+    const pdfConfig = useMemo(() => getPdfReviewConfig(activity?.description), [activity?.description]);
 
     return (
         <div className="space-y-6 w-full p-6">
@@ -109,6 +113,22 @@ export function PdfReviewActivityDetails({ activity, userId, studentName }: PdfR
                                         Pendiente
                                     </Badge>
                                 )}
+
+                                {pdfConfig && (
+                                    <Badge variant="outline" className="text-xs px-2.5 py-1 gap-1.5 border-emerald-500/30 text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 font-medium shrink-0">
+                                        <Sparkles className="h-3.5 w-3.5 text-emerald-500" />
+                                        <span>
+                                            Páginas a evaluar por IA:{" "}
+                                            <strong className="font-bold">
+                                                {pdfConfig.mode === "first_n"
+                                                    ? `Primeras ${pdfConfig.maxPages ?? 5} páginas`
+                                                    : pdfConfig.mode === "range"
+                                                    ? `Páginas ${pdfConfig.pageRange || "1-5"}`
+                                                    : "Documento completo"}
+                                            </strong>
+                                        </span>
+                                    </Badge>
+                                )}
                             </div>
                             <div className="flex items-center gap-4 text-sm font-medium">
                                 <span>Vencimiento: <span className="text-primary font-bold">{activity.deadline ? format(new Date(activity.deadline), "PP p") : "Sin límite"}</span></span>
@@ -135,15 +155,40 @@ export function PdfReviewActivityDetails({ activity, userId, studentName }: PdfR
                         <Separator />
 
                         {/* Submission hints */}
-                        <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300 text-sm">
-                            <Info className="h-4 w-4 shrink-0 mt-0.5" />
-                            <div>
-                                <p className="font-medium">¿Cómo entregar?</p>
-                                <p className="text-xs mt-0.5 opacity-90">
-                                    Sube tu documento PDF a <strong>Google Drive</strong> y asegúrate de que el permiso de
-                                    compartición esté en <em>"Cualquiera con el enlace puede ver"</em>. Luego pega el
-                                    enlace abajo. La IA evaluará tu documento automáticamente.
-                                </p>
+                        <div className="space-y-3">
+                            {pdfConfig && (
+                                <div className="flex items-start gap-2.5 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/25 border border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300 text-sm">
+                                    <Sparkles className="h-4 w-4 shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
+                                    <div className="space-y-0.5">
+                                        <p className="font-bold text-xs sm:text-sm">
+                                            Alcance de Revisión de la IA:{" "}
+                                            {pdfConfig.mode === "first_n"
+                                                ? `Primeras ${pdfConfig.maxPages ?? 5} páginas`
+                                                : pdfConfig.mode === "range"
+                                                ? `Páginas ${pdfConfig.pageRange || "1-5"}`
+                                                : "Documento completo"}
+                                        </p>
+                                        <p className="text-xs opacity-90 leading-relaxed">
+                                            {pdfConfig.mode === "first_n"
+                                                ? `Tu profesor configuró la IA para evaluar únicamente las primeras ${pdfConfig.maxPages ?? 5} páginas de tu informe. Asegúrate de que el contenido principal, análisis y conclusiones se encuentren dentro de estas páginas iniciales.`
+                                                : pdfConfig.mode === "range"
+                                                ? `Tu profesor configuró la IA para evaluar exclusivamente el intervalo de páginas ${pdfConfig.pageRange || "1-5"}. Asegúrate de ubicar tu desarrollo principal en este rango.`
+                                                : "La inteligencia artificial evaluará la totalidad del documento sin recorte de páginas."}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300 text-sm">
+                                <Info className="h-4 w-4 shrink-0 mt-0.5" />
+                                <div>
+                                    <p className="font-medium">¿Cómo entregar?</p>
+                                    <p className="text-xs mt-0.5 opacity-90">
+                                        Sube tu documento PDF a <strong>Google Drive</strong> y asegúrate de que el permiso de
+                                        compartición esté en <em>"Cualquiera con el enlace puede ver"</em>. Luego pega el
+                                        enlace abajo. La IA evaluará tu documento automáticamente.
+                                    </p>
+                                </div>
                             </div>
                         </div>
 
@@ -204,6 +249,7 @@ export function PdfReviewActivityDetails({ activity, userId, studentName }: PdfR
                                             activityId={activity.id}
                                             lastSubmittedAt={submission.lastSubmittedAt}
                                             isLeaderDisabled={Boolean(activity.isGroupActivity && !activity.isLeader)}
+                                            pdfConfig={pdfConfig}
                                         />
                                     </div>
                                 )}
@@ -213,6 +259,7 @@ export function PdfReviewActivityDetails({ activity, userId, studentName }: PdfR
                                 activityId={activity.id}
                                 lastSubmittedAt={null}
                                 isLeaderDisabled={Boolean(activity.isGroupActivity && !activity.isLeader)}
+                                pdfConfig={pdfConfig}
                             />
                         )}
                     </CardContent>
@@ -302,7 +349,17 @@ export function PdfReviewActivityDetails({ activity, userId, studentName }: PdfR
 
 // ─── Submission Form ───────────────────────────────────────────────────────────
 
-function PdfSubmissionForm({ activityId, lastSubmittedAt, isLeaderDisabled = false }: { activityId: string; lastSubmittedAt: string | Date | null; isLeaderDisabled?: boolean }) {
+function PdfSubmissionForm({ 
+    activityId, 
+    lastSubmittedAt, 
+    isLeaderDisabled = false,
+    pdfConfig = null,
+}: { 
+    activityId: string; 
+    lastSubmittedAt: string | Date | null; 
+    isLeaderDisabled?: boolean;
+    pdfConfig?: PdfReviewConfig | null;
+}) {
     const router = useRouter();
     const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
     const [progress, setProgress] = useState<string>("");
@@ -372,11 +429,27 @@ function PdfSubmissionForm({ activityId, lastSubmittedAt, isLeaderDisabled = fal
                         ) : (
                             <>
                                 <Send className="h-4 w-4" />
-                                {isLeaderDisabled ? "Solo el Líder puede Entregar" : "Entregar Tarea"}
+                                Entregar PDF
                             </>
                         )}
                     </Button>
                 </div>
+
+                {pdfConfig && (
+                    <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 pt-0.5">
+                        <Sparkles className="h-3 w-3 text-emerald-500 shrink-0" />
+                        <span>
+                            Recuerda: la IA evaluará{" "}
+                            <strong className="text-foreground">
+                                {pdfConfig.mode === "first_n"
+                                    ? `las primeras ${pdfConfig.maxPages ?? 5} páginas`
+                                    : pdfConfig.mode === "range"
+                                    ? `las páginas ${pdfConfig.pageRange || "1-5"}`
+                                    : "el documento completo"}
+                            </strong> de tu entrega.
+                        </span>
+                    </p>
+                )}
                 <p className="text-[10px] text-muted-foreground italic">
                     * Asegúrate de que el enlace sea público. En Google Drive: botón{" "}
                     <em>"Compartir" → "Cualquiera con el enlace"</em>.

@@ -27,6 +27,7 @@ import '@uiw/react-md-editor/markdown-editor.css';
 import '@uiw/react-markdown-preview/markdown.css';
 import { useTheme } from "next-themes";
 import { improveFeedbackAction, gradePdfReviewAction } from "@/features/teacher/actions/gradingActions";
+import { getPdfReviewConfig } from "../utils/pdfPageUtils";
 import {
     getActivityChecklistConfig,
     extractEvaluationMetadata,
@@ -143,10 +144,8 @@ export function PdfReviewActivityInspector({
     );
 
     // Extraer Lista de Chequeo, Criterios y Ponderaciones configuradas (por defecto: 30% IA / 70% Docente)
-    const checklistConfig = useMemo(() => {
-        return getActivityChecklistConfig(activity?.description);
-    }, [activity?.description]);
-
+    const checklistConfig = useMemo(() => getActivityChecklistConfig(activity?.description), [activity?.description]);
+    const pdfConfig = useMemo(() => getPdfReviewConfig(activity?.description), [activity?.description]);
     const checklistData = checklistConfig?.criteria ?? null;
     const aiWeight = checklistConfig?.aiWeight ?? 30;
     const checklistWeight = checklistConfig?.checklistWeight ?? 70;
@@ -806,6 +805,22 @@ export function PdfReviewActivityInspector({
                                         {isEvaluatingAI ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bot className="h-3.5 w-3.5" />}
                                         <span>{aiFeedbackInput ? "Reevaluar con IA" : "Evaluar con IA"}</span>
                                     </Button>
+
+                                    {pdfConfig && (
+                                        <div 
+                                            className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-500/25 font-medium shrink-0"
+                                            title="Configuración de optimización de páginas para la IA"
+                                        >
+                                            <Sparkles className="h-3 w-3" />
+                                            <span>
+                                                {pdfConfig.mode === "first_n"
+                                                    ? `Primeras ${pdfConfig.maxPages ?? 5} págs.`
+                                                    : pdfConfig.mode === "range"
+                                                    ? `Págs. ${pdfConfig.pageRange || "1-5"}`
+                                                    : "Doc. completo"}
+                                            </span>
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="flex items-center gap-1.5 shrink-0 ml-auto">

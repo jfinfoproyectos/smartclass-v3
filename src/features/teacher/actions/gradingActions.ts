@@ -390,9 +390,6 @@ export async function gradePdfReviewAction(
     const session = await getSession();
     if (!session || session.user.role !== "teacher") throw new Error("Unauthorized");
 
-    const { gradePdfReviewSubmission } = await import("../services/ai/pdfReviewService");
-    const result = await gradePdfReviewSubmission(criteria, pdfUrl, session.user.id, gradingMode);
-
     const [activity, student, existingSubmission] = await Promise.all([
         prisma.activity.findUnique({ where: { id: activityId }, select: { title: true, description: true } }),
         prisma.user.findUnique({ where: { id: studentUserId }, select: { name: true } }),
@@ -401,6 +398,12 @@ export async function gradePdfReviewAction(
             select: { feedback: true, grade: true }
         })
     ]);
+
+    const { getPdfReviewConfig } = await import("../utils/pdfPageUtils");
+    const pdfConfig = getPdfReviewConfig(activity?.description);
+
+    const { gradePdfReviewSubmission } = await import("../services/ai/pdfReviewService");
+    const result = await gradePdfReviewSubmission(criteria, pdfUrl, session.user.id, gradingMode, pdfConfig);
 
     const { getActivityChecklistConfig, extractEvaluationMetadata, embedEvaluationMetadata, calculateCombinedFinalGrade } = await import("../utils/checklistGradingUtils");
     const checklistConfig = getActivityChecklistConfig(activity?.description);

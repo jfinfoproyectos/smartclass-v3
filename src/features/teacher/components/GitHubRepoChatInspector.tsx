@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { 
-    Github, Sparkles, Send, Loader2, Bot, User, Trash2, ShieldAlert, GitCommit, Search,
+    Github, Sparkles, Send, Loader2, Bot, User, Trash2, Search,
     Copy, Check, Maximize2, Minimize2, History, Plus, ChevronDown, MessageSquare, Clock, Eye, Users
 } from "lucide-react";
 import {
@@ -34,6 +34,7 @@ import {
     listMcpChatSessionsAction,
     McpChatSessionSummary
 } from "@/features/github/actions/githubMcpActions";
+import { CategorizedQuestionSelector } from "./CategorizedQuestionSelector";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { format } from "date-fns";
@@ -65,28 +66,6 @@ interface GitHubRepoChatInspectorProps {
     readOnly?: boolean;
 }
 
-const PRESET_QUESTIONS = [
-    {
-        label: "🔍 Auditoría de Commits",
-        prompt: "¿El estudiante realizó commits progresivos o subió todo el código en un único commit masivo al final?",
-        icon: GitCommit,
-    },
-    {
-        label: "🛡️ Seguridad y Claves",
-        prompt: "¿Hay alguna API Key, token de acceso o archivo confidencial expuesto en el código o historial?",
-        icon: ShieldAlert,
-    },
-    {
-        label: "📂 Estructura del Código",
-        prompt: "Describe la estructura principal del repositorio y qué patrones de diseño o arquitectura utilizó el estudiante.",
-        icon: Search,
-    },
-    {
-        label: "🧪 Pruebas y Calidad",
-        prompt: "¿El proyecto cuenta con pruebas unitarias/automatizadas y documentación adecuada en el README?",
-        icon: Sparkles,
-    },
-];
 
 function getWelcomeMessage(readOnly: boolean, studentName?: string, groupName?: string | null): Message {
     return {
@@ -513,30 +492,19 @@ export function GitHubRepoChatInspector({
                 </div>
             </div>
 
-            {/* Presets Rápidos (solo visible para docente para realizar consultas rápidas) */}
+            {/* Selector de Preguntas Organizado por Categorías (solo visible para docente) */}
             {!readOnly && (
-                <div className="p-2.5 bg-muted/20 border-b border-border flex items-center gap-1.5 overflow-x-auto scrollbar-hide text-xs shrink-0">
-                    <span className="text-muted-foreground font-medium shrink-0 px-1">Sugerencias:</span>
-                    {PRESET_QUESTIONS.map((pq, idx) => {
-                        const Icon = pq.icon;
-                        return (
-                            <button
-                                key={idx}
-                                disabled={isLoading}
-                                onClick={() => handleSendMessage(pq.prompt)}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-background hover:bg-accent border border-border text-foreground hover:text-accent-foreground text-[11px] whitespace-nowrap transition-colors disabled:opacity-50 cursor-pointer"
-                            >
-                                <Icon className="h-3 w-3 text-primary" />
-                                {pq.label}
-                            </button>
-                        );
-                    })}
-                </div>
+                <CategorizedQuestionSelector
+                    onSelectAndSend={(prompt) => handleSendMessage(prompt)}
+                    onFillInput={(prompt) => setInput(prompt)}
+                    currentInput={input}
+                    isLoading={isLoading}
+                />
             )}
 
             {/* Área de Mensajes Desplazable */}
-            <div className="flex-1 overflow-y-auto min-h-0 p-1.5 sm:p-2 space-y-3">
-                <div className="space-y-4 max-w-3xl mx-auto">
+            <div className="flex-1 overflow-y-auto min-h-0 p-2.5 sm:p-4 space-y-3">
+                <div className="space-y-4 w-full">
                     {/* Si está en modo estudiante y no hay sesiones guardadas */}
                     {readOnly && sessions.length === 0 ? (
                         <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground space-y-3 bg-muted/20 rounded-xl border border-dashed my-8">
@@ -562,7 +530,7 @@ export function GitHubRepoChatInspector({
                                         </div>
                                     )}
 
-                                    <div className={`group relative max-w-[88%] rounded-2xl p-3.5 text-sm shadow-xs ${
+                                    <div className={`group relative ${isUser ? "max-w-[85%]" : "w-full max-w-full"} rounded-2xl p-3.5 text-sm shadow-xs ${
                                         isUser
                                             ? "bg-primary text-primary-foreground rounded-tr-xs"
                                             : "bg-muted/60 border border-border text-foreground rounded-tl-xs"
@@ -664,7 +632,7 @@ export function GitHubRepoChatInspector({
                             e.preventDefault();
                             handleSendMessage();
                         }}
-                        className="flex items-center gap-2 max-w-3xl mx-auto"
+                        className="flex items-center gap-2 w-full"
                     >
                         <Input
                             value={input}

@@ -56,6 +56,7 @@ model User {
   studentMcpChats       McpInspectorChat[]    @relation("StudentMcpChats")
   ledStudentGroups      StudentGroup[]        @relation("StudentGroupLeader")
   studentGroupMemberships StudentGroupMember[]
+  inspectorQuestions    InspectorQuestion[]   @relation("UserInspectorQuestions")
 
   // Teacher Global Application Appearance & Policies
   appThemeMode                String            @default("STUDENT") // "STUDENT", "LIGHT", "DARK"
@@ -750,5 +751,20 @@ model StudentGroupMember {
 
   @@unique([groupId, userId])
   @@map("student_group_member")
+}
+
+model InspectorQuestion {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("UserInspectorQuestions", fields: [userId], references: [id], onDelete: Cascade)
+  scope     String   @default("GITHUB")
+  category  String
+  label     String
+  prompt    String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, scope, category])
+  @@map("inspector_question")
 }
 
