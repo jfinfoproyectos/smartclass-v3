@@ -1732,69 +1732,32 @@ function ActivityFormDialog({
 
                     <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0 overflow-hidden">
                         {/* Header del Modal con Título, Pestañas y Acciones */}
-                        {/* Header del Modal con Título, Pestañas y Acciones */}
-                        <div className="px-3 sm:px-5 py-2 sm:py-2.5 border-b border-border bg-card flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 shrink-0 shadow-2xs">
-                            {/* Fila 1 en móvil / Izquierda en desktop: Título y Cerrar */}
-                            <div className="flex items-center justify-between sm:justify-start gap-2 sm:gap-3 w-full sm:w-auto">
-                                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                                    <div className="p-1.5 sm:p-2 rounded-xl bg-primary/10 text-primary shrink-0">
-                                        {isEdit ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-                                    </div>
-                                    <div className="min-w-0">
-                                        <div className="flex items-center gap-1.5 sm:gap-2">
-                                            <h2 className="text-sm sm:text-lg font-bold tracking-tight text-foreground truncate">
-                                                {isEdit ? "Editar Actividad" : "Crear Nueva Actividad"}
-                                            </h2>
-                                            {isEdit && (
-                                                <Badge variant="outline" className="font-mono text-[10px] hidden sm:inline-flex shrink-0">
-                                                    {activity.type}
-                                                </Badge>
-                                            )}
-                                        </div>
-                                        <p className="text-[11px] sm:text-xs text-muted-foreground hidden sm:block">
-                                            {isEdit ? "Modifica los parámetros y la rúbrica de la actividad." : "Configura los detalles y el contenido de la nueva actividad."}
-                                        </p>
-                                    </div>
+                        {/* Header Principal del Modal: Título y Acciones */}
+                        <div className="px-3 sm:px-5 py-2 sm:py-2.5 border-b border-border bg-card flex items-center justify-between gap-2 sm:gap-4 shrink-0 shadow-2xs">
+                            {/* Izquierda: Icono, Título, Badge de Tipo y Subtítulo */}
+                            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                                <div className="p-1.5 sm:p-2 rounded-xl bg-primary/10 text-primary shrink-0">
+                                    {isEdit ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
                                 </div>
-
-                                {/* Botón Cerrar en móvil (esquina superior derecha) */}
-                                <Button type="button" variant="ghost" size="sm" onClick={onClose} className="sm:hidden text-xs h-8 px-2 text-muted-foreground hover:text-foreground font-semibold shrink-0">
-                                    <X className="h-4 w-4 mr-1" />
-                                    Cerrar
-                                </Button>
-                            </div>
-
-                            {/* Fila 2 en móvil / Centro en desktop: Pestañas */}
-                            <div className="w-full sm:w-auto overflow-x-auto scrollbar-none py-0.5">
-                                <TabsList className="bg-muted/80 p-1 h-8 sm:h-9 border border-border/50 w-max sm:w-auto flex shrink-0">
-                                    <TabsTrigger value="config" className="text-xs px-2.5 sm:px-3.5 font-semibold gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-xs">
-                                        <Settings2 className="h-3.5 w-3.5 shrink-0" />
-                                        <span className="hidden sm:inline">Configuración</span>
-                                        <span className="sm:hidden">Ajustes</span>
-                                    </TabsTrigger>
-                                    <TabsTrigger value="content" className="text-xs px-2.5 sm:px-3.5 font-semibold gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-xs">
-                                        <FileText className="h-3.5 w-3.5 shrink-0" />
-                                        <span className="hidden sm:inline">Contenido y Rúbrica</span>
-                                        <span className="sm:hidden">Contenido</span>
-                                    </TabsTrigger>
-                                    {(selectedType === "GITHUB" || selectedType === "PDF_REVIEW" || selectedType === "CODE_CHALLENGE" || selectedType === "VIDEO_PITCH" || selectedType === "AI_INTERVIEW" || selectedType === "DB_MODELING") && hasChecklist && (
-                                        <TabsTrigger value="checklist" className="text-xs px-2.5 sm:px-3.5 font-semibold gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-xs">
-                                            <ListChecks className="h-3.5 w-3.5 text-primary shrink-0" />
-                                            <span className="hidden sm:inline">Lista de Chequeo</span>
-                                            <span className="sm:hidden">Chequeo</span>
-                                            <Badge 
-                                                variant={criteriaSum === 100 ? "default" : "secondary"} 
-                                                className="text-[10px] px-1.5 py-0 h-4 ml-0.5 font-mono"
-                                            >
-                                                {criteriaSum}%
+                                <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5 sm:gap-2">
+                                        <h2 className="text-sm sm:text-base md:text-lg font-bold tracking-tight text-foreground truncate">
+                                            {isEdit ? "Editar Actividad" : "Crear Nueva Actividad"}
+                                        </h2>
+                                        {isEdit && (
+                                            <Badge variant="outline" className="font-mono text-[10px] hidden sm:inline-flex shrink-0 font-semibold">
+                                                {activity.type}
                                             </Badge>
-                                        </TabsTrigger>
-                                    )}
-                                </TabsList>
+                                        )}
+                                    </div>
+                                    <p className="text-[11px] sm:text-xs text-muted-foreground truncate hidden md:block">
+                                        {isEdit ? "Modifica los parámetros y la rúbrica de la actividad." : "Configura los detalles y el contenido de la nueva actividad."}
+                                    </p>
+                                </div>
                             </div>
 
-                            {/* Fila 3 en móvil / Derecha en desktop: Botones de Acción */}
-                            <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto justify-between sm:justify-end shrink-0">
+                            {/* Derecha: Botones de Acción */}
+                            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                                 {selectedType === "CODE_CHALLENGE" && (
                                     <Button
                                         type="button"
@@ -1805,33 +1768,75 @@ function ActivityFormDialog({
                                         title="Abrir vista interactiva de prueba idéntica a la que ve el estudiante"
                                     >
                                         <Eye className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                                        <span className="hidden sm:inline">Modo Estudiante</span>
-                                        <span className="sm:hidden">Preview</span>
+                                        <span className="hidden md:inline">Modo Estudiante</span>
+                                        <span className="md:hidden">Preview</span>
                                     </Button>
                                 )}
                                 <input type="file" accept=".json" className="hidden" ref={fileInputRef} onChange={handleImport} />
-                                <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="text-xs h-8 px-2 sm:px-3 shrink-0" title="Importar configuración">
-                                    <Upload className="h-3.5 w-3.5 sm:mr-1.5 shrink-0" />
+                                <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="text-xs h-8 px-2 sm:px-2.5 shrink-0 gap-1 sm:gap-1.5" title="Importar configuración">
+                                    <Upload className="h-3.5 w-3.5 shrink-0" />
                                     <span className="hidden sm:inline">Importar</span>
                                 </Button>
-                                <Button type="button" variant="outline" size="sm" onClick={handleExport} className="text-xs h-8 px-2 sm:px-3 shrink-0" title="Exportar configuración">
-                                    <Download className="h-3.5 w-3.5 sm:mr-1.5 shrink-0" />
+                                <Button type="button" variant="outline" size="sm" onClick={handleExport} className="text-xs h-8 px-2 sm:px-2.5 shrink-0 gap-1 sm:gap-1.5" title="Exportar configuración">
+                                    <Download className="h-3.5 w-3.5 shrink-0" />
                                     <span className="hidden sm:inline">Exportar</span>
                                 </Button>
                                 
                                 {/* Botón Guardar / Actualizar */}
-                                <Button type="submit" size="sm" disabled={isSubmitting} className="flex-1 sm:flex-none font-bold text-xs h-8 px-3 bg-primary text-primary-foreground shadow-xs shrink-0">
-                                    {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5 shrink-0" /> : <Save className="h-3.5 w-3.5 mr-1.5 shrink-0" />}
+                                <Button type="submit" size="sm" disabled={isSubmitting} className="font-bold text-xs h-8 px-3 sm:px-3.5 bg-primary text-primary-foreground shadow-xs shrink-0 gap-1.5">
+                                    {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" /> : <Save className="h-3.5 w-3.5 shrink-0" />}
                                     <span className="hidden sm:inline">{isEdit ? "Actualizar Actividad" : "Crear Actividad"}</span>
                                     <span className="sm:hidden">{isEdit ? "Actualizar" : "Crear"}</span>
                                 </Button>
 
-                                {/* Botón Cerrar en desktop */}
-                                <Button type="button" variant="ghost" size="sm" onClick={onClose} className="hidden sm:inline-flex text-xs h-8 text-muted-foreground hover:text-foreground font-semibold ml-1 shrink-0">
-                                    <X className="h-4 w-4 mr-1" />
-                                    Cerrar
+                                {/* Botón Cerrar */}
+                                <Button type="button" variant="ghost" size="sm" onClick={onClose} className="text-xs h-8 px-2 text-muted-foreground hover:text-foreground font-semibold shrink-0 gap-1">
+                                    <X className="h-4 w-4 shrink-0" />
+                                    <span className="hidden sm:inline">Cerrar</span>
                                 </Button>
                             </div>
+                        </div>
+
+                        {/* Barra Secundaria: Pestañas de Navegación del Formulario */}
+                        <div className="px-3 sm:px-5 py-1.5 bg-muted/40 border-b border-border/80 flex items-center justify-between gap-3 shrink-0">
+                            <TabsList className="bg-muted/80 p-0.5 h-8 border border-border/50 rounded-lg flex shrink-0">
+                                <TabsTrigger value="config" className="text-xs px-2.5 sm:px-3.5 h-7 font-semibold gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-xs">
+                                    <Settings2 className="h-3.5 w-3.5 shrink-0" />
+                                    <span>Configuración</span>
+                                </TabsTrigger>
+                                <TabsTrigger value="content" className="text-xs px-2.5 sm:px-3.5 h-7 font-semibold gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-xs">
+                                    <FileText className="h-3.5 w-3.5 shrink-0" />
+                                    <span>Contenido y Rúbrica</span>
+                                </TabsTrigger>
+                                {(selectedType === "GITHUB" || selectedType === "PDF_REVIEW" || selectedType === "CODE_CHALLENGE" || selectedType === "VIDEO_PITCH" || selectedType === "AI_INTERVIEW" || selectedType === "DB_MODELING") && hasChecklist && (
+                                    <TabsTrigger value="checklist" className="text-xs px-2.5 sm:px-3.5 h-7 font-semibold gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-xs">
+                                        <ListChecks className="h-3.5 w-3.5 text-primary shrink-0" />
+                                        <span>Lista de Chequeo</span>
+                                        <Badge 
+                                            variant={criteriaSum === 100 ? "default" : "secondary"} 
+                                            className="text-[10px] px-1.5 py-0 h-4 ml-0.5 font-mono font-bold"
+                                        >
+                                            {criteriaSum}%
+                                        </Badge>
+                                    </TabsTrigger>
+                                )}
+                            </TabsList>
+
+                            {/* Información adicional o estado de la rúbrica */}
+                            {hasChecklist && (
+                                <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
+                                    <span className="text-[11px]">Ponderación rúbrica:</span>
+                                    <Badge 
+                                        variant={criteriaSum === 100 ? "default" : "outline"} 
+                                        className={cn(
+                                            "text-[10px] font-mono font-semibold",
+                                            criteriaSum === 100 ? "bg-emerald-600 hover:bg-emerald-600 text-white" : "border-amber-500 text-amber-600 dark:text-amber-400"
+                                        )}
+                                    >
+                                        {criteriaSum === 100 ? "100% Completa" : `${criteriaSum}% de 100%`}
+                                    </Badge>
+                                </div>
+                            )}
                         </div>
 
                         {/* Pestaña 1: Configuración (Distribuida a lo ancho y mejorada visualmente) */}
@@ -4683,11 +4688,10 @@ export function ActivityManager({
                             size="sm"
                             className="h-8 px-2.5 sm:px-3 rounded-lg text-xs"
                             onClick={() => setViewMode("grid")}
-                            title="Vista de Tarjetas AI Canvas"
+                            title="Vista de Tarjetas"
                         >
                             <LayoutGrid className="h-4 w-4 mr-1 sm:mr-1.5 shrink-0" />
-                            <span className="hidden sm:inline">Tarjetas AI Canvas</span>
-                            <span className="sm:hidden">Tarjetas</span>
+                            <span>Tarjetas</span>
                         </Button>
                         <Button
                             type="button"

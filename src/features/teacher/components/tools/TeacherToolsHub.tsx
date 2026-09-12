@@ -33,31 +33,26 @@ export function TeacherToolsHub({ courses }: TeacherToolsHubProps) {
 
     return (
         <div className="w-full flex-1 flex flex-col space-y-3 p-0.5 sm:p-1 min-h-0">
-            {/* Barra Superior del Hub (Sin selector de ficha) */}
-            <div className="px-4 py-2.5 rounded-2xl border border-border bg-card text-card-foreground shadow-xs flex items-center justify-between gap-3 w-full">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0 shadow-2xs">
-                        <Wrench className="h-4 w-4" />
-                    </div>
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <h2 className="text-sm sm:text-base font-bold text-foreground tracking-tight">
-                                Herramientas Docentes
-                            </h2>
-                            <Badge variant="secondary" className="text-[10px] font-bold bg-primary/10 text-primary border-primary/20 py-0 px-1.5 h-4">
-                                Dinámicas
-                            </Badge>
+            {/* Header Banner AI Canvas */}
+            <div className="relative overflow-hidden rounded-3xl border border-border bg-card text-card-foreground p-6 sm:p-8 shadow-xl">
+                <div className="pointer-events-none absolute -top-32 right-1/4 w-96 h-96 rounded-full bg-gradient-to-br from-primary/20 via-primary/10 to-transparent blur-3xl opacity-70" />
+                <div className="relative z-10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div className="space-y-2">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20 backdrop-blur-md">
+                            <Wrench className="w-3.5 h-3.5" />
+                            <span>Herramientas Docentes</span>
                         </div>
-                        <p className="text-[11px] text-muted-foreground">
-                            Selecciona una herramienta interactiva para tu clase en vivo.
+                        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
+                            Herramientas Interactivas
+                        </h1>
+                        <p className="text-xs sm:text-sm text-muted-foreground">
+                            Selecciona una herramienta interactiva para dinamizar tu clase en vivo en tiempo real.
                         </p>
                     </div>
-                </div>
 
-                <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-[11px] font-medium text-muted-foreground border-border/80 bg-muted/40 py-1 px-2.5 rounded-xl">
-                        <GraduationCap className="h-3.5 w-3.5 mr-1.5 text-primary" />
-                        <span>{activeCoursesCount} {activeCoursesCount === 1 ? "ficha activa" : "fichas activas"} disponibles</span>
+                    <Badge variant="outline" className="text-xs py-1.5 px-3 rounded-xl border-border bg-muted/50 text-foreground font-semibold shrink-0">
+                        <GraduationCap className="mr-2 h-3.5 w-3.5 text-primary" />
+                        {activeCoursesCount} {activeCoursesCount === 1 ? "ficha activa" : "fichas activas"} disponibles
                     </Badge>
                 </div>
             </div>

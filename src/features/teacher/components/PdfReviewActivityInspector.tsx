@@ -142,6 +142,8 @@ export function PdfReviewActivityInspector({
     const [rightTab, setRightTab] = useState<"ai_report" | "teacher_grade" | "chat_pdf">(
         parsed.aiFeedback ? "ai_report" : "teacher_grade"
     );
+    const [fullscreenSection, setFullscreenSection] = useState<"none" | "left" | "right">("none");
+
 
     // Extraer Lista de Chequeo, Criterios y Ponderaciones configuradas (por defecto: 30% IA / 70% Docente)
     const checklistConfig = useMemo(() => getActivityChecklistConfig(activity?.description), [activity?.description]);
@@ -574,7 +576,10 @@ export function PdfReviewActivityInspector({
             <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 overflow-hidden min-h-0">
                 
                 {/* Left Panel: PDF Viewer, Statement & Delivery Details */}
-                <div className="lg:col-span-6 flex flex-col rounded-xl border bg-card shadow-xs overflow-hidden min-h-0">
+                <div className={cn(
+                    "flex flex-col rounded-xl border bg-card shadow-xs overflow-hidden min-h-0 transition-all",
+                    fullscreenSection === "right" ? "hidden" : fullscreenSection === "left" ? "lg:col-span-12" : "lg:col-span-6"
+                )}>
                     <div className="border-b px-4 py-2 bg-muted/30 flex items-center justify-between shrink-0">
                         <Tabs value={leftTab} onValueChange={(v) => setLeftTab(v as any)} className="w-auto">
                             <TabsList className="h-7 p-0.5 bg-background border">
@@ -749,7 +754,10 @@ export function PdfReviewActivityInspector({
                 </div>
 
                 {/* Right Panel: Dedicated Tabs for AI Evaluation Report & Teacher Evaluation */}
-                <div className="lg:col-span-6 flex flex-col rounded-xl border bg-card shadow-xs overflow-hidden min-h-0">
+                <div className={cn(
+                    "flex flex-col rounded-xl border bg-card shadow-xs overflow-hidden min-h-0 transition-all",
+                    fullscreenSection === "left" ? "hidden" : fullscreenSection === "right" ? "lg:col-span-12" : "lg:col-span-6"
+                )}>
                     <Tabs value={rightTab} onValueChange={(v) => setRightTab(v as any)} className="w-full h-full flex flex-col min-h-0 overflow-hidden">
                         {/* Header Tabs: Evaluación IA vs Evaluación Docente */}
                         <div className="border-b px-4 py-2 bg-muted/30 flex items-center justify-between shrink-0">
@@ -790,40 +798,53 @@ export function PdfReviewActivityInspector({
                         {/* TAB 1: Evaluación IA (Gemini Report) */}
                         <TabsContent value="ai_report" className="flex-1 flex flex-col min-h-0 overflow-hidden m-0">
                             {/* Toolbar interna de la pestaña Evaluación IA */}
-                            <div className="p-3 bg-muted/20 border-b flex flex-wrap items-center justify-between gap-2.5 shrink-0">
-                                <div className="flex items-center gap-2">
-                                    <GradingModeSelector gradingMode={gradingMode} setGradingMode={setGradingMode} />
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        onClick={handleGradeWithAI}
-                                        disabled={!submission?.url || isEvaluatingAI}
-                                        variant="default"
-                                        className="h-8 px-3 text-xs gap-1.5 font-bold shadow-xs transition-all"
-                                        title="Evaluar el documento PDF con IA según el enunciado"
-                                    >
-                                        {isEvaluatingAI ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bot className="h-3.5 w-3.5" />}
-                                        <span>{aiFeedbackInput ? "Reevaluar con IA" : "Evaluar con IA"}</span>
-                                    </Button>
-
-                                    {pdfConfig && (
-                                        <div 
-                                            className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-500/25 font-medium shrink-0"
-                                            title="Configuración de optimización de páginas para la IA"
-                                        >
-                                            <Sparkles className="h-3 w-3" />
-                                            <span>
-                                                {pdfConfig.mode === "first_n"
-                                                    ? `Primeras ${pdfConfig.maxPages ?? 5} págs.`
-                                                    : pdfConfig.mode === "range"
-                                                    ? `Págs. ${pdfConfig.pageRange || "1-5"}`
-                                                    : "Doc. completo"}
-                                            </span>
+                            <div className="p-3 bg-muted/20 border-b flex flex-wrap items-end justify-between gap-2.5 shrink-0">
+                                <div className="flex flex-col gap-1.5">
+                                    <div className="flex items-end gap-2.5">
+                                        <div className="shrink-0">
+                                            <GradingModeSelector 
+                                                gradingMode={gradingMode} 
+                                                setGradingMode={setGradingMode} 
+                                                showWarning={false} 
+                                            />
                                         </div>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            onClick={handleGradeWithAI}
+                                            disabled={!submission?.url || isEvaluatingAI}
+                                            variant="default"
+                                            className="h-[42px] px-3.5 text-xs gap-1.5 font-bold shadow-xs transition-all shrink-0 cursor-pointer"
+                                            title="Evaluar el documento PDF con IA según el enunciado"
+                                        >
+                                            {isEvaluatingAI ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bot className="h-3.5 w-3.5" />}
+                                            <span>{aiFeedbackInput ? "Reevaluar con IA" : "Evaluar con IA"}</span>
+                                        </Button>
+
+                                        {pdfConfig && (
+                                            <div 
+                                                className="h-[42px] flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-3 rounded-lg border border-emerald-500/25 font-medium shrink-0"
+                                                title="Configuración de optimización de páginas para la IA"
+                                            >
+                                                <Sparkles className="h-3.5 w-3.5" />
+                                                <span>
+                                                    {pdfConfig.mode === "first_n"
+                                                        ? `Primeras ${pdfConfig.maxPages ?? 5} págs.`
+                                                        : pdfConfig.mode === "range"
+                                                        ? `Págs. ${pdfConfig.pageRange || "1-5"}`
+                                                        : "Doc. completo"}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    {gradingMode === 'strict' && (
+                                        <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+                                            ⚠️ Modo Estricto: Penalización rigurosa en fallos de arquitectura y buenas prácticas.
+                                        </p>
                                     )}
                                 </div>
 
-                                <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                                <div className="flex items-center gap-1.5 shrink-0 ml-auto self-end h-[42px]">
                                     <Badge variant="outline" className="text-[10px] text-muted-foreground font-mono shrink-0">
                                         Solo Lectura
                                     </Badge>
@@ -834,7 +855,7 @@ export function PdfReviewActivityInspector({
                                             size="sm"
                                             variant="outline"
                                             onClick={handleAdoptAIGrade}
-                                            className="h-8 text-xs font-bold gap-1 text-purple-700 dark:text-purple-300 bg-purple-500/5 hover:bg-purple-500/15 border-purple-500/30 shadow-2xs"
+                                            className="h-8 text-xs font-bold gap-1 text-purple-700 dark:text-purple-300 bg-purple-500/5 hover:bg-purple-500/15 border-purple-500/30 shadow-2xs cursor-pointer"
                                             title="Copiar nota y cambiar a Evaluación Docente"
                                         >
                                             <span>Adoptar Nota ({aiGrade.toFixed(1)})</span>
@@ -936,6 +957,8 @@ export function PdfReviewActivityInspector({
                                 activityId={activity?.id}
                                 studentId={student?.id}
                                 statement={activity?.statement || ""}
+                                isFullscreen={fullscreenSection === "right"}
+                                onToggleFullscreen={() => setFullscreenSection(prev => prev === "right" ? "none" : "right")}
                                 onInsertObservation={(text) => {
                                     setTeacherNotesInput(prev => prev ? `${prev}\n\n${text}` : text);
                                     setRightTab("teacher_grade");

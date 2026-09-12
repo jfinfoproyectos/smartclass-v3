@@ -149,6 +149,102 @@ export const DEFAULT_GITHUB_QUESTIONS: CategorizedQuestion[] = [
     },
 ];
 
+export const DEFAULT_PDF_QUESTIONS: CategorizedQuestion[] = [
+    // Cumplimiento y Rúbrica
+    {
+        id: "pdf-rubric-compliance",
+        category: "📑 Cumplimiento y Rúbrica",
+        label: "Cumplimiento general de secciones y rúbrica",
+        prompt: "¿El documento cumple con todas las secciones, objetivos y requerimientos solicitados en el enunciado de la actividad?",
+    },
+    {
+        id: "pdf-rubric-criteria",
+        category: "📑 Cumplimiento y Rúbrica",
+        label: "Alineación de objetivos y alcance",
+        prompt: "¿Los objetivos formulados en el documento responden a los requerimientos de la actividad y se cumplen a lo largo del texto?",
+    },
+    {
+        id: "pdf-structure-format",
+        category: "📑 Cumplimiento y Rúbrica",
+        label: "Estructura formal y orden del informe",
+        prompt: "¿El documento presenta una estructura lógica adecuada (portada, introducción, desarrollo, resultados, conclusiones y referencias)?",
+    },
+
+    // Síntesis y Contenido
+    {
+        id: "pdf-content-conclusions",
+        category: "🔍 Síntesis y Contenido",
+        label: "Principales conclusiones y aportes",
+        prompt: "¿Cuáles son las conclusiones principales y los aportes más significativos demostrados en el informe?",
+    },
+    {
+        id: "pdf-content-methodology",
+        category: "🔍 Síntesis y Contenido",
+        label: "Metodología y procedimiento técnico",
+        prompt: "¿Qué metodología o procedimiento técnico describe el estudiante y qué tan riguroso es su desarrollo?",
+    },
+    {
+        id: "pdf-content-summary",
+        category: "🔍 Síntesis y Contenido",
+        label: "Resumen ejecutivo del documento",
+        prompt: "Proporciona una síntesis ejecutiva estructurada de los puntos clave tratados en este documento PDF.",
+    },
+
+    // Citas y Bibliografía
+    {
+        id: "pdf-bib-apa",
+        category: "📚 Citas y Bibliografía",
+        label: "Normas de citación y bibliografía (APA)",
+        prompt: "¿El documento incluye citas bibliográficas formales (ej. APA/IEEE), están correctamente referenciadas en el texto y son académicamente válidas?",
+    },
+    {
+        id: "pdf-bib-sources-quality",
+        category: "📚 Citas y Bibliografía",
+        label: "Calidad y actualidad de las fuentes",
+        prompt: "¿Las fuentes citadas son rigurosas, actuales y pertinentes para la temática abordada en la actividad?",
+    },
+
+    // Calidad e Inconsistencias
+    {
+        id: "pdf-quality-inconsistencies",
+        category: "⚠️ Calidad e Inconsistencias",
+        label: "Inconsistencias conceptuales o errores técnicos",
+        prompt: "¿Detectas contradicciones, inconsistencias conceptuales o errores técnicos relevantes en los planteamientos del informe?",
+    },
+    {
+        id: "pdf-quality-originality",
+        category: "⚠️ Calidad e Inconsistencias",
+        label: "Rigor, originalidad y profundidad analítica",
+        prompt: "¿El trabajo demuestra análisis crítico y trabajo propio, o presenta señales de contenido genérico, superficial o automatizado?",
+    },
+    {
+        id: "pdf-quality-writing",
+        category: "⚠️ Calidad e Inconsistencias",
+        label: "Redacción, claridad y cohesión textual",
+        prompt: "¿La redacción es académica, clara y coherente, con adecuado uso de terminología técnica y ortografía?",
+    },
+
+    // Calificación y Retroalimentación
+    {
+        id: "pdf-eval-score-suggestion",
+        category: "💡 Calificación y Retroalimentación",
+        label: "Sugerencia de nota cuantitativa (0.0 - 5.0)",
+        prompt: "¿Qué calificación cuantitativa de 0.0 a 5.0 sugerirías para este documento según su calidad técnica y cumplimiento del enunciado? Justifica detalladamente.",
+    },
+    {
+        id: "pdf-eval-strengths",
+        category: "💡 Calificación y Retroalimentación",
+        label: "Fortalezas destacadas del trabajo",
+        prompt: "¿Cuáles son las mayores fortalezas y aspectos destacados que merece resaltar el estudiante en este trabajo?",
+    },
+    {
+        id: "pdf-eval-improvements",
+        category: "💡 Calificación y Retroalimentación",
+        label: "Oportunidades concretas de mejora",
+        prompt: "¿Qué recomendaciones y oportunidades puntuales de mejora pedagógica se le deben brindar al estudiante para futuros trabajos?",
+    },
+];
+
 export interface CategorizedQuestionSelectorProps {
     onSelectAndSend: (prompt: string) => void;
     onFillInput?: (prompt: string) => void;

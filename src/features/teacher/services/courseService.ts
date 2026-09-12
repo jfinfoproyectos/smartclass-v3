@@ -528,6 +528,11 @@ export const courseService = {
                             name: true,
                             email: true,
                             image: true,
+                            accounts: {
+                                select: {
+                                    providerId: true,
+                                },
+                            },
                             profile: {
                                 select: {
                                     identificacion: true,

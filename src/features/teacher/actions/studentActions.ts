@@ -430,4 +430,95 @@ export async function createAndEnrollStudentAction(formData: FormData) {
     return { success: true, message: "Estudiante creado y agregado al curso exitosamente." };
 }
 
+export async function resetStudentPasswordAction(studentId: string, courseId: string) {
+    const session = await getSession();
+    if (!session || (session.user.role !== "teacher" && session.user.role !== "admin")) {
+        throw new Error("No autorizado");
+    }
+
+    // 1. Verify course ownership or admin
+    if (session.user.role !== "admin") {
+        const course = await prisma.course.findUnique({
+            where: { id: courseId },
+            select: { teacherId: true, title: true }
+        });
+        if (!course || course.teacherId !== session.user.id) {
+            throw new Error("No tienes permisos para modificar estudiantes de este curso");
+        }
+    }
+
+    // 2. Verify student is enrolled in course
+    const enrollment = await prisma.enrollment.findFirst({
+        where: { userId: studentId, courseId },
+        include: {
+            user: {
+                include: {
+                    profile: true,
+                    accounts: true,
+                }
+            }
+        }
+    });
+
+    if (!enrollment) {
+        throw new Error("El estudiante no está inscrito en este curso");
+    }
+
+    const student = enrollment.user;
+    const identificacion = student.profile?.identificacion?.trim();
+
+    if (!identificacion) {
+        throw new Error("El estudiante no tiene número de identificación registrado en su perfil para usarlo como contraseña");
+    }
+
+    // 3. Hash the identification as new password
+    const bcrypt = await import("bcryptjs");
+    const hashedPassword = await bcrypt.hash(identificacion, 10);
+
+    // 4. Update or create the credential account
+    const credentialAccount = student.accounts.find(a => a.providerId === "credential");
+
+    if (credentialAccount) {
+        await prisma.account.update({
+            where: { id: credentialAccount.id },
+            data: { password: hashedPassword }
+        });
+    } else {
+        await prisma.account.create({
+            data: {
+                id: crypto.randomUUID(),
+                accountId: crypto.randomUUID(),
+                userId: studentId,
+                providerId: "credential",
+                password: hashedPassword,
+            }
+        });
+    }
+
+    // 🎯 AUDIT LOG
+    try {
+        const { auditLogger } = await import("../../admin/services/auditLogger");
+        await auditLogger.log({
+            action: "UPDATE",
+            entity: "USER",
+            entityId: studentId,
+            userId: session.user.id,
+            userName: session.user.name || "Profesor",
+            userRole: session.user.role || "teacher",
+            description: `Contraseña restablecida por defecto (identificación) para el estudiante: ${student.name} (${student.email})`,
+            metadata: { studentId, courseId, email: student.email },
+            success: true,
+        });
+    } catch (e) {
+        console.error("Audit log error:", e);
+    }
+
+    revalidatePath(`/dashboard/teacher/courses/${courseId}`);
+    return { 
+        success: true, 
+        message: `Contraseña restablecida exitosamente al número de identificación: ${identificacion}` 
+    };
+}
+
+
 

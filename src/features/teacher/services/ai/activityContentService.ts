@@ -247,24 +247,55 @@ ESTRUCTURA OBLIGATORIA DEL ENUNCIADO:
 * **[Criterio Principal] (50%)**: [Descripción del cumplimiento esperado]
 * **[Criterio Secundario] (30%)**: [Descripción de calidad y metodología]
 * **[Puntualidad y Presentación] (20%)**: [Normas de presentación y rigor formal]`;
+        case "DOCUMENTATION":
+            activityTypeGuidance = `
+TIPO DE DOCUMENTO: Lección o Módulo de Documentación Académica y Técnica en Markdown (GFM).
+El docente está creando material de estudio interactivo, guías paso a paso o documentación técnica de la materia.
+ESTRUCTURA DE LA DOCUMENTACIÓN:
+# [Título del Tema o Módulo]
+
+> [!NOTE]
+> Introducción conceptual o resumen de objetivos clave.
+
+## 1. Fundamentos y Contexto
+[Explicación teórica clara, pedagógica y accesible con analogías o casos de uso]
+
+## 2. Ejemplos Prácticos y Código
+\`\`\`[lenguaje]
+// Código de ejemplo detallado y documentado con comentarios didácticos
+\`\`\`
+
+## 3. Arquitectura y Buenas Prácticas
+[Directrices, tablas comparativas GFM o patrones recomendados]
+
+## 4. Guía Paso a Paso
+1. **Paso 1**: [Descripción]
+2. **Paso 2**: [Descripción]
+
+## 5. Resumen y Puntos Clave
+* **Punto clave 1**: [Detalle]
+* **Punto clave 2**: [Detalle]`;
             break;
     }
 
+    const isDoc = activityType === "DOCUMENTATION";
     const systemPrompt = `Eres un diseñador instruccional y docente universitario experto en ingeniería de software y ciencias de la computación.
-Tu misión es redactar un enunciado académico completo, motivador y profesional con su respectiva rúbrica de evaluación en formato Markdown para una actividad académica de tipo "${activityType}".
+Tu misión es redactar ${isDoc ? "una lección o documento educativo completo, motivador y profesional" : "un enunciado académico completo, motivador y profesional con su respectiva rúbrica de evaluación"} en formato Markdown para una ${isDoc ? "lección de documentación" : `actividad académica de tipo "${activityType}"`}.
 ${levelText}
 
 ${activityTypeGuidance}
 
 REGLAS CRÍTICAS Y OBLIGATORIAS:
-1. La sección de criterios de evaluación (Rúbrica) DEBE OBLIGATORIAMENTE usar viñetas con el formato exacto:
+${isDoc ? `1. Diseña una lección pedagógica enriquecida con encabezados claros (#, ##, ###), bloques de notas (> [!NOTE], > [!TIP], > [!WARNING]), código con sintaxis resaltada y tablas comparativas.
+2. Explica los conceptos de manera progresiva, desde lo más básico hasta casos avanzados con buenas prácticas.
+3. No incluyas rúbricas de calificación de entregas (es un documento de estudio/lección).` : `1. La sección de criterios de evaluación (Rúbrica) DEBE OBLIGATORIAMENTE usar viñetas con el formato exacto:
    * **Nombre del Criterio (Porcentaje%)**: Descripción detallada de lo evaluado.
    Ejemplo:
    * **Funcionalidad y Lógica (40%)**: Cumple con todos los requisitos pedidos.
    * **Arquitectura de Software (35%)**: Modularidad y buenas prácticas.
    * **Manejo de Errores (25%)**: Tratamiento de excepciones.
 
-2. La suma exacta de los porcentajes de todos los criterios DEBE SER EXACTAMENTE 100%. NUNCA generes una rúbrica que sume más o menos de 100%.
+2. La suma exacta de los porcentajes de todos los criterios DEBE SER EXACTAMENTE 100%. NUNCA generes una rúbrica que sume más o menos de 100%.`}
 
 3. Adapta todo el contenido específicamente al prompt del docente, personalizando nombres de componentes, casos de uso, tecnologías y requerimientos técnicos relevantes.
 

@@ -36,7 +36,8 @@ import {
     Send,
     Undo2,
     User,
-    Sparkle
+    Sparkle,
+    BookOpen
 } from "lucide-react";
 import {
     generateActivityDescriptionAction,
@@ -112,10 +113,21 @@ const ACTIVITY_TYPE_INFO: Record<string, { label: string; icon: any; color: stri
         icon: Pencil,
         color: "text-stone-600 dark:text-stone-400",
         badgeColor: "bg-stone-500/10 text-stone-600 dark:text-stone-400 border-stone-200 dark:border-stone-800/40"
+    },
+    DOCUMENTATION: {
+        label: "Documentación / Lección",
+        icon: BookOpen,
+        color: "text-primary dark:text-primary",
+        badgeColor: "bg-primary/10 text-primary border-primary/20"
     }
 };
 
 const QUICK_SUGGESTIONS: Record<string, string[]> = {
+    DOCUMENTATION: [
+        "Introducción completa a Jetpack Compose con arquitectura declarativa, estado, recomposición y ejemplos de código.",
+        "Guía paso a paso sobre desarrollo de APIs RESTful con Node.js, Express y TypeScript, incluyendo autenticación y base de datos.",
+        "Arquitectura MVVM en Android: ViewModel, LiveData, StateFlow y conexión con servicios Retrofit con buenas prácticas."
+    ],
     GITHUB: [
         "API REST con autenticación JWT, operaciones CRUD y validación de esquemas en Node.js/Express o Python FastAPI.",
         "Arquitectura MVC limpia con TypeScript, inyección de dependencias y pruebas unitarias de servicios.",

@@ -53,7 +53,8 @@ import {
   reorderItemAction, 
   moveAndReorderAction,
   updatePageMetadataAction,
-  exportProjectAction
+  exportProjectAction,
+  importProjectStructureAction
 } from "@/features/documentation/actions/adminDocsActions";
 import { toast } from "sonner";
 
@@ -83,6 +84,17 @@ interface AdminFileExplorerProps {
 
 type DialogType = 'file' | 'folder' | 'rename' | 'delete' | 'settings' | null;
 
+const findNodeByPath = (nodes: FileNode[], path: string): FileNode | null => {
+  for (const node of nodes) {
+    if (node.path === path) return node;
+    if (node.children) {
+      const found = findNodeByPath(node.children, path);
+      if (found) return found;
+    }
+  }
+  return null;
+};
+
 export function AdminFileExplorer({ 
   projectId, 
   tree, 
@@ -111,179 +123,91 @@ export function AdminFileExplorer({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImportFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0) return;
 
     setIsSubmitting(true);
-    let mdSuccessCount = 0;
-    let zipSuccessCount = 0;
-    let errorCount = 0;
+    const toastId = toast.loading("Procesando archivos para importar...");
 
-    const targetParent = dialogState.parentPath;
+    try {
+      const filesToImport: { path: string; content: string }[] = [];
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const fileNameLower = file.name.toLowerCase();
+      for (let i = 0; i < fileList.length; i++) {
+        const file = fileList[i];
+        const fileNameLower = file.name.toLowerCase();
 
-      if (fileNameLower.endsWith('.zip')) {
-        try {
+        if (fileNameLower.endsWith('.zip')) {
           const zip = await JSZip.loadAsync(file);
-          const mdFiles: { name: string; content: string }[] = [];
-          const promises: Promise<void>[] = [];
+          const zipPromises: Promise<void>[] = [];
 
           zip.forEach((relativePath, zipEntry) => {
             if (!zipEntry.dir && relativePath.toLowerCase().endsWith('.md')) {
-              promises.push(
-                zipEntry.async("text").then(content => {
-                  mdFiles.push({ name: relativePath, content });
+              zipPromises.push(
+                zipEntry.async("text").then((content) => {
+                  filesToImport.push({ path: relativePath, content });
                 })
               );
             }
           });
 
-          await Promise.all(promises);
-
-          for (const mdFile of mdFiles) {
-            const parts = mdFile.name.split('/');
-            const fileName = parts.pop()!;
-            const relativeParentPath = parts.join('/');
-
-            const currentParentPath = targetParent === projectId ? "" : (targetParent || "");
-            const targetParentPath = currentParentPath 
-              ? (relativeParentPath ? `${currentParentPath}/${relativeParentPath}` : currentParentPath) 
-              : relativeParentPath;
-
-            const baseName = fileName.replace(/\.md$/i, '');
-            const match = baseName.match(/^(\d+)-(.*)$/);
-            const order = match ? match[1] : undefined;
-            const title = match 
-              ? match[2].split(/[ \-_]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') 
-              : baseName.split(/[ \-_]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-            
-            const finalName = baseName.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, '-');
-            const isDirIndex = baseName.toLowerCase() === 'index';
-
-            if (isDirIndex && relativeParentPath) {
-              await createItemAction(
-                projectId,
-                targetParentPath,
-                "index",
-                'file',
-                { title, order },
-                mdFile.content
-              );
-            } else {
-              await createItemAction(
-                projectId,
-                targetParentPath || projectId,
-                finalName,
-                'file',
-                { title, order },
-                mdFile.content
-              );
-            }
-          }
-          zipSuccessCount++;
-        } catch (err) {
-          console.error("Error importing ZIP file:", file.name, err);
-          errorCount++;
-        }
-      } else if (fileNameLower.endsWith('.md')) {
-        try {
+          await Promise.all(zipPromises);
+        } else if (fileNameLower.endsWith('.md')) {
           const text = await file.text();
-          const baseName = file.name.replace(/\.md$/i, '');
-          
-          const match = baseName.match(/^(\d+)-(.*)$/);
-          const order = match ? match[1] : undefined;
-          const title = match ? match[2].split(/[ \-_]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : baseName.split(/[ \-_]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-          const finalName = baseName.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, '-');
-
-          await createItemAction(
-            projectId,
-            targetParent,
-            finalName,
-            'file',
-            { title, order },
-            text
-          );
-          mdSuccessCount++;
-        } catch (err) {
-          console.error("Error importing MD file:", file.name, err);
-          errorCount++;
+          const currentParent = dialogState.parentPath && dialogState.parentPath !== projectId ? dialogState.parentPath : "";
+          const path = currentParent ? `${currentParent}/${file.name}` : file.name;
+          filesToImport.push({ path, content: text });
         }
-      } else {
-        errorCount++;
       }
-    }
 
-    if (zipSuccessCount > 0) {
-      toast.success(`¡Proyecto importado con éxito desde archivo .zip!`);
+      if (filesToImport.length === 0) {
+        toast.error("No se encontraron archivos markdown (.md) válidos.", { id: toastId });
+        setIsSubmitting(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        return;
+      }
+
+      const result = await importProjectStructureAction(projectId, filesToImport);
+      toast.success(`¡Importación completada! Se procesaron ${result.count} páginas en ${result.topicsCount} tópicos.`, { id: toastId });
       onTreeChange();
-    } else if (mdSuccessCount > 0) {
-      toast.success(`¡${mdSuccessCount} archivos importados con éxito!`);
-      onTreeChange();
+    } catch (err: any) {
+      console.error("Error al importar archivos:", err);
+      toast.error(err?.message || "Error al importar el proyecto.", { id: toastId });
+    } finally {
+      setIsSubmitting(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
-
-    if (errorCount > 0) {
-      toast.error(`Error al procesar algunos archivos.`);
-    }
-
-    setIsSubmitting(false);
-    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleExportProject = async () => {
     try {
       setIsSubmitting(true);
-      const toastId = toast.loading("Preparando archivos para exportar...");
+      const toastId = toast.loading("Preparando exportación numerada de tópicos y archivos...");
       
-      const pages = await exportProjectAction(projectId);
+      const { projectName, projectSlug, files } = await exportProjectAction(projectId);
       
+      if (!files || files.length === 0) {
+        toast.error("No hay archivos para exportar en este proyecto.", { id: toastId });
+        setIsSubmitting(false);
+        return;
+      }
+
       const zip = new JSZip();
-      
-      pages.forEach((page: any) => {
-        // File path: keep the slug exactly as-is in the zip, just add .md extension
-        const filePath = page.slug.endsWith('.md') ? page.slug : `${page.slug}.md`;
-        
-        // Build frontmatter lines — only include non-null/non-empty values
-        const fmLines: string[] = [];
-        fmLines.push(`title: "${String(page.title || '').replace(/"/g, '\\"')}"`);
-        if (page.category && page.category !== 'General') {
-          fmLines.push(`category: "${page.category}"`);
-        }
-        if (typeof page.order === 'number' && page.order !== 0) {
-          fmLines.push(`order: ${page.order}`);
-        }
-        if (typeof page.categoryOrder === 'number' && page.categoryOrder !== 0) {
-          fmLines.push(`categoryOrder: ${page.categoryOrder}`);
-        }
-        if (page.draft === true) {
-          fmLines.push(`draft: true`);
-        }
-        if (page.publishDate) {
-          fmLines.push(`date: "${page.publishDate}"`);
-        }
-        if (page.icon) {
-          fmLines.push(`icon: "${page.icon}"`);
-        }
-        
-        const frontmatter = `---\n${fmLines.join('\n')}\n---\n`;
-        const fileContent = frontmatter + '\n' + (page.content || '');
-        
-        zip.file(filePath, fileContent);
+      files.forEach((file) => {
+        zip.file(file.path, file.content);
       });
       
       const blob = await zip.generateAsync({ type: "blob" });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `docs-export-${projectId}.zip`;
+      const cleanDownloadName = (projectSlug || projectName || projectId).replace(/[/\\?%*:|"<>]/g, '-');
+      a.download = `docs-${cleanDownloadName}.zip`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
       
-      toast.success(`¡Exportación completada! ${pages.length} páginas empaquetadas.`, { id: toastId });
+      toast.success(`¡Exportación completada! ${files.length} páginas organizadas en carpetas numeradas.`, { id: toastId });
     } catch (error) {
       console.error(error);
       toast.error("Error al exportar el proyecto");
@@ -297,16 +221,6 @@ export function AdminFileExplorer({
     (node.children && node.children.some(c => c.name.toLowerCase().includes(search.toLowerCase())))
   );
 
-  const findNodeByPath = (nodes: FileNode[], path: string): FileNode | null => {
-    for (const node of nodes) {
-      if (node.path === path) return node;
-      if (node.children) {
-        const found = findNodeByPath(node.children, path);
-        if (found) return found;
-      }
-    }
-    return null;
-  };
 
   const toLocalISO = (date: string | Date | null | undefined) => {
     if (!date) return "";
@@ -324,6 +238,10 @@ export function AdminFileExplorer({
   };
 
   const handleOpenDialog = (type: DialogType, parentPath: string, nodeType?: 'file' | 'folder', currentName?: string, sha?: string, extraData?: any) => {
+    if (type === 'folder' && parentPath !== projectId) {
+      toast.error("No se pueden crear carpetas dentro de otras carpetas.");
+      return;
+    }
     setDialogState({ type, parentPath, nodeType, itemName: currentName, itemSha: sha });
     
     if (type === 'file' || type === 'folder') {
@@ -355,6 +273,9 @@ export function AdminFileExplorer({
     try {
       if (dialogState.type === 'file' || dialogState.type === 'folder') {
         if (!inputValue) throw new Error("El nombre es requerido");
+        if (dialogState.type === 'folder' && dialogState.parentPath !== projectId) {
+          throw new Error("No se permite crear carpetas dentro de otras carpetas.");
+        }
         const finalName = inputValue.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, '-');
         
         await createItemAction(
@@ -379,7 +300,13 @@ export function AdminFileExplorer({
           date: toUTCISO(dialogData.date),
           icon: dialogData.icon
         });
-        toast.success("Configuración actualizada.");
+        toast.success(
+          dialogState.nodeType === 'folder'
+            ? (dialogData.draft 
+                ? "Tópico y todos sus archivos colocados en borrador." 
+                : "Tópico y archivos publicados con éxito.")
+            : "Configuración actualizada."
+        );
       }
       
       onTreeChange();
@@ -452,7 +379,7 @@ export function AdminFileExplorer({
     >
       {/* Sidebar Header Title & Actions Row */}
       <div className="px-4 pt-4 pb-2.5 flex items-center justify-between gap-2">
-        <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/80">
+        <span className="text-xs font-semibold text-muted-foreground">
           Documentos
         </span>
         <div className="flex items-center gap-0.5 shrink-0">
@@ -474,7 +401,7 @@ export function AdminFileExplorer({
           >
             <FilePlus className="w-3.5 h-3.5" />
           </Button>
-          <Separator orientation="vertical" className="h-4 bg-border/40 mx-1" />
+          <Separator orientation="vertical" className="h-4 bg-border/60 mx-1" />
           <Button 
             variant="ghost" 
             size="icon" 
@@ -512,12 +439,12 @@ export function AdminFileExplorer({
       {/* Sidebar Search Row (Full Width) */}
       <div className="px-4 pb-3">
         <div className="relative group w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/45 group-focus-within:text-primary transition-colors" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/60 group-focus-within:text-primary transition-colors" />
           <input 
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar archivos..."
-            className="w-full h-9 pl-9 pr-4 bg-muted/20 border border-border/40 focus:border-border/80 focus:bg-background rounded-xl text-[11px] font-bold tracking-tight focus:ring-1 focus:ring-primary/20 outline-none transition-all placeholder:text-muted-foreground/45 placeholder:font-medium text-foreground"
+            className="w-full h-9 pl-9 pr-3.5 bg-muted/30 border border-border/60 focus:border-primary/50 focus:bg-background rounded-xl text-xs font-medium focus:ring-1 focus:ring-primary/20 outline-none transition-all placeholder:text-muted-foreground/60 text-foreground"
           />
         </div>
       </div>
@@ -529,6 +456,7 @@ export function AdminFileExplorer({
             node={node} 
             projectId={projectId}
             level={0} 
+            tree={tree}
             selectedPath={selectedPath} 
             onSelect={onSelect}
             onTreeChange={onTreeChange}
@@ -548,20 +476,20 @@ export function AdminFileExplorer({
       <Dialog open={!!dialogState.type} onOpenChange={(open) => !open && setDialogState({ type: null, parentPath: projectId })}>
         <DialogContent className="sm:max-w-[425px] border-border bg-background shadow-2xl rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="text-xl font-black uppercase tracking-tight">
+            <DialogTitle className="text-lg font-bold tracking-tight text-foreground">
               {dialogState.type === 'file' && "Nuevo Archivo"}
-              {dialogState.type === 'folder' && (
-                dialogState.parentPath === projectId ? "Nuevo Tópico" : "Nueva Categoría"
-              )}
+              {dialogState.type === 'folder' && "Nuevo Tópico"}
               {dialogState.type === 'rename' && "Renombrar Elemento"}
               {dialogState.type === 'delete' && "¿Eliminar Elemento?"}
-              {dialogState.type === 'settings' && "Configuración de Página"}
+              {dialogState.type === 'settings' && (dialogState.nodeType === 'folder' ? "Configuración del Tópico" : "Configuración de Página")}
             </DialogTitle>
-            <DialogDescription className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            <DialogDescription className="text-xs text-muted-foreground">
               {dialogState.type === 'delete' 
-                ? `¿Estás seguro de eliminar "${dialogState.itemName}"? Esta acción es irreversible.` 
+                ? `¿Estás seguro de eliminar "${dialogState.itemName}"? Esta acción no se puede deshacer.` 
                 : dialogState.type === 'settings' 
-                  ? "Configura los metadatos de la página en la base de datos."
+                  ? (dialogState.nodeType === 'folder' 
+                      ? "Configura los metadatos del tópico. Al colocarlo en borrador, todos sus archivos también se colocarán en borrador."
+                      : "Configura los metadatos de la página en la base de datos.")
                   : "Ingresa el nombre para continuar."}
             </DialogDescription>
           </DialogHeader>
@@ -571,26 +499,39 @@ export function AdminFileExplorer({
               {dialogState.type === 'settings' ? (
                 <>
                   <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-primary/70">Título de la Página</Label>
+                    <Label className="text-xs font-semibold text-foreground/80">
+                      {dialogState.nodeType === 'folder' ? "Título del Tópico" : "Título de la Página"}
+                    </Label>
                     <Input 
                       value={inputValue} 
                       onChange={(e) => setInputValue(e.target.value)} 
-                      className="h-11 bg-muted/20 border-border rounded-xl"
+                      className="h-10 bg-muted/20 border-border rounded-xl text-xs"
                     />
                   </div>
-                  <div className="space-y-4">
-                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-60">Icono (Iconify)</Label>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold text-foreground/80">Icono (Iconify)</Label>
                     <Input 
                       value={dialogData.icon} 
                       onChange={(e) => setDialogData(prev => ({ ...prev, icon: e.target.value }))} 
                       placeholder="ej: lucide:book o mdi:github"
-                      className="h-12 rounded-2xl bg-muted/20 border-border focus:bg-background transition-all"
+                      className="h-10 rounded-xl bg-muted/20 border-border focus:bg-background transition-all text-xs"
                     />
                   </div>
-                  <div className="flex items-center justify-between p-4 rounded-2xl bg-muted/20 border border-border/50">
-                    <div className="space-y-0.5">
-                      <Label className="text-xs font-bold">Modo Borrador</Label>
-                      <p className="text-[9px] text-muted-foreground uppercase">Ocultar de la vista pública</p>
+                  <div className="flex items-center justify-between p-3.5 rounded-xl bg-muted/20 border border-border/50">
+                    <div className="space-y-0.5 pr-2">
+                      <div className="flex items-center gap-2">
+                        <Label className="text-xs font-medium text-foreground">Modo Borrador</Label>
+                        {dialogData.draft && (
+                          <span className="text-[10px] uppercase font-bold tracking-wider text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                            Borrador
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground leading-tight">
+                        {dialogState.nodeType === 'folder' 
+                          ? "Ocultar tópico y todos sus archivos de la vista pública" 
+                          : "Ocultar de la vista pública"}
+                      </p>
                     </div>
                     <Switch 
                       checked={dialogData.draft}
@@ -598,29 +539,29 @@ export function AdminFileExplorer({
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-primary/70">Fecha de Publicación</Label>
+                    <Label className="text-xs font-semibold text-foreground/80">Fecha de Publicación</Label>
                     <Input 
                       type="datetime-local"
                       value={dialogData.date} 
                       onChange={(e) => setDialogData(prev => ({ ...prev, date: e.target.value }))} 
-                      className="h-11 bg-muted/20 border-border rounded-xl"
+                      className="h-10 bg-muted/20 border-border rounded-xl text-xs"
                     />
                   </div>
                 </>
               ) : (dialogState.type === 'file' || dialogState.type === 'folder') ? (
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-primary/70">Nombre / Título</Label>
+                    <Label className="text-xs font-semibold text-foreground/80">Nombre / Título</Label>
                     <Input 
                       value={inputValue} 
                       autoFocus
                       onChange={(e) => setInputValue(e.target.value)} 
                       onKeyDown={(e) => e.key === 'Enter' && handleConfirm()}
-                      className="h-11 bg-muted/20 border-border rounded-xl"
+                      className="h-10 bg-muted/20 border-border rounded-xl text-xs"
                       placeholder={
                         dialogState.type === 'file' 
                           ? "Introducción al Proyecto" 
-                          : (dialogState.parentPath === projectId ? "Nombre del Tópico" : "Nombre de la Categoría")
+                          : "Nombre del Tópico"
                       }
                     />
                   </div>
@@ -628,10 +569,10 @@ export function AdminFileExplorer({
                   {inputValue && (
                     <div className="p-3 rounded-xl bg-primary/5 border border-primary/20 animate-in fade-in slide-in-from-top-2">
                       <div className="flex items-center gap-2 mb-1">
-                        <AlertCircle className="w-3 h-3 text-primary" />
-                        <span className="text-[10px] font-bold uppercase tracking-tight text-primary">Vista Previa del Slug</span>
+                        <AlertCircle className="w-3.5 h-3.5 text-primary" />
+                        <span className="text-xs font-medium text-primary">Vista previa del slug:</span>
                       </div>
-                      <code className="text-[11px] font-mono text-muted-foreground break-all">
+                      <code className="text-xs font-mono text-muted-foreground break-all">
                         {inputValue.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, '-')}{dialogState.type === 'file' ? ".md" : "/"}
                       </code>
                     </div>
@@ -639,14 +580,14 @@ export function AdminFileExplorer({
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <Label htmlFor="name" className="text-xs font-bold uppercase text-primary/70">Nuevo Nombre</Label>
+                  <Label htmlFor="name" className="text-xs font-semibold text-foreground/80">Nuevo Nombre</Label>
                   <Input 
                     id="name" 
                     value={inputValue} 
                     autoFocus
                     onKeyDown={(e) => e.key === 'Enter' && handleConfirm()}
                     onChange={(e) => setInputValue(e.target.value)} 
-                    className="h-11 bg-muted/20 border-border rounded-xl"
+                    className="h-10 bg-muted/20 border-border rounded-xl text-xs"
                   />
                 </div>
               )}
@@ -654,16 +595,16 @@ export function AdminFileExplorer({
           )}
 
           <DialogFooter className="mt-4 gap-2">
-            <Button variant="ghost" onClick={() => setDialogState({ type: null, parentPath: projectId })} disabled={isSubmitting}>
+            <Button variant="ghost" className="rounded-xl text-xs font-medium" onClick={() => setDialogState({ type: null, parentPath: projectId })} disabled={isSubmitting}>
               Cancelar
             </Button>
             <Button 
               onClick={handleConfirm} 
               disabled={isSubmitting}
               variant={dialogState.type === 'delete' ? 'destructive' : 'default'}
-              className="gap-2 px-6 font-black uppercase tracking-widest shadow-lg"
+              className="gap-2 px-5 font-semibold text-xs rounded-xl shadow-xs"
             >
-              {isSubmitting && <Plus className="w-4 h-4 animate-spin" />}
+              {isSubmitting && <Plus className="w-3.5 h-3.5 animate-spin" />}
               {dialogState.type === 'delete' ? 'Eliminar' : (dialogState.type === 'rename' ? 'Actualizar' : (dialogState.type === 'settings' ? 'Guardar' : 'Crear'))}
             </Button>
           </DialogFooter>
@@ -677,6 +618,7 @@ function FileTreeNode({
   node, 
   projectId,
   level, 
+  tree,
   selectedPath, 
   onSelect, 
   onTreeChange,
@@ -689,6 +631,7 @@ function FileTreeNode({
   node: FileNode; 
   projectId: string;
   level: number; 
+  tree: FileNode[];
   selectedPath: string | null; 
   onSelect: (path: string) => void;
   onTreeChange: () => void;
@@ -700,6 +643,7 @@ function FileTreeNode({
 }) {
   const [isOpen, setIsOpen] = useState(level === 0);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [dragOverPos, setDragOverPos] = useState<'top' | 'bottom' | 'middle' | null>(null);
   const isSelected = selectedPath === node.path;
   const isFolder = node.type === "folder";
@@ -713,53 +657,94 @@ function FileTreeNode({
   };
 
   const handleDragStart = (e: React.DragEvent) => {
+    e.stopPropagation();
     e.dataTransfer.setData("path", node.path);
     e.dataTransfer.setData("sha", node.sha || "");
+    e.dataTransfer.setData("isFolder", isFolder ? "true" : "false");
     e.dataTransfer.effectAllowed = "move";
+    setIsDragging(true);
+  };
+
+  const handleDragEnd = () => {
+    setIsDragging(false);
+    setIsDragOver(false);
+    setDragOverPos(null);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "move";
+
     const rect = e.currentTarget.getBoundingClientRect();
     const y = e.clientY - rect.top;
     const height = rect.height;
     
-    // Si es carpeta, permitimos drop "inside" (middle 50%)
-    // Para todos, permitimos drop "before" (top 25%) o "after" (bottom 25%)
-    if (y < height * 0.25) {
-      setDragOverPos('top');
-    } else if (y > height * 0.75) {
-      setDragOverPos('bottom');
-    } else if (isFolder) {
-      setDragOverPos('middle');
+    // Si es carpeta, permitimos drop "inside" (middle 40%)
+    // Top 30% es 'before', Bottom 30% es 'after'
+    if (isFolder) {
+      if (y < height * 0.3) {
+        setDragOverPos('top');
+      } else if (y > height * 0.7) {
+        setDragOverPos('bottom');
+      } else {
+        setDragOverPos('middle');
+      }
     } else {
-      // Si no es carpeta, middle se trata como after o se ignora
-      setDragOverPos(y < height / 2 ? 'top' : 'bottom');
+      setDragOverPos(y < height * 0.5 ? 'top' : 'bottom');
     }
     
     setIsDragOver(true);
   };
 
-  const handleDragLeave = () => {
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
     setIsDragOver(false);
     setDragOverPos(null);
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsDragOver(false);
+
     const draggedPath = e.dataTransfer.getData("path");
-    
     if (!draggedPath || draggedPath === node.path) {
       setDragOverPos(null);
       return;
     }
 
-    if (dragOverPos === 'middle' && isFolder) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const height = rect.height;
+
+    const draggedNode = findNodeByPath(tree, draggedPath);
+    const isDraggedFolder = draggedNode?.type === 'folder';
+
+    // Determinar posición dinámicamente si dragOverPos no estuviera sincronizado
+    let pos = dragOverPos;
+    if (!pos) {
+      if (isFolder && !isDraggedFolder) {
+        if (y < height * 0.3) pos = 'top';
+        else if (y > height * 0.7) pos = 'bottom';
+        else pos = 'middle';
+      } else {
+        pos = y < height * 0.5 ? 'top' : 'bottom';
+      }
+    }
+
+    if (pos === 'middle' && isFolder) {
+      if (isDraggedFolder) {
+        toast.error("No se permite mover un tópico o carpeta dentro de otro tópico.");
+        setDragOverPos(null);
+        return;
+      }
       onMoveAndReorder(draggedPath, node.path, 'inside');
-    } else if (dragOverPos === 'top') {
+    } else if (pos === 'top') {
       onMoveAndReorder(draggedPath, node.path, 'before');
-    } else if (dragOverPos === 'bottom') {
+    } else if (pos === 'bottom') {
       onMoveAndReorder(draggedPath, node.path, 'after');
     }
     
@@ -770,82 +755,105 @@ function FileTreeNode({
     <div className="select-none py-0.5">
       <div 
         className={cn(
-          "group relative flex items-center h-10 px-3 gap-3 cursor-pointer transition-all duration-300 select-none rounded-xl mx-2",
+          "group relative flex items-start min-h-[34px] py-1.5 px-2.5 gap-2.5 cursor-grab active:cursor-grabbing transition-all duration-150 select-none rounded-xl mx-1",
           isSelected 
-            ? "text-emerald-600 dark:text-emerald-400 font-extrabold bg-emerald-500/10 border border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.12)]" 
-            : "text-muted-foreground hover:bg-emerald-500/5 hover:text-emerald-500",
+            ? "text-primary font-semibold bg-primary/10 border border-primary/25 shadow-2xs" 
+            : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
           node.draft && "opacity-60",
-          isDragOver && dragOverPos === 'middle' && "bg-emerald-500/30 scale-[1.02]",
-          "active:scale-[0.98]"
+          isDragging && "opacity-30 border-dashed border-2 border-primary/60 scale-[0.98]",
+          "active:scale-[0.99]"
         )}
-        style={{ marginLeft: `${(level) * 12}px` }}
         onClick={handleToggle}
         draggable
         onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        {/* Indicadores de drop posicional */}
+        {/* Indicadores de drop posicional altamente visibles */}
         {isDragOver && dragOverPos === 'top' && (
-          <div className="absolute top-0 left-0 right-0 h-0.5 bg-primary shadow-[0_0_8px_rgba(var(--primary),0.5)] z-50 animate-pulse" />
+          <div className="absolute -top-1 left-2 right-2 h-1 rounded-full bg-primary shadow-xs z-50 pointer-events-none flex items-center">
+            <div className="w-2.5 h-2.5 -ml-1 rounded-full bg-primary border-2 border-background shadow-xs" />
+          </div>
         )}
         {isDragOver && dragOverPos === 'bottom' && (
-          <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary shadow-[0_0_8px_rgba(var(--primary),0.5)] z-50 animate-pulse" />
+          <div className="absolute -bottom-1 left-2 right-2 h-1 rounded-full bg-primary shadow-xs z-50 pointer-events-none flex items-center">
+            <div className="w-2.5 h-2.5 -ml-1 rounded-full bg-primary border-2 border-background shadow-xs" />
+          </div>
+        )}
+        {isDragOver && dragOverPos === 'middle' && isFolder && (
+          <div className="absolute inset-0 rounded-xl bg-primary/15 border-2 border-primary/40 shadow-inner z-40 pointer-events-none flex items-center justify-end pr-3">
+            <span className="text-[10px] font-semibold text-primary bg-background/90 px-2 py-0.5 rounded-md shadow-xs border border-primary/25">
+              Mover dentro
+            </span>
+          </div>
         )}
         
-        <div className="flex items-center gap-2 flex-1 min-w-0">
+        <div className="flex items-start gap-2 flex-1 min-w-0 pointer-events-none">
           {isFolder ? (
-            <motion.div animate={{ rotate: isOpen ? 90 : 0 }} className="shrink-0">
-              <ChevronRight className={cn("w-3.5 h-3.5", isSelected ? "text-primary" : "text-primary/40")} />
+            <motion.div animate={{ rotate: isOpen ? 90 : 0 }} className="shrink-0 mt-0.5">
+              <ChevronRight className={cn("w-3.5 h-3.5", isSelected ? "text-primary" : "text-muted-foreground/60")} />
             </motion.div>
           ) : (
             node.draft ? (
-              <span title="Borrador">
-                <EyeOff className="w-3.5 h-3.5 shrink-0 text-muted-foreground/40" />
+              <span title="Borrador" className="shrink-0 mt-0.5">
+                <EyeOff className="w-3.5 h-3.5 text-muted-foreground/50" />
               </span>
             ) : node.publishDate ? (
               new Date(node.publishDate) > new Date() ? (
-                <span title={`Programado: ${new Date(node.publishDate).toLocaleString()}`}>
-                  <CalendarClock className="w-3.5 h-3.5 shrink-0 text-red-400" />
+                <span title={`Programado: ${new Date(node.publishDate).toLocaleString()}`} className="shrink-0 mt-0.5">
+                  <CalendarClock className="w-3.5 h-3.5 text-amber-500" />
                 </span>
               ) : (
-                <span title={`Publicado el: ${new Date(node.publishDate).toLocaleString()}`}>
-                  <CalendarCheck className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
+                <span title={`Publicado el: ${new Date(node.publishDate).toLocaleString()}`} className="shrink-0 mt-0.5">
+                  <CalendarCheck className="w-3.5 h-3.5 text-primary" />
                 </span>
               )
             ) : node.icon ? (
-              <DynamicIcon icon={node.icon} className={cn("w-4 h-4 shrink-0", isSelected ? "text-primary" : "text-primary")} />
+              <div className="shrink-0 mt-0.5">
+                <DynamicIcon icon={node.icon} className={cn("w-3.5 h-3.5", isSelected ? "text-primary" : "text-primary/80")} />
+              </div>
             ) : (
-              <FileText className={cn("w-3.5 h-3.5 shrink-0", isSelected ? "text-primary" : "text-primary/40")} />
+              <FileText className={cn("w-3.5 h-3.5 shrink-0 mt-0.5", isSelected ? "text-primary" : "text-muted-foreground/60")} />
             )
           )}
           
           {isFolder ? (
              level === 0 ? (
-               <Bookmark className={cn("w-4 h-4 shrink-0", isSelected ? "text-primary" : "text-primary")} />
+               <Bookmark className={cn("w-3.5 h-3.5 shrink-0 mt-0.5", isSelected ? "text-primary" : "text-primary/70")} />
              ) : (
-               isOpen ? <FolderOpen className={cn("w-4 h-4 shrink-0", isSelected ? "text-primary" : "text-primary")} /> : <FolderIcon className={cn("w-4 h-4 shrink-0", isSelected ? "text-primary" : "text-primary/70")} />
+               isOpen ? <FolderOpen className={cn("w-3.5 h-3.5 shrink-0 mt-0.5", isSelected ? "text-primary" : "text-primary/70")} /> : <FolderIcon className={cn("w-3.5 h-3.5 shrink-0 mt-0.5", isSelected ? "text-primary" : "text-primary/50")} />
              )
           ) : null}
 
           <span className={cn(
-            "text-[11px] transition-all",
-            level === 0 ? "font-black tracking-tight" : (isFolder ? "font-bold" : "font-medium"),
-            isSelected ? "text-primary font-black" : "text-foreground/90 group-hover:text-primary"
+            "text-xs transition-all whitespace-normal break-words leading-snug flex-1 select-none",
+            level === 0 ? "font-semibold text-foreground tracking-tight" : (isFolder ? "font-medium text-foreground/90" : "font-normal"),
+            isSelected ? "text-primary font-semibold" : "text-muted-foreground group-hover:text-foreground"
           )}>
             {node?.title || node?.name?.replace(/^\d+-/, '').split(/[ \-_]/).map(w => w ? (w.charAt(0).toUpperCase() + w.slice(1)) : '').join(' ') || "Sin nombre"}
           </span>
+
+          {node.draft && (
+            <span 
+              title={isFolder ? "Tópico en borrador (archivos internos ocultos)" : "Archivo en borrador"} 
+              className="inline-flex items-center gap-1 text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-md bg-muted/80 text-muted-foreground/80 border border-border/50 shrink-0 select-none"
+            >
+              <EyeOff className="w-2.5 h-2.5 text-amber-500/80" />
+              Borrador
+            </span>
+          )}
         </div>
 
         <div className={cn(
-          "transition-opacity",
+          "transition-opacity pointer-events-auto shrink-0 mt-0.5",
           isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
         )}>
           <DropdownMenu>
             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
               <button className={cn(
-                "p-1 rounded-md transition-colors animate-in fade-in duration-300",
+                "p-1 rounded-md transition-colors animate-in fade-in duration-200",
                 isSelected ? "hover:bg-primary/20" : "hover:bg-muted"
               )}>
                 <MoreVertical className={cn(
@@ -861,15 +869,9 @@ function FileTreeNode({
                     <FilePlus className="w-3.5 h-3.5" />
                     Nuevo Archivo
                   </DropdownMenuItem>
-                  {level === 0 && (
-                    <DropdownMenuItem onClick={() => onOpenDialog('folder', node.path, 'folder')} className="text-xs gap-2 font-medium">
-                      <FolderPlus className="w-3.5 h-3.5" />
-                      Nueva Categoría
-                    </DropdownMenuItem>
-                  )}
                 <DropdownMenuItem 
                   onClick={() => onImport(node.path)} 
-                  className="text-xs gap-2 font-medium text-emerald-500 focus:text-emerald-600"
+                  className="text-xs gap-2 font-medium text-primary focus:text-primary"
                 >
                   <Upload className="w-3.5 h-3.5" />
                   Importar Archivos
@@ -896,7 +898,7 @@ function FileTreeNode({
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            className="overflow-hidden"
+            className="ml-5 pl-2 border-l border-border/50 hover:border-primary/30 transition-colors duration-200 flex flex-col gap-0.5 my-1 overflow-hidden"
           >
             {node.children.map((child) => (
               <FileTreeNode 
@@ -904,6 +906,7 @@ function FileTreeNode({
                 node={child} 
                 level={level + 1} 
                 projectId={projectId}
+                tree={tree}
                 selectedPath={selectedPath} 
                 onSelect={onSelect}
                 onTreeChange={onTreeChange}

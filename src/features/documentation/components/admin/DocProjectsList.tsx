@@ -47,10 +47,10 @@ export function DocProjectsList({ projects }: { projects: DocProject[] }) {
             size="sm"
             className="h-8 px-3 rounded-lg text-xs"
             onClick={() => setViewMode("grid")}
-            title="Vista de Tarjetas AI Canvas"
+            title="Vista de Tarjetas"
           >
             <LayoutGrid className="h-4 w-4 mr-1.5" />
-            <span>Tarjetas AI Canvas</span>
+            <span>Tarjetas</span>
           </Button>
           <Button
             type="button"

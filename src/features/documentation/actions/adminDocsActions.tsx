@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import matter from "gray-matter";
 import * as adminService from "../services/admin-docs";
 import prisma from "@/lib/prisma";
+import { blocksToMarkdown } from "../components/admin/blockEditorUtils";
 
 import { getRoleFromUser } from "@/features/auth/services/authService";
 
@@ -85,8 +86,8 @@ export async function createItemAction(
   const normalizedParent = parentPath === projectId || parentPath === project.slug || parentPath === project.id ? "" : parentPath;
   const depth = normalizedParent ? normalizedParent.split('/').length : 0;
   
-  if (type === 'folder' && depth >= 2) {
-    throw new Error("Solo se permiten dos niveles de carpetas: Tópico y Categoría.");
+  if (type === 'folder' && (depth >= 1 || normalizedParent !== "")) {
+    throw new Error("No se permite crear carpetas o tópicos dentro de otras carpetas o tópicos.");
   }
 
   const path = normalizedParent ? `${normalizedParent}/${name}` : name;
@@ -106,6 +107,23 @@ export async function createItemAction(
     title: metadata?.title || name,
     order: metadata?.order ? parseInt(metadata.order) : undefined
   };
+
+  // Si el archivo se crea dentro de un tópico que está en borrador, hereda el estado de borrador
+  if (type === 'file' && normalizedParent) {
+    const parentTopic = await prisma.docPage.findFirst({
+      where: {
+        docProjectId: project.id,
+        OR: [
+          { slug: `${normalizedParent}/index` },
+          { slug: normalizedParent }
+        ]
+      },
+      select: { draft: true }
+    });
+    if (parentTopic?.draft) {
+      saveMetadata.draft = true;
+    }
+  }
 
   // If content is provided, parse frontmatter using gray-matter
   if (content && content.trim().startsWith("---")) {
@@ -209,8 +227,14 @@ export async function deleteProjectAction(projectId: string) {
 
 export async function moveItemAction(projectId: string, oldPath: string, newParentPath: string, sha: string) {
   const session = await verifyAdmin();
-  const project = await checkProjectOwnership(projectId, session);
+  const project = await checkProjectOwnership(projectId, session, true);
   const normalizedNewParent = newParentPath === projectId || newParentPath === project.slug || newParentPath === project.id ? "" : newParentPath;
+  
+  const isTopic = project.pages.some((p: any) => (p.slug === `${oldPath}/index` || p.slug === oldPath) && p.slug.endsWith('/index'));
+  if (isTopic && normalizedNewParent !== "") {
+    throw new Error("No se permite mover un tópico o carpeta dentro de otro tópico.");
+  }
+
   await adminService.moveItem(project.slug, oldPath, normalizedNewParent);
   revalidatePath(`/dashboard/teacher/docs/${project.slug}`, "page");
   revalidatePath(`/dashboard/teacher/docs/${project.id}`, "page");
@@ -236,7 +260,7 @@ export async function updatePageMetadataAction(
   const session = await verifyAdmin();
   const project = await checkProjectOwnership(projectId, session);
 
-  const page = await prisma.docPage.findFirst({
+  let page = await prisma.docPage.findFirst({
     where: {
       docProjectId: project.id,
       OR: [
@@ -246,7 +270,37 @@ export async function updatePageMetadataAction(
     }
   });
 
-  if (!page) throw new Error(`Página no encontrada: ${path}`);
+  const isFolder = page ? (page.slug.endsWith('/index') || path.endsWith('/index')) : false;
+  const folderSlugPrefix = isFolder
+    ? (page!.slug.endsWith('/index') ? page!.slug.slice(0, -'/index'.length) : path.replace(/\/index$/, ''))
+    : path.replace(/\/index$/, '');
+
+  if (!page) {
+    // Si es un tópico/carpeta pero la página index aún no existe, buscar si tiene hijos
+    const hasChildren = await prisma.docPage.findFirst({
+      where: {
+        docProjectId: project.id,
+        slug: { startsWith: `${folderSlugPrefix}/` }
+      }
+    });
+
+    if (hasChildren) {
+      page = await prisma.docPage.create({
+        data: {
+          docProjectId: project.id,
+          slug: `${folderSlugPrefix}/index`,
+          title: metadata.title || path,
+          category: metadata.category || metadata.title || path,
+          content: `# ${metadata.title || path}\n\nDocumentación del tópico.`,
+          draft: metadata.draft ?? false,
+          publishDate: (metadata.date && metadata.date.trim() !== "") ? new Date(metadata.date) : null,
+          icon: metadata.icon
+        }
+      });
+    } else {
+      throw new Error(`Página no encontrada: ${path}`);
+    }
+  }
 
   await prisma.docPage.update({
     where: { id: page.id },
@@ -262,10 +316,38 @@ export async function updatePageMetadataAction(
     }
   });
 
+  // Si es un tópico/carpeta y se modifica el estado de borrador (draft),
+  // propagar en cascada el nuevo estado de borrador a todos los archivos dentro del tópico
+  if ((isFolder || page.slug.endsWith('/index')) && metadata.draft !== undefined) {
+    const prefix = page.slug.endsWith('/index') ? page.slug.slice(0, -'/index'.length) : folderSlugPrefix;
+    if (prefix) {
+      await prisma.docPage.updateMany({
+        where: {
+          docProjectId: project.id,
+          slug: {
+            startsWith: `${prefix}/`
+          },
+          NOT: {
+            id: page.id
+          }
+        },
+        data: {
+          draft: metadata.draft
+        }
+      });
+    }
+  }
+
+  // Actualizar la fecha de modificación del proyecto para invalidar caches
+  await prisma.docProject.update({
+    where: { id: project.id },
+    data: { updatedAt: new Date() }
+  });
+
   revalidatePath(`/dashboard/teacher/docs/${project.slug}`, "page");
   revalidatePath(`/dashboard/teacher/docs/${project.id}`, "page");
+  revalidatePath(`/docs/${project.slug}`, "layout");
   revalidatePath("/docs", "layout");
-
 
   return { success: true };
 }
@@ -358,7 +440,10 @@ export async function moveAndReorderAction(
   
   let newSlug = sourcePage.slug;
   if (position === 'inside') {
-    newSlug = sourceIsTopic ? `${targetBase}/${sourceBaseName}/index` : `${targetBase}/${sourceFileName}`;
+    if (sourceIsTopic) {
+      throw new Error("No se permite mover un tópico o carpeta dentro de otro tópico.");
+    }
+    newSlug = `${targetBase}/${sourceFileName}`;
   } else {
     const targetHierarchyParent = targetBase.split('/').slice(0, -1).join('/');
     newSlug = sourceIsTopic 
@@ -367,8 +452,11 @@ export async function moveAndReorderAction(
   }
 
   const newSlugParts = newSlug.split('/');
-  if (newSlugParts.length > 3) {
-    throw new Error("No se pueden anidar elementos a más de 3 niveles de profundidad (Tópico > Categoría > Página).");
+  if (sourceIsTopic && newSlugParts.length > 2) {
+    throw new Error("No se permite anidar tópicos o carpetas dentro de otros tópicos.");
+  }
+  if (!sourceIsTopic && newSlugParts.length > 2) {
+    throw new Error("No se pueden anidar páginas a más de 2 niveles (Tópico > Página).");
   }
   
   if (sourceIsTopic) {
@@ -399,34 +487,71 @@ export async function moveAndReorderAction(
       }
     }
 
-    let newOrder = (targetPage as any)[sortField] || 0;
-    if (position === 'before') newOrder -= 5;
-    else if (position === 'after') newOrder += 5;
+    const allPages = await tx.docPage.findMany({
+      where: { docProjectId: project.id }
+    });
 
-    await tx.docPage.update({
-      where: { id: sourcePage.id },
-      data: { 
-        slug: newSlug,
-        [sortField]: position === 'inside' ? undefined : newOrder
+    const destinationParent = sourceIsTopic 
+      ? "" 
+      : (newSlug.includes('/') ? newSlug.split('/').slice(0, -1).join('/') : "");
+
+    let siblings = allPages.filter((p: any) => {
+      const pIsTopic = p.slug === 'index' || p.slug.endsWith('/index');
+      if (sourceIsTopic) {
+        return pIsTopic;
+      } else {
+        if (pIsTopic) return false;
+        const pParent = p.slug.includes('/') ? p.slug.split('/').slice(0, -1).join('/') : "";
+        return pParent === destinationParent;
       }
     });
 
-    const allPages = await tx.docPage.findMany({
-      where: { docProjectId: project.id },
-      orderBy: { [sortField]: 'asc' }
+    siblings.sort((a: any, b: any) => {
+      const aVal = a[sortField] ?? 0;
+      const bVal = b[sortField] ?? 0;
+      if (aVal !== bVal) return aVal - bVal;
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (aTime !== bTime) return aTime - bTime;
+      return a.id.localeCompare(b.id);
     });
 
-    const currentTargetParent = newFolderPrefix.split('/').slice(0, -1).join('/');
-    const siblings = allPages.filter((p: any) => {
-       const pParent = p.slug.replace(/\/index$/, '').split('/').slice(0, -1).join('/');
-       const pIsTopic = p.slug === 'index' || p.slug.endsWith('/index');
-       return pParent === currentTargetParent && pIsTopic === sourceIsTopic;
-    });
+    siblings = siblings.filter((p: any) => p.id !== sourcePage.id);
+
+    if (position === 'inside') {
+      siblings.push(sourcePage);
+    } else {
+      const targetIdx = siblings.findIndex((p: any) => p.id === targetPage.id);
+      if (targetIdx === -1) {
+        siblings.push(sourcePage);
+      } else {
+        const insertIdx = position === 'before' ? targetIdx : targetIdx + 1;
+        siblings.splice(insertIdx, 0, sourcePage);
+      }
+    }
+
+    let categoryName: string | undefined = undefined;
+    if (!sourceIsTopic) {
+      if (destinationParent) {
+        const parentTopic = allPages.find((p: any) => p.slug === `${destinationParent}/index` || p.slug === destinationParent);
+        categoryName = parentTopic?.title || destinationParent;
+      } else {
+        categoryName = "General";
+      }
+    }
 
     for (let i = 0; i < siblings.length; i++) {
+      const item = siblings[i];
+      const isSource = item.id === sourcePage.id;
       await tx.docPage.update({
-        where: { id: siblings[i].id },
-        data: { [sortField]: i * 10 }
+        where: { id: item.id },
+        data: {
+          ...(isSource ? { 
+            slug: newSlug,
+            ...(categoryName ? { category: categoryName } : {})
+          } : {}),
+          [sortField]: i * 10
+        }
       });
     }
   });
@@ -692,19 +817,450 @@ export async function updateProjectNameAction(projectId: string, newName: string
   return { success: true };
 }
 
+function sanitizeDocFilename(name: string): string {
+  return name
+    .replace(/[/\\?%*:|"<>]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function stringToDocSlug(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function formatToStandardMarkdown(content: string, title?: string): string {
+  let body = content || '';
+
+  // 1. If content is JSON array of blocks from BlockEditor designer, convert to standard markdown
+  const trimmed = body.trim();
+  if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+    try {
+      const blocks = JSON.parse(trimmed);
+      if (Array.isArray(blocks)) {
+        body = blocksToMarkdown(blocks);
+      }
+    } catch (e) {
+      console.warn("Could not parse JSON blocks for markdown formatting:", e);
+    }
+  }
+
+  // 2. Normalize CRLF to LF
+  body = body.replace(/\r\n/g, '\n');
+
+  // 3. Remove excessive consecutive blank lines (more than 2 blank lines -> 1 empty line)
+  body = body.replace(/\n{3,}/g, '\n\n');
+
+  // 4. Ensure document starts with H1 title if not already present
+  const trimmedBody = body.trim();
+  if (title && !trimmedBody.startsWith('# ') && !trimmedBody.startsWith('#\t')) {
+    body = `# ${title}\n\n${trimmedBody}`;
+  } else {
+    body = trimmedBody;
+  }
+
+  return body.trim() + '\n';
+}
+
 export async function exportProjectAction(projectId: string) {
   const session = await verifyAdmin();
   const project = await checkProjectOwnership(projectId, session, true);
-  
-  return project.pages.map((p: any) => ({
-    slug: p.slug,
-    title: p.title,
-    content: p.content,
-    category: p.category || "General",
-    order: p.order ?? 0,
-    categoryOrder: p.categoryOrder ?? 0,
-    draft: p.draft ?? false,
-    publishDate: p.publishDate ? (p.publishDate as Date).toISOString() : null,
-    icon: p.icon || null
-  }));
+  const tree = await adminService.getProjectFileTree(project.slug);
+
+  const exportFiles: Array<{ path: string; content: string }> = [];
+  const exportedSlugs = new Set<string>();
+
+  // Map pages by slug for fast lookup
+  const pageMap = new Map<string, any>();
+  project.pages.forEach((p: any) => {
+    pageMap.set(p.slug, p);
+    if (!p.slug.endsWith('/index')) {
+      pageMap.set(`${p.slug}/index`, p);
+    }
+  });
+
+  const formatPageContent = (page: any, overrideCategory?: string, overrideOrder?: number, overrideCatOrder?: number) => {
+    let rawContent = page.content || '';
+    let parsedData: any = {};
+    if (rawContent.trim().startsWith('---')) {
+      try {
+        const parsed = matter(rawContent);
+        rawContent = parsed.content;
+        parsedData = parsed.data || {};
+      } catch {}
+    }
+
+    const title = page.title || parsedData.title || "Sin título";
+    const category = overrideCategory || page.category || parsedData.category || "General";
+    const order = overrideOrder !== undefined ? overrideOrder : (page.order ?? parsedData.order ?? 0);
+    const categoryOrder = overrideCatOrder !== undefined ? overrideCatOrder : (page.categoryOrder ?? parsedData.categoryOrder ?? 0);
+    const draft = page.draft !== undefined ? page.draft : (parsedData.draft ?? false);
+    const date = page.publishDate ? (page.publishDate instanceof Date ? page.publishDate.toISOString() : page.publishDate) : (parsedData.date || null);
+    const icon = page.icon || parsedData.icon || null;
+
+    const cleanMarkdown = formatToStandardMarkdown(rawContent, title);
+
+    const fmLines: string[] = [];
+    fmLines.push(`title: "${String(title).replace(/"/g, '\\"')}"`);
+    if (category && category !== 'General') {
+      fmLines.push(`category: "${category}"`);
+    }
+    fmLines.push(`order: ${order}`);
+    if (categoryOrder !== 0) {
+      fmLines.push(`categoryOrder: ${categoryOrder}`);
+    }
+    if (draft === true) {
+      fmLines.push(`draft: true`);
+    }
+    if (date) {
+      fmLines.push(`date: "${date}"`);
+    }
+    if (icon) {
+      fmLines.push(`icon: "${icon}"`);
+    }
+
+    return `---\n${fmLines.join('\n')}\n---\n\n${cleanMarkdown}`;
+  };
+
+  // 1. Process Folders (Topics) from tree
+  const folders = tree.filter(n => n.type === 'folder');
+  folders.forEach((folder, folderIdx) => {
+    const folderNum = String(folderIdx).padStart(2, '0');
+    const topicTitle = folder.title || folder.name;
+    const folderName = `${folderNum} ${sanitizeDocFilename(topicTitle)}`;
+    
+    const children = folder.children || [];
+    children.forEach((child, childIdx) => {
+      const fileNum = String(childIdx).padStart(2, '0');
+      const fileTitle = child.title || child.name;
+      const fileName = `${fileNum} ${sanitizeDocFilename(fileTitle)}.md`;
+      const fullPath = `${folderName}/${fileName}`;
+
+      const page = pageMap.get(child.path) || project.pages.find((p: any) => p.slug === child.path);
+      if (page) {
+        exportedSlugs.add(page.slug);
+        exportFiles.push({
+          path: fullPath,
+          content: formatPageContent(page, topicTitle, childIdx * 10, folderIdx * 10)
+        });
+      } else {
+        exportFiles.push({
+          path: fullPath,
+          content: `# ${fileTitle}\n`
+        });
+      }
+    });
+  });
+
+  // 2. Process Root Files from tree
+  const rootFiles = tree.filter(n => n.type === 'file');
+  rootFiles.forEach((fileNode, fileIdx) => {
+    const fileNum = String(fileIdx).padStart(2, '0');
+    const fileTitle = fileNode.title || fileNode.name;
+    const fileName = `${fileNum} ${sanitizeDocFilename(fileTitle)}.md`;
+
+    const page = pageMap.get(fileNode.path) || project.pages.find((p: any) => p.slug === fileNode.path);
+    if (page) {
+      exportedSlugs.add(page.slug);
+      exportFiles.push({
+        path: fileName,
+        content: formatPageContent(page, "General", fileIdx * 10, 0)
+      });
+    } else {
+      exportFiles.push({
+        path: fileName,
+        content: `# ${fileTitle}\n`
+      });
+    }
+  });
+
+  // 3. Any remaining pages not covered in tree
+  const remainingPages = project.pages.filter((p: any) => !exportedSlugs.has(p.slug) && !p.slug.endsWith('/index'));
+  if (remainingPages.length > 0) {
+    const catMap = new Map<string, any[]>();
+    remainingPages.forEach((p: any) => {
+      const cat = p.category || 'General';
+      if (!catMap.has(cat)) catMap.set(cat, []);
+      catMap.get(cat)!.push(p);
+    });
+
+    let extraCatIdx = folders.length;
+    catMap.forEach((pagesInCat, catName) => {
+      const catNum = String(extraCatIdx++).padStart(2, '0');
+      const folderName = `${catNum} ${sanitizeDocFilename(catName)}`;
+      pagesInCat.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      
+      pagesInCat.forEach((p, pIdx) => {
+        const fileNum = String(pIdx).padStart(2, '0');
+        const fileName = `${fileNum} ${sanitizeDocFilename(p.title)}.md`;
+        exportFiles.push({
+          path: `${folderName}/${fileName}`,
+          content: formatPageContent(p, catName, pIdx * 10, extraCatIdx * 10)
+        });
+      });
+    });
+  }
+
+  return {
+    projectName: project.name,
+    projectSlug: project.slug,
+    files: exportFiles
+  };
+}
+
+export interface ImportedDocFile {
+  path: string;
+  content: string;
+}
+
+export async function importProjectStructureAction(
+  projectId: string,
+  rawFiles: ImportedDocFile[]
+) {
+  const session = await verifyAdmin();
+  const project = await checkProjectOwnership(projectId, session);
+
+  // 1. Filter out non-markdown and hidden files
+  let validFiles = rawFiles.filter(f => {
+    const p = f.path.replace(/\\/g, '/');
+    const name = p.split('/').pop() || '';
+    if (name.startsWith('.') || p.includes('/.') || p.startsWith('__MACOSX')) return false;
+    return p.toLowerCase().endsWith('.md');
+  });
+
+  if (validFiles.length === 0) {
+    throw new Error("No se encontraron archivos markdown (.md) válidos para importar.");
+  }
+
+  // 2. Detect and strip common root wrapper directory if all files are inside an enclosing folder
+  const paths = validFiles.map(f => f.path.replace(/\\/g, '/').replace(/^\/+/, ''));
+  const firstSlashIndices = paths.map(p => p.indexOf('/'));
+  const allHaveSlash = firstSlashIndices.every(idx => idx > 0);
+  if (allHaveSlash) {
+    const firstDirs = paths.map(p => p.slice(0, p.indexOf('/')));
+    const commonDir = firstDirs[0];
+    const allShareCommonDir = firstDirs.every(d => d === commonDir);
+    // If the common directory is e.g. "my-project" or "docs-export" (not a numbered topic "00 ...")
+    if (allShareCommonDir && !/^\d+[ -_.]/.test(commonDir)) {
+      validFiles = validFiles.map(f => ({
+        path: f.path.replace(/\\/g, '/').replace(/^\/+/, '').slice(commonDir.length + 1),
+        content: f.content
+      }));
+    }
+  }
+
+  // 3. Structure into topics and pages
+  interface ParsedItem {
+    topicFolderRaw: string | null;
+    topicTitle: string;
+    topicOrder: number;
+    topicSlug: string;
+    fileRaw: string;
+    fileTitle: string;
+    fileOrder: number;
+    fileSlug: string;
+    content: string;
+    draft: boolean;
+    publishDate: Date | null;
+    icon: string;
+  }
+
+  const parsedItems: ParsedItem[] = [];
+
+  validFiles.forEach((file, index) => {
+    const normalizedPath = file.path.replace(/\\/g, '/').replace(/^\/+/, '');
+    const parts = normalizedPath.split('/');
+
+    let topicFolderRaw: string | null = null;
+    let fileRaw = parts[parts.length - 1];
+
+    if (parts.length > 1) {
+      topicFolderRaw = parts[0]; // First level is topic folder
+    }
+
+    // Parse frontmatter
+    let body = file.content;
+    let frontmatter: any = {};
+    if (body.trim().startsWith('---')) {
+      try {
+        const parsed = matter(body);
+        body = parsed.content;
+        frontmatter = parsed.data || {};
+      } catch (err) {
+        console.warn("Frontmatter parse error during import:", err);
+      }
+    }
+
+    // Parse Topic info
+    let topicTitle = "General";
+    let topicOrder = 0;
+    if (topicFolderRaw) {
+      const match = topicFolderRaw.match(/^(\d+)[ -_.]+(.*)$/);
+      if (match) {
+        topicOrder = parseInt(match[1], 10);
+        topicTitle = match[2].trim();
+      } else {
+        topicOrder = index;
+        topicTitle = topicFolderRaw.trim();
+      }
+    }
+    if (frontmatter.category && frontmatter.category !== 'General') {
+      topicTitle = frontmatter.category;
+    }
+    if (frontmatter.categoryOrder !== undefined && typeof frontmatter.categoryOrder === 'number') {
+      topicOrder = frontmatter.categoryOrder;
+    }
+
+    const topicSlug = stringToDocSlug(topicTitle) || `topico-${topicOrder}`;
+
+    // Parse File info
+    const cleanBaseName = fileRaw.replace(/\.md$/i, '');
+    let fileTitle = cleanBaseName;
+    let fileOrder = index;
+
+    const fileMatch = cleanBaseName.match(/^(\d+)[ -_.]+(.*)$/);
+    if (fileMatch) {
+      fileOrder = parseInt(fileMatch[1], 10);
+      fileTitle = fileMatch[2].trim();
+    }
+    if (frontmatter.title) {
+      fileTitle = frontmatter.title;
+    }
+    if (frontmatter.order !== undefined && typeof frontmatter.order === 'number') {
+      fileOrder = frontmatter.order;
+    }
+
+    const fileSlug = stringToDocSlug(fileTitle) || `doc-${fileOrder}`;
+
+    let publishDate: Date | null = null;
+    if (frontmatter.date) {
+      const d = new Date(frontmatter.date);
+      if (!isNaN(d.getTime())) publishDate = d;
+    }
+
+    const cleanMarkdown = formatToStandardMarkdown(body, fileTitle);
+
+    parsedItems.push({
+      topicFolderRaw,
+      topicTitle,
+      topicOrder,
+      topicSlug,
+      fileRaw,
+      fileTitle,
+      fileOrder,
+      fileSlug,
+      content: cleanMarkdown,
+      draft: frontmatter.draft === true,
+      publishDate,
+      icon: frontmatter.icon || ""
+    });
+  });
+
+  // 4. Ensure Topic folders are registered (upsert topic index page)
+  const uniqueTopics = new Map<string, { title: string; order: number }>();
+  parsedItems.forEach(item => {
+    if (item.topicFolderRaw && !uniqueTopics.has(item.topicSlug)) {
+      uniqueTopics.set(item.topicSlug, {
+        title: item.topicTitle,
+        order: item.topicOrder
+      });
+    }
+  });
+
+  for (const [tSlug, tInfo] of uniqueTopics.entries()) {
+    await prisma.docPage.upsert({
+      where: {
+        docProjectId_slug: {
+          docProjectId: project.id,
+          slug: `${tSlug}/index`
+        }
+      },
+      update: {
+        title: tInfo.title,
+        category: tInfo.title,
+        categoryOrder: tInfo.order * 10,
+        order: 0,
+        updatedAt: new Date()
+      },
+      create: {
+        docProjectId: project.id,
+        slug: `${tSlug}/index`,
+        title: tInfo.title,
+        category: tInfo.title,
+        categoryOrder: tInfo.order * 10,
+        order: 0,
+        content: `# ${tInfo.title}\n\nDocumentación para ${tInfo.title}.`,
+        draft: false
+      }
+    });
+  }
+
+  // 5. Upsert all pages
+  const usedSlugs = new Set<string>();
+  let importedCount = 0;
+
+  for (const item of parsedItems) {
+    const isTopicIndex = item.fileSlug === 'index' || item.fileRaw.toLowerCase() === 'index.md';
+    let targetSlug = item.topicFolderRaw ? `${item.topicSlug}/${item.fileSlug}` : item.fileSlug;
+
+    if (isTopicIndex && item.topicFolderRaw) {
+      targetSlug = `${item.topicSlug}/index`;
+    } else {
+      let finalSlug = targetSlug;
+      let counter = 2;
+      while (usedSlugs.has(finalSlug)) {
+        finalSlug = `${targetSlug}-${counter++}`;
+      }
+      targetSlug = finalSlug;
+      usedSlugs.add(targetSlug);
+    }
+
+    await prisma.docPage.upsert({
+      where: {
+        docProjectId_slug: {
+          docProjectId: project.id,
+          slug: targetSlug
+        }
+      },
+      update: {
+        title: item.fileTitle,
+        content: item.content,
+        category: item.topicTitle,
+        categoryOrder: item.topicOrder * 10,
+        order: item.fileOrder * 10,
+        draft: item.draft,
+        publishDate: item.publishDate,
+        icon: item.icon,
+        updatedAt: new Date()
+      },
+      create: {
+        docProjectId: project.id,
+        slug: targetSlug,
+        title: item.fileTitle,
+        content: item.content,
+        category: item.topicTitle,
+        categoryOrder: item.topicOrder * 10,
+        order: item.fileOrder * 10,
+        draft: item.draft,
+        publishDate: item.publishDate,
+        icon: item.icon
+      }
+    });
+
+    importedCount++;
+  }
+
+  revalidatePath(`/dashboard/teacher/docs/${project.slug}`, "page");
+  revalidatePath(`/dashboard/teacher/docs/${project.id}`, "page");
+  revalidatePath("/docs", "layout");
+
+  return {
+    success: true,
+    count: importedCount,
+    topicsCount: uniqueTopics.size
+  };
 }

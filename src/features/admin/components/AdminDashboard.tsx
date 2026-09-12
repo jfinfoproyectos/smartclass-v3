@@ -109,7 +109,7 @@ export function AdminDashboard({ stats, recentActivity }: AdminDashboardProps) {
     return (
         <DashboardContainer>
             {/* Header Banner - AI Canvas Ambient Lighting */}
-            <div className="relative overflow-hidden rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-slate-900/90 text-white p-6 sm:p-8 shadow-xl">
+            <div className="relative overflow-hidden rounded-3xl border border-border bg-card text-card-foreground p-6 sm:p-8 shadow-xl">
                 <div className="pointer-events-none absolute -top-32 left-1/3 w-96 h-96 rounded-full bg-gradient-to-br from-primary/20 via-primary/10 to-transparent blur-3xl opacity-70" />
                 <div className="relative z-10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div className="space-y-1.5">
@@ -117,16 +117,16 @@ export function AdminDashboard({ stats, recentActivity }: AdminDashboardProps) {
                             <Shield className="w-3.5 h-3.5" />
                             <span>Panel de Administración Central</span>
                         </div>
-                        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-slate-300">
+                        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
                             Gestión Global del Sistema
                         </h1>
-                        <p className="text-xs sm:text-sm text-slate-400">
+                        <p className="text-xs sm:text-sm text-muted-foreground">
                             Supervisa usuarios, cursos activos, actividad reciente e infraestructura del servidor.
                         </p>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3">
-                        <Button variant="outline" size="sm" className="border-slate-700 bg-slate-800/80 hover:bg-slate-800 text-slate-200 text-xs rounded-xl" asChild>
+                        <Button variant="outline" size="sm" className="text-xs rounded-xl" asChild>
                             <Link href="/dashboard/admin/settings">
                                 <Settings className="h-4 w-4 mr-1.5" />
                                 Ajustes

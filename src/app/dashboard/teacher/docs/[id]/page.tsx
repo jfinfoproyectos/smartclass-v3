@@ -264,10 +264,7 @@ export default function DocEditorPage() {
         : "absolute inset-0 z-40 rounded-xl m-2 sm:m-4"
     )}>
       {/* Visual Top Toolbar */}
-      <div className="flex-none bg-background/90 dark:bg-slate-950/90 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800/80 flex flex-col transition-all shadow-sm">
-        {/* Top ambient glowing line */}
-        <div className="h-0.5 w-full bg-gradient-to-r from-emerald-500 via-teal-400 via-indigo-500 to-amber-400" />
-        
+      <div className="flex-none bg-card/95 backdrop-blur-xl border-b border-border flex flex-col transition-all shadow-xs">
         <div className="px-4 sm:px-6 py-2.5 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             {/* Project Name Editing */}
@@ -286,16 +283,16 @@ export default function DocEditorPage() {
                     }
                   }}
                 />
-                <Button size="sm" className="h-8 px-3 text-xs font-bold rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950" onClick={handleProjectNameSave}>
+                <Button size="sm" className="h-8 px-3 text-xs font-semibold rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground" onClick={handleProjectNameSave}>
                   Listo
                 </Button>
               </div>
             ) : (
               <div className="flex items-center gap-2 group">
-                <span className="font-heading font-extrabold uppercase text-sm tracking-tight text-foreground">{project?.name || "Cargando..."}</span>
+                <span className="font-bold text-sm sm:text-base tracking-tight text-foreground">{project?.name || "Cargando..."}</span>
                 <button 
                   onClick={() => setIsEditingProjectName(true)}
-                  className="p-1 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors hover:bg-muted rounded-lg"
+                  className="p-1 text-muted-foreground/60 group-hover:text-foreground transition-colors hover:bg-muted rounded-lg"
                   title="Editar nombre"
                 >
                   <Edit className="w-3.5 h-3.5" />
@@ -306,19 +303,19 @@ export default function DocEditorPage() {
 
           {/* Center Tab Selector */}
           {selectedFile && (
-            <div className="hidden md:flex items-center gap-1 bg-muted/40 p-1 rounded-xl border border-slate-200/60 dark:border-slate-800/60">
+            <div className="hidden md:flex items-center gap-1 bg-muted/50 p-1 rounded-xl border border-border/60">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setActiveTab("edit")}
                 className={cn(
-                  "font-bold rounded-lg gap-2 h-8 text-[11px] uppercase tracking-wider px-3 transition-all",
+                  "font-medium rounded-lg gap-2 h-8 text-xs px-3 transition-all",
                   activeTab === "edit" 
-                    ? "shadow-sm bg-background text-emerald-600 dark:text-emerald-400 hover:bg-background" 
+                    ? "shadow-xs bg-background text-primary font-semibold hover:bg-background" 
                     : "text-muted-foreground hover:text-foreground hover:bg-transparent"
                 )}
               >
-                <Edit3 className="w-3.5 h-3.5 text-emerald-500" />
+                <Edit3 className="w-3.5 h-3.5 text-primary" />
                 Diseñador
               </Button>
               <Button
@@ -326,13 +323,13 @@ export default function DocEditorPage() {
                 size="sm"
                 onClick={() => setActiveTab("markdown")}
                 className={cn(
-                  "font-bold rounded-lg gap-2 h-8 text-[11px] uppercase tracking-wider px-3 transition-all",
+                  "font-medium rounded-lg gap-2 h-8 text-xs px-3 transition-all",
                   activeTab === "markdown" 
-                    ? "shadow-sm bg-background text-emerald-600 dark:text-emerald-400 hover:bg-background" 
+                    ? "shadow-xs bg-background text-primary font-semibold hover:bg-background" 
                     : "text-muted-foreground hover:text-foreground hover:bg-transparent"
                 )}
               >
-                <FileText className="w-3.5 h-3.5 text-emerald-500" />
+                <FileText className="w-3.5 h-3.5 text-primary" />
                 Editor Markdown
               </Button>
               <Button
@@ -340,22 +337,22 @@ export default function DocEditorPage() {
                 size="sm"
                 onClick={() => setActiveTab("preview")}
                 className={cn(
-                  "font-bold rounded-lg gap-2 h-8 text-[11px] uppercase tracking-wider px-3 transition-all",
+                  "font-medium rounded-lg gap-2 h-8 text-xs px-3 transition-all",
                   activeTab === "preview" 
-                    ? "shadow-sm bg-background text-emerald-600 dark:text-emerald-400 hover:bg-background" 
+                    ? "shadow-xs bg-background text-primary font-semibold hover:bg-background" 
                     : "text-muted-foreground hover:text-foreground hover:bg-transparent"
                 )}
               >
-                <Eye className="w-3.5 h-3.5 text-emerald-500" />
+                <Eye className="w-3.5 h-3.5 text-primary" />
                 Vista Previa
               </Button>
             </div>
           )}
 
           {/* Action Buttons */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {/* Themes, Styles, and DarkMode controls */}
-            <div className="flex items-center gap-1.5 border-r border-slate-200 dark:border-slate-800 pr-3 mr-1">
+            <div className="flex items-center gap-1.5 border-r border-border pr-2.5 sm:pr-3 mr-0.5">
               <ThemeSelector themes={themes} />
               <CodeThemeSelector currentTheme={currentCodeTheme} />
               <ModeToggle />
@@ -365,7 +362,7 @@ export default function DocEditorPage() {
               <Button 
                 disabled={content === originalContent || saving}
                 onClick={handleSave} 
-                className="font-bold rounded-xl gap-2 h-9 px-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20 border-none transition-all"
+                className="font-semibold rounded-xl gap-2 h-9 px-4 bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs transition-all"
               >
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 {content === originalContent ? "Guardado" : "Guardar"}
@@ -382,7 +379,7 @@ export default function DocEditorPage() {
                   router.push("/dashboard/teacher/docs");
                 }
               }}
-              className="font-bold rounded-xl gap-2 h-9 px-4 text-destructive border-destructive/20 hover:bg-destructive/10 hover:text-destructive transition-all shrink-0"
+              className="font-medium rounded-xl gap-2 h-9 px-3 sm:px-4 border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-all shrink-0"
               title="Cerrar Diseñador"
             >
               <X className="w-4 h-4" />
@@ -401,7 +398,7 @@ export default function DocEditorPage() {
               animate={{ width: 288, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
               transition={{ type: "spring", bounce: 0, duration: 0.3 }}
-              className="border-r border-border bg-muted/30 dark:bg-zinc-950 flex flex-col overflow-hidden shrink-0 h-full min-h-0"
+              className="border-r border-border bg-card/50 backdrop-blur-xs flex flex-col overflow-hidden shrink-0 h-full min-h-0"
             >
               <div className="w-72 h-full flex flex-col min-h-0">
                 <AdminFileExplorer 
@@ -430,24 +427,22 @@ export default function DocEditorPage() {
 
                 if (isFolder) {
                   return (
-                    <div className="flex-1 flex flex-col items-center justify-center p-12 text-center animate-in fade-in zoom-in-95 duration-500">
-                       <div className="h-32 w-32 rounded-[2.5rem] bg-primary/5 border border-primary/10 mb-8 relative flex items-center justify-center shrink-0">
-                          <div className="absolute inset-0 bg-primary/5 blur-3xl rounded-full" />
-                          <Layout className="w-16 h-16 text-primary relative z-10" />
+                    <div className="flex-1 flex flex-col items-center justify-center p-8 sm:p-12 text-center animate-in fade-in zoom-in-95 duration-500">
+                       <div className="h-24 w-24 rounded-3xl bg-primary/10 border border-primary/20 mb-6 relative flex items-center justify-center shrink-0 shadow-xs">
+                          <Layout className="w-12 h-12 text-primary relative z-10" />
                        </div>
-                       <h2 className="text-3xl font-black uppercase tracking-tight text-foreground mb-4">
+                       <h2 className="text-2xl font-bold tracking-tight text-foreground mb-3">
                          {selectedNode?.title || selectedNode?.name || "Sin nombre"}
                        </h2>
-                       <p className="text-muted-foreground max-w-md font-medium leading-relaxed">
-                         Este elemento es un <span className="text-primary font-bold">Tópico/Categoría</span>. No requiere contenido manual ya que genera automáticamente la navegación para sus archivos hijos.
+                       <p className="text-muted-foreground max-w-md text-sm font-normal leading-relaxed">
+                         Este elemento es un <span className="text-primary font-semibold">Tópico/Categoría</span>. No requiere contenido manual ya que genera automáticamente la navegación para sus archivos hijos.
                        </p>
-                       <div className="mt-10 flex flex-wrap justify-center gap-4">
-                           <div className="px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
-                              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                       <div className="mt-8 flex flex-wrap justify-center gap-3">
+                           <div className="px-3.5 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-xs font-semibold text-primary flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
                               Navegación Automática Activa
                            </div>
-                           <div className="px-4 py-2 rounded-full bg-primary/10 border border-primary/20 text-[10px] font-bold uppercase tracking-widest text-primary flex items-center gap-2">
-                              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                           <div className="px-3.5 py-1.5 rounded-full bg-muted border border-border text-xs font-medium text-muted-foreground flex items-center gap-2">
                               {selectedNode.children?.length || 0} Elementos hijos
                            </div>
                        </div>
@@ -471,13 +466,22 @@ export default function DocEditorPage() {
               })()}
             </div>
           ) : (
-            <div className="h-full w-full overflow-y-auto custom-scrollbar p-4 md:p-8 flex items-center justify-center">
-              <div className="max-w-md text-center space-y-4">
-                <FileText className="w-12 h-12 text-muted-foreground/30 mx-auto" />
-                <h2 className="text-xl font-bold uppercase tracking-tight">Selecciona una página</h2>
-                <p className="text-muted-foreground text-xs leading-relaxed">
-                  Usa el explorador de la izquierda para abrir una página existente o crear una nueva para comenzar a diseñar.
-                </p>
+            <div className="h-full w-full overflow-y-auto custom-scrollbar p-6 md:p-12 flex items-center justify-center">
+              <div className="p-8 sm:p-12 rounded-3xl border border-border/80 bg-card/60 backdrop-blur-md shadow-xs max-w-md text-center space-y-4">
+                <div className="h-16 w-16 rounded-2xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center mx-auto shadow-xs">
+                  <FileText className="w-8 h-8" />
+                </div>
+                <div className="space-y-2">
+                  <h2 className="text-xl font-bold text-foreground tracking-tight">Selecciona una página</h2>
+                  <p className="text-muted-foreground text-sm leading-relaxed">
+                    Usa el explorador de la izquierda para abrir una página existente o crear una nueva para comenzar a diseñar.
+                  </p>
+                </div>
+                <div className="pt-2 flex items-center justify-center gap-2 text-xs text-muted-foreground/80">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-muted border border-border/60">
+                    💡 Tip: Puedes arrastrar archivos para reordenarlos
+                  </span>
+                </div>
               </div>
             </div>
           )}
