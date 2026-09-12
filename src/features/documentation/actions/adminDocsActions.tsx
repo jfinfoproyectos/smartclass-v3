@@ -601,72 +601,250 @@ Directrices:
 import { generateObject } from "ai";
 import { z } from "zod";
 
-export async function generateFullProjectAction(name: string, prompt: string) {
+function cleanSlug(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+export interface CourseStructureData {
+  name: string;
+  overview: string;
+  topics: Array<{
+    title: string;
+    description: string;
+    documents: Array<{
+      title: string;
+      summary: string;
+    }>;
+  }>;
+}
+
+function structureToMarkdown(data: CourseStructureData): string {
+  return `# ${data.name}
+
+${data.overview}
+
+## Plan de Estudios y Temario Propuesto
+
+${data.topics.map((t, i) => {
+  const topicNum = String(i + 1).padStart(2, "0");
+  return `### ${topicNum}. ${t.title}
+${t.description}
+
+${t.documents.map((d, j) => `- **${String(j + 1).padStart(2, "0")}. ${d.title}**: ${d.summary}`).join("\n")}`;
+}).join("\n\n")}
+
+---
+*💡 Puedes usar el chat de la derecha para pedir modificaciones a este temario antes de crearlo.*`;
+}
+
+const courseStructureZodSchema = z.object({
+  overview: z.string().describe("Breve descripción u objetivos generales del curso (2-3 párrafos)"),
+  topics: z.array(z.object({
+    title: z.string().describe("Título del tópico o unidad temática (ej: 'Fundamentos de Kotlin', 'Arquitectura y Componentes')"),
+    description: z.string().describe("Breve descripción del tópico (1 o 2 oraciones de qué se aprenderá)"),
+    documents: z.array(z.object({
+      title: z.string().describe("Título de la lección o documento (ej: 'Variables y Tipos de Datos', 'StateFlow y LiveData')"),
+      summary: z.string().describe("Breve objetivo o síntesis pedagógica de este documento en 1-2 líneas")
+    })).describe("Lista de lecciones o documentos dentro de este tópico")
+  })).describe("Lista de tópicos secuenciales del curso")
+});
+
+export async function generateCourseStructureProposalAction(name: string, prompt: string) {
   const session = await verifyAdmin();
   const userId = session.user.id;
   const model = await getAIModel(userId);
 
-  const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+  const systemPrompt = `Eres un diseñador curricular y arquitecto pedagógico experto en ingeniería y tecnología.
+Tu única labor es estructurar el plan de estudios o temario jerárquico de un curso completo (Syllabus) organizado en Tópicos (módulos/unidades) y Documentos (lecciones específicas dentro de cada tópico).
+
+IMPORTANTE:
+- NO generes el contenido exhaustivo de cada lección. Solo genera los títulos y una breve síntesis u objetivo (1 o 2 oraciones) de cada documento.
+- El contenido completo de cada documento será redactado posteriormente por el docente usando el Chat IA en el editor.
+- Genera entre 3 y 7 Tópicos principales bien secuenciados.
+- Dentro de cada Tópico, genera entre 2 y 5 Documentos o lecciones ordenadas de forma progresiva.`;
+
+  const { object } = await generateObject({
+    model,
+    schema: courseStructureZodSchema,
+    prompt: `${systemPrompt}\n\nCurso a estructurar:\nNombre: ${name}\nDetalles o temario solicitado: ${prompt}`,
+  });
+
+  if (!object?.topics || object.topics.length === 0) {
+    throw new Error("No se pudo generar la estructura del curso.");
+  }
+
+  const structure: CourseStructureData = {
+    name,
+    overview: object.overview,
+    topics: object.topics,
+  };
+
+  return {
+    success: true,
+    structure,
+    markdownPreview: structureToMarkdown(structure)
+  };
+}
+
+export async function refineCourseStructureProposalAction(
+  currentStructure: CourseStructureData,
+  instruction: string
+) {
+  const session = await verifyAdmin();
+  const userId = session.user.id;
+  const model = await getAIModel(userId);
+
+  const systemPrompt = `Eres un diseñador curricular y arquitecto pedagógico experto en ingeniería y tecnología.
+Tu labor es modificar, adaptar, reorganizar, expandir o resumir la estructura del temario de un curso según las instrucciones específicas del profesor.
+
+ESTRUCTURA ACTUAL DEL CURSO:
+Nombre: ${currentStructure.name}
+Descripción: ${currentStructure.overview}
+Tópicos y Lecciones actuales:
+${JSON.stringify(currentStructure.topics, null, 2)}
+
+INSTRUCCIONES ESPECÍFICAS DEL PROFESOR:
+"${instruction}"
+
+REGLAS CRÍTICAS:
+1. Aplica con exactitud los cambios pedidos por el profesor (ej: añadir más módulos, reducir duración, cambiar el orden, subdividir lecciones o profundizar temas).
+2. Preserva las partes del curso que no se pidió modificar.
+3. Devuelve la estructura completa del curso actualizada con el mismo esquema.`;
+
+  const { object } = await generateObject({
+    model,
+    schema: courseStructureZodSchema,
+    prompt: systemPrompt,
+  });
+
+  if (!object?.topics || object.topics.length === 0) {
+    throw new Error("No se pudo adaptar la estructura del curso.");
+  }
+
+  const updatedStructure: CourseStructureData = {
+    name: currentStructure.name,
+    overview: object.overview,
+    topics: object.topics,
+  };
+
+  return {
+    success: true,
+    structure: updatedStructure,
+    markdownPreview: structureToMarkdown(updatedStructure)
+  };
+}
+
+export async function createProjectFromStructureAction(name: string, structure: CourseStructureData) {
+  const session = await verifyAdmin();
+  const userId = session.user.id;
+
+  const slug = cleanSlug(name) || `doc-${Date.now()}`;
 
   const existing = await prisma.docProject.findUnique({ where: { slug } });
   if (existing) throw new Error("Ya existe un proyecto con ese nombre o identificador similar.");
 
-  const systemPrompt = `Eres un redactor experto de documentación técnica y contenido académico en formato MDX.
-Tu tarea es generar la estructura y el contenido completo de un proyecto de documentación para el tema o descripción suministrado por el usuario.
+  const pagesToCreate: Array<{
+    slug: string;
+    title: string;
+    content: string;
+    category: string;
+    order: number;
+    categoryOrder: number;
+  }> = [];
 
-REGLAS DE FORMATO DE SLUGS Y ESTRUCTURA:
-Este sistema organiza los documentos mediante carpetas/categorías y subarchivos utilizando los slugs.
-- Para la página de INICIO principal del proyecto (raíz), el slug debe ser exactamente "index".
-- Para las categorías/tópicos del proyecto, utiliza el formato "XX-nombre-categoria/index" donde XX es un número de dos dígitos de orden (ej: "01-introduccion/index", "02-conceptos-basicos/index", etc.). Estas páginas actuarán como los índices de las categorías.
-- Para los documentos/archivos dentro de una categoría, utiliza el formato "XX-nombre-categoria/YY-nombre-archivo" donde XX es el orden de la categoría y YY es el orden de la página dentro de esa categoría (ej: "01-introduccion/01-que-es-python", "01-introduccion/02-instalacion").
-- El contenido debe estar en MDX válido.
+  // 1. Página Raíz (Inicio / Presentación del Curso)
+  const rootIndexContent = `# ${name}
 
-EJEMPLO DE ESTRUCTURA GENERADA PARA UN CURSO:
-[
-  { "slug": "index", "title": "Inicio", "category": "General", "order": 0, "categoryOrder": 0, "content": "# Bienvenidos..." },
-  { "slug": "01-fundamentos/index", "title": "Fundamentos", "category": "Fundamentos", "order": 0, "categoryOrder": 1, "content": "# Módulo 1..." },
-  { "slug": "01-fundamentos/01-introduccion", "title": "Introducción", "category": "Fundamentos", "order": 1, "categoryOrder": 1, "content": "# Introducción completa..." },
-  { "slug": "02-estructuras/index", "title": "Estructuras de Control", "category": "Estructuras de Control", "order": 0, "categoryOrder": 2, "content": "# Módulo 2..." }
-]
+${structure.overview}
 
-REGLAS DE CONTENIDO OBLIGATORIAS:
-- NO dejes secciones incompletas, no utilices frases de relleno, resúmenes breves ni marcadores de posición (placeholders).
-- Escribe contenido completo, detallado, útil y muy estético (usando componentes como Accordion, Terminal, Alert, Steps si es necesario).
-- Asegúrate de incluir explicaciones exhaustivas, profundas y rigurosas con ejemplos de código completos y prácticos para cada tema solicitado por el profesor.
+## Estructura General del Curso
 
-Estructura solicitada: ${prompt}`;
+${structure.topics.map((t, i) => {
+  const topicNum = String(i + 1).padStart(2, "0");
+  return `### ${topicNum}. ${t.title}
+${t.description}
 
-  const { object } = await generateObject({
-    model,
-    schema: z.object({
-      pages: z.array(z.object({
-        slug: z.string(),
-        title: z.string(),
-        content: z.string(),
-        category: z.string().optional(),
-        order: z.number().optional(),
-        categoryOrder: z.number().optional()
-      }))
-    }),
-    prompt: `${systemPrompt}\n\nGenera la documentación completa para: ${prompt}`,
+${t.documents.map((d, j) => `- **${String(j + 1).padStart(2, "0")}. ${d.title}**: ${d.summary}`).join("\n")}`;
+}).join("\n\n")}
+
+---
+*Nota: Explora los tópicos en el explorador lateral. Puedes abrir cualquier documento y utilizar el botón **Modificar con Chat IA** para redactar y personalizar el contenido completo de cada lección.*`;
+
+  pagesToCreate.push({
+    slug: "index",
+    title: "Inicio",
+    content: rootIndexContent,
+    category: "General",
+    order: 0,
+    categoryOrder: 0,
   });
 
-  if (!object?.pages || object.pages.length === 0) {
-    throw new Error("No se pudo generar la estructura de la documentación.");
-  }
+  // 2. Páginas de Tópicos (índices de cada tópico) y Documentos (lecciones dentro de cada tópico)
+  structure.topics.forEach((topic, i) => {
+    const topicNum = String(i + 1).padStart(2, "0");
+    const topicSlugPart = `${topicNum}-${cleanSlug(topic.title)}`;
+    const categoryOrder = (i + 1) * 10;
+    const categoryTitle = topic.title;
 
-  // Ensure an index page is present
-  const hasIndex = object.pages.some(p => p.slug === "index");
-  if (!hasIndex) {
-    object.pages.unshift({
-      slug: "index",
-      title: "Inicio",
-      content: `# Bienvenidos a ${name}\n\nEsta es la página principal del proyecto generado automáticamente por la IA.`,
-      category: "General",
+    // Índice del Tópico (XX-topico/index)
+    const topicIndexContent = `# ${topic.title}
+
+${topic.description}
+
+## Documentos y Lecciones en este Tópico
+
+${topic.documents.map((d, j) => {
+  const docNum = String(j + 1).padStart(2, "0");
+  return `${j + 1}. **${d.title}**
+   ${d.summary}`;
+}).join("\n\n")}
+
+---
+*Nota: Selecciona una lección en el panel lateral para comenzar o utiliza el editor con **Chat IA** para redactar su contenido.*`;
+
+    pagesToCreate.push({
+      slug: `${topicSlugPart}/index`,
+      title: topic.title,
+      content: topicIndexContent,
+      category: categoryTitle,
       order: 0,
-      categoryOrder: 0
+      categoryOrder,
     });
-  }
+
+    // Documentos dentro del Tópico (XX-topico/YY-documento)
+    topic.documents.forEach((doc, j) => {
+      const docNum = String(j + 1).padStart(2, "0");
+      const docSlugPart = `${docNum}-${cleanSlug(doc.title)}`;
+
+      const docContent = `# ${doc.title}
+
+> [!NOTE]
+> **Objetivo pedagógico**: ${doc.summary}
+
+## Esquema Temático
+- Fundamentos y conceptos clave
+- Explicación detallada con ejemplos prácticos
+- Guía paso a paso y mejores prácticas
+- Conclusiones y ejercicios recomendados
+
+---
+*Nota: Esta lección fue estructurada en el temario. Haz clic en **Modificar con Chat IA** o **Generar Contenido con IA** en la barra superior para redactar la explicación completa, ejemplos de código interactivos o diagramas.*`;
+
+      pagesToCreate.push({
+        slug: `${topicSlugPart}/${docSlugPart}`,
+        title: doc.title,
+        content: docContent,
+        category: categoryTitle,
+        order: j + 1,
+        categoryOrder,
+      });
+    });
+  });
 
   const project = await prisma.docProject.create({
     data: {
@@ -674,13 +852,13 @@ Estructura solicitada: ${prompt}`;
       slug,
       teacherId: userId,
       pages: {
-        create: object.pages.map(p => ({
+        create: pagesToCreate.map(p => ({
           slug: p.slug,
           title: p.title,
           content: p.content,
-          category: p.category || "General",
-          order: p.order || 0,
-          categoryOrder: p.categoryOrder || 0
+          category: p.category,
+          order: p.order,
+          categoryOrder: p.categoryOrder
         }))
       }
     }
@@ -689,6 +867,11 @@ Estructura solicitada: ${prompt}`;
   revalidatePath("/dashboard/teacher/docs");
   revalidatePath("/dashboard/admin/docs");
   return { success: true, slug: project.slug };
+}
+
+export async function generateFullProjectAction(name: string, prompt: string) {
+  const { structure } = await generateCourseStructureProposalAction(name, prompt);
+  return await createProjectFromStructureAction(name, structure);
 }
 
 export async function getProjectCoursesAction(projectId: string) {
@@ -1264,3 +1447,126 @@ export async function importProjectStructureAction(
     topicsCount: uniqueTopics.size
   };
 }
+
+export async function getProjectEditorialBookDataAction(projectId: string) {
+  const session = await verifyAdmin();
+  const project = await checkProjectOwnership(projectId, session, true);
+  
+  const teacherUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { name: true, email: true }
+  });
+  const authorName = teacherUser?.name || session.user.name || "Profesor Titular";
+
+  const tree = await adminService.getProjectFileTree(project.slug);
+
+  const pageMap = new Map<string, any>();
+  project.pages.forEach((p: any) => {
+    pageMap.set(p.slug, p);
+    if (!p.slug.endsWith('/index')) {
+      pageMap.set(`${p.slug}/index`, p);
+    }
+  });
+
+  // 1. Root / Intro page (index)
+  const rootIndexPage = pageMap.get("index") || project.pages.find((p: any) => p.slug === "index");
+  let intro: { title: string; content: string } | undefined;
+  if (rootIndexPage) {
+    let rawContent = rootIndexPage.content || "";
+    if (rawContent.trim().startsWith("---")) {
+      try {
+        const parsed = matter(rawContent);
+        rawContent = parsed.content;
+      } catch {}
+    }
+    const cleanContent = formatToStandardMarkdown(rawContent, rootIndexPage.title || "Inicio");
+    intro = {
+      title: rootIndexPage.title || "Presentación del Curso",
+      content: cleanContent,
+    };
+  }
+
+  // 2. Chapters (Topics)
+  const folders = tree.filter(n => n.type === 'folder');
+  const chapters: Array<{
+    number: number;
+    title: string;
+    description: string;
+    introContent?: string;
+    lessons: Array<{
+      number: string;
+      title: string;
+      content: string;
+    }>;
+  }> = [];
+
+  folders.forEach((folder, folderIdx) => {
+    const chapterNumber = folderIdx + 1;
+    const topicTitle = folder.title || folder.name;
+    const topicDescription = folder.description || "";
+
+    const topicIndexPage = pageMap.get(`${folder.path}/index`) || pageMap.get(folder.path);
+    let topicIntroContent: string | undefined;
+    if (topicIndexPage) {
+      let rawContent = topicIndexPage.content || "";
+      if (rawContent.trim().startsWith("---")) {
+        try {
+          const parsed = matter(rawContent);
+          rawContent = parsed.content;
+        } catch {}
+      }
+      topicIntroContent = formatToStandardMarkdown(rawContent, topicTitle);
+    }
+
+    const lessons: Array<{ number: string; title: string; content: string }> = [];
+    const children = (folder.children || []).filter(c => c.name !== 'index');
+
+    children.forEach((child, childIdx) => {
+      const lessonNumber = `${chapterNumber}.${childIdx + 1}`;
+      const lessonTitle = child.title || child.name;
+      const page = pageMap.get(child.path) || project.pages.find((p: any) => p.slug === child.path);
+
+      let lessonContent = `# ${lessonTitle}\n`;
+      if (page) {
+        let raw = page.content || "";
+        if (raw.trim().startsWith("---")) {
+          try {
+            const parsed = matter(raw);
+            raw = parsed.content;
+          } catch {}
+        }
+        lessonContent = formatToStandardMarkdown(raw, lessonTitle);
+      }
+
+      lessons.push({
+        number: lessonNumber,
+        title: lessonTitle,
+        content: lessonContent,
+      });
+    });
+
+    chapters.push({
+      number: chapterNumber,
+      title: topicTitle,
+      description: topicDescription,
+      introContent: topicIntroContent,
+      lessons,
+    });
+  });
+
+  return {
+    projectName: project.name,
+    projectSlug: project.slug,
+    authorName,
+    academicYear: new Date().getFullYear().toString(),
+    institutionName: "SmartClass Academic Press",
+    createdAt: new Date(project.createdAt).toLocaleDateString("es-ES", {
+      day: "numeric",
+      month: "long",
+      year: "numeric"
+    }),
+    intro,
+    chapters,
+  };
+}
+

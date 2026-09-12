@@ -34,7 +34,8 @@ import {
   Settings,
   ExternalLink,
   GitMerge,
-  MessageSquare
+  MessageSquare,
+  Search
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -56,6 +57,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -140,8 +146,14 @@ export function BlockEditor({
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
   const [markdownText, setMarkdownText] = useState<string>(() => blocksToMarkdown(blocks));
   const [activeInserterIndex, setActiveInserterIndex] = useState<number | null>(null);
+  const [componentSearch, setComponentSearch] = useState("");
   const [isTocOpen, setIsTocOpen] = useState(true);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+
+  const filteredBlockTypes = blockTypes.filter(bt => 
+    bt.label.toLowerCase().includes(componentSearch.toLowerCase()) ||
+    bt.type.toLowerCase().includes(componentSearch.toLowerCase())
+  );
 
   const insertMarkdownSnippet = (before: string, after: string = "", defaultText: string = "") => {
     if (!textareaRef.current) {
@@ -512,41 +524,23 @@ export function BlockEditor({
     return (
       <div className="relative flex items-center justify-center my-4 group">
         <div className="absolute inset-x-0 h-px bg-border/40 scale-x-0 group-hover:scale-x-100 transition-transform duration-500" />
-        <button
-          onClick={() => setActiveInserterIndex(activeInserterIndex === targetIndex ? null : targetIndex)}
-          className="relative z-10 w-7 h-7 rounded-full bg-background border border-border hover:bg-primary hover:border-primary text-muted-foreground hover:text-primary-foreground flex items-center justify-center shadow-sm hover:scale-110 transition-all duration-300 cursor-pointer"
-          title="Insertar bloque aquí"
-        >
-          <Plus className="w-4 h-4" />
-        </button>
-
-        <AnimatePresence>
-          {activeInserterIndex === targetIndex && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setActiveInserterIndex(null)} />
-              <motion.div
-                initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                className="absolute z-50 mt-10 w-80 bg-background border border-border/80 rounded-2xl shadow-xl p-3 grid grid-cols-3 gap-2"
-              >
-                {blockTypes.map(bt => (
-                  <button
-                    key={bt.type}
-                    onClick={() => {
-                      insertBlockAtIndex(targetIndex, bt.type);
-                      setActiveInserterIndex(null);
-                    }}
-                    className="flex flex-col items-center justify-center p-2 rounded-xl border border-transparent hover:border-primary/20 hover:bg-primary/5 text-muted-foreground hover:text-primary transition-all gap-1 text-[8px] font-black uppercase tracking-wider text-center"
-                  >
-                    <bt.icon className="w-4 h-4 text-primary/75" />
-                    <span>{bt.label}</span>
-                  </button>
-                ))}
-              </motion.div>
-            </>
-          )}
-        </AnimatePresence>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={() => {
+                setComponentSearch("");
+                setActiveInserterIndex(targetIndex);
+              }}
+              className="relative z-10 w-7 h-7 rounded-full bg-background border border-border hover:bg-primary hover:border-primary text-muted-foreground hover:text-primary-foreground flex items-center justify-center shadow-sm hover:scale-110 transition-all duration-300 cursor-pointer"
+              aria-label="Insertar componente aquí"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            <p>Insertar componente aquí</p>
+          </TooltipContent>
+        </Tooltip>
       </div>
     );
   };
@@ -562,10 +556,10 @@ export function BlockEditor({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 shrink-0 px-1 pt-0.5">
                 <div>
                   <h3 className="text-xs sm:text-sm font-bold text-foreground">
-                    Enunciado / Contenido (Markdown)
+                    Contenido de la Lección (Markdown)
                   </h3>
                   <p className="text-[11px] text-muted-foreground leading-tight">
-                    Define el contenido con formato Markdown estándar y previsualización en vivo sincronizada.
+                    Escribe o genera el contenido de este documento con formato Markdown estándar y previsualización en vivo sincronizada.
                   </p>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
@@ -579,7 +573,7 @@ export function BlockEditor({
                     className="h-8 text-xs font-semibold gap-1.5 bg-gradient-to-r from-primary to-primary/85 hover:from-primary/95 hover:to-primary text-primary-foreground shadow-xs transition-all cursor-pointer"
                   >
                     <Sparkles className="h-3.5 w-3.5 shrink-0" />
-                    <span className="hidden sm:inline">Generar Enunciado con IA</span>
+                    <span className="hidden sm:inline">Generar Contenido con IA</span>
                     <span className="sm:hidden">Generar con IA</span>
                   </Button>
                   <Button
@@ -592,7 +586,7 @@ export function BlockEditor({
                     }}
                     disabled={!markdownText || markdownText.trim().length < 10}
                     className="h-8 text-xs font-semibold gap-1.5 border-primary/40 text-primary hover:bg-primary/10 hover:text-primary transition-all cursor-pointer shadow-2xs"
-                    title="Toma el contenido actual del editor y abre el chat de IA para modificarlo, adaptarlo o mejorarlo interactivamente"
+                    title="Toma el contenido actual de la lección y abre el chat de IA para redactarlo, enriquecerlo o mejorarlo interactivamente"
                   >
                     <MessageSquare className="h-3.5 w-3.5 text-primary shrink-0" />
                     <span className="hidden sm:inline">Modificar con Chat IA</span>
@@ -676,36 +670,67 @@ export function BlockEditor({
                             </Button>
 
                             <div className="flex items-center gap-0.5 border-l border-border/60 pl-1.5 ml-1">
-                              <button 
-                                disabled={index === 0}
-                                onClick={() => moveBlock(index, "up")}
-                                className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-                                title="Subir"
-                              >
-                                <ChevronUp className="w-3.5 h-3.5" />
-                              </button>
-                              <button 
-                                disabled={index === blocks.length - 1}
-                                onClick={() => moveBlock(index, "down")}
-                                className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-                                title="Bajar"
-                              >
-                                <ChevronDown className="w-3.5 h-3.5" />
-                              </button>
-                              <button 
-                                onClick={() => duplicateBlock(block)}
-                                className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                                title="Duplicar"
-                              >
-                                <Copy className="w-3.5 h-3.5" />
-                              </button>
-                              <button 
-                                onClick={() => deleteBlock(block.id)}
-                                className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                                title="Eliminar"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button 
+                                    disabled={index === 0}
+                                    onClick={() => moveBlock(index, "up")}
+                                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent transition-colors cursor-pointer"
+                                    aria-label="Subir bloque"
+                                  >
+                                    <ChevronUp className="w-3.5 h-3.5" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                  <p>Subir</p>
+                                </TooltipContent>
+                              </Tooltip>
+
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button 
+                                    disabled={index === blocks.length - 1}
+                                    onClick={() => moveBlock(index, "down")}
+                                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent transition-colors cursor-pointer"
+                                    aria-label="Bajar bloque"
+                                  >
+                                    <ChevronDown className="w-3.5 h-3.5" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                  <p>Bajar</p>
+                                </TooltipContent>
+                              </Tooltip>
+
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button 
+                                    onClick={() => duplicateBlock(block)}
+                                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                                    aria-label="Duplicar bloque"
+                                  >
+                                    <Copy className="w-3.5 h-3.5" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                  <p>Duplicar</p>
+                                </TooltipContent>
+                              </Tooltip>
+
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button 
+                                    onClick={() => deleteBlock(block.id)}
+                                    className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
+                                    aria-label="Eliminar bloque"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                  <p>Eliminar</p>
+                                </TooltipContent>
+                              </Tooltip>
                             </div>
                           </div>
                         </motion.div>
@@ -839,6 +864,76 @@ export function BlockEditor({
               </>
             );
           })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal para Seleccionar e Insertar Componentes */}
+      <Dialog 
+        open={activeInserterIndex !== null} 
+        onOpenChange={(open) => {
+          if (!open) {
+            setActiveInserterIndex(null);
+            setComponentSearch("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl w-[94vw] sm:w-full rounded-3xl border border-border bg-background p-0 overflow-hidden shadow-2xl">
+          <div className="px-6 pt-6 pb-4 border-b border-border/50 bg-card/60 backdrop-blur-xs">
+            <DialogHeader className="space-y-1">
+              <DialogTitle className="text-base sm:text-lg font-bold tracking-tight flex items-center gap-2.5 text-foreground">
+                <div className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+                  <Plus className="w-4 h-4" />
+                </div>
+                <span>Insertar Componente</span>
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                Selecciona el componente interactivo o bloque que deseas agregar al documento.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="mt-3.5 relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar componente (ej: Acordeón, Quiz, Código, Video, Tabla...)"
+                value={componentSearch}
+                onChange={(e) => setComponentSearch(e.target.value)}
+                className="pl-10 h-10 bg-background border-border/80 focus:border-primary/50 rounded-xl text-xs"
+                autoFocus
+              />
+            </div>
+          </div>
+
+          <div className="p-6 max-h-[58vh] overflow-y-auto custom-scrollbar">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+              {filteredBlockTypes.map((bt) => (
+                <button
+                  key={bt.type}
+                  onClick={() => {
+                    if (activeInserterIndex !== null) {
+                      insertBlockAtIndex(activeInserterIndex, bt.type);
+                      setActiveInserterIndex(null);
+                      setComponentSearch("");
+                    }
+                  }}
+                  className="group flex flex-col items-center justify-center p-3.5 rounded-2xl border border-border/60 hover:border-primary/40 bg-card hover:bg-primary/5 text-muted-foreground hover:text-primary transition-all duration-150 gap-2 cursor-pointer shadow-2xs hover:shadow-xs hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-muted/60 group-hover:bg-primary/15 border border-border/40 group-hover:border-primary/25 flex items-center justify-center text-muted-foreground group-hover:text-primary transition-colors">
+                    <bt.icon className="w-5 h-5" />
+                  </div>
+                  <span className="text-[11px] font-bold tracking-tight text-foreground group-hover:text-primary transition-colors text-center line-clamp-1">
+                    {bt.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {filteredBlockTypes.length === 0 && (
+              <div className="text-center py-10 text-muted-foreground space-y-1">
+                <p className="text-xs font-medium">No se encontraron componentes</p>
+                <p className="text-[11px] text-muted-foreground/70">Prueba buscando con otro término.</p>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 

@@ -72,7 +72,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
           cancelButton:
             "!bg-muted !text-muted-foreground font-medium rounded-xl text-xs px-3 py-1.5 hover:bg-muted/80",
           closeButton:
-            "!border-border/60 !bg-card/90 dark:!bg-zinc-800/90 hover:!bg-muted text-muted-foreground hover:text-foreground transition-all !rounded-full shadow-2xs",
+            "!border-current/20 !bg-transparent hover:!bg-black/5 dark:hover:!bg-white/10 !text-inherit transition-all !rounded-full shadow-2xs",
         },
       }}
       style={

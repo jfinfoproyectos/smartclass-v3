@@ -227,26 +227,6 @@ ESTRUCTURA OBLIGATORIA DEL ENUNCIADO:
 * **Claridad y Comunicación (25%)**: [Estructura en las respuestas y poder de síntesis]`;
             break;
 
-        case "MANUAL":
-        default:
-            activityTypeGuidance = `
-TIPO DE ACTIVIDAD: Entrega Libre / Calificación Manual Docente.
-Actividad académica evaluada directamente por el profesor sin procesamiento automático de IA.
-ESTRUCTURA OBLIGATORIA DEL ENUNCIADO:
-# [Título de la Actividad / Taller]
-
-## Descripción de la Actividad
-[Explicación clara del contexto, metas y entregables solicitados al estudiante]
-
-## Instrucciones y Requerimientos
-1. [Requerimiento 1 detallado]
-2. [Requerimiento 2 detallado]
-3. [Requerimiento 3 detallado]
-
-## Criterios de Calificación
-* **[Criterio Principal] (50%)**: [Descripción del cumplimiento esperado]
-* **[Criterio Secundario] (30%)**: [Descripción de calidad y metodología]
-* **[Puntualidad y Presentación] (20%)**: [Normas de presentación y rigor formal]`;
         case "DOCUMENTATION":
             activityTypeGuidance = `
 TIPO DE DOCUMENTO: Lección o Módulo de Documentación Académica y Técnica en Markdown (GFM).
@@ -275,6 +255,28 @@ ESTRUCTURA DE LA DOCUMENTACIÓN:
 ## 5. Resumen y Puntos Clave
 * **Punto clave 1**: [Detalle]
 * **Punto clave 2**: [Detalle]`;
+            break;
+
+        case "MANUAL":
+        default:
+            activityTypeGuidance = `
+TIPO DE ACTIVIDAD: Entrega Libre / Calificación Manual Docente.
+Actividad académica evaluada directamente por el profesor sin procesamiento automático de IA.
+ESTRUCTURA OBLIGATORIA DEL ENUNCIADO:
+# [Título de la Actividad / Taller]
+
+## Descripción de la Actividad
+[Explicación clara del contexto, metas y entregables solicitados al estudiante]
+
+## Instrucciones y Requerimientos
+1. [Requerimiento 1 detallado]
+2. [Requerimiento 2 detallado]
+3. [Requerimiento 3 detallado]
+
+## Criterios de Calificación
+* **[Criterio Principal] (50%)**: [Descripción del cumplimiento esperado]
+* **[Criterio Secundario] (30%)**: [Descripción de calidad y metodología]
+* **[Puntualidad y Presentación] (20%)**: [Normas de presentación y rigor formal]`;
             break;
     }
 
@@ -338,8 +340,23 @@ export async function refineActivityStatement(
     userId: string
 ): Promise<string> {
     const model = await getAIModel(userId);
+    const isDoc = activityType === "DOCUMENTATION";
 
-    const systemPrompt = `Eres un diseñador instruccional y docente universitario experto en ingeniería de software.
+    const systemPrompt = isDoc
+        ? `Eres un docente y educador técnico experto en ingeniería de software y redacción pedagógica.
+Tu labor es modificar, adaptar, expandir o perfeccionar una lección o documento educativo según las instrucciones específicas que te dé el profesor (por ejemplo: explicar conceptos paso a paso, añadir ejemplos de código prácticos y comentados, resumir, estructurar en tablas comparativas, agregar diagramas Mermaid, profundizar en detalles técnicos, etc.).
+
+DOCUMENTO ACTUAL DE LA LECCIÓN:
+"""markdown
+${currentStatement}
+"""
+
+REGLAS CRÍTICAS Y ESTRICTAS:
+1. Aplica con máxima precisión los cambios solicitados por el profesor en la instrucción dada, manteniendo intactas las partes que no solicitó modificar.
+2. Este es un documento de estudio / lección: NO agregues rúbricas ni criterios de evaluación con porcentajes (es material de aprendizaje, no un examen de entrega).
+3. Utiliza Markdown GFM enriquecido: títulos claros (#, ##, ###), bloques de notas (> [!NOTE], > [!TIP], > [!WARNING]), bloques de código con sintaxis resaltada y tablas o diagramas cuando corresponda.
+4. Devuelve ÚNICAMENTE el documento Markdown completo actualizado. NO agregues saludos, explicaciones, ni envuelvas todo el documento en bloques de código markdown (\`\`\`markdown ... \`\`\`). Empieza directamente con el encabezado # o el contenido del documento.`
+        : `Eres un diseñador instruccional y docente universitario experto en ingeniería de software.
 Tu labor es modificar, adaptar o refinar un enunciado de actividad académica y su rúbrica según las instrucciones específicas que te dé el profesor (por ejemplo: simplificar, resumir, aumentar nivel, cambiar lenguaje, agregar o quitar requerimientos, etc.).
 
 TIPO DE ACTIVIDAD: "${activityType}".
@@ -357,7 +374,12 @@ REGLAS CRÍTICAS Y ESTRICTAS:
 3. Mantén un formato Markdown limpio, profesional y consistente con la estructura de la actividad.
 4. Devuelve ÚNICAMENTE el documento Markdown completo actualizado. NO agregues saludos, explicaciones, ni envuelvas todo en bloques de código markdown (\`\`\`markdown ... \`\`\`). Empieza directamente con el encabezado #.`;
 
-    const userPrompt = `Instrucción del profesor para adaptar el enunciado:
+    const userPrompt = isDoc
+        ? `Instrucción del profesor para adaptar el documento o lección:
+"${instruction}"
+
+Genera el documento Markdown completo actualizado aplicando los cambios solicitados.`
+        : `Instrucción del profesor para adaptar el enunciado:
 "${instruction}"
 
 Genera el documento Markdown completo actualizado aplicando los cambios solicitados.`;

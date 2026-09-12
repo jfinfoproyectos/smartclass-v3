@@ -27,7 +27,8 @@ import {
   FileText,
   Edit3,
   Eye,
-  X
+  X,
+  BookOpen
 } from "lucide-react";
 import { toast } from "sonner";
 import { FileNode } from "@/features/documentation/services/admin-docs";
@@ -37,6 +38,7 @@ import { cn } from "@/lib/utils";
 import { ThemeSelector } from "@/components/theme/ThemeSelector";
 import { CodeThemeSelector } from "@/features/documentation/components/reader/CodeThemeSelector";
 import { ModeToggle } from "@/components/theme/ModeToggle";
+import { ExportBookDialog } from "@/features/documentation/components/pdf/ExportBookDialog";
 import { getAvailableThemes } from "@/app/actions/themes";
 import { getCodeTheme } from "@/app/actions/code-themes";
 import { 
@@ -357,6 +359,23 @@ export default function DocEditorPage() {
               <CodeThemeSelector currentTheme={currentCodeTheme} />
               <ModeToggle />
             </div>
+
+            {/* Exportar Superlibro Editorial en PDF */}
+            <ExportBookDialog 
+              projectId={projectId} 
+              projectName={project?.name}
+              trigger={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="font-bold rounded-xl gap-2 h-9 px-3 sm:px-3.5 border-border hover:bg-primary/10 hover:border-primary/40 text-primary transition-all shrink-0 cursor-pointer shadow-2xs"
+                  title="Exportar como Superlibro Editorial en PDF con portada, índice y código completo"
+                >
+                  <BookOpen className="w-4 h-4 text-primary shrink-0" />
+                  <span className="hidden sm:inline text-xs">Libro PDF</span>
+                </Button>
+              }
+            />
 
             {selectedFile && (
               <Button 

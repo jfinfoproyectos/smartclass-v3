@@ -170,7 +170,7 @@ const QUICK_SUGGESTIONS: Record<string, string[]> = {
     ]
 };
 
-// Sugerencias rápidas para el chat de adaptación
+// Sugerencias rápidas para el chat de adaptación de actividades
 const REFINEMENT_CHIPS = [
     "⚡ Simplificar y hacer más accesible",
     "📝 Resumir y acortar la extensión",
@@ -178,6 +178,16 @@ const REFINEMENT_CHIPS = [
     "🛡️ Añadir más casos límite y validaciones",
     "🎯 Ajustar rúbrica a 3 criterios clave",
     "💡 Añadir ejemplos de entrada y salida"
+];
+
+// Sugerencias rápidas para el chat de redacción y edición de documentos/lecciones
+const DOCUMENTATION_REFINEMENT_CHIPS = [
+    "💡 Añadir ejemplos de código prácticos",
+    "⚡ Explicar paso a paso de forma didáctica",
+    "📝 Resumir y sintetizar conceptos clave",
+    "📊 Crear tabla comparativa o resumen",
+    "🔥 Profundizar en conceptos técnicos",
+    "🧩 Añadir esquema visual o diagrama Mermaid"
 ];
 
 export function AIGenerateDialog({
@@ -218,7 +228,7 @@ export function AIGenerateDialog({
         }
     }, [isOpen]);
 
-    // Inicializar contenido si se abre para modificar un enunciado existente
+    // Inicializar contenido si se abre para modificar un documento o enunciado existente
     useEffect(() => {
         if (isOpen) {
             if (initialContent && initialContent.trim().length > 0) {
@@ -228,7 +238,9 @@ export function AIGenerateDialog({
                     {
                         id: "initial-loaded-msg",
                         role: "assistant",
-                        text: "He cargado el enunciado actual de tu actividad. Puedes usar este chat para pedirme cualquier cambio: por ejemplo, simplificar la actividad, resumir, cambiar requerimientos, agregar casos borde o ajustar los porcentajes de la rúbrica.",
+                        text: activityType === "DOCUMENTATION"
+                            ? "He cargado el contenido actual de tu lección. Puedes usar este chat para pedirme cualquier cambio: por ejemplo, explicar conceptos paso a paso, añadir ejemplos de código prácticos y comentados, resumir, crear tablas o agregar diagramas."
+                            : "He cargado el enunciado actual de tu actividad. Puedes usar este chat para pedirme cualquier cambio: por ejemplo, simplificar la actividad, resumir, cambiar requerimientos, agregar casos borde o ajustar los porcentajes de la rúbrica.",
                         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                     }
                 ]);
@@ -238,7 +250,7 @@ export function AIGenerateDialog({
                 setChatMessages([]);
             }
         }
-    }, [isOpen, initialContent]);
+    }, [isOpen, initialContent, activityType]);
 
     useEffect(() => {
         if (initialPrompt && !prompt) {
@@ -412,12 +424,20 @@ export function AIGenerateDialog({
                             </div>
                             <div>
                                 <DialogTitle className="text-base sm:text-lg font-bold flex items-center gap-2">
-                                    {initialContent ? "Modificar Enunciado con Chat IA" : "Generar Enunciado y Rúbrica con IA"}
+                                    {activityType === "DOCUMENTATION"
+                                        ? (initialContent ? "Modificar Lección con Chat IA" : "Generar Contenido de Lección con IA")
+                                        : (initialContent ? "Modificar Enunciado con Chat IA" : "Generar Enunciado y Rúbrica con IA")
+                                    }
                                 </DialogTitle>
                                 <DialogDescription className="text-xs text-muted-foreground">
-                                    {generatedContent
-                                        ? "Adapta y perfecciona el resultado de forma interactiva conversando con la IA."
-                                        : "Crea objetivos, requerimientos técnicos y criterios con ponderación al 100%."}
+                                    {activityType === "DOCUMENTATION"
+                                        ? (generatedContent
+                                            ? "Adapta y perfecciona el contenido de la lección conversando con la IA."
+                                            : "Crea explicaciones detalladas, guías pedagógicas y ejemplos prácticos para tu documento.")
+                                        : (generatedContent
+                                            ? "Adapta y perfecciona el resultado de forma interactiva conversando con la IA."
+                                            : "Crea objetivos, requerimientos técnicos y criterios con ponderación al 100%.")
+                                    }
                                 </DialogDescription>
                             </div>
                         </div>
@@ -596,7 +616,7 @@ export function AIGenerateDialog({
                                         <Sparkle className="h-3 w-3 text-amber-500" /> Atajos rápidos:
                                     </span>
                                     <div className="flex flex-wrap gap-1">
-                                        {REFINEMENT_CHIPS.map((chip, i) => (
+                                        {(activityType === "DOCUMENTATION" ? DOCUMENTATION_REFINEMENT_CHIPS : REFINEMENT_CHIPS).map((chip, i) => (
                                             <button
                                                 key={i}
                                                 type="button"
@@ -616,7 +636,9 @@ export function AIGenerateDialog({
                                         <Textarea
                                             value={chatInput}
                                             onChange={(e) => setChatInput(e.target.value)}
-                                            placeholder="Escribe cómo deseas adaptar el enunciado... (ej: simplifica para principiantes, enfócate solo en arrays, o añade ejemplos de código)"
+                                            placeholder={activityType === "DOCUMENTATION"
+                                                ? "Escribe cómo deseas adaptar la lección... (ej: agrega ejemplos de código, explica paso a paso, añade diagrama Mermaid o resume conceptos)"
+                                                : "Escribe cómo deseas adaptar el enunciado... (ej: simplifica para principiantes, enfócate solo en arrays, o añade ejemplos de código)"}
                                             disabled={isRefining}
                                             rows={2}
                                             className="text-xs resize-none pr-10 min-h-[64px] bg-background leading-relaxed"
@@ -770,7 +792,7 @@ export function AIGenerateDialog({
                                 className="text-xs h-8 gap-1.5 bg-primary text-primary-foreground font-semibold shadow-xs"
                             >
                                 <Check className="h-3.5 w-3.5" />
-                                Insertar en el Enunciado
+                                {activityType === "DOCUMENTATION" ? "Insertar en el Documento" : "Insertar en el Enunciado"}
                             </Button>
                         ) : (
                             <Button
@@ -788,7 +810,7 @@ export function AIGenerateDialog({
                                 ) : (
                                     <>
                                         <Sparkles className="h-3.5 w-3.5" />
-                                        Generar Enunciado
+                                        {activityType === "DOCUMENTATION" ? "Generar Contenido" : "Generar Enunciado"}
                                         <ArrowRight className="h-3.5 w-3.5" />
                                     </>
                                 )}

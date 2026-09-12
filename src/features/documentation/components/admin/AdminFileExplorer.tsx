@@ -31,13 +31,15 @@ import {
   ArrowLeft,
   Settings2,
   Upload,
-  Download
+  Download,
+  BookOpen
 } from "lucide-react";
 import JSZip from "jszip";
 import { useRef } from "react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { FileNode } from "@/features/documentation/services/admin-docs";
+import { ExportBookDialog } from "@/features/documentation/components/pdf/ExportBookDialog";
 import { Button } from "@/components/ui/button";
 import { 
   DropdownMenu, 
@@ -68,6 +70,11 @@ import {
   DialogDescription,
   DialogFooter
 } from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -383,48 +390,104 @@ export function AdminFileExplorer({
           Documentos
         </span>
         <div className="flex items-center gap-0.5 shrink-0">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-7 w-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" 
-            onClick={() => handleOpenDialog('folder', projectId, 'folder')}
-            title="Nuevo Tópico"
-          >
-            <FolderPlus className="w-3.5 h-3.5" />
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-7 w-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" 
-            onClick={() => handleOpenDialog('file', projectId, 'file')}
-            title="Nuevo Archivo"
-          >
-            <FilePlus className="w-3.5 h-3.5" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-7 w-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer" 
+                onClick={() => handleOpenDialog('folder', projectId, 'folder')}
+                aria-label="Nuevo Tópico"
+              >
+                <FolderPlus className="w-3.5 h-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p>Nuevo Tópico</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-7 w-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer" 
+                onClick={() => handleOpenDialog('file', projectId, 'file')}
+                aria-label="Nuevo Archivo"
+              >
+                <FilePlus className="w-3.5 h-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p>Nuevo Archivo</p>
+            </TooltipContent>
+          </Tooltip>
+
           <Separator orientation="vertical" className="h-4 bg-border/60 mx-1" />
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-7 w-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" 
-            onClick={() => {
-              setDialogState({ type: null, parentPath: projectId });
-              fileInputRef.current?.click();
-            }}
-            title="Importar Markdowns"
-            disabled={isSubmitting}
-          >
-            <Upload className="w-3.5 h-3.5" />
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-7 w-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" 
-            onClick={handleExportProject}
-            title="Exportar Documentación (.zip)"
-            disabled={isSubmitting}
-          >
-            <Download className="w-3.5 h-3.5" />
-          </Button>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-7 w-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer" 
+                onClick={() => {
+                  setDialogState({ type: null, parentPath: projectId });
+                  fileInputRef.current?.click();
+                }}
+                disabled={isSubmitting}
+                aria-label="Importar Markdowns"
+              >
+                <Upload className="w-3.5 h-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p>Importar Markdowns (.md, .zip)</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-7 w-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer" 
+                onClick={handleExportProject}
+                disabled={isSubmitting}
+                aria-label="Exportar Documentación (.zip)"
+              >
+                <Download className="w-3.5 h-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p>Exportar Documentación (.zip)</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <ExportBookDialog
+            projectId={projectId}
+            trigger={
+              <div>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-7 w-7 rounded-lg hover:bg-primary/10 text-primary hover:text-primary transition-colors cursor-pointer" 
+                      disabled={isSubmitting}
+                      aria-label="Exportar Superlibro Editorial (PDF)"
+                    >
+                      <BookOpen className="w-3.5 h-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <p>Exportar Superlibro Editorial (PDF)</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            }
+          />
           <input 
             type="file" 
             multiple 
@@ -836,13 +899,19 @@ function FileTreeNode({
           </span>
 
           {node.draft && (
-            <span 
-              title={isFolder ? "Tópico en borrador (archivos internos ocultos)" : "Archivo en borrador"} 
-              className="inline-flex items-center gap-1 text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-md bg-muted/80 text-muted-foreground/80 border border-border/50 shrink-0 select-none"
-            >
-              <EyeOff className="w-2.5 h-2.5 text-amber-500/80" />
-              Borrador
-            </span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span 
+                  className="inline-flex items-center gap-1 text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-md bg-muted/80 text-muted-foreground/80 border border-border/50 shrink-0 select-none cursor-help"
+                >
+                  <EyeOff className="w-2.5 h-2.5 text-amber-500/80" />
+                  Borrador
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <p>{isFolder ? "Tópico en borrador (archivos internos ocultos)" : "Archivo en borrador"}</p>
+              </TooltipContent>
+            </Tooltip>
           )}
         </div>
 
