@@ -23,6 +23,8 @@ import Editor from "@monaco-editor/react";
 import { cn } from "@/lib/utils";
 import { FeedbackViewer } from "./FeedbackViewer";
 import { submitActivityAction } from "../actions/submissionActions";
+import { getActivityChecklistConfig, extractEvaluationMetadata } from "@/features/teacher/utils/checklistGradingUtils";
+import { StudentTeacherEvaluationSection } from "./StudentTeacherEvaluationSection";
 
 interface CodeChallengeActivityDetailsProps {
     activity: any;
@@ -191,6 +193,15 @@ export function CodeChallengeActivityDetails({
     const isSubmitted = !!submission;
     const isGraded = submission && submission.grade !== null && submission.grade !== undefined;
     const isDeadlinePassed = activity.deadline && new Date(activity.deadline) < new Date();
+
+    // Extraer configuración de lista de chequeo docente
+    const checklistConfig = useMemo(() => {
+        return getActivityChecklistConfig(activity?.description);
+    }, [activity?.description]);
+
+    const evalMetadata = useMemo(() => {
+        return extractEvaluationMetadata(submission?.feedback);
+    }, [submission?.feedback]);
 
     const { resolvedTheme } = useTheme();
     const [mounted, setMounted] = useState(false);
@@ -560,7 +571,12 @@ export function CodeChallengeActivityDetails({
             formData.append("activityId", activity.id);
             formData.append("url", payload);
 
-            await submitActivityAction(null, formData);
+            const res = await submitActivityAction(null, formData);
+            if (res && res.error) {
+                toast.error(res.message || "Error al entregar la actividad.");
+                return;
+            }
+
             toast.success("✓ ¡Solución de código entregada exitosamente!");
             window.location.reload();
         } catch (err: any) {
@@ -604,6 +620,24 @@ export function CodeChallengeActivityDetails({
                             <span className="hidden sm:inline">Modo Prueba Docente</span>
                             <span className="sm:hidden">Prueba</span>
                         </Badge>
+                    ) : checklistConfig && isGraded && evalMetadata ? (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                            {evalMetadata.aiGrade !== undefined && evalMetadata.aiGrade !== null && (
+                                <Badge variant="outline" className="text-[10px] sm:text-xs bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-300 font-mono font-bold">
+                                    IA ({checklistConfig.aiWeight}%): {Number(evalMetadata.aiGrade).toFixed(1)}
+                                </Badge>
+                            )}
+                            {evalMetadata.checklistScore !== undefined && evalMetadata.checklistScore !== null && (
+                                <Badge variant="outline" className="text-[10px] sm:text-xs bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-300 font-mono font-bold">
+                                    Docente ({checklistConfig.checklistWeight}%): {Number(evalMetadata.checklistScore).toFixed(1)}
+                                </Badge>
+                            )}
+                            <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-md text-[11px] font-bold shrink-0">
+                                <span className="text-[9px] uppercase font-bold opacity-80">Final:</span>
+                                <span className="text-xs font-black">{submission.grade.toFixed(1)}</span>
+                                <span className="text-[9px] font-bold opacity-75">/ 5.0</span>
+                            </div>
+                        </div>
                     ) : isGraded ? (
                         <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-md text-[11px] font-bold shrink-0">
                             <span className="text-[9px] uppercase font-bold opacity-80">Nota:</span>
@@ -875,6 +909,14 @@ export function CodeChallengeActivityDetails({
                                             {submission.grade.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">/ 5.0</span>
                                         </div>
                                     </div>
+
+                                    {/* Sección de Evaluación Docente (Solo si está habilitada en la configuración) */}
+                                    {checklistConfig && (
+                                        <StudentTeacherEvaluationSection
+                                            checklistConfig={checklistConfig}
+                                            submission={submission}
+                                        />
+                                    )}
 
                                     {submission.feedback && (
                                         <div className="space-y-2">

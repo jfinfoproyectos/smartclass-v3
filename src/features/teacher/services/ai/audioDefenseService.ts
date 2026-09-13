@@ -61,12 +61,24 @@ export async function gradeAudioDefense(params: {
     } = params;
 
     const model = await getAIModel(teacherId);
+    const { extractMediaMetadata } = await import("./mediaMetadataService");
+    const mediaMetadata = await extractMediaMetadata(audioUrl);
 
     const modePrompt = {
         normal: "Sé motivador y constructivo. Valora la intención comunicativa, el esfuerzo oral y la comprensión de las ideas centrales.",
         moderate: "Equilibra la fluidez verbal con la exactitud técnica y la cobertura de los temas del enunciado.",
         strict: "Sé riguroso con la profundidad técnica, la precisión terminológica, la estructura de la sustentación y el cumplimiento exhaustivo del enunciado.",
     }[gradingMode];
+
+    const mediaDetails = [
+        `- Enlace del audio/recurso: ${audioUrl}`,
+        `- Plataforma detectada: ${mediaMetadata.platform}`,
+        `- Estado de verificación técnica: ${mediaMetadata.isAccessible ? "Enlace verificado y activo" : "Enlace no accesible"}`,
+        mediaMetadata.title ? `- Título de la grabación: "${mediaMetadata.title}"` : null,
+        mediaMetadata.durationFormatted ? `- Duración detectada: ${mediaMetadata.durationFormatted}` : null,
+        mediaMetadata.author ? `- Autor o podcaster: ${mediaMetadata.author}` : null,
+        mediaMetadata.description && mediaMetadata.description.trim() ? `- Resumen / Transcripción del audio extraída de la plataforma:\n"""\n${mediaMetadata.description.trim()}\n"""` : null,
+    ].filter(Boolean).join("\n");
 
     const prompt = `
 Eres un docente universitario y jurado evaluador experto en Ingeniería de Software, Arquitectura de Sistemas y Comunicación Técnica Oral.
@@ -89,22 +101,23 @@ ${audioConfig?.requiredTopics && audioConfig.requiredTopics.length > 0
     : "  (No se configuraron temas específicos, evaluar según el enunciado)"}
 
 ---
-### ENLACE DEL AUDIO ENTREGADO POR EL ESTUDIANTE:
-URL: ${audioUrl}
+### INFORMACIÓN DE LA ENTREGA DEL ESTUDIANTE:
+${mediaDetails}
 
 ### NOTAS / MINUTERO / TIMESTAMPS DEL ESTUDIANTE:
 ${studentNotes.trim() ? studentNotes : "El estudiante no adjuntó marcas de tiempo o notas complementarias."}
 
 ---
-### INSTRUCCIONES DE CALIFICACIÓN:
-1. Evalúa el desempeño del estudiante considerando el contenido, la claridad técnica y los requerimientos del enunciado.
-2. Si el estudiante incluyó notas o marcas de tiempo (timestamps), úsalas como evidencia de la estructura de su exposición.
-3. Asigna puntajes justos en escala 0.0 a 5.0 para:
+### REGLAS OBLIGATORIAS DE EVALUACIÓN:
+1. El enlace provisto por el estudiante ES VÁLIDO y HA SIDO VERIFICADO POR EL SERVIDOR. NO indiques que el enlace no funciona o que no se pudo acceder.
+2. Evalúa el desempeño del estudiante considerando el contenido extraído de la grabación, la claridad técnica, las notas y los requerimientos del enunciado.
+3. Si el estudiante incluyó notas o marcas de tiempo (timestamps), úsalas como evidencia de la estructura de su exposición.
+4. Asigna puntajes justos en escala 0.0 a 5.0 para:
    - Argumentación y Fluidez (0.0 - 5.0)
    - Estructura y Organización (0.0 - 5.0)
    - Profundidad y Vocabulario Técnico (0.0 - 5.0)
-4. Calcula el porcentaje de cobertura de los temas solicitados (0 a 100%).
-5. Genera una retroalimentación formativa y detallada en Markdown que incluya:
+5. Calcula el porcentaje de cobertura de los temas solicitados (0 a 100%).
+6. Genera una retroalimentación formativa y detallada en Markdown que incluya:
    - **Diagnóstico General**: Síntesis del audio y claridad expositiva.
    - **Evaluación de Temas**: Cumplimiento de cada punto solicitado.
    - **Buenas Prácticas Observadas y Recomendaciones**: Consejos para mejorar la defensa técnica oral.

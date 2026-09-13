@@ -17,9 +17,11 @@ import '@uiw/react-markdown-preview/markdown.css';
 import { useTheme } from "next-themes";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { submitActivityAction } from "@/features/student/actions/submissionActions";
-import { useActionState } from "react";
+import { useActionState, useMemo } from "react";
 import { toast } from "sonner";
 import { useCooldown } from "@/hooks/use-cooldown";
+import { getActivityChecklistConfig, extractEvaluationMetadata } from "@/features/teacher/utils/checklistGradingUtils";
+import { StudentTeacherEvaluationSection } from "./StudentTeacherEvaluationSection";
 
 interface ManualActivityDetailsProps {
     activity: any;
@@ -36,6 +38,16 @@ export function ManualActivityDetails({ activity, userId, studentName }: ManualA
     const submission = activity.submissions?.[0];
     const isGraded = submission && submission.grade !== null;
     const isRejected = submission && submission.grade === null && submission.feedback && submission.feedback.includes("[ENTREGA RECHAZADA]");
+    
+    // Extraer configuración de lista de chequeo docente
+    const checklistConfig = useMemo(() => {
+        return getActivityChecklistConfig(activity?.description);
+    }, [activity?.description]);
+
+    const evalMetadata = useMemo(() => {
+        return extractEvaluationMetadata(submission?.feedback);
+    }, [submission?.feedback]);
+
     const { resolvedTheme } = useTheme();
     const [mounted, setMounted] = useState(false);
     const [state, formAction] = useActionState(submitActivityAction, initialState);
@@ -85,12 +97,24 @@ export function ManualActivityDetails({ activity, userId, studentName }: ManualA
                         {activity.course.title}
                     </p>
                 </div>
-                {isGraded && (
+                {checklistConfig && isGraded && evalMetadata ? (
+                    <div className="flex flex-col items-end gap-1">
+                        {evalMetadata.checklistScore !== undefined && evalMetadata.checklistScore !== null && (
+                            <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-300 font-mono font-bold">
+                                Sustentación: {Number(evalMetadata.checklistScore).toFixed(1)} / 5.0
+                            </Badge>
+                        )}
+                        <div className="flex flex-col items-end bg-primary text-primary-foreground px-4 py-2 rounded-lg shadow-lg">
+                            <span className="text-[10px] uppercase font-bold tracking-wider opacity-80">Tu Calificación</span>
+                            <span className="text-3xl font-black">{submission.grade.toFixed(1)}</span>
+                        </div>
+                    </div>
+                ) : isGraded ? (
                     <div className="flex flex-col items-end bg-primary text-primary-foreground px-4 py-2 rounded-lg shadow-lg">
                         <span className="text-[10px] uppercase font-bold tracking-wider opacity-80">Tu Calificación</span>
                         <span className="text-3xl font-black">{submission.grade.toFixed(1)}</span>
                     </div>
-                )}
+                ) : null}
             </div>
 
             <div className="space-y-6">
@@ -273,7 +297,14 @@ export function ManualActivityDetails({ activity, userId, studentName }: ManualA
                                     />
                                 )}
                             </CardHeader>
-                            <CardContent className="pt-6">
+                            <CardContent className="pt-6 space-y-4">
+                                {checklistConfig && isGraded && (
+                                    <StudentTeacherEvaluationSection
+                                        checklistConfig={checklistConfig}
+                                        submission={submission}
+                                    />
+                                )}
+
                                 {(isGraded || isRejected) && submission?.feedback ? (
                                     <div className="bg-card rounded-lg p-2">
                                         <FeedbackViewer feedback={submission.feedback} />

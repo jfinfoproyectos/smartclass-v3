@@ -22,6 +22,8 @@ import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
 import { useTheme } from "next-themes";
 import { isValidPdfUrl } from "@/lib/utils";
+import { getActivityChecklistConfig, extractEvaluationMetadata } from "@/features/teacher/utils/checklistGradingUtils";
+import { StudentTeacherEvaluationSection } from "./StudentTeacherEvaluationSection";
 
 interface PdfReviewActivityDetailsProps {
     activity: any;
@@ -60,6 +62,15 @@ export function PdfReviewActivityDetails({ activity, userId, studentName }: PdfR
     // Configuración de páginas de revisión PDF
     const pdfConfig = useMemo(() => getPdfReviewConfig(activity?.description), [activity?.description]);
 
+    // Extraer configuración de lista de chequeo docente
+    const checklistConfig = useMemo(() => {
+        return getActivityChecklistConfig(activity?.description);
+    }, [activity?.description]);
+
+    const evalMetadata = useMemo(() => {
+        return extractEvaluationMetadata(submission?.feedback);
+    }, [submission?.feedback]);
+
     return (
         <div className="space-y-4 sm:space-y-6 w-full max-w-full min-w-0 p-3 sm:p-6 overflow-x-hidden">
             {/* Header: Compacto, Moderno y Responsivo */}
@@ -81,13 +92,31 @@ export function PdfReviewActivityDetails({ activity, userId, studentName }: PdfR
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
-                    {isGraded && (
+                    {checklistConfig && isGraded && evalMetadata ? (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                            {evalMetadata.aiGrade !== undefined && evalMetadata.aiGrade !== null && (
+                                <Badge variant="outline" className="text-xs bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-300 font-mono font-bold">
+                                    IA ({checklistConfig.aiWeight}%): {Number(evalMetadata.aiGrade).toFixed(1)}
+                                </Badge>
+                            )}
+                            {evalMetadata.checklistScore !== undefined && evalMetadata.checklistScore !== null && (
+                                <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-300 font-mono font-bold">
+                                    Docente ({checklistConfig.checklistWeight}%): {Number(evalMetadata.checklistScore).toFixed(1)}
+                                </Badge>
+                            )}
+                            <div className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 px-3 py-1 rounded-lg">
+                                <span className="text-[10px] uppercase font-bold tracking-wider opacity-80">Final:</span>
+                                <span className="text-lg sm:text-2xl font-black font-mono">{submission.grade.toFixed(1)}</span>
+                                <span className="text-[10px] font-bold opacity-75">/ 5.0</span>
+                            </div>
+                        </div>
+                    ) : isGraded ? (
                         <div className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 px-3 py-1 rounded-lg">
                             <span className="text-[10px] uppercase font-bold tracking-wider opacity-80">Nota:</span>
                             <span className="text-lg sm:text-2xl font-black font-mono">{submission.grade.toFixed(1)}</span>
                             <span className="text-[10px] font-bold opacity-75">/ 5.0</span>
                         </div>
-                    )}
+                    ) : null}
 
                     {activity.courseId && (
                         <Button
@@ -346,7 +375,15 @@ export function PdfReviewActivityDetails({ activity, userId, studentName }: PdfR
                                     />
                                 )}
                             </CardHeader>
-                            <CardContent className="p-3.5 sm:p-5">
+                            <CardContent className="p-3.5 sm:p-5 space-y-4">
+                                {/* Sección de Evaluación Docente (Solo si está habilitada en la configuración) */}
+                                {checklistConfig && isGraded && (
+                                    <StudentTeacherEvaluationSection
+                                        checklistConfig={checklistConfig}
+                                        submission={submission}
+                                    />
+                                )}
+
                                 {isSubmitted && submission.feedback ? (
                                     <div className="bg-card rounded-lg p-2">
                                         <FeedbackViewer feedback={submission.feedback} />

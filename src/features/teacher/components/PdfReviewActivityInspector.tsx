@@ -817,8 +817,8 @@ export function PdfReviewActivityInspector({
                                             className="h-[42px] px-3.5 text-xs gap-1.5 font-bold shadow-xs transition-all shrink-0 cursor-pointer"
                                             title="Evaluar el documento PDF con IA según el enunciado"
                                         >
-                                            {isEvaluatingAI ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bot className="h-3.5 w-3.5" />}
-                                            <span>{aiFeedbackInput ? "Reevaluar con IA" : "Evaluar con IA"}</span>
+                                            {isEvaluatingAI ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                                            <span>{isEvaluatingAI ? "Evaluando con IA..." : (aiFeedbackInput ? "Reevaluar con IA" : "Evaluar con IA (Gemini)")}</span>
                                         </Button>
 
                                         {pdfConfig && (

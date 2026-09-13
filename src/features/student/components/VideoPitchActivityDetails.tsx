@@ -21,6 +21,9 @@ import "@uiw/react-markdown-preview/markdown.css";
 import { useTheme } from "next-themes";
 import { FeedbackViewer } from "./FeedbackViewer";
 import { submitActivityAction } from "../actions/submissionActions";
+import { getActivityChecklistConfig, extractEvaluationMetadata } from "@/features/teacher/utils/checklistGradingUtils";
+import { StudentTeacherEvaluationSection } from "./StudentTeacherEvaluationSection";
+import { cn } from "@/lib/utils";
 
 interface VideoPitchActivityDetailsProps {
     activity: any;
@@ -95,6 +98,15 @@ export function VideoPitchActivityDetails({
         "Lecciones y Retos Superados",
     ];
 
+    // Extraer configuración de lista de chequeo docente
+    const checklistConfig = useMemo(() => {
+        return getActivityChecklistConfig(activity?.description);
+    }, [activity?.description]);
+
+    const evalMetadata = useMemo(() => {
+        return extractEvaluationMetadata(submission?.feedback);
+    }, [submission?.feedback]);
+
     // Extraer videoUrl y notas guardadas
     const initialData = useMemo(() => {
         if (!submission?.url) return { videoUrl: "", notes: "" };
@@ -113,6 +125,17 @@ export function VideoPitchActivityDetails({
     const [notes, setNotes] = useState<string>(initialData.notes);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [activeTab, setActiveTab] = useState<"statement" | "checklist" | "submission">("statement");
+
+    useEffect(() => {
+        if (!checklistConfig && activeTab === "checklist") {
+            setActiveTab("statement");
+        }
+    }, [checklistConfig, activeTab]);
+
+    useEffect(() => {
+        setVideoUrl(initialData.videoUrl);
+        setNotes(initialData.notes);
+    }, [initialData]);
 
     // Embed info
     const embedInfo = useMemo(() => getEmbedUrl(videoUrl), [videoUrl]);
@@ -136,8 +159,13 @@ export function VideoPitchActivityDetails({
             formData.append("activityId", activity.id);
             formData.append("url", payload);
 
-            await submitActivityAction(null, formData);
-            toast.success("¡Video de sustentación enviado exitosamente!");
+            const res = await submitActivityAction(null, formData);
+            if (res && res.error) {
+                toast.error(res.message || "Error al enviar la entrega.");
+                return;
+            }
+
+            toast.success(isSubmitted ? "¡Sustentación actualizada exitosamente!" : "¡Video de sustentación enviado exitosamente!");
             window.location.reload();
         } catch (err: any) {
             toast.error(err.message || "Error al enviar la entrega.");
@@ -159,7 +187,23 @@ export function VideoPitchActivityDetails({
                         <Badge variant="secondary" className="text-xs font-mono">
                             Máx. {maxMinutes} min
                         </Badge>
-                        {isGraded ? (
+                        {checklistConfig && isGraded && evalMetadata ? (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                                {evalMetadata.aiGrade !== undefined && evalMetadata.aiGrade !== null && (
+                                    <Badge variant="outline" className="text-xs bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-300 font-mono font-bold">
+                                        IA ({checklistConfig.aiWeight}%): {Number(evalMetadata.aiGrade).toFixed(1)}
+                                    </Badge>
+                                )}
+                                {evalMetadata.checklistScore !== undefined && evalMetadata.checklistScore !== null && (
+                                    <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-300 font-mono font-bold">
+                                        Docente ({checklistConfig.checklistWeight}%): {Number(evalMetadata.checklistScore).toFixed(1)}
+                                    </Badge>
+                                )}
+                                <Badge className="bg-emerald-600 text-white font-bold">
+                                    Final: {submission.grade.toFixed(1)} / 5.0
+                                </Badge>
+                            </div>
+                        ) : isGraded ? (
                             <Badge className="bg-emerald-600 text-white font-bold">
                                 Calificado: {submission.grade.toFixed(1)} / 5.0
                             </Badge>
@@ -284,13 +328,18 @@ export function VideoPitchActivityDetails({
                 <div className="lg:col-span-5 flex flex-col bg-card rounded-2xl border border-border/70 overflow-hidden shadow-xs">
                     <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex-1 flex flex-col">
                         <div className="border-b p-2 bg-muted/30 overflow-x-auto scrollbar-none">
-                            <TabsList className="inline-flex w-max min-w-full sm:grid sm:grid-cols-3 h-auto min-h-8 p-1 gap-1">
+                            <TabsList className={cn(
+                                "inline-flex w-max min-w-full h-auto min-h-8 p-1 gap-1",
+                                checklistConfig ? "sm:grid sm:grid-cols-3" : "sm:grid sm:grid-cols-2"
+                            )}>
                                 <TabsTrigger value="statement" className="text-xs font-semibold gap-1 shrink-0 px-3 py-1.5 whitespace-nowrap">
                                     <FileText className="h-3.5 w-3.5 shrink-0" /> <span>Enunciado</span>
                                 </TabsTrigger>
-                                <TabsTrigger value="checklist" className="text-xs font-semibold gap-1 shrink-0 px-3 py-1.5 whitespace-nowrap">
-                                    <CheckSquare className="h-3.5 w-3.5 shrink-0" /> <span>Estructura</span>
-                                </TabsTrigger>
+                                {checklistConfig && (
+                                    <TabsTrigger value="checklist" className="text-xs font-semibold gap-1 shrink-0 px-3 py-1.5 whitespace-nowrap">
+                                        <CheckSquare className="h-3.5 w-3.5 shrink-0" /> <span>Estructura</span>
+                                    </TabsTrigger>
+                                )}
                                 <TabsTrigger value="submission" className="text-xs font-semibold gap-1 shrink-0 px-3 py-1.5 whitespace-nowrap">
                                     <Award className="h-3.5 w-3.5 shrink-0" /> <span>Evaluación</span>
                                 </TabsTrigger>
@@ -308,30 +357,32 @@ export function VideoPitchActivityDetails({
                         </TabsContent>
 
                         {/* Pestaña 2: Guía de Estructura Recomendada */}
-                        <TabsContent value="checklist" className="flex-1 p-4 overflow-y-auto m-0 space-y-3">
-                            <div className="space-y-1 pb-2 border-b">
-                                <span className="text-xs font-bold text-foreground">Lista de Autochequeo del Pitch</span>
-                                <p className="text-[11px] text-muted-foreground">
-                                    Asegúrate de cubrir estos temas en tu exposición antes de enviar:
-                                </p>
-                            </div>
+                        {checklistConfig && (
+                            <TabsContent value="checklist" className="flex-1 p-4 overflow-y-auto m-0 space-y-3">
+                                <div className="space-y-1 pb-2 border-b">
+                                    <span className="text-xs font-bold text-foreground">Lista de Autochequeo del Pitch</span>
+                                    <p className="text-[11px] text-muted-foreground">
+                                        Asegúrate de cubrir estos temas en tu exposición antes de enviar:
+                                    </p>
+                                </div>
 
-                            <div className="space-y-2 pt-1">
-                                {requiredTopics.map((topic, idx) => (
-                                    <div key={idx} className="flex items-start gap-2.5 p-2.5 rounded-xl border bg-muted/20 text-xs">
-                                        <div className="h-5 w-5 rounded-full bg-rose-500/10 text-rose-600 font-bold flex items-center justify-center shrink-0 text-[10px]">
-                                            {idx + 1}
+                                <div className="space-y-2 pt-1">
+                                    {requiredTopics.map((topic, idx) => (
+                                        <div key={idx} className="flex items-start gap-2.5 p-2.5 rounded-xl border bg-muted/20 text-xs">
+                                            <div className="h-5 w-5 rounded-full bg-rose-500/10 text-rose-600 font-bold flex items-center justify-center shrink-0 text-[10px]">
+                                                {idx + 1}
+                                            </div>
+                                            <div className="space-y-0.5">
+                                                <span className="font-bold text-foreground block">{topic}</span>
+                                                <span className="text-[10px] text-muted-foreground block">
+                                                    Explica con precisión conceptual y muestra evidencia en tu video.
+                                                </span>
+                                            </div>
                                         </div>
-                                        <div className="space-y-0.5">
-                                            <span className="font-bold text-foreground block">{topic}</span>
-                                            <span className="text-[10px] text-muted-foreground block">
-                                                Explica con precisión conceptual y muestra evidencia en tu video.
-                                            </span>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </TabsContent>
+                                    ))}
+                                </div>
+                            </TabsContent>
+                        )}
 
                         {/* Pestaña 3: Evaluación y Feedback */}
                         <TabsContent value="submission" className="flex-1 p-4 overflow-y-auto m-0 space-y-4">
@@ -343,6 +394,14 @@ export function VideoPitchActivityDetails({
                                             {submission.grade.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">/ 5.0</span>
                                         </div>
                                     </div>
+
+                                    {/* Sección de Evaluación Docente (Solo si está habilitada en la configuración) */}
+                                    {checklistConfig && (
+                                        <StudentTeacherEvaluationSection
+                                            checklistConfig={checklistConfig}
+                                            submission={submission}
+                                        />
+                                    )}
 
                                     {submission.feedback && (
                                         <div className="space-y-2">

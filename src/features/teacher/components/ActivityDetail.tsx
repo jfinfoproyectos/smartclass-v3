@@ -1456,7 +1456,7 @@ export function ActivityDetail({
                                                         {gradingStudentId === student.id ? (
                                                             <><Loader2 className="h-4 w-4 animate-spin" />Calificando...</>
                                                         ) : (
-                                                            <><Bot className="h-4 w-4" />Calificar con IA (Gemini)</>
+                                                            <><Sparkles className="h-4 w-4" />Calificar con IA (Gemini)</>
                                                         )}
                                                     </Button>
                                                     {gradingLogs.length > 0 && (
@@ -1626,7 +1626,7 @@ export function ActivityDetail({
                                                     {isPdfGrading === student.id ? (
                                                         <><Loader2 className="h-4 w-4 animate-spin" />Calificando...</>
                                                     ) : (
-                                                        <><Bot className="h-4 w-4" />Calificar con IA (Gemini)</>
+                                                        <><Sparkles className="h-4 w-4" />Calificar con IA (Gemini)</>
                                                     )}
                                                 </Button>
                                                 {gradingResult && (

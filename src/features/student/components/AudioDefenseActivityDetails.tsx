@@ -21,6 +21,8 @@ import "@uiw/react-markdown-preview/markdown.css";
 import { useTheme } from "next-themes";
 import { FeedbackViewer } from "./FeedbackViewer";
 import { submitActivityAction } from "../actions/submissionActions";
+import { getActivityChecklistConfig, extractEvaluationMetadata } from "@/features/teacher/utils/checklistGradingUtils";
+import { StudentTeacherEvaluationSection } from "./StudentTeacherEvaluationSection";
 
 interface AudioDefenseActivityDetailsProps {
     activity: any;
@@ -94,6 +96,15 @@ export function AudioDefenseActivityDetails({
         "Retos y Conclusiones",
     ];
 
+    // Extraer configuración de lista de chequeo docente
+    const checklistConfig = useMemo(() => {
+        return getActivityChecklistConfig(activity?.description);
+    }, [activity?.description]);
+
+    const evalMetadata = useMemo(() => {
+        return extractEvaluationMetadata(submission?.feedback);
+    }, [submission?.feedback]);
+
     // Extraer datos entregados previamente por el estudiante
     const savedSubmissionData = useMemo(() => {
         if (!submission?.url) return null;
@@ -130,7 +141,12 @@ export function AudioDefenseActivityDetails({
             formData.append("activityId", activity.id);
             formData.append("url", payload);
 
-            await submitActivityAction(null, formData);
+            const res = await submitActivityAction(null, formData);
+            if (res && res.error) {
+                toast.error(res.message || "Error al entregar la sustentación.");
+                return;
+            }
+
             toast.success("✓ ¡Sustentación en audio entregada exitosamente!");
             window.location.reload();
         } catch (err: any) {
@@ -153,7 +169,23 @@ export function AudioDefenseActivityDetails({
                         <Badge variant="secondary" className="text-xs font-mono">
                             Máx. {maxDuration} min
                         </Badge>
-                        {isGraded ? (
+                        {checklistConfig && isGraded && evalMetadata ? (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                                {evalMetadata.aiGrade !== undefined && evalMetadata.aiGrade !== null && (
+                                    <Badge variant="outline" className="text-xs bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-300 font-mono font-bold">
+                                        IA ({checklistConfig.aiWeight}%): {Number(evalMetadata.aiGrade).toFixed(1)}
+                                    </Badge>
+                                )}
+                                {evalMetadata.checklistScore !== undefined && evalMetadata.checklistScore !== null && (
+                                    <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-300 font-mono font-bold">
+                                        Docente ({checklistConfig.checklistWeight}%): {Number(evalMetadata.checklistScore).toFixed(1)}
+                                    </Badge>
+                                )}
+                                <Badge className="bg-emerald-600 text-white font-bold">
+                                    Final: {submission.grade.toFixed(1)} / 5.0
+                                </Badge>
+                            </div>
+                        ) : isGraded ? (
                             <Badge className="bg-emerald-600 text-white font-bold">
                                 Calificado: {submission.grade.toFixed(1)} / 5.0
                             </Badge>
@@ -311,7 +343,7 @@ export function AudioDefenseActivityDetails({
                     </Card>
 
                     {/* Temas Requeridos Checklist */}
-                    {requiredTopics.length > 0 && (
+                    {checklistConfig && requiredTopics.length > 0 && (
                         <Card className="rounded-2xl border border-border/70 p-4 space-y-2.5">
                             <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
                                 <CheckSquare className="h-4 w-4 text-violet-600" />
@@ -372,6 +404,14 @@ export function AudioDefenseActivityDetails({
                                             {submission.grade.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">/ 5.0</span>
                                         </div>
                                     </div>
+
+                                    {/* Sección de Evaluación Docente (Solo si está habilitada en la configuración) */}
+                                    {checklistConfig && (
+                                        <StudentTeacherEvaluationSection
+                                            checklistConfig={checklistConfig}
+                                            submission={submission}
+                                        />
+                                    )}
 
                                     {submission.feedback && (
                                         <div className="space-y-2">

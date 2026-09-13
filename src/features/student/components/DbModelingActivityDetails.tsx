@@ -21,6 +21,8 @@ import Editor from "@monaco-editor/react";
 import { useTheme } from "next-themes";
 import { FeedbackViewer } from "./FeedbackViewer";
 import { submitActivityAction } from "../actions/submissionActions";
+import { getActivityChecklistConfig, extractEvaluationMetadata } from "@/features/teacher/utils/checklistGradingUtils";
+import { StudentTeacherEvaluationSection } from "./StudentTeacherEvaluationSection";
 
 interface DbModelingActivityDetailsProps {
     activity: any;
@@ -119,6 +121,15 @@ export function DbModelingActivityDetails({
     const requiredNormalization = dbConfig?.requiredNormalization || "3FN";
     const requiredEntities: string[] = dbConfig?.requiredEntities || [];
 
+    // Extraer configuración de lista de chequeo docente
+    const checklistConfig = useMemo(() => {
+        return getActivityChecklistConfig(activity?.description);
+    }, [activity?.description]);
+
+    const evalMetadata = useMemo(() => {
+        return extractEvaluationMetadata(submission?.feedback);
+    }, [submission?.feedback]);
+
     // Cargar datos entregados previamente
     const savedData = useMemo(() => {
         if (!submission?.url) return null;
@@ -202,7 +213,12 @@ export function DbModelingActivityDetails({
             formData.append("activityId", activity.id);
             formData.append("url", payload);
 
-            await submitActivityAction(null, formData);
+            const res = await submitActivityAction(null, formData);
+            if (res && res.error) {
+                toast.error(res.message || "Error al enviar la entrega.");
+                return;
+            }
+
             toast.success(isCloudMode ? "✓ ¡Conexión a Base de Datos Cloud entregada exitosamente!" : "✓ ¡Script SQL entregado exitosamente!");
             window.location.reload();
         } catch (err: any) {
@@ -244,7 +260,23 @@ export function DbModelingActivityDetails({
                         <Badge variant="outline" className="text-xs font-mono">
                             Norm: {requiredNormalization}
                         </Badge>
-                        {isGraded ? (
+                        {checklistConfig && isGraded && evalMetadata ? (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                                {evalMetadata.aiGrade !== undefined && evalMetadata.aiGrade !== null && (
+                                    <Badge variant="outline" className="text-xs bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-300 font-mono font-bold">
+                                        IA ({checklistConfig.aiWeight}%): {Number(evalMetadata.aiGrade).toFixed(1)}
+                                    </Badge>
+                                )}
+                                {evalMetadata.checklistScore !== undefined && evalMetadata.checklistScore !== null && (
+                                    <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-300 font-mono font-bold">
+                                        Docente ({checklistConfig.checklistWeight}%): {Number(evalMetadata.checklistScore).toFixed(1)}
+                                    </Badge>
+                                )}
+                                <Badge className="bg-emerald-600 text-white font-bold">
+                                    Final: {submission.grade.toFixed(1)} / 5.0
+                                </Badge>
+                            </div>
+                        ) : isGraded ? (
                             <Badge className="bg-emerald-600 text-white font-bold">
                                 Calificado: {submission.grade.toFixed(1)} / 5.0
                             </Badge>
@@ -349,6 +381,14 @@ export function DbModelingActivityDetails({
                                             {submission.grade.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">/ 5.0</span>
                                         </div>
                                     </div>
+
+                                    {/* Sección de Evaluación Docente (Solo si está habilitada en la configuración) */}
+                                    {checklistConfig && (
+                                        <StudentTeacherEvaluationSection
+                                            checklistConfig={checklistConfig}
+                                            submission={submission}
+                                        />
+                                    )}
 
                                     {submission.feedback && (
                                         <div className="space-y-2">

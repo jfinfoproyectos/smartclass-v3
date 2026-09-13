@@ -22,6 +22,8 @@ import { useTheme } from "next-themes";
 import { FeedbackViewer } from "./FeedbackViewer";
 import { getNextInterviewQuestionAction, gradeInterviewAction } from "@/features/teacher/actions/gradingActions";
 import { submitActivityAction } from "../actions/submissionActions";
+import { getActivityChecklistConfig, extractEvaluationMetadata } from "@/features/teacher/utils/checklistGradingUtils";
+import { StudentTeacherEvaluationSection } from "./StudentTeacherEvaluationSection";
 
 interface AiInterviewActivityDetailsProps {
     activity: any;
@@ -68,6 +70,15 @@ export function AiInterviewActivityDetails({
         "Patrones de Diseño y Buenas Prácticas",
         "Resolución de Problemas y Casos Borde",
     ];
+
+    // Extraer configuración de lista de chequeo docente
+    const checklistConfig = useMemo(() => {
+        return getActivityChecklistConfig(activity?.description);
+    }, [activity?.description]);
+
+    const evalMetadata = useMemo(() => {
+        return extractEvaluationMetadata(submission?.feedback);
+    }, [submission?.feedback]);
 
     // Cargar historial previo si ya fue entregado
     const savedSession = useMemo(() => {
@@ -208,7 +219,12 @@ export function AiInterviewActivityDetails({
             formData.append("activityId", activity.id);
             formData.append("url", payload);
 
-            await submitActivityAction(null, formData);
+            const res = await submitActivityAction(null, formData);
+            if (res && res.error) {
+                toast.error(res.message || "Error al calificar la entrevista.");
+                return;
+            }
+
             toast.success("✓ ¡Entrevista completada y calificada exitosamente!");
             window.location.reload();
         } catch (err: any) {
@@ -231,7 +247,23 @@ export function AiInterviewActivityDetails({
                         <Badge variant="secondary" className="text-xs font-mono">
                             Nivel: {targetRole}
                         </Badge>
-                        {isGraded ? (
+                        {checklistConfig && isGraded && evalMetadata ? (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                                {evalMetadata.aiGrade !== undefined && evalMetadata.aiGrade !== null && (
+                                    <Badge variant="outline" className="text-xs bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-300 font-mono font-bold">
+                                        IA ({checklistConfig.aiWeight}%): {Number(evalMetadata.aiGrade).toFixed(1)}
+                                    </Badge>
+                                )}
+                                {evalMetadata.checklistScore !== undefined && evalMetadata.checklistScore !== null && (
+                                    <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-300 font-mono font-bold">
+                                        Docente ({checklistConfig.checklistWeight}%): {Number(evalMetadata.checklistScore).toFixed(1)}
+                                    </Badge>
+                                )}
+                                <Badge className="bg-emerald-600 text-white font-bold">
+                                    Final: {submission.grade.toFixed(1)} / 5.0
+                                </Badge>
+                            </div>
+                        ) : isGraded ? (
                             <Badge className="bg-emerald-600 text-white font-bold">
                                 Calificado: {submission.grade.toFixed(1)} / 5.0
                             </Badge>
@@ -452,6 +484,14 @@ export function AiInterviewActivityDetails({
                                             {submission.grade.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">/ 5.0</span>
                                         </div>
                                     </div>
+
+                                    {/* Sección de Evaluación Docente (Solo si está habilitada en la configuración) */}
+                                    {checklistConfig && (
+                                        <StudentTeacherEvaluationSection
+                                            checklistConfig={checklistConfig}
+                                            submission={submission}
+                                        />
+                                    )}
 
                                     {submission.feedback && (
                                         <div className="space-y-2">

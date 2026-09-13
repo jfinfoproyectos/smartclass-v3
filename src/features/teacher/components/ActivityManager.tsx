@@ -22,7 +22,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { createActivityAction, updateActivityAction, deleteActivityAction, generateChecklistCriteriaAction, verifyCriterionRelationAction, balanceCriteriaPercentagesAction, generateCodeFileTemplateAction } from "@/features/teacher/actions/activityActions";
+import { createActivityAction, updateActivityAction, deleteActivityAction, generateChecklistCriteriaAction, verifyCriterionRelationAction, balanceCriteriaPercentagesAction, generateCodeFileTemplateAction, generateRequiredTopicsAction } from "@/features/teacher/actions/activityActions";
 import { scanRepositoryAction } from "@/features/github/actions/githubActions";
 import { getMissingSubmissionsAction } from "@/features/teacher/actions/studentActions";
 import { Plus, Calendar, FileText, MessageSquare, Pencil, Trash2, Eye, X, ChevronUp, ChevronDown, AlertCircle, Sparkles, Upload, Download, Loader2, Search, UserX, GripVertical, LayoutGrid, List, Save, Settings2, Code2, FolderGit2, CheckCircle2, Clock, SlidersHorizontal, Info, ListChecks, CheckSquare, RefreshCw, Bot, Cpu, HelpCircle, MessageSquareQuote, Shuffle, Scale, Crown, Users, Terminal, Video, Database, Mic, Headphones, FileCode, Target, Layers, FileCheck, BookOpen } from "lucide-react";
@@ -1007,12 +1007,64 @@ function ActivityFormDialog({
         "Demostración en Vivo",
         "Lecciones y Retos Superados",
     ]);
+    const [isGeneratingPitchTopics, setIsGeneratingPitchTopics] = useState<boolean>(false);
+
+    const handleGeneratePitchTopics = async () => {
+        const titleInput = (document.querySelector('input[name="title"]') as HTMLInputElement)?.value || "";
+        const content = (statement || "").trim();
+        if (!content && !titleInput.trim()) {
+            toast.warning("Ingresa al menos el título o el enunciado de la actividad para que la IA extraiga los temas requeridos.");
+            return;
+        }
+        setIsGeneratingPitchTopics(true);
+        try {
+            const generated = await generateRequiredTopicsAction(content, "VIDEO_PITCH", titleInput);
+            if (generated && generated.length > 0) {
+                setPitchRequiredTopics(generated);
+                toast.success(`${generated.length} temas del pitch generados con IA.`);
+            } else {
+                toast.error("La IA no pudo generar los temas. Intenta de nuevo.");
+            }
+        } catch (err: any) {
+            console.error("Error al generar temas del pitch con IA:", err);
+            toast.error(err.message || "Error al conectar con la IA para generar temas.");
+        } finally {
+            setIsGeneratingPitchTopics(false);
+        }
+    };
+
     const [audioMaxMinutes, setAudioMaxMinutes] = useState<number>(5);
     const [audioRequiredTopics, setAudioRequiredTopics] = useState<string[]>([
         "Problema y Contexto",
         "Arquitectura y Decisiones Técnicas",
         "Retos y Conclusiones",
     ]);
+    const [isGeneratingAudioTopics, setIsGeneratingAudioTopics] = useState<boolean>(false);
+
+    const handleGenerateAudioTopics = async () => {
+        const titleInput = (document.querySelector('input[name="title"]') as HTMLInputElement)?.value || "";
+        const content = (statement || "").trim();
+        if (!content && !titleInput.trim()) {
+            toast.warning("Ingresa al menos el título o el enunciado de la actividad para que la IA extraiga los temas requeridos.");
+            return;
+        }
+        setIsGeneratingAudioTopics(true);
+        try {
+            const generated = await generateRequiredTopicsAction(content, "AUDIO_DEFENSE", titleInput);
+            if (generated && generated.length > 0) {
+                setAudioRequiredTopics(generated);
+                toast.success(`${generated.length} temas del audio generados con IA.`);
+            } else {
+                toast.error("La IA no pudo generar los temas. Intenta de nuevo.");
+            }
+        } catch (err: any) {
+            console.error("Error al generar temas de audio con IA:", err);
+            toast.error(err.message || "Error al conectar con la IA para generar temas.");
+        } finally {
+            setIsGeneratingAudioTopics(false);
+        }
+    };
+
     const [interviewQuestionsCount, setInterviewQuestionsCount] = useState<number>(4);
     const [interviewTargetRole, setInterviewTargetRole] = useState<"Junior" | "Semi-Senior" | "Senior">("Junior");
     const [interviewFocusAreas, setInterviewFocusAreas] = useState<string[]>([
@@ -1020,6 +1072,31 @@ function ActivityFormDialog({
         "Patrones de Diseño y Buenas Prácticas",
         "Resolución de Problemas y Casos Borde",
     ]);
+    const [isGeneratingInterviewAreas, setIsGeneratingInterviewAreas] = useState<boolean>(false);
+
+    const handleGenerateInterviewAreas = async () => {
+        const titleInput = (document.querySelector('input[name="title"]') as HTMLInputElement)?.value || "";
+        const content = (statement || "").trim();
+        if (!content && !titleInput.trim()) {
+            toast.warning("Ingresa al menos el título o el enunciado de la actividad para que la IA extraiga las áreas temáticas.");
+            return;
+        }
+        setIsGeneratingInterviewAreas(true);
+        try {
+            const generated = await generateRequiredTopicsAction(content, "AI_INTERVIEW", titleInput);
+            if (generated && generated.length > 0) {
+                setInterviewFocusAreas(generated);
+                toast.success(`${generated.length} áreas temáticas generadas con IA.`);
+            } else {
+                toast.error("La IA no pudo generar las áreas. Intenta de nuevo.");
+            }
+        } catch (err: any) {
+            console.error("Error al generar áreas con IA:", err);
+            toast.error(err.message || "Error al conectar con la IA para generar áreas temáticas.");
+        } finally {
+            setIsGeneratingInterviewAreas(false);
+        }
+    };
     const [dbDeliveryMode, setDbDeliveryMode] = useState<"sandbox" | "cloud">("sandbox");
     const [dbTargetEngine, setDbTargetEngine] = useState<string>("PostgreSQL");
     const [dbRequiredNormalization, setDbRequiredNormalization] = useState<string>("3FN");
@@ -1088,6 +1165,12 @@ function ActivityFormDialog({
         setAiWeight(100 - clamped);
     };
 
+    const defaultOpenDate = useMemo(() => {
+        const d = new Date();
+        d.setSeconds(0, 0);
+        return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    }, [formKey]);
+
     const defaultDeadline = useMemo(() => {
         const d = new Date();
         d.setDate(d.getDate() + 7);
@@ -1095,15 +1178,33 @@ function ActivityFormDialog({
         return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     }, [formKey]);
 
+    const handleOpenDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        if (!val) return;
+        const openD = new Date(val);
+        if (!isNaN(openD.getTime())) {
+            const target = new Date(openD);
+            target.setDate(target.getDate() + 7);
+            target.setHours(23, 59, 0, 0);
+            const localIso = new Date(target.getTime() - target.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+            const deadlineInput = document.getElementById("deadlineLocal") as HTMLInputElement;
+            if (deadlineInput) {
+                deadlineInput.value = localIso;
+            }
+        }
+    };
+
     const setQuickDeadline = (days: number) => {
-        const target = new Date();
+        const openInput = document.getElementById("openDateLocal") as HTMLInputElement;
+        const baseDate = openInput?.value ? new Date(openInput.value) : new Date();
+        const target = new Date(baseDate);
         target.setDate(target.getDate() + days);
         target.setHours(23, 59, 0, 0);
         const localIso = new Date(target.getTime() - target.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
         const input = document.getElementById("deadlineLocal") as HTMLInputElement;
         if (input) {
             input.value = localIso;
-            toast.success(`Fecha límite fijada para dentro de ${days} días`);
+            toast.success(`Fecha límite fijada para ${days} días después de la apertura`);
         }
     };
 
@@ -1980,16 +2081,17 @@ function ActivityFormDialog({
                                             <div className="space-y-1.5">
                                                 <div className="flex items-center justify-between">
                                                     <Label htmlFor="openDateLocal" className="text-xs font-semibold flex items-center gap-1.5">
-                                                        <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                                                        Fecha de Apertura
+                                                        <Clock className="h-3.5 w-3.5 text-primary" />
+                                                        Fecha de Apertura (Inicio)
                                                     </Label>
-                                                    <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">Opcional</span>
+                                                    <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded font-medium">Inicio</span>
                                                 </div>
                                                 <Input
                                                     id="openDateLocal"
                                                     name="openDateLocal"
                                                     type="datetime-local"
-                                                    defaultValue={importedData?.openDateLocal || (activity?.openDate ? new Date(new Date(activity.openDate).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "")}
+                                                    defaultValue={importedData?.openDateLocal || (activity?.openDate ? new Date(new Date(activity.openDate).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : defaultOpenDate)}
+                                                    onChange={handleOpenDateChange}
                                                     className="h-9 font-mono text-xs"
                                                 />
                                             </div>
@@ -1997,9 +2099,9 @@ function ActivityFormDialog({
                                                 <div className="flex items-center justify-between">
                                                     <Label htmlFor="deadlineLocal" className="text-xs font-semibold flex items-center gap-1.5">
                                                         <Calendar className="h-3.5 w-3.5 text-primary" />
-                                                        Fecha Límite
+                                                        Fecha Límite (Final)
                                                     </Label>
-                                                    <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded font-semibold">Obligatorio</span>
+                                                    <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded font-semibold">Obligatorio (+7 días)</span>
                                                 </div>
                                                 <Input
                                                     id="deadlineLocal"
@@ -3174,20 +3276,38 @@ function ActivityFormDialog({
                                                             <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
                                                             <Label className="text-xs font-bold text-foreground">Temas Requeridos en el Pitch</Label>
                                                         </div>
-                                                        <Button
-                                                            type="button"
-                                                            size="sm"
-                                                            variant="outline"
-                                                            onClick={() => {
-                                                                setPitchRequiredTopics([
-                                                                    ...pitchRequiredTopics,
-                                                                    `Nuevo Apartado ${pitchRequiredTopics.length + 1}`
-                                                                ]);
-                                                            }}
-                                                            className="h-6 text-[10px] gap-1 px-2 text-primary hover:text-primary"
-                                                        >
-                                                            <Plus className="h-3 w-3" /> Añadir
-                                                        </Button>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={handleGeneratePitchTopics}
+                                                                disabled={isGeneratingPitchTopics}
+                                                                className="h-6 text-[10px] gap-1 px-2 text-primary hover:text-primary border-primary/30 hover:bg-primary/5 font-semibold"
+                                                                title="Generar estructura y apartados sugeridos para el pitch con Inteligencia Artificial"
+                                                            >
+                                                                {isGeneratingPitchTopics ? (
+                                                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                                                ) : (
+                                                                    <Sparkles className="h-3 w-3 text-purple-600" />
+                                                                )}
+                                                                {isGeneratingPitchTopics ? "Generando..." : "Generar con IA"}
+                                                            </Button>
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => {
+                                                                    setPitchRequiredTopics([
+                                                                        ...pitchRequiredTopics,
+                                                                        `Nuevo Apartado ${pitchRequiredTopics.length + 1}`
+                                                                    ]);
+                                                                }}
+                                                                className="h-6 text-[10px] gap-1 px-2 text-primary hover:text-primary"
+                                                            >
+                                                                <Plus className="h-3 w-3" /> Añadir
+                                                            </Button>
+                                                        </div>
                                                     </div>
 
                                                     <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
@@ -3374,20 +3494,38 @@ function ActivityFormDialog({
                                                             <CheckCircle2 className="h-3.5 w-3.5 text-violet-600" />
                                                             <Label className="text-xs font-bold text-foreground">Temas Requeridos en el Audio</Label>
                                                         </div>
-                                                        <Button
-                                                            type="button"
-                                                            size="sm"
-                                                            variant="outline"
-                                                            onClick={() => {
-                                                                setAudioRequiredTopics([
-                                                                    ...audioRequiredTopics,
-                                                                    `Nuevo Apartado ${audioRequiredTopics.length + 1}`
-                                                                ]);
-                                                            }}
-                                                            className="h-6 text-[10px] gap-1 px-2 text-primary hover:text-primary"
-                                                        >
-                                                            <Plus className="h-3 w-3" /> Añadir
-                                                        </Button>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={handleGenerateAudioTopics}
+                                                                disabled={isGeneratingAudioTopics}
+                                                                className="h-6 text-[10px] gap-1 px-2 text-primary hover:text-primary border-primary/30 hover:bg-primary/5 font-semibold"
+                                                                title="Generar temas de sustentación oral sugeridos con IA a partir del enunciado"
+                                                            >
+                                                                {isGeneratingAudioTopics ? (
+                                                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                                                ) : (
+                                                                    <Sparkles className="h-3 w-3 text-purple-600" />
+                                                                )}
+                                                                {isGeneratingAudioTopics ? "Generando..." : "Generar con IA"}
+                                                            </Button>
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => {
+                                                                    setAudioRequiredTopics([
+                                                                        ...audioRequiredTopics,
+                                                                        `Nuevo Apartado ${audioRequiredTopics.length + 1}`
+                                                                    ]);
+                                                                }}
+                                                                className="h-6 text-[10px] gap-1 px-2 text-primary hover:text-primary"
+                                                            >
+                                                                <Plus className="h-3 w-3" /> Añadir
+                                                            </Button>
+                                                        </div>
                                                     </div>
 
                                                     <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
@@ -3589,20 +3727,38 @@ function ActivityFormDialog({
                                                 <div className="p-3 bg-muted/15 rounded-xl border border-border/60 space-y-2.5">
                                                     <div className="flex items-center justify-between">
                                                         <Label className="text-xs font-bold text-foreground">Áreas Temáticas de la Entrevista</Label>
-                                                        <Button
-                                                            type="button"
-                                                            size="sm"
-                                                            variant="outline"
-                                                            onClick={() => {
-                                                                setInterviewFocusAreas([
-                                                                    ...interviewFocusAreas,
-                                                                    `Nueva Área ${interviewFocusAreas.length + 1}`
-                                                                ]);
-                                                            }}
-                                                            className="h-6 text-[10px] gap-1 px-2 text-primary hover:text-primary"
-                                                        >
-                                                            <Plus className="h-3 w-3" /> Añadir
-                                                        </Button>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={handleGenerateInterviewAreas}
+                                                                disabled={isGeneratingInterviewAreas}
+                                                                className="h-6 text-[10px] gap-1 px-2 text-primary hover:text-primary border-primary/30 hover:bg-primary/5 font-semibold"
+                                                                title="Generar áreas temáticas clave con IA a partir del enunciado"
+                                                            >
+                                                                {isGeneratingInterviewAreas ? (
+                                                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                                                ) : (
+                                                                    <Sparkles className="h-3 w-3 text-purple-600" />
+                                                                )}
+                                                                {isGeneratingInterviewAreas ? "Generando..." : "Generar con IA"}
+                                                            </Button>
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => {
+                                                                    setInterviewFocusAreas([
+                                                                        ...interviewFocusAreas,
+                                                                        `Nueva Área ${interviewFocusAreas.length + 1}`
+                                                                    ]);
+                                                                }}
+                                                                className="h-6 text-[10px] gap-1 px-2 text-primary hover:text-primary"
+                                                            >
+                                                                <Plus className="h-3 w-3" /> Añadir
+                                                            </Button>
+                                                        </div>
                                                     </div>
 
                                                     <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">

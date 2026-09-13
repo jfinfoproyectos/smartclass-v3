@@ -52,6 +52,7 @@ export async function submitActivityAction(prevState: any, formData: FormData) {
         await notifyTeacherOfSubmission(activityId, session.user.name || "Estudiante", submission.reevaluationRequested);
 
         revalidatePath("/dashboard/student");
+        revalidatePath(`/dashboard/student/activities/${activityId}`);
         return { 
             message: submission.reevaluationRequested ? "Solicitud de reevaluación enviada con éxito" : "Entrega exitosa", 
             error: false 
@@ -106,6 +107,7 @@ export async function submitGithubActivityAction(activityId: string, repoUrl: st
     await notifyTeacherOfSubmission(activityId, session.user.name || "Estudiante", submission.reevaluationRequested);
 
     revalidatePath("/dashboard/student");
+    revalidatePath(`/dashboard/student/activities/${activityId}`);
 }
 
 export async function submitPdfActivityAction(activityId: string, url: string) {
@@ -144,4 +146,5 @@ export async function submitPdfActivityAction(activityId: string, url: string) {
     await notifyTeacherOfSubmission(activityId, session.user.name || "Estudiante", submission.reevaluationRequested);
 
     revalidatePath("/dashboard/student");
+    revalidatePath(`/dashboard/student/activities/${activityId}`);
 }

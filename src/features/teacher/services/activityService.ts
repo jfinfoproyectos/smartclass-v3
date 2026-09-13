@@ -176,10 +176,13 @@ export const activityService = {
             throw new Error("La fecha límite para esta actividad ha pasado. Ya no se aceptan entregas ni solicitudes de reevaluación.");
         }
 
-        // Check max attempts (bypass for MANUAL activities, teacher grading, or rejected activities)
+        // Check max attempts (bypass for MANUAL, VIDEO_PITCH, AUDIO_DEFENSE, teacher grading, or pending/rejected activities)
         const currentAttempts = existingSubmission?.attemptCount || 0;
-        if (!isTeacherGrading && activity.type !== "MANUAL" && !isRejected && currentAttempts >= activity.maxAttempts) {
-            throw new Error(`Maximum submission attempts (${activity.maxAttempts}) reached.`);
+        const isPendingGrading = existingSubmission && (existingSubmission.grade === null || existingSubmission.grade === undefined);
+        const isFlexibleSubmissionType = activity.type === "MANUAL" || activity.type === "VIDEO_PITCH" || activity.type === "AUDIO_DEFENSE" || activity.type === "GITHUB" || activity.type === "PDF_REVIEW";
+
+        if (!isTeacherGrading && !isRejected && !isPendingGrading && !isFlexibleSubmissionType && currentAttempts >= activity.maxAttempts) {
+            throw new Error(`Has alcanzado el límite máximo de intentos (${activity.maxAttempts}) para esta actividad.`);
         }
 
         // Validate URL based on type (Bypass for rejections to allow marking invalid links as rejected)
@@ -213,9 +216,10 @@ export const activityService = {
             }
         }
 
-        // Check cooldown period (5 minutes) - except for teacher grading or if submission was rejected
-        
-        if (!isTeacherGrading && !isRejected && activity.type !== "PDF_REVIEW" && existingSubmission && existingSubmission.lastSubmittedAt) {
+        // Check cooldown period (5 minutes) - only for auto-graded AI activities that consume evaluation tokens
+        const isAutoGradedWithAI = activity.type === "CODE_CHALLENGE" || activity.type === "DB_MODELING" || activity.type === "AI_INTERVIEW";
+
+        if (!isTeacherGrading && !isRejected && !isPendingGrading && isAutoGradedWithAI && existingSubmission && existingSubmission.lastSubmittedAt) {
             const now = new Date().getTime();
             const lastTime = new Date(existingSubmission.lastSubmittedAt).getTime();
             const difference = now - lastTime;
@@ -250,9 +254,8 @@ export const activityService = {
             }
         } else {
             // Student submission
-            // If it was rejected, we don't increment to avoid hitting the limit again (it's a replacement)
-            // unless the teacher already discounted it to 0.
-            if (isRejected && currentAttempts > 0) {
+            // If it was rejected or it's an update to an un-graded delivery, do not increment attempt count
+            if ((isRejected || isPendingGrading) && currentAttempts > 0) {
                 attemptUpdate = undefined;
             } else {
                 attemptUpdate = { increment: 1 };

@@ -5,13 +5,11 @@ import { motion } from "framer-motion";
 import {
   BrainCircuit,
   Sparkles,
-  ArrowRight,
   Code2,
   CalendarCheck,
   GraduationCap,
   BarChart3,
   Bot,
-  LogIn,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -101,9 +99,12 @@ export function HeroSection() {
           </Link>
 
           <div className="flex items-center gap-3">
-            <Button size="sm" className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold shadow-lg shadow-emerald-500/20 border-none" asChild>
+            <Button
+              size="sm"
+              className="h-8 px-4 rounded-xl font-medium text-xs bg-white/[0.08] hover:bg-white/[0.14] text-slate-100 hover:text-white border border-white/15 backdrop-blur-md transition-all duration-200 shadow-sm cursor-pointer"
+              asChild
+            >
               <Link href={targetAuthUrl}>
-                <LogIn className="w-4 h-4 mr-1.5" />
                 {isLoggedIn ? "Ir al Dashboard" : "Iniciar Sesión"}
               </Link>
             </Button>
@@ -145,12 +146,27 @@ export function HeroSection() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.2 }}
-          className="flex items-center justify-center pt-4"
+          className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4"
         >
-          <Button size="lg" className="h-12 px-10 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-base rounded-xl shadow-xl shadow-emerald-500/25 transition-all hover:scale-105" asChild>
+          <Button
+            size="lg"
+            className="h-12 px-8 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:via-teal-400 hover:to-cyan-400 text-white font-bold text-base shadow-xl shadow-teal-500/25 border border-white/20 transition-all duration-300 hover:scale-[1.03] active:scale-[0.98] cursor-pointer"
+            asChild
+          >
             <Link href={targetAuthUrl}>
-              {isLoggedIn ? "Ir al Dashboard" : "Iniciar Sesión"} <ArrowRight className="ml-2 w-5 h-5" />
+              <span>{isLoggedIn ? "Ir al Dashboard" : "Iniciar Sesión"}</span>
             </Link>
+          </Button>
+
+          <Button
+            variant="outline"
+            size="lg"
+            className="h-12 px-8 rounded-2xl border-white/15 bg-white/[0.04] hover:bg-white/[0.08] text-slate-200 hover:text-white backdrop-blur-md font-semibold text-base transition-all duration-300 hover:scale-[1.02] cursor-pointer"
+            asChild
+          >
+            <a href="#caracteristicas">
+              Explorar Características
+            </a>
           </Button>
         </motion.div>
 
@@ -174,7 +190,7 @@ export function HeroSection() {
       </section>
 
       {/* Feature Cards Grid (AI Canvas Bento Grid) */}
-      <section className="relative z-10 max-w-7xl mx-auto px-6 py-16 border-t border-white/10 space-y-12">
+      <section id="caracteristicas" className="relative z-10 max-w-7xl mx-auto px-6 py-16 border-t border-white/10 space-y-12">
         <div className="text-center space-y-3">
           <h2 className="text-2xl sm:text-4xl font-bold tracking-tight text-white">
             Características Diseñadas para la Educación del Futuro
@@ -196,6 +212,7 @@ export function HeroSection() {
                 accentColor={feat.accentColor}
                 iconBgColor={feat.iconBgColor}
                 iconTextColor={feat.iconTextColor}
+                actionText="Acceder"
                 className="h-full bg-slate-900/80 border-slate-800 hover:border-slate-700"
               />
             </Link>

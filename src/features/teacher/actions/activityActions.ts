@@ -32,13 +32,18 @@ export async function createActivityAction(formData: FormData) {
 
     console.log("SERVER ACTION: createActivityAction received:", { title, courseId, type, isGroupActivity: isGroupActivityStr === "true", groupScope });
 
+    const now = new Date();
+    const defaultEnd = new Date(now);
+    defaultEnd.setDate(defaultEnd.getDate() + 7);
+    defaultEnd.setHours(23, 59, 0, 0);
+
     const activity = await activityService.createActivity({
         title,
         description,
         statement,
         filePaths,
-        deadline: deadlineStr ? new Date(deadlineStr) : new Date(),
-        openDate: openDateStr ? new Date(openDateStr) : undefined,
+        deadline: deadlineStr ? new Date(deadlineStr) : defaultEnd,
+        openDate: openDateStr ? new Date(openDateStr) : now,
         courseId,
         type: type || "GITHUB",
         weight: weightStr ? parseFloat(weightStr) : 1.0,
@@ -311,6 +316,27 @@ export async function generateAllCodeChallengeSolutionsAction(
         files,
         language,
         statement,
+        activityTitle,
+        session.user.id,
+        aiModelName
+    );
+}
+
+export async function generateRequiredTopicsAction(
+    statement: string,
+    activityType: "VIDEO_PITCH" | "AUDIO_DEFENSE" | "AI_INTERVIEW",
+    activityTitle?: string,
+    aiModelName?: string
+) {
+    const session = await getSession();
+    if (!session || session.user.role !== "teacher") {
+        throw new Error("Unauthorized");
+    }
+
+    const { generateRequiredTopics } = await import("../services/ai/activityContentService");
+    return await generateRequiredTopics(
+        statement,
+        activityType,
         activityTitle,
         session.user.id,
         aiModelName

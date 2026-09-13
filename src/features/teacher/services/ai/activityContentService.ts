@@ -968,3 +968,76 @@ RECUERDA: Genera la solución COMPLETA para cada archivo, con código limpio, or
     return updatedFiles;
 }
 
+/**
+ * Genera la lista de temas o apartados obligatorios requeridos para la sustentación
+ * en Video Pitch, Audio Defense o Entrevista con IA.
+ */
+export async function generateRequiredTopics(
+    statement: string,
+    activityType: "VIDEO_PITCH" | "AUDIO_DEFENSE" | "AI_INTERVIEW",
+    activityTitle?: string,
+    userId?: string,
+    aiModelName?: string
+): Promise<string[]> {
+    if (!userId) {
+        throw new Error("Usuario no autenticado");
+    }
+
+    const model = await getAIModel(userId, aiModelName);
+
+    let roleDescription = "";
+    if (activityType === "VIDEO_PITCH") {
+        roleDescription = `Estás formulando la estructura temática obligatoria de un VIDEO PITCH (sustentación corta en video) para una actividad académica.
+El estudiante deberá grabar un video de 3 a 7 minutos cubriendo secuencialmente estos apartados.
+Debes generar entre 3 y 5 títulos concisos, profesionales y directamente pertinentes al contenido específico de la actividad.
+Ejemplos de apartados típicos adaptados al tema:
+- "Contexto del Problema y Justificación"
+- "Arquitectura de la Solución y Tecnologías Empleadas"
+- "Demostración en Vivo del Código y Pruebas"
+- "Retos Técnicos, Optimización y Conclusiones"`;
+    } else if (activityType === "AUDIO_DEFENSE") {
+        roleDescription = `Estás formulando los temas de debate o argumentación oral obligatorios para una SUSTENTACIÓN EN AUDIO O PODCAST TÉCNICO.
+El estudiante grabará su defensa oral explicando sus decisiones de diseño y resolución del taller.
+Debes generar entre 3 y 5 títulos claros, puntuales y específicos adaptados al enunciado y título del taller.
+Ejemplos de apartados:
+- "Problema y Contexto de Negocio"
+- "Decisiones de Arquitectura y Patrones Implementados"
+- "Solución Técnica a Casos Límite y Desafíos"
+- "Conclusiones y Aprendizajes Obtenidos"`;
+    } else {
+        roleDescription = `Estás formulando las áreas temáticas clave de evaluación para una SIMULACIÓN DE ENTREVISTA TÉCNICA O EXAMEN ORAL CON IA.
+Debes generar entre 3 y 5 áreas conceptuales y prácticas prioritarias que el entrevistador IA debe interrogar al alumno.`;
+    }
+
+    const systemPrompt = `${roleDescription}
+
+REGLAS OBLIGATORIAS:
+1. Analiza a fondo el título y el enunciado de la actividad.
+2. Si el enunciado describe tecnologías, conceptos o reglas específicas (ej. Spring Boot, JPA, Normalización SQL, Polimorfismo en Java, Git, React, APIs REST, etc.), los títulos de los temas DEBEN reflejar explícitamente esos conceptos técnicos reales.
+3. Cada título de tema debe ser conciso (entre 3 y 8 palabras), claro y con formato capitalizado (ej: "Modelado de Datos y Relaciones SQL").
+4. Genera una lista de 3 a 5 temas como máximo. No agregues números (#1, #2), solo el texto limpio del tema.`;
+
+    const userPrompt = `TÍTULO DE LA ACTIVIDAD:
+${activityTitle || "Sin título definido"}
+
+ENUNCIADO / INSTRUCCIONES:
+${statement || "Sin enunciado detallado"}`;
+
+    const TopicsSchema = z.object({
+        topics: z.array(z.string().min(3).max(120)).min(3).max(6).describe("Lista de temas o apartados obligatorios ordenados lógicamente")
+    });
+
+    const { object } = await generateObject({
+        model,
+        schema: TopicsSchema,
+        system: systemPrompt,
+        prompt: userPrompt,
+        temperature: 0.2,
+    });
+
+    if (!object?.topics || object.topics.length === 0) {
+        throw new Error("No se pudieron generar los temas requeridos con la IA.");
+    }
+
+    return object.topics.map(t => t.trim().replace(/^#?\d+[\.\-\)]\s*/, ''));
+}

@@ -12,7 +12,7 @@ import {
     Sparkles, Users, Crown, CheckCircle2, ChevronLeft, ChevronRight,
     Terminal, Play, Check, X, Clock, FileCode,
     FileText, ClipboardList, Info, Loader2, Bot, ArrowRight, RotateCcw, CheckCircle,
-    ListChecks, SlidersHorizontal, HelpCircle, Zap, Award, AlertCircle, XCircle
+    ListChecks, SlidersHorizontal, HelpCircle, Zap, Award, AlertCircle, XCircle, UserCheck
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatName, cn } from "@/lib/utils";
@@ -145,6 +145,7 @@ export function CodeChallengeInspector({
         return getActivityChecklistConfig(activity);
     }, [activity]);
 
+    const isTeacherGradingEnabled = Boolean(checklistConfig);
     const checklistData = checklistConfig?.criteria ?? null;
     const aiWeight = checklistConfig?.aiWeight ?? 50;
     const checklistWeight = checklistConfig?.checklistWeight ?? 50;
@@ -168,6 +169,13 @@ export function CodeChallengeInspector({
     // Pestañas
     const [leftTab, setLeftTab] = useState<"code" | "statement">("code");
     const [rightTab, setRightTab] = useState<"ai_eval" | "teacher_grade">("ai_eval");
+
+    // Redirigir si la calificación docente está deshabilitada y la pestaña activa era teacher_grade
+    useEffect(() => {
+        if (!isTeacherGradingEnabled && rightTab === "teacher_grade") {
+            setRightTab("ai_eval");
+        }
+    }, [isTeacherGradingEnabled, rightTab]);
 
     // Sincronizar al cambiar de estudiante
     useEffect(() => {
@@ -359,14 +367,20 @@ export function CodeChallengeInspector({
                             </div>
                         )}
 
-                        {checklistConfig && (
+                        {isTeacherGradingEnabled && checklistConfig ? (
                             <TeacherEvaluationHeaderBadges
                                 checklistConfig={checklistConfig}
                                 aiGrade={aiGrade}
                                 checklistScore={checklistScore}
                                 combinedFinalScore={combinedFinalScore}
                             />
-                        )}
+                        ) : (submission?.grade !== null && submission?.grade !== undefined) ? (
+                            <div className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 px-2.5 py-0.5 rounded-lg text-xs shrink-0 font-bold animate-in fade-in">
+                                <span className="text-[10px] uppercase font-bold opacity-80">Nota:</span>
+                                <span className="text-sm font-black font-mono">{Number(submission.grade).toFixed(1)}</span>
+                                <span className="text-[10px] font-bold opacity-75">/ 5.0</span>
+                            </div>
+                        ) : null}
 
                         <Button
                             type="button"
@@ -472,19 +486,19 @@ export function CodeChallengeInspector({
                     <div className={cn("flex flex-col min-h-0 overflow-hidden bg-background", checklistConfig ? "lg:col-span-6" : "lg:col-span-5")}>
                         <Tabs value={rightTab} onValueChange={(v) => setRightTab(v as any)} className="flex-1 flex flex-col min-h-0">
                             <div className="border-b p-2 bg-muted/20 overflow-x-auto scrollbar-none">
-                                <TabsList className="inline-flex w-max min-w-full sm:grid sm:grid-cols-2 h-auto min-h-8 p-1 gap-1">
+                                <TabsList className={cn("h-8 p-0.5 gap-1", isTeacherGradingEnabled && checklistConfig ? "grid grid-cols-2" : "inline-flex")}>
                                     <TabsTrigger value="ai_eval" className="text-xs font-semibold gap-1 shrink-0 px-3 py-1.5 whitespace-nowrap">
                                         <Bot className="h-3.5 w-3.5 shrink-0" /> <span>Evaluación IA</span>
                                     </TabsTrigger>
-                                    <TabsTrigger value="teacher_grade" className="text-xs font-semibold gap-1 shrink-0 px-3 py-1.5 whitespace-nowrap">
-                                        <CheckCircle className="h-3.5 w-3.5 shrink-0" /> 
-                                        <span>{checklistConfig ? "Evaluación Docente" : "Calificación"}</span>
-                                        {checklistConfig && (
+                                    {isTeacherGradingEnabled && checklistConfig && (
+                                        <TabsTrigger value="teacher_grade" className="text-xs font-semibold gap-1 shrink-0 px-3 py-1.5 whitespace-nowrap">
+                                            <UserCheck className="h-3.5 w-3.5 shrink-0" /> 
+                                            <span>Evaluación Docente</span>
                                             <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 font-mono bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30 font-bold ml-0.5 shrink-0">
                                                 {checklistScore.toFixed(1)}
                                             </Badge>
-                                        )}
-                                    </TabsTrigger>
+                                        </TabsTrigger>
+                                    )}
                                 </TabsList>
                             </div>
 
@@ -496,12 +510,13 @@ export function CodeChallengeInspector({
 
                                 <Button
                                     type="button"
+                                    variant="default"
                                     onClick={handleGradeWithAI}
                                     disabled={isEvaluatingAI || files.length === 0}
-                                    className="w-full font-bold text-xs gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-xs h-9"
+                                    className="w-full font-bold text-xs gap-2 shadow-xs h-9 cursor-pointer"
                                 >
                                     {isEvaluatingAI ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                                    Evaluar Código con Gemini
+                                    {isEvaluatingAI ? "Evaluando con IA..." : (aiFeedbackInput ? "Reevaluar con IA" : "Evaluar con IA (Gemini)")}
                                 </Button>
 
                                 {aiResult ? (
@@ -554,9 +569,9 @@ export function CodeChallengeInspector({
                                 )}
                             </TabsContent>
 
-                            {/* TAB 2: Calificación Docente y Sustentación */}
-                            <TabsContent value="teacher_grade" className="flex-1 p-0 overflow-y-auto m-0">
-                                {checklistConfig ? (
+                            {/* TAB 2: Calificación Docente y Sustentación (Solo si está habilitada en la actividad) */}
+                            {isTeacherGradingEnabled && checklistConfig && (
+                                <TabsContent value="teacher_grade" className="flex-1 p-0 overflow-y-auto m-0">
                                     <div className="p-4">
                                         <TeacherChecklistEvaluationPanel
                                             activity={activity}
@@ -579,56 +594,8 @@ export function CodeChallengeInspector({
                                             onReject={onReject ? () => onReject(student.id, teacherNotesInput || undefined) : undefined}
                                         />
                                     </div>
-                                ) : (
-                                    <div className="p-4 space-y-4">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="grade-input" className="text-xs font-bold uppercase tracking-wider flex justify-between">
-                                                <span>Nota Final (0.0 a 5.0)</span>
-                                                <span className="text-[11px] font-normal text-muted-foreground">Escala 0.0 - 5.0</span>
-                                            </Label>
-                                            <div className="flex items-center gap-2">
-                                                <Input
-                                                    id="grade-input"
-                                                    type="number"
-                                                    step="0.1"
-                                                    min="0"
-                                                    max="5"
-                                                    value={gradeInput}
-                                                    onChange={(e) => setGradeInput(e.target.value)}
-                                                    className="h-10 text-lg font-bold font-mono tracking-tight text-primary w-24 text-center"
-                                                />
-                                                <div className="flex flex-wrap items-center gap-1 flex-1">
-                                                    {["5.0", "4.5", "4.0", "3.5", "3.0", "0.0"].map((qg) => (
-                                                        <Button
-                                                            key={qg}
-                                                            type="button"
-                                                            variant="outline"
-                                                            size="sm"
-                                                            onClick={() => setGradeInput(qg)}
-                                                            className={`h-7 px-2 text-xs font-bold ${gradeInput === qg ? "bg-primary text-primary-foreground" : ""}`}
-                                                        >
-                                                            {qg}
-                                                        </Button>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-1.5">
-                                            <Label className="text-xs font-bold uppercase tracking-wider">
-                                                Observaciones y Retroalimentación
-                                            </Label>
-                                            <Textarea
-                                                value={teacherNotesInput}
-                                                onChange={(e) => setTeacherNotesInput(e.target.value)}
-                                                rows={6}
-                                                className="text-xs leading-relaxed"
-                                                placeholder="Comentarios sobre el código y sustentación..."
-                                            />
-                                        </div>
-                                    </div>
-                                )}
-                            </TabsContent>
+                                </TabsContent>
+                            )}
                         </Tabs>
                     </div>
                 </div>

@@ -47,6 +47,7 @@ import {
 import { getTeacherCredentialsAction } from "@/app/teacher-actions";
 import MDEditor from "@uiw/react-md-editor";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 interface AIGenerateDialogProps {
     isOpen: boolean;
@@ -414,9 +415,9 @@ export function AIGenerateDialog({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
-            <DialogContent className="sm:max-w-4xl md:max-w-5xl lg:max-w-7xl w-[96vw] max-h-[94vh] flex flex-col p-0 overflow-hidden shadow-2xl border-border/70">
+            <DialogContent className="!max-w-[98vw] w-[98vw] !h-[96vh] !max-h-[97vh] flex flex-col !p-0 !gap-0 overflow-hidden shadow-2xl border-border/70">
                 {/* Cabecera con Degradado, Tipo de Actividad y Modelo Activo */}
-                <DialogHeader className="p-4 sm:p-5 pb-3 border-b border-border/60 bg-muted/20">
+                <DialogHeader className="px-4 sm:px-5 py-2 sm:py-2.5 border-b border-border/60 bg-muted/20 shrink-0">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                         <div className="flex items-center gap-2.5">
                             <div className="p-2 rounded-xl bg-primary/10 text-primary shrink-0 shadow-2xs">
@@ -464,13 +465,13 @@ export function AIGenerateDialog({
                 </DialogHeader>
 
                 {/* Contenido Principal */}
-                <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+                <div className={cn("flex-1 min-h-0 p-3 sm:p-4 flex flex-col", generatedContent ? "overflow-hidden" : "overflow-y-auto space-y-4")}>
                     {/* Si ya se generó contenido: Vista en 2 Columnas (Previa + Chat de Adaptación) */}
                     {generatedContent ? (
-                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-                            {/* Columna Izquierda: Vista Previa del Documento (7 de 12 columnas) */}
-                            <div className="lg:col-span-7 flex flex-col space-y-2.5">
-                                <div className="flex items-center justify-between bg-muted/30 border border-border/60 p-2.5 rounded-xl">
+                        <div className="flex flex-col lg:flex-row gap-3.5 flex-1 min-h-0 w-full items-stretch">
+                            {/* Columna Izquierda: Vista Previa del Documento */}
+                            <div className="w-full lg:w-[58%] xl:w-[60%] flex flex-col h-full min-h-0 space-y-2 overflow-hidden">
+                                <div className="flex items-center justify-between bg-muted/30 border border-border/60 px-3 py-1.5 rounded-xl shrink-0">
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <Badge variant="default" className="text-[10px] font-mono gap-1">
                                             <CheckCircle2 className="h-3 w-3" />
@@ -493,7 +494,7 @@ export function AIGenerateDialog({
                                                 setChatMessages([]);
                                                 setPrompt("");
                                             }}
-                                            className="h-7 text-xs px-2 gap-1 text-muted-foreground hover:text-foreground"
+                                            className="h-6.5 text-xs px-2 gap-1 text-muted-foreground hover:text-foreground"
                                             title="Empezar a redactar un nuevo enunciado desde cero con un prompt"
                                         >
                                             <Sparkles className="h-3 w-3" />
@@ -504,7 +505,7 @@ export function AIGenerateDialog({
                                             size="sm"
                                             variant="outline"
                                             onClick={handleCopy}
-                                            className="h-7 text-xs px-2.5 gap-1 shadow-2xs"
+                                            className="h-6.5 text-xs px-2.5 gap-1 shadow-2xs"
                                         >
                                             {copied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
                                             {copied ? "Copiado" : "Copiar"}
@@ -512,37 +513,37 @@ export function AIGenerateDialog({
                                     </div>
                                 </div>
 
-                                <Tabs value={previewTab} onValueChange={(v) => setPreviewTab(v as any)} className="w-full flex-1 flex flex-col">
-                                    <div className="flex items-center justify-between pb-1">
+                                <Tabs value={previewTab} onValueChange={(v) => setPreviewTab(v as any)} className="w-full flex-1 min-h-0 flex flex-col overflow-hidden">
+                                    <div className="flex items-center justify-between pb-1 shrink-0">
                                         <span className="text-xs font-bold text-foreground">Documento Markdown</span>
-                                        <TabsList className="h-6.5 bg-muted/80 p-0.5">
-                                            <TabsTrigger value="rendered" className="text-[10px] h-5.5 px-2 font-semibold">
+                                        <TabsList className="h-6 bg-muted/80 p-0.5">
+                                            <TabsTrigger value="rendered" className="text-[10px] h-5 px-2 font-semibold">
                                                 Visualización
                                             </TabsTrigger>
-                                            <TabsTrigger value="raw" className="text-[10px] h-5.5 px-2 font-semibold">
+                                            <TabsTrigger value="raw" className="text-[10px] h-5 px-2 font-semibold">
                                                 Código
                                             </TabsTrigger>
                                         </TabsList>
                                     </div>
 
-                                    <TabsContent value="rendered" className="mt-0 flex-1">
-                                        <div className="border border-border/80 rounded-xl p-4 bg-background h-[480px] overflow-y-auto prose prose-sm dark:prose-invert max-w-none text-xs leading-relaxed shadow-inner">
+                                    <TabsContent value="rendered" className="mt-0 flex-1 min-h-0 flex flex-col overflow-hidden data-[state=inactive]:hidden">
+                                        <div className="border border-border/80 rounded-xl p-3.5 bg-background flex-1 min-h-0 h-full overflow-y-auto prose prose-sm dark:prose-invert max-w-none text-xs leading-relaxed shadow-inner">
                                             <MDEditor.Markdown source={generatedContent} />
                                         </div>
                                     </TabsContent>
 
-                                    <TabsContent value="raw" className="mt-0 flex-1">
-                                        <pre className="border border-border/80 rounded-xl p-3.5 bg-muted/40 font-mono text-[11px] h-[480px] overflow-y-auto whitespace-pre-wrap leading-relaxed">
+                                    <TabsContent value="raw" className="mt-0 flex-1 min-h-0 flex flex-col overflow-hidden data-[state=inactive]:hidden">
+                                        <pre className="border border-border/80 rounded-xl p-3 bg-muted/40 font-mono text-[11px] flex-1 min-h-0 h-full overflow-y-auto whitespace-pre-wrap leading-relaxed">
                                             {generatedContent}
                                         </pre>
                                     </TabsContent>
                                 </Tabs>
                             </div>
 
-                            {/* Columna Derecha: Chat Interactivo para Adaptar y Cambiar (5 de 12 columnas) */}
-                            <div className="lg:col-span-5 flex flex-col h-full bg-card border border-border/70 rounded-2xl p-3.5 space-y-3 shadow-xs">
+                            {/* Columna Derecha: Chat Interactivo para Adaptar y Cambiar */}
+                            <div className="w-full lg:w-[42%] xl:w-[40%] flex flex-col h-full min-h-0 bg-card border border-border/70 rounded-2xl p-3 space-y-2 shadow-xs overflow-hidden">
                                 {/* Cabecera del Chat */}
-                                <div className="flex items-center justify-between pb-2 border-b border-border/60">
+                                <div className="flex items-center justify-between pb-1.5 border-b border-border/60 shrink-0">
                                     <div className="flex items-center gap-2">
                                         <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
                                             <MessageSquareQuote className="h-4 w-4" />
@@ -560,7 +561,7 @@ export function AIGenerateDialog({
                                             variant="ghost"
                                             onClick={handleUndo}
                                             disabled={isRefining}
-                                            className="h-6.5 text-[10px] px-2 gap-1 text-muted-foreground hover:text-foreground"
+                                            className="h-6 text-[10px] px-2 gap-1 text-muted-foreground hover:text-foreground shrink-0"
                                             title="Revertir al cambio anterior"
                                         >
                                             <Undo2 className="h-3 w-3" />
@@ -570,7 +571,7 @@ export function AIGenerateDialog({
                                 </div>
 
                                 {/* Historial de Mensajes del Chat */}
-                                <div className="h-[250px] overflow-y-auto space-y-2.5 pr-1 text-xs">
+                                <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1 text-xs scrollbar-thin">
                                     {chatMessages.map((msg) => (
                                         <div
                                             key={msg.id}
@@ -611,11 +612,11 @@ export function AIGenerateDialog({
                                 </div>
 
                                 {/* Chips de Atajos Rápidos de Adaptación */}
-                                <div className="space-y-1.5 pt-1 border-t border-border/50">
+                                <div className="space-y-1 pt-1 border-t border-border/50 shrink-0">
                                     <span className="text-[10px] text-muted-foreground font-semibold flex items-center gap-1">
                                         <Sparkle className="h-3 w-3 text-amber-500" /> Atajos rápidos:
                                     </span>
-                                    <div className="flex flex-wrap gap-1">
+                                    <div className="flex flex-wrap gap-1 max-h-[54px] overflow-y-auto">
                                         {(activityType === "DOCUMENTATION" ? DOCUMENTATION_REFINEMENT_CHIPS : REFINEMENT_CHIPS).map((chip, i) => (
                                             <button
                                                 key={i}
@@ -631,7 +632,7 @@ export function AIGenerateDialog({
                                 </div>
 
                                 {/* Caja de Entrada del Chat */}
-                                <div className="space-y-1.5 pt-1">
+                                <div className="space-y-1 pt-0.5 shrink-0">
                                     <div className="relative">
                                         <Textarea
                                             value={chatInput}
@@ -641,7 +642,7 @@ export function AIGenerateDialog({
                                                 : "Escribe cómo deseas adaptar el enunciado... (ej: simplifica para principiantes, enfócate solo en arrays, o añade ejemplos de código)"}
                                             disabled={isRefining}
                                             rows={2}
-                                            className="text-xs resize-none pr-10 min-h-[64px] bg-background leading-relaxed"
+                                            className="text-xs resize-none pr-10 min-h-[48px] max-h-[64px] bg-background leading-relaxed"
                                             onKeyDown={(e) => {
                                                 if (e.key === "Enter" && !e.shiftKey) {
                                                     e.preventDefault();
@@ -751,7 +752,7 @@ export function AIGenerateDialog({
                 </div>
 
                 {/* Footer con Botones */}
-                <DialogFooter className="p-3 sm:p-4 border-t border-border/60 bg-muted/10 gap-2 flex-row justify-between items-center">
+                <DialogFooter className="px-4 sm:px-5 py-2 sm:py-2.5 border-t border-border/60 bg-muted/10 gap-2 flex-row justify-between items-center shrink-0">
                     <div>
                         {generatedContent && (
                             <Button
