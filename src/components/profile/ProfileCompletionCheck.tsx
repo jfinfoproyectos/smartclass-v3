@@ -158,9 +158,9 @@ export function ProfileCompletionCheck() {
 
     return (
         <Dialog open={isOpen} onOpenChange={() => { }}>
-            <DialogContent className="sm:max-w-[500px] w-[95vw] max-h-[85vh] overflow-y-auto [&>button]:hidden text-left" onPointerDownOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
+            <DialogContent className="sm:max-w-4xl md:max-w-5xl lg:max-w-6xl w-[95vw] max-h-[92vh] overflow-y-auto [&>button]:hidden text-left p-6 sm:p-8" onPointerDownOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
                 <DialogHeader>
-                    <DialogTitle>Información Requerida</DialogTitle>
+                    <DialogTitle className="text-xl font-bold">Información Requerida</DialogTitle>
                     <DialogDescription>
                         Para continuar usando la plataforma, necesitamos que completes la siguiente información.
                     </DialogDescription>
@@ -178,7 +178,7 @@ export function ProfileCompletionCheck() {
                     {profileIncomplete && (
                         <div className="space-y-4">
                             <h3 className="font-medium border-b pb-2">Datos Personales</h3>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                 <div className="space-y-2">
                                     <Label htmlFor="nombres">Nombres *</Label>
                                     <Input id="nombres" value={nombres} onChange={(e) => setNombres(e.target.value)} placeholder="Tus nombres" />

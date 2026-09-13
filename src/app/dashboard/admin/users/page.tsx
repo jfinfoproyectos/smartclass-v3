@@ -2,9 +2,9 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { UserManagement } from "@/features/admin/components/UserManagement";
-import { getAllUsersAction } from "@/app/admin-actions";
+import { getAllUsersAction, getUsersSummaryStatsAction } from "@/app/admin-actions";
 import { DashboardContainer } from "@/components/ui/dashboard-container";
-import { Users, ShieldCheck } from "lucide-react";
+import { Users } from "lucide-react";
 
 export default async function AdminUsersPage() {
     const session = await auth.api.getSession({ headers: await headers() });
@@ -13,7 +13,11 @@ export default async function AdminUsersPage() {
         redirect("/dashboard/student");
     }
 
-    const { users, total } = await getAllUsersAction({ limit: 20, role: "student" });
+    const [{ users, total }, summaryStats, { users: teachers }] = await Promise.all([
+        getAllUsersAction({ limit: 20, role: "student" }),
+        getUsersSummaryStatsAction(),
+        getAllUsersAction({ role: "teacher", limit: 500 })
+    ]);
 
     return (
         <DashboardContainer>
@@ -23,18 +27,23 @@ export default async function AdminUsersPage() {
                 <div className="relative z-10 space-y-2">
                     <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20 backdrop-blur-md">
                         <Users className="w-3.5 h-3.5" />
-                        <span>Gestión de Usuarios</span>
+                        <span>Gestión de Cuentas</span>
                     </div>
                     <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
                         Administración de Cuentas & Roles
                     </h1>
                     <p className="text-xs sm:text-sm text-muted-foreground">
-                        Administra estudiantes, profesores y roles de administración del sistema.
+                        Supervisa estudiantes, profesores y roles administrativos con control académico centralizado.
                     </p>
                 </div>
             </div>
 
-            <UserManagement initialUsers={users} totalCount={total} />
+            <UserManagement
+                initialUsers={users}
+                totalCount={total}
+                summaryStats={summaryStats}
+                teachers={teachers}
+            />
         </DashboardContainer>
     );
 }

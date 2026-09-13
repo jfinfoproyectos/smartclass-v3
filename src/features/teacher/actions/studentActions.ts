@@ -362,10 +362,10 @@ export async function createAndEnrollStudentAction(formData: FormData) {
         return { success: true, message: "Estudiante existente inscrito al curso correctamente." };
     }
 
-    // 2. Hash password (use custom password or default to identificacion)
+    // 2. Hash password using Better Auth standard format
     const passwordToHash = customPassword || identificacion;
-    const bcrypt = await import("bcryptjs");
-    const hashedPassword = await bcrypt.hash(passwordToHash, 10);
+    const { hashPassword } = await import("better-auth/crypto");
+    const hashedPassword = await hashPassword(passwordToHash);
 
     const userId = crypto.randomUUID();
     const name = `${nombres} ${apellido}`;
@@ -471,9 +471,9 @@ export async function resetStudentPasswordAction(studentId: string, courseId: st
         throw new Error("El estudiante no tiene número de identificación registrado en su perfil para usarlo como contraseña");
     }
 
-    // 3. Hash the identification as new password
-    const bcrypt = await import("bcryptjs");
-    const hashedPassword = await bcrypt.hash(identificacion, 10);
+    // 3. Hash the identification as new password using Better Auth standard format
+    const { hashPassword } = await import("better-auth/crypto");
+    const hashedPassword = await hashPassword(identificacion);
 
     // 4. Update or create the credential account
     const credentialAccount = student.accounts.find(a => a.providerId === "credential");

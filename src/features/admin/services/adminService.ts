@@ -61,19 +61,58 @@ export const adminService = {
     },
 
 
+    async getUsersSummaryStats() {
+        const [countsByRole, bannedCount, totalCount] = await Promise.all([
+            prisma.user.groupBy({
+                by: ['role'],
+                _count: true
+            }),
+            prisma.user.count({ where: { banned: true } }),
+            prisma.user.count()
+        ]);
+
+        const student = countsByRole.find(c => c.role === 'student')?._count || 0;
+        const teacher = countsByRole.find(c => c.role === 'teacher')?._count || 0;
+        const admin = countsByRole.find(c => c.role === 'admin')?._count || 0;
+
+        return {
+            total: totalCount,
+            student,
+            teacher,
+            admin,
+            active: totalCount - bannedCount,
+            banned: bannedCount
+        };
+    },
+
     // ============ USER MANAGEMENT ============
     async getAllUsers(filters?: {
-        role?: "teacher" | "student" | "admin";
+        role?: "teacher" | "student" | "admin" | "all";
         search?: string;
         courseId?: string;
+        teacherId?: string;
+        status?: "all" | "active" | "banned";
         limit?: number;
         offset?: number;
     }) {
         const where: any = {};
         const andConditions: any[] = [];
 
-        if (filters?.role) {
+        if (filters?.role && (filters.role as string) !== 'all') {
             where.role = filters.role;
+        }
+
+        if (filters?.status === 'active') {
+            andConditions.push({
+                OR: [
+                    { banned: false },
+                    { banned: null }
+                ]
+            });
+        } else if (filters?.status === 'banned') {
+            andConditions.push({
+                banned: true
+            });
         }
 
         if (filters?.courseId && filters.courseId !== 'all') {
@@ -87,11 +126,26 @@ export const adminService = {
             });
         }
 
-        if (filters?.search) {
+        if (filters?.teacherId && filters.teacherId !== 'all') {
             andConditions.push({
                 OR: [
-                    { name: { contains: filters.search, mode: 'insensitive' as const } },
-                    { email: { contains: filters.search, mode: 'insensitive' as const } }
+                    // Student enrolled in any course of this teacher
+                    { enrollments: { some: { course: { teacherId: filters.teacherId } } } },
+                    // Or the teacher themselves if viewing all
+                    { id: filters.teacherId }
+                ]
+            });
+        }
+
+        if (filters?.search && filters.search.trim() !== '') {
+            const query = filters.search.trim();
+            andConditions.push({
+                OR: [
+                    { name: { contains: query, mode: 'insensitive' as const } },
+                    { email: { contains: query, mode: 'insensitive' as const } },
+                    { profile: { identificacion: { contains: query, mode: 'insensitive' as const } } },
+                    { profile: { nombres: { contains: query, mode: 'insensitive' as const } } },
+                    { profile: { apellido: { contains: query, mode: 'insensitive' as const } } }
                 ]
             });
         }
@@ -108,6 +162,11 @@ export const adminService = {
                 orderBy: { createdAt: 'desc' },
                 include: {
                     profile: true,
+                    accounts: {
+                        select: {
+                            providerId: true,
+                        }
+                    },
                     _count: {
                         select: {
                             coursesCreated: true,
@@ -128,6 +187,11 @@ export const adminService = {
             where: { id: userId },
             include: {
                 profile: true,
+                accounts: {
+                    select: {
+                        providerId: true,
+                    }
+                },
                 coursesCreated: {
                     include: {
                         _count: {
@@ -261,7 +325,9 @@ export const adminService = {
                         select: {
                             id: true,
                             name: true,
-                            email: true
+                            email: true,
+                            image: true,
+                            profile: true
                         }
                     },
                     _count: {
@@ -282,7 +348,11 @@ export const adminService = {
         return await prisma.course.findUnique({
             where: { id: courseId },
             include: {
-                teacher: true,
+                teacher: {
+                    include: {
+                        profile: true
+                    }
+                },
                 enrollments: {
                     include: {
                         user: {
@@ -290,7 +360,8 @@ export const adminService = {
                                 profile: true
                             }
                         }
-                    }
+                    },
+                    orderBy: { createdAt: 'desc' }
                 },
                 activities: {
                     include: {
@@ -298,22 +369,40 @@ export const adminService = {
                             select: {
                                 submissions: true
                             }
+                        },
+                        submissions: {
+                            include: {
+                                user: {
+                                    include: {
+                                        profile: true
+                                    }
+                                }
+                            },
+                            orderBy: { createdAt: 'desc' }
                         }
-                    }
+                    },
+                    orderBy: { createdAt: 'desc' }
                 },
                 remarks: {
                     include: {
-                        user: true,
-                        teacher: true
-                    }
+                        user: {
+                            include: {
+                                profile: true
+                            }
+                        },
+                        teacher: {
+                            include: {
+                                profile: true
+                            }
+                        }
+                    },
+                    orderBy: { date: 'desc' }
                 },
                 attendances: {
                     include: {
-                        user: true,
-                        course: {
-                            select: {
-                                id: true,
-                                title: true
+                        user: {
+                            include: {
+                                profile: true
                             }
                         }
                     },
@@ -338,7 +427,8 @@ export const adminService = {
             where: {},
             select: {
                 id: true,
-                title: true
+                title: true,
+                teacherId: true,
             },
             orderBy: {
                 title: 'asc'

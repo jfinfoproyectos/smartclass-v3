@@ -55,3 +55,23 @@ export async function updateProfileAction(formData: FormData) {
 
     revalidatePath("/");
 }
+
+export async function setUserPasswordAction(newPassword: string) {
+    const session = await getSession();
+    if (!session?.user) {
+        throw new Error("No autorizado");
+    }
+    if (newPassword.length < 8) {
+        throw new Error("La contraseña debe tener al menos 8 caracteres");
+    }
+
+    await auth.api.setPassword({
+        body: {
+            newPassword
+        },
+        headers: await headers()
+    });
+
+    return { success: true };
+}
+

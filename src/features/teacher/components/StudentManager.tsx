@@ -933,7 +933,7 @@ export function StudentManager({
                         const idDoc = enrollment.user.profile?.identificacion;
                         const phone = enrollment.user.profile?.telefono;
                         const accounts = enrollment.user.accounts || [];
-                        const isGoogleUser = accounts.some((a: any) => a.providerId === "google");
+                        const isGoogleOnly = accounts.length > 0 && accounts.every((a: any) => a.providerId === "google");
 
                         return (
                             <div
@@ -960,7 +960,7 @@ export function StudentManager({
                                                 {enrollment.user.email}
                                             </p>
                                             <div className="mt-1">
-                                                {isGoogleUser ? (
+                                                {isGoogleOnly ? (
                                                     <Badge
                                                         variant="outline"
                                                         className="inline-flex items-center gap-1 text-[10px] font-medium py-0 px-1.5 border-blue-200 bg-blue-50/60 text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/40 dark:text-blue-300"
@@ -1049,7 +1049,7 @@ export function StudentManager({
                                                 studentName={studentName}
                                             />
 
-                                            {!isGoogleUser && (
+                                            {!isGoogleOnly && (
                                                 <ResetStudentPasswordDialog
                                                     courseId={courseId}
                                                     studentId={enrollment.user.id}
@@ -1141,7 +1141,7 @@ export function StudentManager({
                                 const studentName = formatName(enrollment.user.name, enrollment.user.profile);
                                 const idDoc = enrollment.user.profile?.identificacion;
                                 const accounts = enrollment.user.accounts || [];
-                                const isGoogleUser = accounts.some((a: any) => a.providerId === "google");
+                                const isGoogleOnly = accounts.length > 0 && accounts.every((a: any) => a.providerId === "google");
 
                                 return (
                                 <TableRow key={enrollment.user.id}>
@@ -1161,7 +1161,7 @@ export function StudentManager({
                                                 {enrollment.user.email}
                                             </span>
                                             <div>
-                                                {isGoogleUser ? (
+                                                {isGoogleOnly ? (
                                                     <Badge
                                                         variant="outline"
                                                         className="inline-flex items-center gap-1 text-[10px] font-medium py-0 px-1.5 border-blue-200 bg-blue-50/60 text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/40 dark:text-blue-300"
@@ -1187,14 +1187,14 @@ export function StudentManager({
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <TooltipProvider>
-                                            <div className="flex justify-end gap-2">
+                                            <div className="flex items-center justify-end gap-1">
                                                 <Tooltip>
                                                     <TooltipTrigger asChild>
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
                                                             onClick={() => handleOpenAttendanceSheet(enrollment.user)}
-                                                            className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                                                            className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/30"
                                                         >
                                                             <Calendar className="h-4 w-4" />
                                                         </Button>
@@ -1223,7 +1223,7 @@ export function StudentManager({
                                                     studentName={studentName}
                                                 />
 
-                                                {!isGoogleUser && (
+                                                {!isGoogleOnly && (
                                                     <ResetStudentPasswordDialog
                                                         courseId={courseId}
                                                         studentId={enrollment.user.id}

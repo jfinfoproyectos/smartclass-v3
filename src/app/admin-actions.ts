@@ -31,10 +31,17 @@ export async function getRecentActivityAction(limit?: number) {
 }
 
 // ============ USER MANAGEMENT ============
+export async function getUsersSummaryStatsAction() {
+    await requireAdmin();
+    return await adminService.getUsersSummaryStats();
+}
+
 export async function getAllUsersAction(filters?: {
-    role?: "teacher" | "student" | "admin";
+    role?: "teacher" | "student" | "admin" | "all";
     search?: string;
     courseId?: string;
+    teacherId?: string;
+    status?: "all" | "active" | "banned";
     limit?: number;
     offset?: number;
 }) {
@@ -65,9 +72,9 @@ export async function createUserAction(data: {
         throw new Error("Ya existe un usuario con este correo electrónico");
     }
 
-    // Hash password
-    const bcrypt = await import("bcryptjs");
-    const hashedPassword = await bcrypt.hash(data.password, 10);
+    // Hash password using Better Auth standard format
+    const { hashPassword } = await import("better-auth/crypto");
+    const hashedPassword = await hashPassword(data.password);
 
     // Create user with account
     const user = await prisma.user.create({
@@ -229,6 +236,90 @@ export async function deleteUserAction(userId: string) {
     return result;
 }
 
+export async function resetUserPasswordByAdminAction(userId: string, customPassword?: string) {
+    const session = await requireAdmin();
+
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+            profile: true,
+            accounts: true,
+        }
+    });
+
+    if (!user) {
+        throw new Error("Usuario no encontrado");
+    }
+
+    const identificacion = user.profile?.identificacion?.trim();
+    const newPassword = customPassword?.trim() || identificacion;
+
+    if (!newPassword) {
+        throw new Error("El usuario no tiene número de identificación registrado en su perfil para usarlo como contraseña predeterminada.");
+    }
+
+    // Hash password using Better Auth standard format
+    const { hashPassword } = await import("better-auth/crypto");
+    const hashedPassword = await hashPassword(newPassword);
+
+    // Update or create credential account
+    const credentialAccount = user.accounts.find(a => a.providerId === "credential");
+
+    if (credentialAccount) {
+        await prisma.account.update({
+            where: { id: credentialAccount.id },
+            data: { password: hashedPassword }
+        });
+    } else {
+        await prisma.account.create({
+            data: {
+                id: crypto.randomUUID(),
+                accountId: crypto.randomUUID(),
+                userId: user.id,
+                providerId: "credential",
+                password: hashedPassword,
+            }
+        });
+    }
+
+    // 🎯 AUDIT LOG
+    try {
+        const { auditLogger } = await import("@/features/admin/services/auditLogger");
+        await auditLogger.log({
+            action: "UPDATE",
+            entity: "USER",
+            entityId: userId,
+            userId: session.user.id,
+            userName: session.user.name || "Admin",
+            userRole: "admin",
+            description: `Contraseña restablecida para ${user.name || user.email} (${user.email}) asignando por defecto su identificación (${identificacion})`,
+            metadata: { email: user.email, hasCustomPassword: !!customPassword },
+            success: true,
+        });
+    } catch (e) {
+        console.error("Audit log error:", e);
+    }
+
+    // 🔔 PUSH NOTIFICATION
+    try {
+        const { sendPushNotification } = await import("@/lib/push-notifications");
+        await sendPushNotification(userId, {
+            title: "Contraseña Restablecida 🔐",
+            body: "Tu contraseña ha sido restablecida. Puedes ingresar con tu número de identificación.",
+            url: "/dashboard"
+        });
+    } catch (pushError) {
+        console.error("Failed to send reset password push notification:", pushError);
+    }
+
+    revalidatePath("/dashboard/admin/users");
+    return {
+        success: true,
+        message: `Contraseña restablecida exitosamente para ${user.name || user.email}`,
+        passwordAssigned: newPassword
+    };
+}
+
 
 // ============ COURSE MANAGEMENT ============
 export async function getAllCoursesAdminAction(filters?: {
@@ -276,6 +367,143 @@ export async function reassignCourseTeacherAction(courseId: string, newTeacherId
     revalidatePath("/dashboard/admin/courses");
     revalidatePath(`/dashboard/admin/courses/${courseId}`);
     return result;
+}
+
+export async function createCourseAdminAction(data: {
+    title: string;
+    description?: string;
+    teacherId: string;
+    startDate?: string;
+    endDate?: string;
+    startTime?: string;
+    endTime?: string;
+    classDays?: string;
+}) {
+    const session = await requireAdmin();
+
+    if (!data.title?.trim()) {
+        throw new Error("El título del curso es requerido.");
+    }
+    if (!data.teacherId) {
+        throw new Error("Debes asignar un profesor al curso.");
+    }
+
+    // Verify teacher exists
+    const teacher = await prisma.user.findUnique({
+        where: { id: data.teacherId },
+        select: { id: true, name: true, email: true }
+    });
+
+    if (!teacher) {
+        throw new Error("Profesor no encontrado.");
+    }
+
+    // Generate unique 6-character enrollment code
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let code = "";
+    let isUnique = false;
+    let attempts = 0;
+    while (!isUnique && attempts < 10) {
+        code = "";
+        for (let i = 0; i < 6; i++) {
+            code += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        const existing = await prisma.course.findUnique({ where: { enrollmentCode: code } });
+        if (!existing) isUnique = true;
+        attempts++;
+    }
+
+    const { parseISOAsUTC } = await import("@/lib/dateUtils");
+
+    const course = await prisma.course.create({
+        data: {
+            id: crypto.randomUUID(),
+            title: data.title.trim(),
+            description: data.description?.trim() || null,
+            teacherId: data.teacherId,
+            enrollmentCode: isUnique ? code : null,
+            startDate: data.startDate ? parseISOAsUTC(data.startDate) : null,
+            endDate: data.endDate ? parseISOAsUTC(data.endDate) : null,
+            startTime: data.startTime?.trim() || null,
+            endTime: data.endTime?.trim() || null,
+            classDays: data.classDays?.trim() || null,
+        },
+        include: {
+            teacher: {
+                select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    image: true,
+                    profile: true
+                }
+            },
+            _count: {
+                select: {
+                    enrollments: true,
+                    activities: true
+                }
+            }
+        }
+    });
+
+    // 🎯 AUDIT LOG
+    const { auditLogger } = await import("@/features/admin/services/auditLogger");
+    await auditLogger.logCourseCreate(
+        course.id,
+        course.title,
+        session.user.id,
+        session.user.name || "Admin"
+    );
+
+    revalidatePath("/dashboard/admin/courses");
+    return course;
+}
+
+export async function toggleCourseArchivedAdminAction(courseId: string, archive: boolean) {
+    const session = await requireAdmin();
+
+    const course = await prisma.course.findUnique({
+        where: { id: courseId },
+        select: { id: true, title: true, endDate: true }
+    });
+
+    if (!course) {
+        throw new Error("Curso no encontrado.");
+    }
+
+    let newEndDate: Date | null = null;
+    if (archive) {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        newEndDate = yesterday;
+    } else {
+        const futureDate = new Date();
+        futureDate.setMonth(futureDate.getMonth() + 6);
+        newEndDate = futureDate;
+    }
+
+    const updated = await prisma.course.update({
+        where: { id: courseId },
+        data: { endDate: newEndDate }
+    });
+
+    // 🎯 AUDIT LOG
+    const { auditLogger } = await import("@/features/admin/services/auditLogger");
+    await auditLogger.log({
+        action: "UPDATE",
+        entity: "COURSE",
+        entityId: courseId,
+        userId: session.user.id,
+        userName: session.user.name || "Admin",
+        userRole: "admin",
+        description: `Curso "${course.title}" ${archive ? "archivado" : "reactivado"} por el administrador`,
+        metadata: { courseId, title: course.title, archived: archive },
+        success: true,
+    });
+
+    revalidatePath("/dashboard/admin/courses");
+    return updated;
 }
 
 

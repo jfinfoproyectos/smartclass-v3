@@ -15,15 +15,21 @@ import {
     Clock,
     UserPlus,
     FileText,
-    Shield
+    Shield,
+    FileSpreadsheet,
+    Loader2
 } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 import { es } from "date-fns/locale";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { formatName } from "@/lib/utils";
 import { AICanvasCard } from "@/components/ui/ai-canvas-card";
 import { DashboardContainer } from "@/components/ui/dashboard-container";
+import { pdf } from "@react-pdf/renderer";
+import { exportMultiSheetExcel } from "@/lib/export-utils";
+import { AdminExecutiveReportPDFDocument } from "./AdminExecutiveReportPDFDocument";
+import { toast } from "sonner";
 
 interface AdminDashboardProps {
     stats: {
@@ -49,6 +55,84 @@ interface AdminDashboardProps {
 }
 
 export function AdminDashboard({ stats, recentActivity }: AdminDashboardProps) {
+    const [isExportingPDF, setIsExportingPDF] = React.useState(false);
+    const [isExportingExcel, setIsExportingExcel] = React.useState(false);
+
+    const handleExportPDF = async () => {
+        setIsExportingPDF(true);
+        toast.info("Generando balance ejecutivo institucional en PDF...");
+        try {
+            const blob = await pdf(
+                <AdminExecutiveReportPDFDocument
+                    stats={stats}
+                    recentActivity={recentActivity}
+                    generatedAt={format(new Date(), 'dd/MM/yyyy HH:mm:ss')}
+                />
+            ).toBlob();
+
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `Balance_Ejecutivo_Institucional_${format(new Date(), "yyyy-MM-dd")}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            toast.success("Balance ejecutivo en PDF descargado exitosamente");
+        } catch (error) {
+            console.error("Executive PDF Error:", error);
+            toast.error("Error al generar el balance ejecutivo en PDF");
+        } finally {
+            setIsExportingPDF(false);
+        }
+    };
+
+    const handleExportExcel = async () => {
+        setIsExportingExcel(true);
+        try {
+            const metricsData = [
+                { "Indicador": "Total de Usuarios Registrados", "Valor": stats.users.total, "Detalle": "Cuentas en el sistema" },
+                { "Indicador": "Estudiantes Matriculados", "Valor": stats.users.student, "Detalle": `${stats.users.total > 0 ? Math.round((stats.users.student / stats.users.total) * 100) : 0}% de la comunidad` },
+                { "Indicador": "Cuerpo Docente", "Valor": stats.users.teacher, "Detalle": "Profesores e instructores" },
+                { "Indicador": "Administradores del Sistema", "Valor": stats.users.admin, "Detalle": "Gestores de control global" },
+                { "Indicador": "Total de Cursos Registrados", "Valor": stats.courses.total, "Detalle": "Catálogo general" },
+                { "Indicador": "Cursos Activos", "Valor": stats.courses.active, "Detalle": "En periodo lectivo vigente" },
+                { "Indicador": "Cursos Archivados", "Valor": stats.courses.archived, "Detalle": "Periodos culminados" },
+                { "Indicador": "Entregas Totales Evaluadas", "Valor": stats.activity.submissions, "Detalle": "Evidencias y tareas" },
+                { "Indicador": "Estado Servidor & Base de Datos", "Valor": stats.health.connected ? "Operativo (100%)" : "Atención Requerida", "Detalle": "Infraestructura Cloud" },
+            ];
+
+            const activityData = recentActivity && recentActivity.length > 0
+                ? recentActivity.map((act: any, idx: number) => ({
+                    "#": idx + 1,
+                    "Usuario": formatName(act.user?.name, act.user?.profile),
+                    "Correo": act.user?.email || "Sin email",
+                    "Actividad / Evidencia": act.details?.activity || "Acción registrada",
+                    "Curso Asociado": act.details?.course || "Plataforma General",
+                    "Fecha y Hora": format(new Date(act.timestamp), "dd/MM/yyyy HH:mm:ss")
+                }))
+                : [
+                    { "#": 1, "Usuario": "Sin actividad reciente", "Correo": "-", "Actividad / Evidencia": "-", "Curso Asociado": "-", "Fecha y Hora": "-" }
+                ];
+
+            await exportMultiSheetExcel(
+                [
+                    { name: "Indicadores Generales", data: metricsData },
+                    { name: "Auditoría de Actividad", data: activityData },
+                ],
+                `Consolidado_Institucional_SmartClass_${format(new Date(), "yyyy-MM-dd")}.xlsx`
+            );
+
+            toast.success("Matriz consolidada en Excel exportada exitosamente");
+        } catch (error) {
+            console.error("Executive Excel Error:", error);
+            toast.error("Error al exportar consolidado en Excel");
+        } finally {
+            setIsExportingExcel(false);
+        }
+    };
+
     const kpis = [
         {
             title: "Usuarios Totales",
@@ -125,7 +209,27 @@ export function AdminDashboard({ stats, recentActivity }: AdminDashboardProps) {
                         </p>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-2.5">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleExportExcel}
+                            disabled={isExportingExcel}
+                            className="text-xs rounded-xl gap-1.5 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 font-medium"
+                        >
+                            {isExportingExcel ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />}
+                            <span>Exportar Excel</span>
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleExportPDF}
+                            disabled={isExportingPDF}
+                            className="text-xs rounded-xl gap-1.5 border-rose-500/30 text-rose-700 dark:text-rose-400 hover:bg-rose-500/10 font-medium"
+                        >
+                            {isExportingPDF ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />}
+                            <span>Balance PDF</span>
+                        </Button>
                         <Button variant="outline" size="sm" className="text-xs rounded-xl" asChild>
                             <Link href="/dashboard/admin/settings">
                                 <Settings className="h-4 w-4 mr-1.5" />

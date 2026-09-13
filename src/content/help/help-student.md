@@ -485,10 +485,10 @@ Usa esta checklist antes de cada entrega para asegurarte de que todo esté corre
 ### Olvidé mi contraseña
 
 **Solución:**
-1. Haz clic en **"¿Olvidaste tu contraseña?"** en la página de inicio
-2. Ingresa tu email
-3. Revisa tu correo para el enlace de recuperación
-4. Crea una nueva contraseña
+1. Ponte en contacto con tu **profesor** o con el **administrador** del sistema.
+2. Ellos restablecerán tu contraseña de acceso asignando por defecto tu **número de identificación** (documento de identidad).
+3. Inicia sesión con tu correo y tu número de identificación.
+4. Si deseas cambiarla por una personalizada, ingresa a tu perfil (menú de usuario en la esquina inferior izquierda) y ve a la pestaña **"Seguridad y Contraseña"**.
 
 ---
 

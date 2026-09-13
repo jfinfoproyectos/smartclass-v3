@@ -6,9 +6,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { ArrowRight, Eye, EyeOff, Lock, Mail, BrainCircuit, Sparkles, ShieldCheck } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ArrowRight, Eye, EyeOff, Lock, Mail, BrainCircuit, Sparkles, ShieldCheck, KeyRound, AlertCircle } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { getRedirectForSession, signInEmail, signInSocial } from "@/features/auth/services/authService";
 
@@ -24,7 +32,10 @@ export default function SignIn() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const justRegistered = searchParams.get("registered") === "true";
   const { data: session } = authClient.useSession();
 
   useEffect(() => {
@@ -35,14 +46,19 @@ export default function SignIn() {
   const toggleVisibility = () => setIsVisible((prevState) => !prevState);
 
   const handleEmailSignIn = async () => {
+    if (!email.trim() || !password) {
+      setError("Por favor ingresa tu correo y contraseña.");
+      return;
+    }
     setError("");
     setLoading(true);
     try {
-      await signInEmail({ email, password });
+      const data = await signInEmail({ email: email.trim(), password });
+      const target = getRedirectForSession(data) || "/dashboard";
+      window.location.href = target;
     } catch (err) {
       const message = err instanceof Error ? err.message : "Error al iniciar sesión";
       setError(message);
-    } finally {
       setLoading(false);
     }
   };
@@ -146,9 +162,18 @@ export default function SignIn() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password" className="text-xs font-semibold text-slate-300">
-                  Contraseña
-                </Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password" className="text-xs font-semibold text-slate-300">
+                    Contraseña
+                  </Label>
+                  <button
+                    type="button"
+                    onClick={() => setForgotPasswordOpen(true)}
+                    className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors font-medium hover:underline focus:outline-none"
+                  >
+                    ¿Olvidaste tu contraseña?
+                  </button>
+                </div>
                 <div className="relative">
                   <Input
                     id="password"
@@ -172,9 +197,25 @@ export default function SignIn() {
                 </div>
               </div>
 
+              {justRegistered && !error && (
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs text-center font-medium">
+                  ¡Cuenta creada exitosamente! Ingresa tu correo y contraseña para acceder.
+                </div>
+              )}
+
               {error && (
-                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs text-center font-medium">
-                  {error}
+                <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs space-y-2 text-center font-medium">
+                  <div>{error}</div>
+                  <div className="pt-1.5 border-t border-red-500/20">
+                    <button
+                      type="button"
+                      onClick={() => setForgotPasswordOpen(true)}
+                      className="text-amber-300 hover:text-amber-200 underline font-medium inline-flex items-center gap-1.5 text-xs transition-colors"
+                    >
+                      <KeyRound className="w-3.5 h-3.5" />
+                      ¿Olvidaste tu contraseña? Infórmate aquí
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -197,6 +238,58 @@ export default function SignIn() {
           </div>
         </div>
       </motion.div>
+
+      {/* Modal Informativo: Recuperar Contraseña */}
+      <Dialog open={forgotPasswordOpen} onOpenChange={setForgotPasswordOpen}>
+        <DialogContent className="sm:max-w-md bg-slate-900 border-slate-800 text-white p-6 rounded-3xl shadow-2xl">
+          <DialogHeader className="space-y-3">
+            <div className="mx-auto w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-1">
+              <KeyRound className="w-6 h-6" />
+            </div>
+            <DialogTitle className="text-xl font-bold text-center text-white">
+              ¿Olvidaste tu contraseña?
+            </DialogTitle>
+            <DialogDescription className="text-center text-slate-400 text-xs sm:text-sm">
+              Información para restablecer tu cuenta de correo y contraseña
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-2 space-y-3">
+            <div className="p-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-sm space-y-2">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                <div className="space-y-1.5">
+                  <p className="font-semibold text-white text-sm">
+                    Ponte en contacto con tu profesor o administrador
+                  </p>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    Para recuperar tu acceso, solicita el restablecimiento directamente a tu <strong>profesor</strong> o al <strong>administrador</strong> del sistema.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl border border-slate-800 bg-slate-950/60 text-xs text-slate-400 space-y-1.5">
+              <p className="font-semibold text-slate-300 flex items-center gap-1.5">
+                <span>🔑</span> Contraseña por defecto
+              </p>
+              <p className="leading-relaxed">
+                Al restablecer tu clave, se te asignará automáticamente tu <strong>número de identificación</strong> (documento de identidad) como contraseña de acceso. Luego de ingresar, podrás actualizarla desde tu perfil.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="pt-2">
+            <Button
+              type="button"
+              onClick={() => setForgotPasswordOpen(false)}
+              className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl h-11"
+            >
+              Entendido
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

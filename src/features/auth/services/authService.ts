@@ -24,8 +24,27 @@ export function getRedirectForSession(session: unknown): string | null {
   return "/dashboard/student";
 }
 
-export async function signInEmail(payload: { email: string; password: string }): Promise<void> {
-  await authClient.signIn.email(payload);
+export async function signInEmail(payload: { email: string; password: string }): Promise<any> {
+  const res = await authClient.signIn.email({
+    email: payload.email.trim(),
+    password: payload.password,
+  });
+
+  if (res?.error) {
+    const rawMsg = res.error.message || "";
+    const lower = rawMsg.toLowerCase();
+    if (
+      lower.includes("invalid email or password") ||
+      lower.includes("unauthorized") ||
+      lower.includes("user not found") ||
+      lower.includes("invalid password")
+    ) {
+      throw new Error("Correo electrónico o contraseña incorrectos. Si olvidaste tu contraseña, ponte en contacto con tu profesor o administrador para restablecerla.");
+    }
+    throw new Error(rawMsg || "Error al iniciar sesión.");
+  }
+
+  return res?.data;
 }
 
 export async function signInSocial(provider: "google"): Promise<void> {
@@ -37,14 +56,31 @@ export async function signUpEmail(payload: {
   password: string;
   name?: string;
   confirmPassword?: string;
-}): Promise<void> {
+}): Promise<any> {
   if (payload.confirmPassword !== undefined && payload.password !== payload.confirmPassword) {
-    throw new Error("Las contraseñas no coinciden");
+    throw new Error("Las contraseñas no coinciden.");
   }
   if (payload.password.length < 8) {
-    throw new Error("La contraseña debe tener al menos 8 caracteres");
+    throw new Error("La contraseña debe tener al menos 8 caracteres.");
   }
-  await authClient.signUp.email({ email: payload.email, password: payload.password, name: "" });
+
+  const name = payload.name?.trim() || payload.email.split("@")[0];
+  const res = await authClient.signUp.email({
+    email: payload.email.trim(),
+    password: payload.password,
+    name,
+  });
+
+  if (res?.error) {
+    const rawMsg = res.error.message || "";
+    const lower = rawMsg.toLowerCase();
+    if (lower.includes("already exists") || lower.includes("user exists")) {
+      throw new Error("Ya existe una cuenta registrada con este correo electrónico.");
+    }
+    throw new Error(rawMsg || "Error al crear la cuenta.");
+  }
+
+  return res?.data;
 }
 
 export async function signOut(): Promise<void> {
@@ -54,3 +90,47 @@ export async function signOut(): Promise<void> {
 export function getPostLogoutRedirect(): string {
   return "/signin";
 }
+
+export async function changeUserPassword(payload: {
+  currentPassword: string;
+  newPassword: string;
+  revokeOtherSessions?: boolean;
+}): Promise<void> {
+  if (payload.newPassword.length < 8) {
+    throw new Error("La nueva contraseña debe tener al menos 8 caracteres.");
+  }
+
+  const res = await authClient.changePassword({
+    currentPassword: payload.currentPassword,
+    newPassword: payload.newPassword,
+    revokeOtherSessions: payload.revokeOtherSessions ?? false,
+  });
+
+  if (res?.error) {
+    const rawMsg = res.error.message || "";
+    const lower = rawMsg.toLowerCase();
+    if (lower.includes("invalid password") || lower.includes("invalid_password")) {
+      throw new Error("La contraseña actual es incorrecta.");
+    }
+    if (lower.includes("password is too short") || lower.includes("password_too_short")) {
+      throw new Error("La nueva contraseña debe tener al menos 8 caracteres.");
+    }
+    if (lower.includes("credential account not found") || lower.includes("credential_account_not_found")) {
+      throw new Error("Esta cuenta no tiene una contraseña configurada todavía.");
+    }
+    throw new Error(rawMsg || "Error al cambiar la contraseña.");
+  }
+}
+
+export async function setUserPassword(payload: {
+  newPassword: string;
+}): Promise<void> {
+  if (payload.newPassword.length < 8) {
+    throw new Error("La contraseña debe tener al menos 8 caracteres.");
+  }
+
+  const { setUserPasswordAction } = await import("@/features/profile/actions/profileActions");
+  await setUserPasswordAction(payload.newPassword);
+}
+
+

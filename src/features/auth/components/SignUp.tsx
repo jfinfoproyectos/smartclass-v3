@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { ArrowRight, Eye, EyeOff, Lock, Mail, BrainCircuit, UserPlus } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Lock, Mail, BrainCircuit, UserPlus, User } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
@@ -15,6 +15,7 @@ import { getRedirectForSession, signUpEmail } from "@/features/auth/services/aut
 export default function SignUp() {
   const [isVisible, setIsVisible] = useState<boolean>(false);
   const [isVisibleConfirm, setIsVisibleConfirm] = useState<boolean>(false);
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -32,11 +33,29 @@ export default function SignUp() {
   const toggleVisibilityConfirm = () => setIsVisibleConfirm((prev) => !prev);
 
   const handleEmailSignUp = async () => {
+    if (!name.trim() || !email.trim() || !password) {
+      setError("Por favor completa todos los campos.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("Las contraseñas no coinciden.");
+      return;
+    }
+    if (password.length < 8) {
+      setError("La contraseña debe tener al menos 8 caracteres.");
+      return;
+    }
+
     setError("");
     setLoading(true);
     try {
-      await signUpEmail({ email, password, confirmPassword });
-      router.push("/signin");
+      await signUpEmail({
+        name: name.trim(),
+        email: email.trim(),
+        password,
+        confirmPassword,
+      });
+      router.push("/signin?registered=true");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Error al crear la cuenta";
       setError(message);
@@ -93,6 +112,25 @@ export default function SignUp() {
               }}
               className="space-y-4"
             >
+              <div className="space-y-2">
+                <Label htmlFor="name" className="text-xs font-semibold text-slate-300">
+                  Nombre Completo
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="name"
+                    className="peer ps-10 h-11 rounded-xl bg-slate-950/70 border-slate-800 text-white placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500/20 text-sm"
+                    placeholder="Ej. Juan Pérez"
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                  <div className="text-slate-500 pointer-events-none absolute inset-y-0 start-0 flex items-center justify-center ps-3.5 peer-focus:text-emerald-400 transition-colors">
+                    <User size={17} />
+                  </div>
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-xs font-semibold text-slate-300">
                   Correo Electrónico

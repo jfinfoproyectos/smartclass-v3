@@ -3,9 +3,20 @@ import prisma from "@/lib/prisma";
 
 export const profileService = {
     async getProfile(userId: string) {
-        return await prisma.profile.findUnique({
-            where: { userId },
-        });
+        const [profile, credentialAccount] = await Promise.all([
+            prisma.profile.findUnique({
+                where: { userId },
+            }),
+            prisma.account.findFirst({
+                where: { userId, providerId: "credential" },
+                select: { id: true, password: true }
+            })
+        ]);
+
+        return {
+            ...profile,
+            hasPassword: !!credentialAccount?.password
+        };
     },
 
     async upsertProfile(userId: string, data: {
