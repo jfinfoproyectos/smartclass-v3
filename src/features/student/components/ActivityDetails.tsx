@@ -11,6 +11,7 @@ const VideoPitchActivityDetails = dynamic(() => import('./VideoPitchActivityDeta
 const AiInterviewActivityDetails = dynamic(() => import('./AiInterviewActivityDetails').then(m => m.AiInterviewActivityDetails), { ssr: false });
 const DbModelingActivityDetails = dynamic(() => import('./DbModelingActivityDetails').then(m => m.DbModelingActivityDetails), { ssr: false });
 const AudioDefenseActivityDetails = dynamic(() => import('./AudioDefenseActivityDetails').then(m => m.AudioDefenseActivityDetails), { ssr: false });
+const WorkshopActivityDetails = dynamic(() => import('./WorkshopActivityDetails').then(m => m.WorkshopActivityDetails), { ssr: false });
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
@@ -79,7 +80,7 @@ export function GroupActivityBanner({ activity, compact = false }: { activity: a
 
     if (isLeader) {
         return (
-            <div className="mb-2.5 p-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-xs flex items-center justify-between gap-3 shadow-2xs">
+            <div className="shrink-0 mb-2.5 p-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-xs flex items-center justify-between gap-3 shadow-2xs">
                 <div className="flex items-center gap-3">
                     <div className="p-2 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 shrink-0">
                         <Crown className="h-4 w-4 fill-amber-500" />
@@ -113,7 +114,7 @@ export function GroupActivityBanner({ activity, compact = false }: { activity: a
     }
 
     return (
-        <div className="mb-2.5 p-3 rounded-2xl border border-primary/20 bg-primary/5 text-xs flex items-center justify-between gap-3 shadow-2xs">
+        <div className="shrink-0 mb-2.5 p-3 rounded-2xl border border-primary/20 bg-primary/5 text-xs flex items-center justify-between gap-3 shadow-2xs">
             <div className="flex items-center gap-3">
                 <div className="p-2 rounded-xl bg-primary/10 text-primary shrink-0">
                     <Users className="h-4 w-4" />
@@ -147,12 +148,23 @@ export function GroupActivityBanner({ activity, compact = false }: { activity: a
 }
 
 export function ActivityDetails({ activity, userId, studentName }: ActivityDetailsProps) {
-    const isFullHeight = activity.type === "GITHUB" || activity.type === "CODE_CHALLENGE";
+    const isFullHeight =
+        activity.type === "GITHUB" ||
+        activity.type === "CODE_CHALLENGE" ||
+        activity.type === "AI_INTERVIEW" ||
+        activity.type === "VIDEO_PITCH" ||
+        activity.type === "AUDIO_DEFENSE" ||
+        activity.type === "DB_MODELING" ||
+        activity.type === "CODE_PROJECT" ||
+        activity.type === "WORKSHOP_CODE" ||
+        activity.type === "WORKSHOP_GITHUB";
 
     return (
         <div className={`flex flex-col ${isFullHeight ? "h-full min-h-0 overflow-hidden flex-1" : "min-h-full w-full"} p-0.5 sm:p-1`}>
             {activity.type !== "GITHUB" && <GroupActivityBanner activity={activity} />}
-            <ActivityContent activity={activity} userId={userId} studentName={studentName} />
+            <div className={isFullHeight ? "flex-1 min-h-0 flex flex-col overflow-hidden" : "w-full"}>
+                <ActivityContent activity={activity} userId={userId} studentName={studentName} />
+            </div>
         </div>
     );
 }
@@ -185,6 +197,9 @@ function ActivityContent({ activity, userId, studentName }: ActivityDetailsProps
             return <AudioDefenseActivityDetails activity={activity} userId={userId} studentName={studentName} />;
         case "CODE_PROJECT":
             return <CodeProjectActivityDetails activity={activity} userId={userId} studentName={studentName} />;
+        case "WORKSHOP_CODE":
+        case "WORKSHOP_GITHUB":
+            return <WorkshopActivityDetails activity={activity} userId={userId} studentName={studentName} />;
         default:
             return <div>Tipo de actividad no soportado</div>;
     }

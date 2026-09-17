@@ -27,16 +27,18 @@ export function ThemeEnforcer({ themeMode, themeColor, allowThemeColorChange }: 
     // 2. Sync Theme Color (Palette) from user's DB settings
     useEffect(() => {
         if (themeColor) {
-            const currentSaved = localStorage.getItem("smartclass-theme") || "default";
+            const currentSaved = localStorage.getItem("smartclass-theme");
+            const effectiveSaved = (!currentSaved || currentSaved === "default") ? "ocean-breeze" : currentSaved;
+            const targetColor = (themeColor === "default") ? "ocean-breeze" : themeColor;
 
-            if (currentSaved !== themeColor) {
+            if (effectiveSaved !== targetColor) {
                 const applyColor = async () => {
                     try {
-                        if (themeColor === "zinc" || themeColor === "default") {
+                        if (targetColor === "zinc") {
                             const elId = "smartclass-dynamic-theme";
                             const styleEl = document.getElementById(elId);
                             if (styleEl) styleEl.remove();
-                            localStorage.setItem("smartclass-theme", "default");
+                            localStorage.setItem("smartclass-theme", "zinc");
                             localStorage.removeItem("smartclass-theme-css-v2");
                             window.dispatchEvent(new CustomEvent("smartclass-theme-changed"));
                             return;
@@ -44,7 +46,7 @@ export function ThemeEnforcer({ themeMode, themeColor, allowThemeColorChange }: 
 
                         const response = await fetch("/api/themes");
                         const themes = await response.json();
-                        const themeData = themes.find((t: any) => t.id === themeColor);
+                        const themeData = themes.find((t: any) => t.id === targetColor);
 
                         if (themeData) {
                             const elId = "smartclass-dynamic-theme";
@@ -60,8 +62,19 @@ export function ThemeEnforcer({ themeMode, themeColor, allowThemeColorChange }: 
                                 finalCss = finalCss.replace(/(--[a-zA-Z0-9-]+:\s*[^;!]+)(;)/g, "$1 !important$2");
                             }
 
+                            if (!finalCss.includes('font-family: var(--font-sans)')) {
+                                finalCss += `
+html, body, button, input, select, textarea {
+  font-family: var(--font-sans) !important;
+}
+h1, h2, h3, h4, h5, h6, .prose h1, .prose h2, .prose h3, .prose h4 {
+  font-family: var(--font-heading, var(--font-sans)) !important;
+}
+`;
+                            }
+
                             styleEl.innerHTML = finalCss;
-                            localStorage.setItem("smartclass-theme", themeColor);
+                            localStorage.setItem("smartclass-theme", targetColor);
                             localStorage.setItem("smartclass-theme-css-v2", finalCss);
                             window.dispatchEvent(new CustomEvent("smartclass-theme-changed"));
                         }

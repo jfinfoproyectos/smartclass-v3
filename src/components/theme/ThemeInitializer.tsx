@@ -5,8 +5,14 @@ import { useEffect, useState } from "react";
 export function ThemeInitializer() {
   useEffect(() => {
     const applyTheme = async () => {
-      const savedThemeId = localStorage.getItem("smartclass-theme") || "default";
-      if (savedThemeId === "default") {
+      let savedThemeId = localStorage.getItem("smartclass-theme");
+      if (!savedThemeId || savedThemeId === "default") {
+        savedThemeId = "ocean-breeze";
+        localStorage.setItem("smartclass-theme", "ocean-breeze");
+        localStorage.removeItem("smartclass-theme-css-v2");
+      }
+
+      if (savedThemeId === "zinc") {
         const styleEl = document.getElementById("smartclass-dynamic-theme");
         if (styleEl) styleEl.remove();
         return;

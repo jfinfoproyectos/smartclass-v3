@@ -10,8 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
     Video, Send, CheckCircle2, Clock, RotateCcw,
-    FileText, Award, Sparkles, Loader2, Info, AlertCircle, Play, CheckSquare, ExternalLink
+    FileText, Award, Sparkles, Loader2, Info, AlertCircle, Play, CheckSquare, ExternalLink, ChevronLeft
 } from "lucide-react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -125,6 +126,7 @@ export function VideoPitchActivityDetails({
     const [notes, setNotes] = useState<string>(initialData.notes);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [activeTab, setActiveTab] = useState<"statement" | "checklist" | "submission">("statement");
+    const [mobileView, setMobileView] = useState<"pitch" | "info">("pitch");
 
     useEffect(() => {
         if (!checklistConfig && activeTab === "checklist") {
@@ -175,66 +177,112 @@ export function VideoPitchActivityDetails({
     };
 
     return (
-        <div className="space-y-6 w-full p-4 sm:p-6 max-w-7xl mx-auto">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-muted/20 p-4 rounded-2xl border">
-                <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-xs bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-200">
-                            <Video className="h-3.5 w-3.5 mr-1" />
+        <div className="flex flex-col h-full w-full overflow-hidden flex-1 min-h-0 gap-2 sm:gap-2.5">
+            {/* Header: Compacto y Moderno */}
+            <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-muted/20 p-2.5 sm:p-3 rounded-xl border">
+                <div className="space-y-1 min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                        <Badge variant="outline" className="text-[11px] bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-200">
+                            <Video className="h-3 w-3 mr-1" />
                             Sustentación en Video (Pitch)
                         </Badge>
-                        <Badge variant="secondary" className="text-xs font-mono">
+                        <Badge variant="secondary" className="text-[11px] font-mono">
                             Máx. {maxMinutes} min
                         </Badge>
                         {checklistConfig && isGraded && evalMetadata ? (
                             <div className="flex items-center gap-1.5 flex-wrap">
                                 {evalMetadata.aiGrade !== undefined && evalMetadata.aiGrade !== null && (
-                                    <Badge variant="outline" className="text-xs bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-300 font-mono font-bold">
+                                    <Badge variant="outline" className="text-[11px] bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-300 font-mono font-bold">
                                         IA ({checklistConfig.aiWeight}%): {Number(evalMetadata.aiGrade).toFixed(1)}
                                     </Badge>
                                 )}
                                 {evalMetadata.checklistScore !== undefined && evalMetadata.checklistScore !== null && (
-                                    <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-300 font-mono font-bold">
+                                    <Badge variant="outline" className="text-[11px] bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-300 font-mono font-bold">
                                         Docente ({checklistConfig.checklistWeight}%): {Number(evalMetadata.checklistScore).toFixed(1)}
                                     </Badge>
                                 )}
-                                <Badge className="bg-emerald-600 text-white font-bold">
+                                <Badge className="bg-emerald-600 text-white font-bold text-[11px]">
                                     Final: {submission.grade.toFixed(1)} / 5.0
                                 </Badge>
                             </div>
                         ) : isGraded ? (
-                            <Badge className="bg-emerald-600 text-white font-bold">
+                            <Badge className="bg-emerald-600 text-white font-bold text-[11px]">
                                 Calificado: {submission.grade.toFixed(1)} / 5.0
                             </Badge>
                         ) : isSubmitted ? (
-                            <Badge variant="outline" className="text-amber-600 border-amber-300">
-                                Entregado (Pendiente de Calificación)
+                            <Badge variant="outline" className="text-amber-600 border-amber-300 text-[11px]">
+                                Entregado (Pendiente Docente)
                             </Badge>
                         ) : (
-                            <Badge variant="outline" className="text-muted-foreground">
+                            <Badge variant="outline" className="text-muted-foreground text-[11px]">
                                 No entregado
                             </Badge>
                         )}
                     </div>
-                    <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+                    <h1 className="text-sm sm:text-base md:text-lg font-bold tracking-tight text-foreground truncate" title={activity.title}>
                         {activity.title}
                     </h1>
                 </div>
 
-                <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <div className="flex items-center gap-1.5">
-                        <Clock className="h-4 w-4 text-primary" />
-                        <span>Límite: {activity.deadline ? format(new Date(activity.deadline), "PPp", { locale: es }) : "Sin fecha"}</span>
+                <div className="flex items-center gap-2 sm:gap-3 text-xs text-muted-foreground shrink-0">
+                    <div className="hidden sm:flex items-center gap-1.5">
+                        <Clock className="h-3.5 w-3.5 text-primary" />
+                        <span className="text-[11px]">Límite: {activity.deadline ? format(new Date(activity.deadline), "PPp", { locale: es }) : "Sin fecha"}</span>
                     </div>
+                    <Button
+                        asChild
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 px-2.5 text-xs font-semibold shrink-0 gap-1 rounded-lg border-border/80 hover:bg-accent hover:text-accent-foreground shadow-xs cursor-pointer bg-background"
+                        title="Volver a la lista de actividades"
+                    >
+                        <Link href={activity.courseId ? `/dashboard/student?courseId=${activity.courseId}&tab=activities` : `/dashboard/student`}>
+                            <ChevronLeft className="h-3.5 w-3.5" />
+                            <span>Volver a actividades</span>
+                        </Link>
+                    </Button>
                 </div>
             </div>
 
-            {/* Layout principal */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[560px]">
+            {/* Selector de Vistas Móviles (< lg) */}
+            <div className="lg:hidden shrink-0 grid grid-cols-2 gap-1 bg-muted/60 p-1 rounded-xl border border-border/70 shadow-2xs">
+                <button
+                    type="button"
+                    onClick={() => setMobileView("pitch")}
+                    className={cn(
+                        "flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+                        mobileView === "pitch"
+                            ? "bg-background text-foreground shadow-xs font-bold border border-border/80 text-rose-600 dark:text-rose-400"
+                            : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                    )}
+                >
+                    <Video className="h-3.5 w-3.5 text-rose-500 shrink-0" />
+                    <span className="truncate">Pitch y Entrega</span>
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setMobileView("info")}
+                    className={cn(
+                        "flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+                        mobileView === "info"
+                            ? "bg-background text-foreground shadow-xs font-bold border border-border/80 text-rose-600 dark:text-rose-400"
+                            : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                    )}
+                >
+                    <FileText className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                    <span className="truncate">Enunciado y Rúbrica</span>
+                </button>
+            </div>
+
+            {/* Layout principal adaptado: 2 columnas en desktop, 1 pestaña en móvil */}
+            <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-2.5 sm:gap-3 overflow-hidden">
                 {/* Columna Izquierda: Reproductor y Formulario (7 columnas) */}
-                <div className="lg:col-span-7 flex flex-col bg-card rounded-2xl border border-border/70 overflow-hidden shadow-xs">
-                    <div className="p-3 border-b bg-muted/30 flex items-center justify-between">
+                <div className={cn(
+                    "lg:col-span-7 flex flex-col h-full min-h-0 bg-card rounded-xl border border-border/70 overflow-hidden shadow-xs",
+                    mobileView === "pitch" ? "flex" : "hidden lg:flex"
+                )}>
+                    <div className="shrink-0 p-2.5 sm:p-3 border-b bg-muted/30 flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <Video className="h-4 w-4 text-rose-500" />
                             <span className="text-xs font-bold text-foreground">Grabación del Pitch</span>
@@ -245,7 +293,7 @@ export function VideoPitchActivityDetails({
                     </div>
 
                     {/* Previsualizador de Video */}
-                    <div className="relative aspect-video w-full bg-slate-950 flex items-center justify-center overflow-hidden border-b">
+                    <div className="shrink-0 relative aspect-video w-full max-h-[260px] sm:max-h-[300px] bg-slate-950 flex items-center justify-center overflow-hidden border-b">
                         {embedInfo.embedUrl ? (
                             embedInfo.type === "video" ? (
                                 <video src={embedInfo.embedUrl} controls className="w-full h-full object-contain" />
@@ -269,8 +317,8 @@ export function VideoPitchActivityDetails({
                         )}
                     </div>
 
-                    {/* Formulario de Entrega */}
-                    <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
+                    {/* Formulario de Entrega con scroll vertical interno si es necesario */}
+                    <div className="p-3 sm:p-4 space-y-3 flex-1 min-h-0 overflow-y-auto flex flex-col justify-between">
                         <div className="space-y-3">
                             <div className="space-y-1">
                                 <Label htmlFor="video-url-input" className="text-xs font-bold flex items-center justify-between">
@@ -307,7 +355,7 @@ export function VideoPitchActivityDetails({
                             </div>
                         </div>
 
-                        <div className="pt-2 border-t flex items-center justify-between">
+                        <div className="pt-2 border-t flex items-center justify-between shrink-0">
                             <span className="text-[11px] text-muted-foreground">
                                 Límite sugerido: <strong>{maxMinutes} minutos</strong>.
                             </span>
@@ -315,7 +363,7 @@ export function VideoPitchActivityDetails({
                                 type="button"
                                 onClick={handleSubmit}
                                 disabled={isSubmitting || isDeadlinePassed || !videoUrl.trim()}
-                                className="font-bold text-xs gap-1.5 bg-primary text-primary-foreground shadow-xs"
+                                className="font-bold text-xs gap-1.5 bg-primary text-primary-foreground shadow-xs cursor-pointer"
                             >
                                 {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                                 {isSubmitted ? "Actualizar Sustentación" : "Entregar Sustentación"}
@@ -325,29 +373,32 @@ export function VideoPitchActivityDetails({
                 </div>
 
                 {/* Columna Derecha: Enunciado, Estructura y Evaluación (5 columnas) */}
-                <div className="lg:col-span-5 flex flex-col bg-card rounded-2xl border border-border/70 overflow-hidden shadow-xs">
-                    <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex-1 flex flex-col">
-                        <div className="border-b p-2 bg-muted/30 overflow-x-auto scrollbar-none">
+                <div className={cn(
+                    "lg:col-span-5 flex flex-col h-full min-h-0 bg-card rounded-xl border border-border/70 overflow-hidden shadow-xs",
+                    mobileView === "info" ? "flex" : "hidden lg:flex"
+                )}>
+                    <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex-1 min-h-0 flex flex-col h-full overflow-hidden">
+                        <div className="border-b p-1.5 sm:p-2 bg-muted/30 shrink-0">
                             <TabsList className={cn(
-                                "inline-flex w-max min-w-full h-auto min-h-8 p-1 gap-1",
-                                checklistConfig ? "sm:grid sm:grid-cols-3" : "sm:grid sm:grid-cols-2"
+                                "grid w-full h-auto min-h-8 p-1 gap-1",
+                                checklistConfig ? "grid-cols-3" : "grid-cols-2"
                             )}>
-                                <TabsTrigger value="statement" className="text-xs font-semibold gap-1 shrink-0 px-3 py-1.5 whitespace-nowrap">
+                                <TabsTrigger value="statement" className="text-xs font-semibold gap-1 shrink-0 px-2 sm:px-3 py-1.5 whitespace-nowrap justify-center cursor-pointer">
                                     <FileText className="h-3.5 w-3.5 shrink-0" /> <span>Enunciado</span>
                                 </TabsTrigger>
                                 {checklistConfig && (
-                                    <TabsTrigger value="checklist" className="text-xs font-semibold gap-1 shrink-0 px-3 py-1.5 whitespace-nowrap">
+                                    <TabsTrigger value="checklist" className="text-xs font-semibold gap-1 shrink-0 px-2 sm:px-3 py-1.5 whitespace-nowrap justify-center cursor-pointer">
                                         <CheckSquare className="h-3.5 w-3.5 shrink-0" /> <span>Estructura</span>
                                     </TabsTrigger>
                                 )}
-                                <TabsTrigger value="submission" className="text-xs font-semibold gap-1 shrink-0 px-3 py-1.5 whitespace-nowrap">
+                                <TabsTrigger value="submission" className="text-xs font-semibold gap-1 shrink-0 px-2 sm:px-3 py-1.5 whitespace-nowrap justify-center cursor-pointer">
                                     <Award className="h-3.5 w-3.5 shrink-0" /> <span>Evaluación</span>
                                 </TabsTrigger>
                             </TabsList>
                         </div>
 
-                        {/* Pestaña 1: Enunciado */}
-                        <TabsContent value="statement" className="flex-1 p-4 overflow-y-auto m-0 space-y-4">
+                        {/* Pestaña 1: Enunciado con scroll vertical independiente */}
+                        <TabsContent value="statement" className="flex-1 min-h-0 p-3 sm:p-4 overflow-y-auto m-0 space-y-4">
                             <div data-color-mode={mode} className="prose prose-sm dark:prose-invert max-w-none text-xs">
                                 <MDEditor.Markdown
                                     source={activity.statement || "**No hay enunciado disponible.**"}
@@ -356,9 +407,9 @@ export function VideoPitchActivityDetails({
                             </div>
                         </TabsContent>
 
-                        {/* Pestaña 2: Guía de Estructura Recomendada */}
+                        {/* Pestaña 2: Guía de Estructura Recomendada con scroll vertical independiente */}
                         {checklistConfig && (
-                            <TabsContent value="checklist" className="flex-1 p-4 overflow-y-auto m-0 space-y-3">
+                            <TabsContent value="checklist" className="flex-1 min-h-0 p-3 sm:p-4 overflow-y-auto m-0 space-y-3">
                                 <div className="space-y-1 pb-2 border-b">
                                     <span className="text-xs font-bold text-foreground">Lista de Autochequeo del Pitch</span>
                                     <p className="text-[11px] text-muted-foreground">
@@ -384,8 +435,8 @@ export function VideoPitchActivityDetails({
                             </TabsContent>
                         )}
 
-                        {/* Pestaña 3: Evaluación y Feedback */}
-                        <TabsContent value="submission" className="flex-1 p-4 overflow-y-auto m-0 space-y-4">
+                        {/* Pestaña 3: Calificación y Feedback con scroll vertical independiente */}
+                        <TabsContent value="submission" className="flex-1 min-h-0 p-3 sm:p-4 overflow-y-auto m-0 space-y-4">
                             {isGraded ? (
                                 <div className="space-y-4">
                                     <div className="p-4 rounded-xl border bg-primary/5 border-primary/20 space-y-1 text-center">
@@ -406,7 +457,7 @@ export function VideoPitchActivityDetails({
                                     {submission.feedback && (
                                         <div className="space-y-2">
                                             <Label className="text-xs font-bold uppercase tracking-wider">
-                                                Retroalimentación de la Exposición
+                                                Retroalimentación del Docente
                                             </Label>
                                             <FeedbackViewer feedback={submission.feedback} />
                                         </div>
@@ -414,8 +465,8 @@ export function VideoPitchActivityDetails({
                                 </div>
                             ) : isSubmitted ? (
                                 <div className="flex flex-col items-center justify-center h-48 text-center space-y-2">
-                                    <Clock className="h-8 w-8 text-amber-500 animate-pulse" />
-                                    <p className="text-xs font-semibold">Sustentación entregada</p>
+                                    <CheckCircle2 className="h-8 w-8 text-rose-500" />
+                                    <p className="text-xs font-semibold">Sustentación Enviada</p>
                                     <p className="text-[11px] text-muted-foreground max-w-xs">
                                         El docente y la IA evaluarán la claridad, estructura y dominio técnico de tu presentación.
                                     </p>

@@ -31,6 +31,8 @@ export default async function RootLayout({
     ? themes.find(t => t.id === visualSettings.themeColor) 
     : null;
 
+  const defaultThemeData = themes.find(t => t.id === "ocean-breeze");
+
   return (
     <html lang="es" suppressHydrationWarning>
       <head>
@@ -49,11 +51,26 @@ export default async function RootLayout({
               __html: `
                 (function() {
                   try {
+                    var saved = localStorage.getItem("smartclass-theme");
                     var css = localStorage.getItem("smartclass-theme-css-v2");
+
+                    if (!saved || saved === "default") {
+                      saved = "ocean-breeze";
+                      localStorage.setItem("smartclass-theme", "ocean-breeze");
+                    }
+
+                    if (saved === "zinc") {
+                      return;
+                    }
+
+                    var style = document.createElement("style");
+                    style.id = "smartclass-dynamic-theme";
                     if (css) {
-                      var style = document.createElement("style");
-                      style.id = "smartclass-dynamic-theme";
                       style.innerHTML = css;
+                    } else if (saved === "ocean-breeze") {
+                      style.innerHTML = ${JSON.stringify(defaultThemeData ? defaultThemeData.cssContent : "")};
+                    }
+                    if (style.innerHTML) {
                       document.head.appendChild(style);
                     }
                   } catch (e) {}

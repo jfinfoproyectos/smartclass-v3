@@ -10,8 +10,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
     Bot, Send, CheckCircle2, Clock, RotateCcw,
     FileText, Award, Sparkles, Loader2, Info, MessageSquareQuote,
-    User, ArrowRight, CheckCircle, HelpCircle, AlertCircle, Play
+    User, ArrowRight, CheckCircle, HelpCircle, AlertCircle, Play, ChevronLeft
 } from "lucide-react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -24,6 +25,7 @@ import { getNextInterviewQuestionAction, gradeInterviewAction } from "@/features
 import { submitActivityAction } from "../actions/submissionActions";
 import { getActivityChecklistConfig, extractEvaluationMetadata } from "@/features/teacher/utils/checklistGradingUtils";
 import { StudentTeacherEvaluationSection } from "./StudentTeacherEvaluationSection";
+import { cn } from "@/lib/utils";
 
 interface AiInterviewActivityDetailsProps {
     activity: any;
@@ -97,6 +99,7 @@ export function AiInterviewActivityDetails({
     const [isLoadingNext, setIsLoadingNext] = useState<boolean>(false);
     const [isFinishing, setIsFinishing] = useState<boolean>(false);
     const [activeTab, setActiveTab] = useState<"interview" | "statement" | "results">("interview");
+    const [mobileView, setMobileView] = useState<"interview" | "info">("interview");
 
     const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -235,67 +238,113 @@ export function AiInterviewActivityDetails({
     };
 
     return (
-        <div className="space-y-6 w-full p-4 sm:p-6 max-w-7xl mx-auto">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-muted/20 p-4 rounded-2xl border">
-                <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-xs bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-200">
-                            <MessageSquareQuote className="h-3.5 w-3.5 mr-1" />
+        <div className="flex flex-col h-full w-full overflow-hidden flex-1 min-h-0 gap-2 sm:gap-2.5">
+            {/* Header: Compacto y Moderno */}
+            <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-muted/20 p-2.5 sm:p-3 rounded-xl border">
+                <div className="space-y-1 min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                        <Badge variant="outline" className="text-[11px] bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-200">
+                            <MessageSquareQuote className="h-3 w-3 mr-1" />
                             Entrevista Técnica con IA
                         </Badge>
-                        <Badge variant="secondary" className="text-xs font-mono">
+                        <Badge variant="secondary" className="text-[11px] font-mono">
                             Nivel: {targetRole}
                         </Badge>
                         {checklistConfig && isGraded && evalMetadata ? (
                             <div className="flex items-center gap-1.5 flex-wrap">
                                 {evalMetadata.aiGrade !== undefined && evalMetadata.aiGrade !== null && (
-                                    <Badge variant="outline" className="text-xs bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-300 font-mono font-bold">
+                                    <Badge variant="outline" className="text-[11px] bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-300 font-mono font-bold">
                                         IA ({checklistConfig.aiWeight}%): {Number(evalMetadata.aiGrade).toFixed(1)}
                                     </Badge>
                                 )}
                                 {evalMetadata.checklistScore !== undefined && evalMetadata.checklistScore !== null && (
-                                    <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-300 font-mono font-bold">
+                                    <Badge variant="outline" className="text-[11px] bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-300 font-mono font-bold">
                                         Docente ({checklistConfig.checklistWeight}%): {Number(evalMetadata.checklistScore).toFixed(1)}
                                     </Badge>
                                 )}
-                                <Badge className="bg-emerald-600 text-white font-bold">
+                                <Badge className="bg-emerald-600 text-white font-bold text-[11px]">
                                     Final: {submission.grade.toFixed(1)} / 5.0
                                 </Badge>
                             </div>
                         ) : isGraded ? (
-                            <Badge className="bg-emerald-600 text-white font-bold">
+                            <Badge className="bg-emerald-600 text-white font-bold text-[11px]">
                                 Calificado: {submission.grade.toFixed(1)} / 5.0
                             </Badge>
                         ) : isSubmitted ? (
-                            <Badge variant="outline" className="text-amber-600 border-amber-300">
-                                Entrevista Completada (Pendiente de Calificación Docente)
+                            <Badge variant="outline" className="text-amber-600 border-amber-300 text-[11px]">
+                                Entrevista Completada (Pendiente Docente)
                             </Badge>
                         ) : (
-                            <Badge variant="outline" className="text-muted-foreground">
+                            <Badge variant="outline" className="text-muted-foreground text-[11px]">
                                 No realizada
                             </Badge>
                         )}
                     </div>
-                    <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+                    <h1 className="text-sm sm:text-base md:text-lg font-bold tracking-tight text-foreground truncate" title={activity.title}>
                         {activity.title}
                     </h1>
                 </div>
 
-                <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <div className="flex items-center gap-1.5">
-                        <Clock className="h-4 w-4 text-primary" />
-                        <span>Límite: {activity.deadline ? format(new Date(activity.deadline), "PPp", { locale: es }) : "Sin fecha"}</span>
+                <div className="flex items-center gap-2 sm:gap-3 text-xs text-muted-foreground shrink-0">
+                    <div className="hidden sm:flex items-center gap-1.5">
+                        <Clock className="h-3.5 w-3.5 text-primary" />
+                        <span className="text-[11px]">Límite: {activity.deadline ? format(new Date(activity.deadline), "PPp", { locale: es }) : "Sin fecha"}</span>
                     </div>
+                    <Button
+                        asChild
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 px-2.5 text-xs font-semibold shrink-0 gap-1 rounded-lg border-border/80 hover:bg-accent hover:text-accent-foreground shadow-xs cursor-pointer bg-background"
+                        title="Volver a la lista de actividades"
+                    >
+                        <Link href={activity.courseId ? `/dashboard/student?courseId=${activity.courseId}&tab=activities` : `/dashboard/student`}>
+                            <ChevronLeft className="h-3.5 w-3.5" />
+                            <span>Volver a actividades</span>
+                        </Link>
+                    </Button>
                 </div>
             </div>
 
-            {/* Layout principal */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[580px]">
+            {/* Selector de Vistas Móviles (< lg) */}
+            <div className="lg:hidden shrink-0 grid grid-cols-2 gap-1 bg-muted/60 p-1 rounded-xl border border-border/70 shadow-2xs">
+                <button
+                    type="button"
+                    onClick={() => setMobileView("interview")}
+                    className={cn(
+                        "flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+                        mobileView === "interview"
+                            ? "bg-background text-foreground shadow-xs font-bold border border-border/80 text-teal-600 dark:text-teal-400"
+                            : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                    )}
+                >
+                    <Bot className="h-3.5 w-3.5 text-teal-600 shrink-0" />
+                    <span className="truncate">Simulador en Vivo</span>
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setMobileView("info")}
+                    className={cn(
+                        "flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+                        mobileView === "info"
+                            ? "bg-background text-foreground shadow-xs font-bold border border-border/80 text-teal-600 dark:text-teal-400"
+                            : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                    )}
+                >
+                    <FileText className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                    <span className="truncate">Enunciado / Evaluación</span>
+                </button>
+            </div>
+
+            {/* Layout principal adaptado: 2 columnas en desktop, 1 pestaña en móvil */}
+            <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-2.5 sm:gap-3 overflow-hidden">
                 {/* Columna Izquierda: Sala de Entrevista Interactiva (7 columnas) */}
-                <div className="lg:col-span-7 flex flex-col bg-card rounded-2xl border border-border/70 overflow-hidden shadow-xs">
+                <div className={cn(
+                    "lg:col-span-7 flex flex-col h-full min-h-0 bg-card rounded-xl border border-border/70 overflow-hidden shadow-xs",
+                    mobileView === "interview" ? "flex" : "hidden lg:flex"
+                )}>
                     {/* Barra de progreso de la entrevista */}
-                    <div className="p-3 border-b bg-muted/30 flex items-center justify-between">
+                    <div className="shrink-0 p-2.5 sm:p-3 border-b bg-muted/30 flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <Bot className="h-4 w-4 text-teal-600 dark:text-teal-400" />
                             <span className="text-xs font-bold text-foreground">Simulador de Entrevista en Vivo</span>
@@ -313,8 +362,8 @@ export function AiInterviewActivityDetails({
                         </div>
                     </div>
 
-                    {/* Chat Feed */}
-                    <div className="flex-1 min-h-[380px] max-h-[460px] overflow-y-auto p-4 space-y-3 bg-muted/5">
+                    {/* Chat Feed con scroll vertical independiente */}
+                    <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 space-y-3 bg-muted/5">
                         {!isSessionStarted ? (
                             <div className="flex flex-col items-center justify-center h-full text-center p-6 space-y-3 my-auto">
                                 <div className="h-12 w-12 rounded-2xl bg-teal-500/10 text-teal-600 flex items-center justify-center">
@@ -330,7 +379,7 @@ export function AiInterviewActivityDetails({
                                     type="button"
                                     onClick={handleStartInterview}
                                     disabled={isLoadingNext || isDeadlinePassed}
-                                    className="font-bold text-xs gap-2 bg-teal-600 hover:bg-teal-700 text-white shadow-xs"
+                                    className="font-bold text-xs gap-2 bg-teal-600 hover:bg-teal-700 text-white shadow-xs cursor-pointer"
                                 >
                                     {isLoadingNext ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4 fill-current" />}
                                     Iniciar Entrevista Ahora
@@ -399,61 +448,63 @@ export function AiInterviewActivityDetails({
                         )}
                     </div>
 
-                    {/* Caja de Respuesta del Estudiante */}
+                    {/* Caja de Respuesta del Estudiante - SIEMPRE FIJA EN EL PIE SIN OBSTRUCCIÓN */}
                     {isSessionStarted && !isInterviewComplete && !isSubmitted && (
-                        <div className="p-3 border-t bg-card space-y-2">
-                            <div className="relative">
-                                <Textarea
-                                    value={currentAnswer}
-                                    onChange={(e) => setCurrentAnswer(e.target.value)}
-                                    placeholder="Escribe tu respuesta con la mayor claridad y detalle conceptual posible..."
-                                    rows={3}
-                                    disabled={isLoadingNext || isFinishing || isDeadlinePassed}
-                                    className="text-xs resize-none pr-20 leading-relaxed"
-                                    onKeyDown={(e) => {
-                                        if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-                                            e.preventDefault();
-                                            handleSendAnswer();
-                                        }
-                                    }}
-                                />
-                                <div className="absolute right-2 bottom-2">
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        onClick={handleSendAnswer}
-                                        disabled={isLoadingNext || isFinishing || !currentAnswer.trim() || isDeadlinePassed}
-                                        className="h-7 px-3 text-xs font-bold gap-1 bg-teal-600 hover:bg-teal-700 text-white shadow-xs"
-                                    >
-                                        {isLoadingNext || isFinishing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                                        {questionsAsked >= totalQuestions ? "Finalizar" : "Responder"}
-                                    </Button>
+                        <div className="shrink-0 p-2.5 sm:p-3 border-t bg-card space-y-2">
+                            <Textarea
+                                value={currentAnswer}
+                                onChange={(e) => setCurrentAnswer(e.target.value)}
+                                placeholder="Escribe tu respuesta con la mayor claridad y detalle conceptual posible..."
+                                rows={3}
+                                disabled={isLoadingNext || isFinishing || isDeadlinePassed}
+                                className="text-xs resize-none leading-relaxed bg-background"
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                                        e.preventDefault();
+                                        handleSendAnswer();
+                                    }
+                                }}
+                            />
+                            <div className="flex items-center justify-between gap-2 pt-0.5">
+                                <div className="flex items-center gap-2 text-[10px] text-muted-foreground px-0.5">
+                                    <span>Tip: Presiona <strong>Ctrl + Enter</strong> para enviar.</span>
+                                    <span>•</span>
+                                    <span>{currentAnswer.length} caracteres</span>
                                 </div>
-                            </div>
-                            <div className="flex items-center justify-between text-[10px] text-muted-foreground px-1">
-                                <span>Tip: Presiona <strong>Ctrl + Enter</strong> para enviar tu respuesta.</span>
-                                <span>{currentAnswer.length} caracteres</span>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={handleSendAnswer}
+                                    disabled={isLoadingNext || isFinishing || !currentAnswer.trim() || isDeadlinePassed}
+                                    className="h-7 px-3.5 text-xs font-bold gap-1.5 bg-teal-600 hover:bg-teal-700 text-white shadow-xs cursor-pointer shrink-0"
+                                >
+                                    {isLoadingNext || isFinishing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                                    {questionsAsked >= totalQuestions ? "Finalizar" : "Responder"}
+                                </Button>
                             </div>
                         </div>
                     )}
                 </div>
 
                 {/* Columna Derecha: Enunciado, Temas y Calificación (5 columnas) */}
-                <div className="lg:col-span-5 flex flex-col bg-card rounded-2xl border border-border/70 overflow-hidden shadow-xs">
-                    <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex-1 flex flex-col">
-                        <div className="border-b p-2 bg-muted/30 overflow-x-auto scrollbar-none">
-                            <TabsList className="inline-flex w-max min-w-full sm:grid sm:grid-cols-2 h-auto min-h-8 p-1 gap-1">
-                                <TabsTrigger value="interview" className="text-xs font-semibold gap-1 shrink-0 px-3 py-1.5 whitespace-nowrap">
+                <div className={cn(
+                    "lg:col-span-5 flex flex-col h-full min-h-0 bg-card rounded-xl border border-border/70 overflow-hidden shadow-xs",
+                    mobileView === "info" ? "flex" : "hidden lg:flex"
+                )}>
+                    <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex-1 min-h-0 flex flex-col h-full overflow-hidden">
+                        <div className="border-b p-1.5 sm:p-2 bg-muted/30 shrink-0">
+                            <TabsList className="grid grid-cols-2 w-full h-auto min-h-8 p-1 gap-1">
+                                <TabsTrigger value="interview" className="text-xs font-semibold gap-1 shrink-0 px-3 py-1.5 whitespace-nowrap justify-center cursor-pointer">
                                     <FileText className="h-3.5 w-3.5 shrink-0" /> <span>Enunciado y Áreas</span>
                                 </TabsTrigger>
-                                <TabsTrigger value="results" className="text-xs font-semibold gap-1 shrink-0 px-3 py-1.5 whitespace-nowrap">
+                                <TabsTrigger value="results" className="text-xs font-semibold gap-1 shrink-0 px-3 py-1.5 whitespace-nowrap justify-center cursor-pointer">
                                     <Award className="h-3.5 w-3.5 shrink-0" /> <span>Evaluación</span>
                                 </TabsTrigger>
                             </TabsList>
                         </div>
 
-                        {/* Pestaña 1: Enunciado y Temas */}
-                        <TabsContent value="interview" className="flex-1 p-4 overflow-y-auto m-0 space-y-4">
+                        {/* Pestaña 1: Enunciado y Temas con scroll vertical independiente */}
+                        <TabsContent value="interview" className="flex-1 min-h-0 p-3 sm:p-4 overflow-y-auto m-0 space-y-4">
                             <div className="p-3 bg-muted/20 rounded-xl border space-y-2">
                                 <span className="text-xs font-bold text-foreground block">Áreas a Evaluar:</span>
                                 <div className="space-y-1">
@@ -474,8 +525,8 @@ export function AiInterviewActivityDetails({
                             </div>
                         </TabsContent>
 
-                        {/* Pestaña 2: Calificación y Resultados */}
-                        <TabsContent value="results" className="flex-1 p-4 overflow-y-auto m-0 space-y-4">
+                        {/* Pestaña 2: Calificación y Resultados con scroll vertical independiente */}
+                        <TabsContent value="results" className="flex-1 min-h-0 p-3 sm:p-4 overflow-y-auto m-0 space-y-4">
                             {isGraded ? (
                                 <div className="space-y-4">
                                     <div className="p-4 rounded-xl border bg-primary/5 border-primary/20 space-y-1 text-center">

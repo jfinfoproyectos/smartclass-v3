@@ -264,7 +264,21 @@ export function PdfReviewActivityInspector({
                 : result.grade;
             setGradeInput(finalCombined.toFixed(1));
             setRightTab("ai_report");
-            toast.success(`PDF evaluado con éxito: ${finalCombined.toFixed(1)} / 5.0 (IA: ${rawAi.toFixed(1)})`, { id: toastId });
+
+            // Guardar automáticamente la nota al evaluar con IA
+            let finalFeedback = stripEvaluationMetadata(result.feedback) || "";
+            if (checklistConfig) {
+                finalFeedback = embedEvaluationMetadata(finalFeedback, {
+                    aiGrade: rawAi,
+                    checklistScore: checklistScore,
+                    criteriaLevels: criteriaLevels as any,
+                    manualSustentacionScore: manualSustentacionScore,
+                    calculatedFinalGrade: finalCombined,
+                });
+            }
+            await onGradeManual(finalCombined.toFixed(1), finalFeedback, student.id, activity.id);
+
+            toast.success(`PDF evaluado y nota guardada con éxito: ${finalCombined.toFixed(1)} / 5.0 (IA: ${rawAi.toFixed(1)})`, { id: toastId });
         } catch (error: any) {
             toast.error("Error al evaluar el PDF con IA", { id: toastId, description: error.message });
         } finally {

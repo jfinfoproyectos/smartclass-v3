@@ -220,7 +220,7 @@ export const courseZipService = {
                     docThemeMode: data.course.docThemeMode ?? "STUDENT",
                     docCodeTheme: data.course.docCodeTheme ?? "one-dark-pro",
                     docAllowCodeThemeChange: data.course.docAllowCodeThemeChange ?? true,
-                    docThemeColor: data.course.docThemeColor ?? "zinc",
+                    docThemeColor: data.course.docThemeColor ?? "ocean-breeze",
                     docAllowThemeColorChange: data.course.docAllowThemeColorChange ?? true,
                     enrollmentCode: Math.floor(100000 + Math.random() * 900000).toString(),
                 }

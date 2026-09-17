@@ -23,7 +23,7 @@ export async function createActivityAction(formData: FormData) {
     const deadlineStr = formData.get("deadline") as string;
     const openDateStr = formData.get("openDate") as string;
     const courseId = formData.get("courseId") as string;
-    const type = formData.get("type") as "GITHUB" | "MANUAL" | "PDF_REVIEW" | "CODE_PROJECT" | "CODE_CHALLENGE" | "VIDEO_PITCH" | "AI_INTERVIEW" | "DB_MODELING" | "AUDIO_DEFENSE";
+    const type = formData.get("type") as "GITHUB" | "MANUAL" | "PDF_REVIEW" | "CODE_PROJECT" | "CODE_CHALLENGE" | "VIDEO_PITCH" | "AI_INTERVIEW" | "DB_MODELING" | "AUDIO_DEFENSE" | "WORKSHOP_CODE" | "WORKSHOP_GITHUB";
     const weightStr = formData.get("weight") as string;
     const maxAttemptsStr = formData.get("maxAttempts") as string;
     const allowLinkSubmissionStr = formData.get("allowLinkSubmission") as string;
@@ -103,7 +103,7 @@ export async function updateActivityAction(formData: FormData) {
     const deadlineStr = formData.get("deadline") as string | null;
     const openDateStr = formData.get("openDate") as string | null;
     const courseId = formData.get("courseId") as string;
-    const type = formData.get("type") as "GITHUB" | "MANUAL" | "PDF_REVIEW" | "CODE_PROJECT" | "CODE_CHALLENGE" | "VIDEO_PITCH" | "AI_INTERVIEW" | "DB_MODELING" | "AUDIO_DEFENSE" | null;
+    const type = formData.get("type") as "GITHUB" | "MANUAL" | "PDF_REVIEW" | "CODE_PROJECT" | "CODE_CHALLENGE" | "VIDEO_PITCH" | "AI_INTERVIEW" | "DB_MODELING" | "AUDIO_DEFENSE" | "WORKSHOP_CODE" | "WORKSHOP_GITHUB" | null;
     const weightStr = formData.get("weight") as string | null;
     const maxAttemptsStr = formData.get("maxAttempts") as string | null;
     const allowLinkSubmissionStr = formData.get("allowLinkSubmission") as string | null;
@@ -324,7 +324,7 @@ export async function generateAllCodeChallengeSolutionsAction(
 
 export async function generateRequiredTopicsAction(
     statement: string,
-    activityType: "VIDEO_PITCH" | "AUDIO_DEFENSE" | "AI_INTERVIEW",
+    activityType: "VIDEO_PITCH" | "AUDIO_DEFENSE" | "AI_INTERVIEW" | "DB_MODELING",
     activityTitle?: string,
     aiModelName?: string
 ) {
@@ -342,4 +342,65 @@ export async function generateRequiredTopicsAction(
         aiModelName
     );
 }
+
+export async function generateAllWorkshopStepsAction(params: {
+    title: string;
+    topicPrompt: string;
+    workshopType: "WORKSHOP_CODE" | "WORKSHOP_GITHUB";
+    language?: string;
+    stepCount?: number;
+    level?: string;
+    aiModelName?: string;
+}) {
+    const session = await getSession();
+    if (!session || session.user.role !== "teacher") {
+        throw new Error("Unauthorized");
+    }
+
+    const { generateAllWorkshopSteps } = await import("../services/ai/activityContentService");
+    return await generateAllWorkshopSteps({
+        ...params,
+        userId: session.user.id
+    });
+}
+
+export async function generateSingleWorkshopStepAction(params: {
+    stepTitle: string;
+    prompt?: string;
+    currentInstructions?: string;
+    workshopType: "WORKSHOP_CODE" | "WORKSHOP_GITHUB";
+    language?: string;
+    workshopTitle?: string;
+    aiModelName?: string;
+}) {
+    const session = await getSession();
+    if (!session || session.user.role !== "teacher") {
+        throw new Error("Unauthorized");
+    }
+
+    const { generateSingleWorkshopStep } = await import("../services/ai/activityContentService");
+    return await generateSingleWorkshopStep({
+        ...params,
+        userId: session.user.id
+    });
+}
+
+export async function generateWorkshopStepHintsAction(params: {
+    stepTitle: string;
+    instructions: string;
+    language?: string;
+    aiModelName?: string;
+}) {
+    const session = await getSession();
+    if (!session || session.user.role !== "teacher") {
+        throw new Error("Unauthorized");
+    }
+
+    const { generateWorkshopStepHints } = await import("../services/ai/activityContentService");
+    return await generateWorkshopStepHints({
+        ...params,
+        userId: session.user.id
+    });
+}
+
 

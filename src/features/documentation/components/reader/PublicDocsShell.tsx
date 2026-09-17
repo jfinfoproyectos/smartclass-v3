@@ -27,6 +27,9 @@ interface PublicDocsShellProps {
   userProgress?: { pageId: string, completed: boolean, timeSpent: number }[];
   userTotalViews?: number;
   backUrl?: string;
+  rawContent?: string;
+  pageTitle?: string;
+  pageCategory?: string;
   courseSettings?: {
     themeMode: string;
     codeTheme: string;
@@ -46,7 +49,10 @@ export function PublicDocsShell({
   userProgress = [], 
   userTotalViews = 0,
   backUrl = "/",
-  courseSettings = { themeMode: "STUDENT", codeTheme: "one-dark-pro", allowCodeThemeChange: true, themeColor: "zinc", allowThemeColorChange: true }
+  rawContent,
+  pageTitle,
+  pageCategory,
+  courseSettings = { themeMode: "STUDENT", codeTheme: "one-dark-pro", allowCodeThemeChange: true, themeColor: "ocean-breeze", allowThemeColorChange: true }
 }: PublicDocsShellProps) {
   const { theme, setTheme } = useTheme();
   const pathname = usePathname();
@@ -283,6 +289,9 @@ export function PublicDocsShell({
           topics={topics}
           activeTopicSlug={activeTopic?.slug || null}
           backUrl={backUrl}
+          rawContent={rawContent}
+          pageTitle={pageTitle}
+          pageCategory={pageCategory}
         />
       </div>
       

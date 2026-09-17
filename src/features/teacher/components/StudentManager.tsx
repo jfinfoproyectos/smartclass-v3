@@ -1314,6 +1314,23 @@ export function StudentManager({
 
 
 
+function getActivityTypeLabel(type: string) {
+    switch (type) {
+        case "GITHUB": return "IA GitHub";
+        case "CODE_PROJECT": return "Proyecto Código";
+        case "CODE_CHALLENGE": return "Code Challenge";
+        case "WORKSHOP_CODE": return "Taller Codelab";
+        case "WORKSHOP_GITHUB": return "Taller GitHub";
+        case "VIDEO_PITCH": return "Video Pitch";
+        case "AUDIO_DEFENSE": return "Defensa Oral";
+        case "AI_INTERVIEW": return "Entrevista IA";
+        case "DB_MODELING":
+        case "DATABASE": return "Base de Datos";
+        case "PDF_REVIEW": return "Revisión PDF";
+        case "MANUAL": default: return "Manual";
+    }
+}
+
 function MissingActivitiesDialog({ courseId, userId, studentName }: { courseId: string, userId: string, studentName: string }) {
     const [isOpen, setIsOpen] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -1362,7 +1379,7 @@ function MissingActivitiesDialog({ courseId, userId, studentName }: { courseId: 
                                 <div key={activity.id} className="p-3 border rounded-md hover:bg-muted/50">
                                     <div className="flex justify-between items-start mb-1">
                                         <p className="font-medium text-sm">{activity.title}</p>
-                                        <Badge variant="outline" className="text-[10px]">{activity.type}</Badge>
+                                        <Badge variant="outline" className="text-[10px]">{getActivityTypeLabel(activity.type)}</Badge>
                                     </div>
                                     <p className="text-xs text-muted-foreground">
                                         Vence: {new Date(activity.deadline).toLocaleString()}

@@ -974,7 +974,7 @@ RECUERDA: Genera la solución COMPLETA para cada archivo, con código limpio, or
  */
 export async function generateRequiredTopics(
     statement: string,
-    activityType: "VIDEO_PITCH" | "AUDIO_DEFENSE" | "AI_INTERVIEW",
+    activityType: "VIDEO_PITCH" | "AUDIO_DEFENSE" | "AI_INTERVIEW" | "DB_MODELING",
     activityTitle?: string,
     userId?: string,
     aiModelName?: string
@@ -1004,18 +1004,31 @@ Ejemplos de apartados:
 - "Decisiones de Arquitectura y Patrones Implementados"
 - "Solución Técnica a Casos Límite y Desafíos"
 - "Conclusiones y Aprendizajes Obtenidos"`;
+    } else if (activityType === "DB_MODELING") {
+        roleDescription = `Estás formulando la lista de ENTIDADES O TABLAS OBLIGATORIAS para un taller o proyecto de MODELADO DE BASE DE DATOS (Relacional / SQL / PostgreSQL).
+Debes analizar detalladamente el enunciado o caso de negocio y deducir o extraer entre 3 y 6 nombres de tablas/entidades fundamentales que el estudiante obligatoriamente debe diseñar en su script SQL o modelo entidad-relación (ERD).
+Ejemplos de tablas según el contexto:
+- Sistema de Ventas: "Usuarios", "Clientes", "Productos", "Pedidos", "Detalle_Pedidos"
+- Sistema Académico: "Estudiantes", "Docentes", "Cursos", "Matrículas", "Calificaciones"
+- Sistema Financiero: "Clientes", "Cuentas", "Transacciones", "Tarjetas", "Auditoría"
+Cada nombre de tabla debe ser conciso (1 a 3 palabras máximo, ej. "Usuarios", "Roles", "Transacciones", "Auditoría"), sin símbolos raros ni numeraciones prefijas.`;
     } else {
         roleDescription = `Estás formulando las áreas temáticas clave de evaluación para una SIMULACIÓN DE ENTREVISTA TÉCNICA O EXAMEN ORAL CON IA.
 Debes generar entre 3 y 5 áreas conceptuales y prácticas prioritarias que el entrevistador IA debe interrogar al alumno.`;
     }
 
+    const isDb = activityType === "DB_MODELING";
     const systemPrompt = `${roleDescription}
 
 REGLAS OBLIGATORIAS:
 1. Analiza a fondo el título y el enunciado de la actividad.
-2. Si el enunciado describe tecnologías, conceptos o reglas específicas (ej. Spring Boot, JPA, Normalización SQL, Polimorfismo en Java, Git, React, APIs REST, etc.), los títulos de los temas DEBEN reflejar explícitamente esos conceptos técnicos reales.
-3. Cada título de tema debe ser conciso (entre 3 y 8 palabras), claro y con formato capitalizado (ej: "Modelado de Datos y Relaciones SQL").
-4. Genera una lista de 3 a 5 temas como máximo. No agregues números (#1, #2), solo el texto limpio del tema.`;
+2. ${isDb 
+    ? 'Deduce o extrae las entidades o tablas de base de datos directamente requeridas por el enunciado o indispensables para modelar el dominio descrito. Cada entidad debe ser el nombre de una tabla (ej: "Usuarios", "Roles", "Transacciones", "Auditoría").' 
+    : 'Si el enunciado describe tecnologías, conceptos o reglas específicas (ej. Spring Boot, JPA, Normalización SQL, Polimorfismo en Java, Git, React, APIs REST, etc.), los títulos de los temas DEBEN reflejar explícitamente esos conceptos técnicos reales.'}
+3. ${isDb 
+    ? 'Cada nombre de entidad debe ser conciso (1 a 3 palabras, de 2 a 50 caracteres).' 
+    : 'Cada título de tema debe ser conciso (entre 3 y 8 palabras), claro y con formato capitalizado (ej: "Modelado de Datos y Relaciones SQL").'}
+4. Genera una lista de 3 a 6 elementos como máximo. No agregues números (#1, #2), solo el texto limpio.`;
 
     const userPrompt = `TÍTULO DE LA ACTIVIDAD:
 ${activityTitle || "Sin título definido"}
@@ -1024,7 +1037,11 @@ ENUNCIADO / INSTRUCCIONES:
 ${statement || "Sin enunciado detallado"}`;
 
     const TopicsSchema = z.object({
-        topics: z.array(z.string().min(3).max(120)).min(3).max(6).describe("Lista de temas o apartados obligatorios ordenados lógicamente")
+        topics: z.array(z.string().min(2).max(120)).min(2).max(8).describe(
+            activityType === "DB_MODELING" 
+                ? "Lista de entidades o nombres de tablas obligatorias deducidas del enunciado"
+                : "Lista de temas o apartados obligatorios ordenados lógicamente"
+        )
     });
 
     const { object } = await generateObject({
@@ -1036,8 +1053,207 @@ ${statement || "Sin enunciado detallado"}`;
     });
 
     if (!object?.topics || object.topics.length === 0) {
-        throw new Error("No se pudieron generar los temas requeridos con la IA.");
+        throw new Error(
+            activityType === "DB_MODELING"
+                ? "No se pudieron generar las entidades obligatorias con la IA."
+                : "No se pudieron generar los temas requeridos con la IA."
+        );
     }
 
     return object.topics.map(t => t.trim().replace(/^#?\d+[\.\-\)]\s*/, ''));
 }
+
+/**
+ * Genera la secuencia completa de pasos para un taller (WORKSHOP_CODE o WORKSHOP_GITHUB) con IA.
+ */
+export async function generateAllWorkshopSteps(params: {
+    title: string;
+    topicPrompt: string;
+    workshopType: "WORKSHOP_CODE" | "WORKSHOP_GITHUB";
+    language?: string;
+    stepCount?: number;
+    level?: string;
+    userId: string;
+    aiModelName?: string;
+}): Promise<{
+    summary: string;
+    steps: Array<{
+        title: string;
+        instructions: string;
+        starterCode?: string;
+        expectedSolution?: string;
+        hints: string[];
+        suggestedMinutes?: number;
+    }>;
+}> {
+    const {
+        title,
+        topicPrompt,
+        workshopType,
+        language = "java",
+        stepCount = 4,
+        level = "intermedio",
+        userId,
+        aiModelName
+    } = params;
+
+    const model = await getAIModel(userId, aiModelName);
+    const isCode = workshopType === "WORKSHOP_CODE";
+
+    const systemPrompt = `Eres un docente universitario y diseñador instruccional experto en ingeniería de software y programación.
+Tu objetivo es diseñar un taller formativo práctico paso a paso de tipo ${isCode ? "Codelab interactivo (Monaco Editor)" : "Taller práctico con repositorio Git y GitHub"}.
+
+DIRECTRICES OBLIGATORIAS:
+1. Diseña exactamente ${stepCount} pasos pedagógicos secuenciales que vayan de lo simple a lo complejo.
+2. Cada paso debe tener un título claro (ej: "Paso 1: Definición de Entidades Base"), instrucciones detalladas en Markdown explicando el problema y qué debe implementar el estudiante.
+3. ${isCode 
+    ? `Para cada paso, debes incluir:
+       - starterCode: Código inicial en ${language} con la firma de métodos/clases y comentarios '// TODO' para que el estudiante complete.
+       - expectedSolution: Solución de referencia 100% funcional y correcta en ${language}.
+       - hints: 2 o 3 pistas orientativas sin dar la respuesta completa.`
+    : `Para cada paso en Git & GitHub:
+       - instructions: Comandos git recomendados, diseño de ramas, commits específicos y verificación del código en ${language}.
+       - hints: 2 o 3 pistas pedagógicas sobre Git o la arquitectura solicitada.`}
+4. Nivel académico: ${level}.
+5. Formato de código: Debe ser limpio, con saltos de línea y sangría adecuada de 4 espacios.`;
+
+    const userPrompt = `Título del taller: "${title}"
+Temática / Requisitos solicitados por el docente:
+${topicPrompt || "Crea un taller completo con pasos secuenciales aplicando buenas prácticas."}
+Lenguaje principal: ${language}
+Cantidad de pasos solicitados: ${stepCount}`;
+
+    const StepSchema = z.object({
+        summary: z.string().describe("Resumen general conciso del taller y sus objetivos"),
+        steps: z.array(z.object({
+            title: z.string().describe("Título del paso con prefijo Paso N: ..."),
+            instructions: z.string().describe("Instrucciones detalladas en Markdown con contexto y requerimientos"),
+            starterCode: z.string().optional().describe("Código inicial para el estudiante"),
+            expectedSolution: z.string().optional().describe("Solución de referencia completa y funcional"),
+            hints: z.array(z.string()).describe("Lista de 2 a 3 pistas orientativas"),
+            suggestedMinutes: z.number().optional().describe("Minutos estimados para este paso (ej: 15)")
+        })).min(1).max(8)
+    });
+
+    const { object } = await generateObject({
+        model,
+        schema: StepSchema,
+        system: systemPrompt,
+        prompt: userPrompt,
+        temperature: 0.3,
+    });
+
+    if (!object?.steps || object.steps.length === 0) {
+        throw new Error("No se pudieron generar los pasos del taller con la IA.");
+    }
+
+    return object;
+}
+
+/**
+ * Genera o enriquece un paso individual de un taller.
+ */
+export async function generateSingleWorkshopStep(params: {
+    stepTitle: string;
+    prompt?: string;
+    currentInstructions?: string;
+    workshopType: "WORKSHOP_CODE" | "WORKSHOP_GITHUB";
+    language?: string;
+    workshopTitle?: string;
+    userId: string;
+    aiModelName?: string;
+}): Promise<{
+    title: string;
+    instructions: string;
+    starterCode?: string;
+    expectedSolution?: string;
+    hints: string[];
+}> {
+    const {
+        stepTitle,
+        prompt = "",
+        currentInstructions = "",
+        workshopType,
+        language = "java",
+        workshopTitle = "",
+        userId,
+        aiModelName
+    } = params;
+
+    const model = await getAIModel(userId, aiModelName);
+    const isCode = workshopType === "WORKSHOP_CODE";
+
+    const systemPrompt = `Eres un docente universitario experto en ${language}.
+Tu tarea es generar o perfeccionar un PASO pedagógico específico para el taller "${workshopTitle}".
+${isCode ? "El paso se resolverá en un editor de código interactivo." : "El paso se resolverá en Git y GitHub."}
+
+Debes retornar:
+- title: Título conciso del paso.
+- instructions: Instrucciones detalladas en formato Markdown con el objetivo, requisitos y guía práctica.
+- starterCode: (Opcional, si aplica) Código base con plantillas y comentarios TODO en ${language}.
+- expectedSolution: (Opcional, si aplica) Solución completa de referencia.
+- hints: 2 a 3 pistas pedagógicas.`;
+
+    const userPrompt = `Paso: ${stepTitle}
+Instrucciones previas (si las hay): ${currentInstructions}
+Petición o ajuste específico del docente: ${prompt || "Genera el contenido completo y código para este paso."}
+Lenguaje: ${language}`;
+
+    const SingleStepSchema = z.object({
+        title: z.string().describe("Título del paso"),
+        instructions: z.string().describe("Instrucciones claras en Markdown"),
+        starterCode: z.string().optional().describe("Código inicial"),
+        expectedSolution: z.string().optional().describe("Solución de referencia"),
+        hints: z.array(z.string()).describe("2 a 3 pistas pedagógicas")
+    });
+
+    const { object } = await generateObject({
+        model,
+        schema: SingleStepSchema,
+        system: systemPrompt,
+        prompt: userPrompt,
+        temperature: 0.3,
+    });
+
+    if (!object?.title) {
+        throw new Error("No se pudo generar el contenido del paso con la IA.");
+    }
+
+    return object;
+}
+
+/**
+ * Genera pistas pedagógicas para un paso específico de un taller.
+ */
+export async function generateWorkshopStepHints(params: {
+    stepTitle: string;
+    instructions: string;
+    language?: string;
+    userId: string;
+    aiModelName?: string;
+}): Promise<string[]> {
+    const { stepTitle, instructions, language = "java", userId, aiModelName } = params;
+    const model = await getAIModel(userId, aiModelName);
+
+    const systemPrompt = `Eres un tutor pedagógico de programación.
+Genera entre 2 y 3 pistas breves (1 a 2 oraciones cada una) para guiar a un estudiante en la resolución del siguiente paso formativo, sin regalarle la solución directa.`;
+
+    const userPrompt = `Paso: ${stepTitle}
+Instrucciones del paso: ${instructions}
+Lenguaje: ${language}`;
+
+    const HintsSchema = z.object({
+        hints: z.array(z.string().min(5).max(200)).min(1).max(4)
+    });
+
+    const { object } = await generateObject({
+        model,
+        schema: HintsSchema,
+        system: systemPrompt,
+        prompt: userPrompt,
+        temperature: 0.3,
+    });
+
+    return object?.hints || [];
+}
+

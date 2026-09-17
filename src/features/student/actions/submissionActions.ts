@@ -148,3 +148,20 @@ export async function submitPdfActivityAction(activityId: string, url: string) {
     revalidatePath("/dashboard/student");
     revalidatePath(`/dashboard/student/activities/${activityId}`);
 }
+
+export async function testStudentSqlAction(sql: string) {
+    const session = await getSession();
+    if (!session || (session.user.role !== "student" && session.user.role !== "teacher")) {
+        return {
+            success: false,
+            executionTimeMs: 0,
+            tables: [],
+            createdTableNames: [],
+            errors: ["No autorizado para ejecutar pruebas en sandbox."],
+            summary: "Sesión inválida.",
+        };
+    }
+
+    const { executeSqlInSandbox } = await import("@/features/teacher/services/dbSandboxService");
+    return await executeSqlInSandbox(sql);
+}

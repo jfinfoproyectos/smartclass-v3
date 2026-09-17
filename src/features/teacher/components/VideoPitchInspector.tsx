@@ -285,10 +285,25 @@ export function VideoPitchInspector({
             setGradeInput(finalCombined.toFixed(1));
             setRightTab("ai_eval");
 
+            // Guardar automáticamente la nota al evaluar con IA
+            let finalFeedback = result.feedback || "";
             if (checklistConfig) {
-                toast.success(`✓ Evaluación multimodal completada (${result.grade.toFixed(1)}). Nota ponderada: ${finalCombined.toFixed(1)}`);
+                const metadata: EvaluationMetadata = {
+                    aiGrade: result.grade,
+                    checklistScore: checklistScore,
+                    criteriaLevels: criteriaLevels,
+                    manualSustentacionScore: manualSustentacionScore,
+                    calculatedFinalGrade: finalCombined,
+                    updatedAt: new Date().toISOString(),
+                };
+                finalFeedback = embedEvaluationMetadata(finalFeedback, metadata);
+            }
+            await onGradeManual(finalCombined.toFixed(1), finalFeedback, student.id, activity.id);
+
+            if (checklistConfig) {
+                toast.success(`✓ Evaluación multimodal completada y guardada (${result.grade.toFixed(1)}). Nota ponderada: ${finalCombined.toFixed(1)}`);
             } else {
-                toast.success(`✓ Evaluación multimodal completada. Nota sugerida: ${result.grade.toFixed(1)}`);
+                toast.success(`✓ Evaluación multimodal completada y guardada: ${result.grade.toFixed(1)}`);
             }
         } catch (err: any) {
             toast.error(err.message || "Error al evaluar con IA.");
@@ -470,19 +485,6 @@ export function VideoPitchInspector({
                             <span className="text-[10px] font-bold opacity-75">/ 5.0</span>
                         </div>
                     ) : null}
-
-                    {!isTeacherGradingEnabled && (
-                        <Button
-                            type="button"
-                            size="sm"
-                            onClick={handleSaveGrade}
-                            disabled={isSaving || (!gradeInput && aiGrade === null)}
-                            className="h-7 text-xs font-bold gap-1 bg-primary text-primary-foreground shadow-xs cursor-pointer"
-                        >
-                            {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Award className="h-3.5 w-3.5" />}
-                            Guardar Nota
-                        </Button>
-                    )}
                 </div>
             </div>
 

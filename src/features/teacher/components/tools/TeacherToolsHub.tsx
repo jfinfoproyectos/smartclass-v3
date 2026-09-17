@@ -31,6 +31,10 @@ export function TeacherToolsHub({ courses }: TeacherToolsHubProps) {
         router.push(`/dashboard/teacher/tools/groups`);
     };
 
+    const handleOpenGitReport = () => {
+        router.push(`/dashboard/teacher/tools/git-report`);
+    };
+
     return (
         <div className="w-full flex-1 flex flex-col space-y-3 p-0.5 sm:p-1 min-h-0">
             {/* Header Banner AI Canvas */}
@@ -46,7 +50,7 @@ export function TeacherToolsHub({ courses }: TeacherToolsHubProps) {
                             Herramientas Interactivas
                         </h1>
                         <p className="text-xs sm:text-sm text-muted-foreground">
-                            Selecciona una herramienta interactiva para dinamizar tu clase en vivo en tiempo real.
+                            Selecciona una herramienta interactiva para dinamizar tu clase en vivo o auditar entregas técnicas en tiempo real.
                         </p>
                     </div>
 
@@ -57,8 +61,8 @@ export function TeacherToolsHub({ courses }: TeacherToolsHubProps) {
                 </div>
             </div>
 
-            {/* Tarjetas de Selección adaptadas al 100% del ancho */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 w-full">
+            {/* Tarjetas de Selección adaptadas al ancho */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 w-full">
                 {/* Tarjeta 1: Ruleta Aleatoria */}
                 <div 
                     onClick={handleOpenRoulette}
@@ -159,6 +163,58 @@ export function TeacherToolsHub({ courses }: TeacherToolsHubProps) {
                         >
                             <Settings2 className="h-4 w-4" />
                             Abrir Generador de Grupos
+                        </Button>
+                    </div>
+                </div>
+
+                {/* Tarjeta 3: Reportes GitHub con IA */}
+                <div 
+                    onClick={handleOpenGitReport}
+                    className="group relative overflow-hidden rounded-2xl border border-border/80 hover:border-primary/50 bg-card text-card-foreground p-5 sm:p-6 shadow-xs hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col justify-between w-full"
+                >
+                    <div className="space-y-3.5">
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="p-3 rounded-2xl bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 group-hover:scale-105 transition-transform">
+                                <Sparkles className="h-6 w-6" />
+                            </div>
+                            <Badge variant="secondary" className="bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20 text-[10px] font-bold">
+                                Inteligencia Artificial
+                            </Badge>
+                        </div>
+
+                        <div>
+                            <h3 className="text-base sm:text-lg font-bold text-foreground group-hover:text-primary transition-colors flex items-center gap-1.5">
+                                Reportes GitHub con IA
+                                <ArrowRight className="h-4 w-4 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-primary" />
+                            </h3>
+                            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                                Audita repositorios de GitHub con filtro multi-rama, rangos temporales (día, semana, mes) y síntesis en PDF corporativo.
+                            </p>
+                        </div>
+
+                        <div className="space-y-1.5 pt-2 border-t border-border/60 text-[11px] text-muted-foreground">
+                            <div className="flex items-center gap-2">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                <span>Soporte de ramas individuales o todas las ramas</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                <span>Síntesis de cambios y lenguaje claro con modelo LLM</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                <span>Exportación a PDF ejecutivo estilo SmartClass</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="pt-5 mt-2">
+                        <Button 
+                            type="button" 
+                            className="w-full font-bold text-xs gap-2 group-hover:bg-primary group-hover:text-primary-foreground transition-all shadow-xs cursor-pointer"
+                        >
+                            <Sparkles className="h-4 w-4" />
+                            Abrir Reportes GitHub
                         </Button>
                     </div>
                 </div>

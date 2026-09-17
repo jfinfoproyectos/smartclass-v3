@@ -227,7 +227,40 @@ export async function saveFileContent(
   });
 
   const finalTitle = metadata?.title || existingPage?.title || fallbackMetadata.title;
-  const finalOrder = metadata?.order !== undefined ? metadata.order : existingPage?.order !== undefined ? existingPage.order : fallbackMetadata.order;
+
+  let finalOrder = metadata?.order !== undefined 
+    ? metadata.order 
+    : (existingPage?.order !== undefined ? existingPage.order : undefined);
+
+  if (finalOrder === undefined) {
+    const isTopic = pageSlug === 'index' || pageSlug.endsWith('/index');
+    if (!isTopic) {
+      const parts = pageSlug.split('/');
+      const parentPrefix = parts.length > 1 ? parts.slice(0, -1).join('/') : "";
+      
+      const allPages = await prisma.docPage.findMany({
+        where: { docProjectId: project.id },
+        select: { slug: true, order: true }
+      });
+
+      const siblings = allPages.filter((p) => {
+        const pIsTopic = p.slug === 'index' || p.slug.endsWith('/index');
+        if (pIsTopic) return false;
+        const pParent = p.slug.includes('/') ? p.slug.split('/').slice(0, -1).join('/') : "";
+        return pParent === parentPrefix;
+      });
+
+      if (siblings.length > 0) {
+        const maxOrder = Math.max(...siblings.map(p => p.order ?? 0));
+        finalOrder = maxOrder + 10;
+      } else {
+        finalOrder = fallbackMetadata.order !== undefined ? fallbackMetadata.order : 0;
+      }
+    } else {
+      finalOrder = fallbackMetadata.order !== undefined ? fallbackMetadata.order : 0;
+    }
+  }
+
   const finalCategory = metadata?.category || existingPage?.category || fallbackMetadata.category;
   const finalCategoryOrder = metadata?.categoryOrder !== undefined ? metadata.categoryOrder : existingPage?.categoryOrder !== undefined ? existingPage.categoryOrder : fallbackMetadata.categoryOrder;
   const finalDraft = metadata?.draft !== undefined ? metadata.draft : existingPage?.draft !== undefined ? existingPage.draft : false;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -80,9 +80,13 @@ export function DbModelingInspector({
     const parsedPayload = useMemo(() => {
         if (!submission?.url) return null;
         try {
-            return JSON.parse(submission.url);
+            const parsed = JSON.parse(submission.url);
+            if (typeof parsed === "object" && parsed !== null) {
+                return parsed;
+            }
+            return { sqlScript: String(submission.url) };
         } catch {
-            return null;
+            return { sqlScript: String(submission.url) };
         }
     }, [submission?.url]);
 
@@ -139,7 +143,9 @@ export function DbModelingInspector({
         }
     }, [isTeacherGradingEnabled, rightTab]);
 
-    // Sincronizar al cambiar de estudiante
+    const lastStudentIdRef = useRef<string | null>(null);
+
+    // Sincronizar al cambiar de estudiante (sin borrar aiResult si solo revalida el mismo estudiante)
     useEffect(() => {
         const meta = extractEvaluationMetadata(submission?.feedback);
         const cleanFeedback = stripEvaluationMetadata(submission?.feedback || "");
@@ -149,10 +155,16 @@ export function DbModelingInspector({
 
         const currentAi = meta?.aiGrade ?? null;
         setAiGrade(currentAi);
-        setAiResult(null);
-        setAiFeedbackInput("");
+
+        // Resetear el estado de la IA únicamente si se cambió de estudiante
+        if (lastStudentIdRef.current !== student?.id) {
+            lastStudentIdRef.current = student?.id;
+            setAiResult(null);
+            setAiFeedbackInput("");
+            setLeftTab("sql");
+        }
+
         setTeacherNotesInput(cleanFeedback);
-        setLeftTab("sql");
 
         if (submission?.grade !== null && submission?.grade !== undefined) {
             setGradeInput(String(submission.grade));
@@ -231,10 +243,26 @@ export function DbModelingInspector({
                 : result.grade;
             setGradeInput(finalCombined.toFixed(1));
             setRightTab("ai_eval");
+
+            // Guardar automáticamente la nota al evaluar con IA
+            let finalFeedback = result.feedback || "";
             if (checklistConfig) {
-                toast.success(`✓ Modelo evaluado con IA (${result.grade.toFixed(1)}). Nota ponderada: ${finalCombined.toFixed(1)}`);
+                const metadata: EvaluationMetadata = {
+                    aiGrade: result.grade,
+                    checklistScore: checklistScore,
+                    criteriaLevels: criteriaLevels,
+                    manualSustentacionScore: manualSustentacionScore,
+                    calculatedFinalGrade: finalCombined,
+                    updatedAt: new Date().toISOString(),
+                };
+                finalFeedback = embedEvaluationMetadata(finalFeedback, metadata);
+            }
+            await onGradeManual(finalCombined.toFixed(1), finalFeedback, student.id, activity.id);
+
+            if (checklistConfig) {
+                toast.success(`✓ Modelo evaluado con IA y nota guardada (${result.grade.toFixed(1)}). Nota ponderada: ${finalCombined.toFixed(1)}`);
             } else {
-                toast.success(`✓ Modelo evaluado con IA. Nota sugerida: ${result.grade.toFixed(1)}`);
+                toast.success(`✓ Modelo evaluado con IA y nota guardada: ${result.grade.toFixed(1)}`);
             }
         } catch (err: any) {
             toast.error(err.message || "Error al evaluar modelo de base de datos.");
@@ -348,17 +376,6 @@ export function DbModelingInspector({
                                 </Button>
                             </div>
                         )}
-
-                        <Button
-                            type="button"
-                            size="sm"
-                            onClick={handleSaveGrade}
-                            disabled={isSaving}
-                            className="h-8 text-xs font-bold gap-1.5 bg-primary text-primary-foreground shadow-xs"
-                        >
-                            {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Award className="h-3.5 w-3.5" />}
-                            Guardar Nota
-                        </Button>
                     </div>
                 </div>
 
@@ -451,6 +468,7 @@ export function DbModelingInspector({
                                             </div>
                                             <div className="flex-1 min-h-[360px]">
                                                 <Editor
+                                                    key={`inspector_sql_${student?.id}_${submission?.id || "draft"}`}
                                                     height="100%"
                                                     language="sql"
                                                     theme={mode === "dark" ? "vs-dark" : "light"}
@@ -735,11 +753,11 @@ export function DbModelingInspector({
                                     type="button"
                                     variant="default"
                                     onClick={handleGradeWithAI}
-                                    disabled={isEvaluatingAI || !sqlScript}
+                                    disabled={isEvaluatingAI || (!sqlScript && !connectionString)}
                                     className="w-full font-bold text-xs gap-2 shadow-xs h-9 cursor-pointer"
                                 >
                                     {isEvaluatingAI ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                                    {isEvaluatingAI ? "Evaluando con IA..." : (aiFeedbackInput ? "Reevaluar con IA" : "Evaluar con IA (Gemini)")}
+                                    {isEvaluatingAI ? "Evaluando con IA..." : (aiFeedbackInput || submission?.feedback ? "Reevaluar con IA" : "Evaluar con IA (Gemini)")}
                                 </Button>
 
                                 {aiResult ? (
@@ -852,6 +870,30 @@ export function DbModelingInspector({
                                                 <FeedbackViewer feedback={aiResult.feedback} />
                                             </div>
                                         )}
+                                    </div>
+                                ) : submission?.feedback ? (
+                                    /* Si ya existe feedback guardado de una evaluación previa */
+                                    <div className="space-y-4 animate-in fade-in">
+                                        <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                                                    Calificación asignada:
+                                                </span>
+                                                <span className="text-sm font-extrabold font-mono text-emerald-700 dark:text-emerald-300">
+                                                    {submission.grade !== null && submission.grade !== undefined ? Number(submission.grade).toFixed(1) : "—"} / 5.0
+                                                </span>
+                                            </div>
+                                            <Badge variant="outline" className="text-emerald-700 dark:text-emerald-300 border-emerald-300 text-[10px] bg-emerald-500/10">
+                                                ✓ Evaluación Guardada
+                                            </Badge>
+                                        </div>
+
+                                        <div className="rounded-xl border bg-background p-3 space-y-2">
+                                            <span className="text-xs font-bold text-foreground block">
+                                                Retroalimentación de la Evaluación:
+                                            </span>
+                                            <FeedbackViewer feedback={stripEvaluationMetadata(submission.feedback)} />
+                                        </div>
                                     </div>
                                 ) : (
                                     <div className="flex flex-col items-center justify-center h-48 text-center space-y-2 text-muted-foreground">

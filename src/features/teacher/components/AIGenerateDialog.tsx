@@ -37,8 +37,10 @@ import {
     Undo2,
     User,
     Sparkle,
-    BookOpen
+    BookOpen,
+    Terminal
 } from "lucide-react";
+import { useTheme } from "next-themes";
 import {
     generateActivityDescriptionAction,
     generateActivityStatementAction,
@@ -120,6 +122,18 @@ const ACTIVITY_TYPE_INFO: Record<string, { label: string; icon: any; color: stri
         icon: BookOpen,
         color: "text-primary dark:text-primary",
         badgeColor: "bg-primary/10 text-primary border-primary/20"
+    },
+    WORKSHOP_CODE: {
+        label: "Taller Codelab",
+        icon: Terminal,
+        color: "text-cyan-600 dark:text-cyan-400",
+        badgeColor: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800/40"
+    },
+    WORKSHOP_GITHUB: {
+        label: "Taller GitHub",
+        icon: GitBranch,
+        color: "text-amber-600 dark:text-amber-400",
+        badgeColor: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800/40"
     }
 };
 
@@ -200,6 +214,8 @@ export function AIGenerateDialog({
     initialPrompt = "",
     initialContent = ""
 }: AIGenerateDialogProps) {
+    const { resolvedTheme } = useTheme();
+    const mode = resolvedTheme === "dark" ? "dark" : "light";
     const [prompt, setPrompt] = useState(initialPrompt);
     const [configuredModel, setConfiguredModel] = useState<string>("gemini-2.0-flash");
     const [academicLevel, setAcademicLevel] = useState("Intermedio (Universitario)");
@@ -527,13 +543,19 @@ export function AIGenerateDialog({
                                     </div>
 
                                     <TabsContent value="rendered" className="mt-0 flex-1 min-h-0 flex flex-col overflow-hidden data-[state=inactive]:hidden">
-                                        <div className="border border-border/80 rounded-xl p-3.5 bg-background flex-1 min-h-0 h-full overflow-y-auto prose prose-sm dark:prose-invert max-w-none text-xs leading-relaxed shadow-inner">
-                                            <MDEditor.Markdown source={generatedContent} />
+                                        <div 
+                                            data-color-mode={mode}
+                                            className="border border-border/80 rounded-xl p-3.5 bg-card text-card-foreground flex-1 min-h-0 h-full overflow-y-auto prose prose-sm dark:prose-invert max-w-none text-xs leading-relaxed shadow-inner [&_.wmde-markdown]:bg-transparent! [&_.wmde-markdown]:text-inherit!"
+                                        >
+                                            <MDEditor.Markdown 
+                                                source={generatedContent} 
+                                                style={{ background: "transparent", color: "inherit" }}
+                                            />
                                         </div>
                                     </TabsContent>
 
                                     <TabsContent value="raw" className="mt-0 flex-1 min-h-0 flex flex-col overflow-hidden data-[state=inactive]:hidden">
-                                        <pre className="border border-border/80 rounded-xl p-3 bg-muted/40 font-mono text-[11px] flex-1 min-h-0 h-full overflow-y-auto whitespace-pre-wrap leading-relaxed">
+                                        <pre className="border border-border/80 rounded-xl p-3 bg-muted/40 font-mono text-[11px] text-foreground flex-1 min-h-0 h-full overflow-y-auto whitespace-pre-wrap leading-relaxed">
                                             {generatedContent}
                                         </pre>
                                     </TabsContent>

@@ -182,8 +182,8 @@ export function parseInlineFormatting(text: string): InlineToken[] {
   const sanitized = cleanPdfText(text);
   if (!sanitized) return [];
 
-  // Regex para detectar `código`, **negrita**, y *cursiva*
-  const pattern = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g;
+  // Regex para detectar `código`, **negrita**, *cursiva*, __negrita__, _cursiva_, y [enlace](url)
+  const pattern = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|__[^_]+__|_[^_]+_|\[[^\]]+\]\([^\)]+\))/g;
   const parts = sanitized.split(pattern);
   const result: InlineToken[] = [];
 
@@ -194,8 +194,19 @@ export function parseInlineFormatting(text: string): InlineToken[] {
       result.push({ text: part.slice(1, -1), code: true });
     } else if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
       result.push({ text: part.slice(2, -2), bold: true });
+    } else if (part.startsWith("__") && part.endsWith("__") && part.length > 4) {
+      result.push({ text: part.slice(2, -2), bold: true });
     } else if (part.startsWith("*") && part.endsWith("*") && part.length > 2) {
       result.push({ text: part.slice(1, -1), italic: true });
+    } else if (part.startsWith("_") && part.endsWith("_") && part.length > 2) {
+      result.push({ text: part.slice(1, -1), italic: true });
+    } else if (part.startsWith("[") && part.includes("](") && part.endsWith(")")) {
+      const linkMatch = part.match(/^\[([^\]]+)\]\(([^\)]+)\)$/);
+      if (linkMatch) {
+        result.push({ text: linkMatch[1], bold: true });
+      } else {
+        result.push({ text: part });
+      }
     } else {
       result.push({ text: part });
     }
@@ -215,11 +226,13 @@ export type SectionType =
   | 'list' 
   | 'ordered-list' 
   | 'table' 
+  | 'image'
   | 'divider';
 
 export interface EditorialSection {
   type: SectionType;
   title?: string;
+  url?: string;
   inlineTokens?: InlineToken[];
   language?: string;
   codeLines?: CodeLine[];
@@ -232,15 +245,21 @@ export interface EditorialSection {
 }
 
 /**
- * Parser de Markdown robusto y completo que convierte texto plano en secciones para el PDF editorial.
+ * Parser de Markdown robusto y completo que convierte texto plano en secciones para el PDF editorial y corporativo.
  */
 export function parseMarkdownToEditorialSections(markdown: string): EditorialSection[] {
   if (!markdown) return [];
 
-  const rawLines = markdown
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .split("\n");
+  // 0. Quitar Frontmatter (YAML inicial delimitado por ---) si existe
+  let cleanMarkdown = markdown.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  if (cleanMarkdown.trim().startsWith("---")) {
+    const secondFence = cleanMarkdown.indexOf("\n---", 3);
+    if (secondFence !== -1) {
+      cleanMarkdown = cleanMarkdown.slice(secondFence + 4).trim();
+    }
+  }
+
+  const rawLines = cleanMarkdown.split("\n");
 
   const sections: EditorialSection[] = [];
   let i = 0;
@@ -251,6 +270,18 @@ export function parseMarkdownToEditorialSections(markdown: string): EditorialSec
 
     // 1. Líneas vacías
     if (!trimmed) {
+      i++;
+      continue;
+    }
+
+    // 1.1 Imagen Markdown (![alt](url))
+    const imgMatch = trimmed.match(/^!\[([^\]]*)\]\(([^\)]+)\)$/);
+    if (imgMatch) {
+      sections.push({
+        type: 'image',
+        title: cleanPdfText(imgMatch[1]) || "Figura ilustrativa",
+        url: imgMatch[2].trim(),
+      });
       i++;
       continue;
     }
@@ -380,13 +411,13 @@ export function parseMarkdownToEditorialSections(markdown: string): EditorialSec
       }
     }
 
-    // 7. Listas ordenadas (1. , 2. )
-    if (/^\d+\.\s+/.test(trimmed)) {
+    // 7. Listas ordenadas (1. , 2. o 1) , 2) )
+    if (/^\d+[\.\)]\s+/.test(trimmed)) {
       const items: Array<{ number: number; inlineTokens: InlineToken[] }> = [];
       let itemNum = 1;
 
-      while (i < rawLines.length && /^\d+\.\s+/.test(rawLines[i].trim())) {
-        const match = rawLines[i].trim().match(/^(\d+)\.\s+(.+)$/);
+      while (i < rawLines.length && /^\d+[\.\)]\s+/.test(rawLines[i].trim())) {
+        const match = rawLines[i].trim().match(/^(\d+)[\.\)]\s+(.+)$/);
         if (match) {
           items.push({
             number: parseInt(match[1]) || itemNum,
@@ -432,7 +463,7 @@ export function parseMarkdownToEditorialSections(markdown: string): EditorialSec
       !rawLines[i].trim().startsWith("```") &&
       !rawLines[i].trim().startsWith(">") &&
       !/^[\*\-\+]\s+/.test(rawLines[i].trim()) &&
-      !/^\d+\.\s+/.test(rawLines[i].trim()) &&
+      !/^\d+[\.\)]\s+/.test(rawLines[i].trim()) &&
       !/^(\-{3,}|\*{3,}|_{3,})$/.test(rawLines[i].trim()) &&
       !(rawLines[i].trim().startsWith("|") && rawLines[i].trim().endsWith("|"))
     ) {

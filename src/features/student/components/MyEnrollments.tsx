@@ -4,7 +4,8 @@ import { useState } from "react";
 import { 
     MessageSquare, Users, ClipboardCheck, Clock, BookOpen, GraduationCap, 
     FileText, AlertCircle, ArrowLeft, Calendar, ArrowRight, LayoutGrid, List,
-    Sparkles, FolderGit2, Code2, Terminal, Video, Headphones, MessageSquareQuote, Database, Target, CheckCircle2
+    Sparkles, FolderGit2, Code2, Terminal, Video, Headphones, MessageSquareQuote, Database, Target, CheckCircle2,
+    Layers
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

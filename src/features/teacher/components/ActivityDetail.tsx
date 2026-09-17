@@ -49,7 +49,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { format, formatDistanceToNow, isAfter } from "date-fns";
 import { es } from "date-fns/locale";
-import { Eye, Github, FileText, ClipboardList, Users, Trash2, Sparkles, Search, AlertTriangle, CheckCircle2, Bot, Loader2, ChevronDown, ChevronUp, CheckCircle, ChevronLeft, ChevronRight, ExternalLink, Settings, Link2, Download, FileSpreadsheet, RotateCcw, Code2, Link as LinkIcon, Crown, ArrowLeft, Terminal, Video, MessageSquareQuote, Database, Mic, Target } from "lucide-react";
+import { Eye, Github, FileText, ClipboardList, Users, Trash2, Sparkles, Search, AlertTriangle, CheckCircle2, Bot, Loader2, ChevronDown, ChevronUp, CheckCircle, ChevronLeft, ChevronRight, ExternalLink, Settings, Link2, Download, FileSpreadsheet, RotateCcw, Code2, Link as LinkIcon, Crown, ArrowLeft, Terminal, Video, MessageSquareQuote, Database, Mic, Target, GitBranch } from "lucide-react";
 import { FeedbackViewer } from '../../student/components/FeedbackViewer';
 import { validateUniqueLinksAction, deleteSubmissionAction, analyzeGitHubFileAction, finalizeGitHubGradingAction, gradePdfReviewAction, gradeManualActivityAction, improveFeedbackAction, rejectManualActivityAction } from "../../../features/teacher/actions/gradingActions";
 import { getGitHubSubmissionDetailsAction, getRepoStructureAction, fetchRepoFilesAction } from "../../../features/github/actions/githubActions";
@@ -72,6 +72,7 @@ import { pdf } from "@react-pdf/renderer";
 import { ActivitySummaryPDFDocument } from "./ActivitySummaryPDFDocument";
 import { ExportFeedbackButtons } from "@/components/ui/export-feedback-buttons";
 import { CodeChallengeActivityDetails } from "@/features/student/components/CodeChallengeActivityDetails";
+import { WorkshopActivityDetails } from "@/features/student/components/WorkshopActivityDetails";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -842,6 +843,8 @@ export function ActivityDetail({
                             {activity.type === "GITHUB" && <Github className="h-3 w-3 text-primary" />}
                             {activity.type === "CODE_PROJECT" && <Code2 className="h-3 w-3 text-primary" />}
                             {activity.type === "CODE_CHALLENGE" && <Terminal className="h-3 w-3 text-primary" />}
+                            {activity.type === "WORKSHOP_CODE" && <Terminal className="h-3 w-3 text-cyan-500" />}
+                            {activity.type === "WORKSHOP_GITHUB" && <GitBranch className="h-3 w-3 text-orange-500" />}
                             {activity.type === "VIDEO_PITCH" && <Video className="h-3 w-3 text-primary" />}
                             {activity.type === "AI_INTERVIEW" && <MessageSquareQuote className="h-3 w-3 text-primary" />}
                             {activity.type === "DB_MODELING" && <Database className="h-3 w-3 text-primary" />}
@@ -855,6 +858,10 @@ export function ActivityDetail({
                                     ? "Proyecto de Código"
                                     : activity.type === "CODE_CHALLENGE"
                                     ? "Desafío Sandbox"
+                                    : activity.type === "WORKSHOP_CODE"
+                                    ? "Taller Codelab"
+                                    : activity.type === "WORKSHOP_GITHUB"
+                                    ? "Taller Git & GitHub"
                                     : activity.type === "VIDEO_PITCH"
                                     ? "Video Pitch"
                                     : activity.type === "AUDIO_DEFENSE"
@@ -900,7 +907,7 @@ export function ActivityDetail({
                         </Button>
                     )}
 
-                    {activity.type === "CODE_CHALLENGE" && (
+                    {(activity.type === "CODE_CHALLENGE" || activity.type === "WORKSHOP_CODE" || activity.type === "WORKSHOP_GITHUB") && (
                         <Button
                             variant="outline"
                             size="sm"
@@ -2405,7 +2412,7 @@ export function ActivityDetail({
                                 Evaluación de Entrega — {formatName(evalStudent.name, evalStudent.profile)}
                             </DialogTitle>
 
-                            {(activity.type === "CODE_PROJECT" || activity.type === "GITHUB") && (
+                            {(activity.type === "CODE_PROJECT" || activity.type === "GITHUB" || activity.type === "WORKSHOP_GITHUB") && (
                                 <CodeProjectInspector
                                     student={evalStudent}
                                     submission={evalSubmission}
@@ -2483,7 +2490,7 @@ export function ActivityDetail({
                                 />
                             )}
 
-                            {activity.type === "CODE_CHALLENGE" && (
+                            {(activity.type === "CODE_CHALLENGE" || activity.type === "WORKSHOP_CODE") && (
                                 <CodeChallengeInspector
                                     student={evalStudent}
                                     submission={evalSubmission}
@@ -2630,13 +2637,29 @@ export function ActivityDetail({
                 <Dialog open={showStudentPreview} onOpenChange={setShowStudentPreview}>
                     <DialogContent showCloseButton={false} className="fixed inset-0 top-0 left-0 z-[100] w-screen h-screen max-w-none! sm:max-w-none! max-h-none! border-none rounded-none translate-x-0! translate-y-0! p-0 flex flex-col bg-background overflow-hidden">
                         <DialogTitle className="sr-only">Modo Estudiante - Vista Previa</DialogTitle>
-                        <CodeChallengeActivityDetails
-                            activity={activity}
-                            userId="teacher-preview-id"
-                            studentName="Profesor (Modo Estudiante)"
-                            isTeacherPreview={true}
-                            onClosePreview={() => setShowStudentPreview(false)}
-                        />
+                        {(activity.type === "WORKSHOP_CODE" || activity.type === "WORKSHOP_GITHUB") ? (
+                            <div className="flex-1 min-h-0 flex flex-col h-full bg-background">
+                                <div className="p-2 border-b bg-muted/40 flex justify-between items-center px-4 shrink-0">
+                                    <span className="font-bold text-xs">Vista Previa Docente — {activity.title}</span>
+                                    <Button size="sm" variant="ghost" onClick={() => setShowStudentPreview(false)}>Cerrar Previa</Button>
+                                </div>
+                                <div className="flex-1 min-h-0">
+                                    <WorkshopActivityDetails
+                                        activity={activity}
+                                        userId="teacher-preview-id"
+                                        studentName="Profesor (Modo Estudiante)"
+                                    />
+                                </div>
+                            </div>
+                        ) : (
+                            <CodeChallengeActivityDetails
+                                activity={activity}
+                                userId="teacher-preview-id"
+                                studentName="Profesor (Modo Estudiante)"
+                                isTeacherPreview={true}
+                                onClosePreview={() => setShowStudentPreview(false)}
+                            />
+                        )}
                     </DialogContent>
                 </Dialog>
             )}

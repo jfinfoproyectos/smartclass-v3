@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   Folder as FolderIcon, 
   FolderOpen, 
@@ -32,7 +32,9 @@ import {
   Settings2,
   Upload,
   Download,
-  BookOpen
+  BookOpen,
+  UnfoldVertical,
+  FoldVertical
 } from "lucide-react";
 import JSZip from "jszip";
 import { useRef } from "react";
@@ -126,6 +128,7 @@ export function AdminFileExplorer({
     date: "",
     icon: ""
   });
+  const [expandToken, setExpandToken] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -293,6 +296,13 @@ export function AdminFileExplorer({
           { title: inputValue }
         );
         toast.success(`¡${dialogState.type === 'file' ? 'Archivo' : 'Tópico'} creado con éxito!`);
+        
+        if (dialogState.type === 'file') {
+          const createdSlug = dialogState.parentPath && dialogState.parentPath !== projectId
+            ? `${dialogState.parentPath}/${finalName}`
+            : finalName;
+          onSelect(createdSlug);
+        }
       } else if (dialogState.type === 'rename') {
         if (!inputValue) throw new Error("El nombre es requerido");
         await renameItemAction(projectId, dialogState.parentPath, inputValue, dialogState.itemSha || "");
@@ -424,7 +434,43 @@ export function AdminFileExplorer({
             </TooltipContent>
           </Tooltip>
 
-          <Separator orientation="vertical" className="h-4 bg-border/60 mx-1" />
+          <Separator orientation="vertical" className="h-4 bg-border/60 mx-0.5" />
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-7 w-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer" 
+                onClick={() => setExpandToken(prev => prev <= 0 ? 1 : prev + 1)}
+                aria-label="Abrir todos los tópicos"
+              >
+                <UnfoldVertical className="w-3.5 h-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p>Abrir todos los tópicos</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-7 w-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer" 
+                onClick={() => setExpandToken(prev => prev >= 0 ? -1 : prev - 1)}
+                aria-label="Cerrar todos los tópicos"
+              >
+                <FoldVertical className="w-3.5 h-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p>Cerrar todos los tópicos</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Separator orientation="vertical" className="h-4 bg-border/60 mx-0.5" />
 
           <Tooltip>
             <TooltipTrigger asChild>
@@ -520,6 +566,7 @@ export function AdminFileExplorer({
             projectId={projectId}
             level={0} 
             tree={tree}
+            expandToken={expandToken}
             selectedPath={selectedPath} 
             onSelect={onSelect}
             onTreeChange={onTreeChange}
@@ -682,6 +729,7 @@ function FileTreeNode({
   projectId,
   level, 
   tree,
+  expandToken,
   selectedPath, 
   onSelect, 
   onTreeChange,
@@ -695,6 +743,7 @@ function FileTreeNode({
   projectId: string;
   level: number; 
   tree: FileNode[];
+  expandToken: number;
   selectedPath: string | null; 
   onSelect: (path: string) => void;
   onTreeChange: () => void;
@@ -705,6 +754,19 @@ function FileTreeNode({
   onImport: (parentPath: string) => void;
 }) {
   const [isOpen, setIsOpen] = useState(level === 0);
+
+  useEffect(() => {
+    if (selectedPath && node.type === 'folder') {
+      if (selectedPath === node.path || selectedPath.startsWith(node.path + '/')) {
+        setIsOpen(true);
+      }
+    }
+  }, [selectedPath, node.path, node.type]);
+
+  useEffect(() => {
+    if (expandToken > 0) setIsOpen(true);
+    if (expandToken < 0) setIsOpen(false);
+  }, [expandToken]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [dragOverPos, setDragOverPos] = useState<'top' | 'bottom' | 'middle' | null>(null);
@@ -976,6 +1038,7 @@ function FileTreeNode({
                 level={level + 1} 
                 projectId={projectId}
                 tree={tree}
+                expandToken={expandToken}
                 selectedPath={selectedPath} 
                 onSelect={onSelect}
                 onTreeChange={onTreeChange}

@@ -31,7 +31,7 @@ export async function getVisualSettingsAction() {
             if (user) {
                 return {
                     themeMode: user.appThemeMode || settings?.appThemeMode || "STUDENT",
-                    themeColor: user.appThemeColor || settings?.appThemeColor || "zinc",
+                    themeColor: user.appThemeColor || settings?.appThemeColor || "ocean-breeze",
                     allowThemeColorChange: user.appAllowThemeColorChange ?? settings?.appAllowThemeColorChange ?? true,
                     codeTheme: user.appCodeTheme || settings?.appCodeTheme || "one-dark-pro",
                     allowCodeThemeChange: user.appAllowCodeThemeChange ?? settings?.appAllowCodeThemeChange ?? true
@@ -41,7 +41,7 @@ export async function getVisualSettingsAction() {
 
         return { 
             themeMode: settings?.appThemeMode || "STUDENT",
-            themeColor: settings?.appThemeColor || "zinc",
+            themeColor: settings?.appThemeColor || "ocean-breeze",
             allowThemeColorChange: settings?.appAllowThemeColorChange ?? true,
             codeTheme: settings?.appCodeTheme || "one-dark-pro",
             allowCodeThemeChange: settings?.appAllowCodeThemeChange ?? true
@@ -50,7 +50,7 @@ export async function getVisualSettingsAction() {
         console.warn("Aviso: usando configuración visual por defecto:", error?.message || error);
         return {
             themeMode: "STUDENT",
-            themeColor: "zinc",
+            themeColor: "ocean-breeze",
             allowThemeColorChange: true,
             codeTheme: "one-dark-pro",
             allowCodeThemeChange: true

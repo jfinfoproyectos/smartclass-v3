@@ -144,7 +144,8 @@ export async function getAIModel(userId?: string, customModel?: string): Promise
     const google = createGoogleGenerativeAI({
         apiKey: googleKey
     });
-    return google(activeModel);
+    const effectiveModel = activeModel || "gemini-2.5-flash";
+    return google(effectiveModel);
 }
 
 /**

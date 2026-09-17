@@ -670,7 +670,7 @@ export function CodeChallengeActivityDetails({
                                 <span className="sm:hidden">Salir</span>
                             </Button>
                         )
-                    ) : activity.courseId && (
+                    ) : (
                         <Button
                             asChild
                             type="button"
@@ -679,9 +679,9 @@ export function CodeChallengeActivityDetails({
                             className="h-6 sm:h-7 px-2 text-xs font-semibold shrink-0 gap-1 rounded-md border-border/80 hover:bg-accent hover:text-accent-foreground shadow-xs cursor-pointer"
                             title="Volver a la lista de actividades"
                         >
-                            <Link href={`/dashboard/student?courseId=${activity.courseId}&tab=activities`}>
+                            <Link href={activity.courseId ? `/dashboard/student?courseId=${activity.courseId}&tab=activities` : `/dashboard/student`}>
                                 <ChevronLeft className="h-3.5 w-3.5" />
-                                <span>Volver</span>
+                                <span>Volver a actividades</span>
                             </Link>
                         </Button>
                     )}

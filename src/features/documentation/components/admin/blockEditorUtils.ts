@@ -374,3 +374,21 @@ export const getInitialBlockData = (type: Block["type"]): Record<string, unknown
     default: return {};
   }
 };
+
+// Convierte contenido que puede estar en formato JSON (Block[]) a Markdown estándar puro
+export const ensureStandardMarkdown = (content: string): string => {
+  if (!content) return "";
+  const trimmed = content.trim();
+  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return blocksToMarkdown(parsed);
+      }
+    } catch {
+      // Si falla JSON.parse, se retorna como markdown directo
+    }
+  }
+  return content;
+};
+

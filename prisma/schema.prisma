@@ -60,7 +60,7 @@ model User {
 
   // Teacher Global Application Appearance & Policies
   appThemeMode                String            @default("STUDENT") // "STUDENT", "LIGHT", "DARK"
-  appThemeColor               String?           @default("zinc")
+  appThemeColor               String?           @default("ocean-breeze")
   appAllowThemeColorChange    Boolean           @default(true)
   appCodeTheme                String            @default("one-dark-pro")
   appAllowCodeThemeChange     Boolean           @default(true)
@@ -204,6 +204,8 @@ enum ActivityType {
   AI_INTERVIEW
   DB_MODELING
   AUDIO_DEFENSE
+  WORKSHOP_CODE
+  WORKSHOP_GITHUB
 }
 
 model Activity {
@@ -319,7 +321,7 @@ model SystemSettings {
   siteTitle             String?
   siteLogo              String?
   socialLinks           String?          @default("[]")
-  defaultTheme          String?          @default("default")
+  defaultTheme          String?          @default("ocean-breeze")
   defaultAppearance     String?          @default("system")
   defaultCodeTheme      String?          @default("one-dark-pro")
   forceDefaultSettings  Boolean          @default(false)
@@ -332,7 +334,7 @@ model SystemSettings {
   
   // App Visual Identity (Global)
   appThemeMode                String            @default("STUDENT") // "STUDENT", "LIGHT", "DARK"
-  appThemeColor               String?           @default("zinc")
+  appThemeColor               String?           @default("ocean-breeze")
   appAllowThemeColorChange    Boolean           @default(true)
   appCodeTheme                String            @default("one-dark-pro")
   appAllowCodeThemeChange     Boolean           @default(true)
@@ -767,4 +769,3 @@ model InspectorQuestion {
   @@index([userId, scope, category])
   @@map("inspector_question")
 }
-

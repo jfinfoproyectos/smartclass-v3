@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, AlertCircle, ExternalLink, CheckCircle, Download, Send, Clock, FileText, ClipboardList, RotateCcw, Bot } from "lucide-react";
+import { Loader2, AlertCircle, ExternalLink, CheckCircle, Download, Send, Clock, FileText, ClipboardList, RotateCcw, Bot, ChevronLeft } from "lucide-react";
+import Link from "next/link";
 import { format } from "date-fns";
 import { FeedbackViewer } from "./FeedbackViewer";
 import { Badge } from "@/components/ui/badge";
@@ -80,10 +81,25 @@ export function CodeProjectActivityDetails({ activity, userId, studentName }: Co
         <div className="space-y-6 w-full p-4 sm:p-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-muted/20 p-4 rounded-xl border">
                 <div className="space-y-1">
-                    <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">{activity.title}</h1>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            asChild
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-2.5 text-xs font-semibold shrink-0 gap-1 rounded-md border-border/80 hover:bg-accent hover:text-accent-foreground shadow-xs cursor-pointer"
+                            title="Volver a la lista de actividades"
+                        >
+                            <Link href={activity.courseId ? `/dashboard/student?courseId=${activity.courseId}&tab=activities` : `/dashboard/student`}>
+                                <ChevronLeft className="h-3.5 w-3.5" />
+                                <span>Volver a actividades</span>
+                            </Link>
+                        </Button>
+                        <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">{activity.title}</h1>
+                    </div>
                     <p className="text-muted-foreground font-medium flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-primary" />
-                        {activity.course.title}
+                        {activity.course?.title || "Curso"}
                     </p>
                 </div>
                 {isGraded && (

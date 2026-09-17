@@ -285,12 +285,13 @@ export function GithubActivityDetails({ activity, userId, studentName }: GithubA
                                                 asChild
                                                 type="button"
                                                 variant="outline"
-                                                size="icon"
-                                                className="h-6 w-6 rounded-md border-border/80 hover:bg-accent hover:text-accent-foreground shadow-xs cursor-pointer"
+                                                size="sm"
+                                                className="h-6 sm:h-7 px-2 text-xs font-semibold shrink-0 gap-1 rounded-md border-border/80 hover:bg-accent hover:text-accent-foreground shadow-xs cursor-pointer"
                                                 aria-label="Volver a la lista de actividades"
                                             >
-                                                <Link href={`/dashboard/student?courseId=${activity.courseId}&tab=activities`}>
+                                                <Link href={activity.courseId ? `/dashboard/student?courseId=${activity.courseId}&tab=activities` : `/dashboard/student`}>
                                                     <ChevronLeft className="h-3.5 w-3.5" />
+                                                    <span className="hidden sm:inline">Volver a actividades</span>
                                                 </Link>
                                             </Button>
                                         </TooltipTrigger>

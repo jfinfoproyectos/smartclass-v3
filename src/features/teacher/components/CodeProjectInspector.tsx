@@ -12,7 +12,8 @@ import {
     Github, Code2, FileCode, FileText, Folder, Search, Sparkles, Bot,
     Loader2, CheckCircle, Eye, Copy, Check, RotateCcw, ExternalLink, Zap, X, Link as LinkIcon, AlertTriangle, ClipboardList,
     ChevronLeft, ChevronRight, ChevronDown, Maximize2, Minimize2, ListChecks, HelpCircle, CheckCircle2, MinusCircle, XCircle, Info, ZoomIn, ZoomOut,
-    GitCommitVertical, ArrowUp, ArrowDown, GripVertical, ListOrdered, ArrowUpDown, GitBranch, UserCheck, SlidersHorizontal
+    GitCommitVertical, ArrowUp, ArrowDown, GripVertical, ListOrdered, ArrowUpDown, GitBranch, UserCheck, SlidersHorizontal,
+    Terminal, Video, Mic, MessageSquareQuote, Database
 } from "lucide-react";
 import {
     DropdownMenu,
@@ -1066,6 +1067,13 @@ export function CodeProjectInspector({
                                 {activity.type === "GITHUB" && <Github className="h-3 w-3 text-primary" />}
                                 {activity.type === "CODE_PROJECT" && <Code2 className="h-3 w-3 text-primary" />}
                                 {activity.type === "PDF_REVIEW" && <FileText className="h-3 w-3 text-primary" />}
+                                {activity.type === "CODE_CHALLENGE" && <Terminal className="h-3 w-3 text-primary" />}
+                                {activity.type === "VIDEO_PITCH" && <Video className="h-3 w-3 text-primary" />}
+                                {activity.type === "AUDIO_DEFENSE" && <Mic className="h-3 w-3 text-primary" />}
+                                {activity.type === "AI_INTERVIEW" && <MessageSquareQuote className="h-3 w-3 text-primary" />}
+                                {(activity.type === "DB_MODELING" || activity.type === "DATABASE") && <Database className="h-3 w-3 text-primary" />}
+                                {activity.type === "WORKSHOP_CODE" && <Terminal className="h-3 w-3 text-cyan-500" />}
+                                {activity.type === "WORKSHOP_GITHUB" && <GitBranch className="h-3 w-3 text-orange-500" />}
                                 {activity.type === "MANUAL" && <LinkIcon className="h-3 w-3 text-primary" />}
                                 <span>
                                     {activity.type === "GITHUB"
@@ -1074,6 +1082,20 @@ export function CodeProjectInspector({
                                         ? "Proyecto Código"
                                         : activity.type === "PDF_REVIEW"
                                         ? "PDF"
+                                        : activity.type === "CODE_CHALLENGE"
+                                        ? "Code Challenge"
+                                        : activity.type === "WORKSHOP_CODE"
+                                        ? "Taller Codelab"
+                                        : activity.type === "WORKSHOP_GITHUB"
+                                        ? "Taller Git & GitHub"
+                                        : activity.type === "VIDEO_PITCH"
+                                        ? "Video Pitch"
+                                        : activity.type === "AUDIO_DEFENSE"
+                                        ? "Defensa Oral"
+                                        : activity.type === "AI_INTERVIEW"
+                                        ? "Entrevista IA"
+                                        : (activity.type === "DB_MODELING" || activity.type === "DATABASE")
+                                        ? "Base de Datos"
                                         : "Manual"}
                                 </span>
                             </Badge>

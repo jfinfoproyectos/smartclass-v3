@@ -22,10 +22,10 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { createActivityAction, updateActivityAction, deleteActivityAction, generateChecklistCriteriaAction, verifyCriterionRelationAction, balanceCriteriaPercentagesAction, generateCodeFileTemplateAction, generateRequiredTopicsAction } from "@/features/teacher/actions/activityActions";
+import { createActivityAction, updateActivityAction, deleteActivityAction, generateChecklistCriteriaAction, verifyCriterionRelationAction, balanceCriteriaPercentagesAction, generateCodeFileTemplateAction, generateRequiredTopicsAction, generateAllWorkshopStepsAction, generateSingleWorkshopStepAction, generateWorkshopStepHintsAction } from "@/features/teacher/actions/activityActions";
 import { scanRepositoryAction } from "@/features/github/actions/githubActions";
 import { getMissingSubmissionsAction } from "@/features/teacher/actions/studentActions";
-import { Plus, Calendar, FileText, MessageSquare, Pencil, Trash2, Eye, X, ChevronUp, ChevronDown, AlertCircle, Sparkles, Upload, Download, Loader2, Search, UserX, GripVertical, LayoutGrid, List, Save, Settings2, Code2, FolderGit2, CheckCircle2, Clock, SlidersHorizontal, Info, ListChecks, CheckSquare, RefreshCw, Bot, Cpu, HelpCircle, MessageSquareQuote, Shuffle, Scale, Crown, Users, Terminal, Video, Database, Mic, Headphones, FileCode, Target, Layers, FileCheck, BookOpen } from "lucide-react";
+import { Plus, Calendar, FileText, MessageSquare, Pencil, Trash2, Eye, X, ChevronUp, ChevronDown, AlertCircle, Sparkles, Upload, Download, Loader2, Search, UserX, GripVertical, LayoutGrid, List, Save, Settings2, Code2, FolderGit2, CheckCircle2, Clock, SlidersHorizontal, Info, ListChecks, CheckSquare, RefreshCw, Bot, Cpu, HelpCircle, MessageSquareQuote, Shuffle, Scale, Crown, Users, Terminal, Video, Database, Mic, Headphones, FileCode, Target, Layers, FileCheck, BookOpen, GitBranch, ArrowRight } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -75,6 +75,7 @@ import '@uiw/react-md-editor/markdown-editor.css';
 import '@uiw/react-markdown-preview/markdown.css';
 import { useTheme } from "next-themes";
 import { CodeChallengeActivityDetails } from "@/features/student/components/CodeChallengeActivityDetails";
+import { WorkshopActivityDetails } from "@/features/student/components/WorkshopActivityDetails";
 
 const TEMPLATE_GITHUB = `# Evaluación Automática con IA (GitHub)
 
@@ -230,6 +231,34 @@ const TEMPLATE_MANUAL = `# Entrega Libre (Evaluación Manual sin IA)
 ## Criterios de Calificación
 * **Criterio 1 (50%)**: [Descripción]
 * **Criterio 2 (50%)**: [Descripción]`;
+
+const TEMPLATE_WORKSHOP_CODE = `# Taller Codelab de Programación Paso a Paso
+
+## Objetivo del Taller
+Completar de manera práctica y secuencial los pasos de código propuestos en el entorno interactivo.
+
+## Metodología de Trabajo
+- Lee atentamente las instrucciones de cada paso antes de codificar.
+- Utiliza las pistas disponibles si encuentras dificultades.
+- Valida la solución en el editor interactivo y avanza paso a paso.
+
+## Criterios de Evaluación
+* **Resolución de Pasos (70%)**: Cumplimiento de la lógica, estructura y algoritmos solicitados en cada paso.
+* **Buenas Prácticas y Calidad de Código (30%)**: Nomenclatura, modularización, legibilidad y manejo de casos borde.`;
+
+const TEMPLATE_WORKSHOP_GITHUB = `# Taller Práctico con Repositorio Git y GitHub
+
+## Objetivo del Taller
+Desarrollar y consolidar competencias de versionamiento y desarrollo colaborativo utilizando Git y GitHub paso a paso.
+
+## Instrucciones del Taller
+1. Clona o crea tu repositorio para la actividad según las indicaciones.
+2. Avanza por los pasos secuenciales realizando los commits y branches solicitados.
+3. Conecta y entrega el enlace público de tu repositorio de GitHub para auditar los avances.
+
+## Criterios de Evaluación
+* **Cumplimiento de Pasos Técnicos (60%)**: Implementación correcta del código y estructura en cada paso.
+* **Historial de Versionamiento y Ramas (40%)**: Calidad de commits, ramas semánticas y flujo Git ordenado.`;
 
 function SortablePathItem({ id, path, index, onRemove }: { id: string; path: string; index: number; onRemove: (index: number) => void }) {
     const {
@@ -582,6 +611,24 @@ const ACTIVITY_TYPES = [
         badgeColor: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800/40",
         icon: Database,
         description: "Scripts .sql con DDL, DML (inserts/updates/deletes) y diagrama ER. La IA valida sintaxis, normalización e integridad.",
+    },
+    {
+        id: "WORKSHOP_CODE",
+        title: "Taller Codelab (Paso a Paso)",
+        shortTitle: "Taller Codelab",
+        badge: "Codelab por Pasos",
+        badgeColor: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800/40",
+        icon: Terminal,
+        description: "Codelab guiado con editor Monaco integrado. El alumno resuelve secuencialmente pasos de código con pistas y validación.",
+    },
+    {
+        id: "WORKSHOP_GITHUB",
+        title: "Taller / Reto Git & GitHub",
+        shortTitle: "Taller GitHub",
+        badge: "Git & Pasos IA",
+        badgeColor: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-200 dark:border-orange-800/40",
+        icon: GitBranch,
+        description: "Taller práctico basado en repositorios GitHub con pasos guiados, commits ordenados y ramas de desarrollo.",
     },
     {
         id: "MANUAL",
@@ -1106,6 +1153,31 @@ function ActivityFormDialog({
         "Transacciones",
         "Auditoría",
     ]);
+    const [isGeneratingDbEntities, setIsGeneratingDbEntities] = useState<boolean>(false);
+
+    const handleGenerateDbEntities = async () => {
+        const titleInput = (document.querySelector('input[name="title"]') as HTMLInputElement)?.value || "";
+        const content = (statement || "").trim();
+        if (!content && !titleInput.trim()) {
+            toast.warning("Ingresa al menos el título o el enunciado de la actividad para que la IA extraiga las entidades de base de datos.");
+            return;
+        }
+        setIsGeneratingDbEntities(true);
+        try {
+            const generated = await generateRequiredTopicsAction(content, "DB_MODELING", titleInput);
+            if (generated && generated.length > 0) {
+                setDbRequiredEntities(generated);
+                toast.success(`${generated.length} entidades de BD generadas con IA a partir del enunciado.`);
+            } else {
+                toast.error("La IA no pudo generar las entidades. Intenta de nuevo.");
+            }
+        } catch (err: any) {
+            console.error("Error al generar entidades con IA:", err);
+            toast.error(err.message || "Error al conectar con la IA para generar entidades.");
+        } finally {
+            setIsGeneratingDbEntities(false);
+        }
+    };
     const [dbIncludeDiagram, setDbIncludeDiagram] = useState<boolean>(true);
     const [dbIncludeDdl, setDbIncludeDdl] = useState<boolean>(true);
     const [dbIncludeDml, setDbIncludeDml] = useState<boolean>(true);
@@ -1121,6 +1193,155 @@ function ActivityFormDialog({
     const [pdfReviewMode, setPdfReviewMode] = useState<"first_n" | "range" | "all">("first_n");
     const [pdfMaxPages, setPdfMaxPages] = useState<number>(5);
     const [pdfPageRange, setPdfPageRange] = useState<string>("1-5");
+
+    // Configuración específica para WORKSHOP_CODE y WORKSHOP_GITHUB
+    const [workshopDeliveryMode, setWorkshopDeliveryMode] = useState<"TUTORIAL" | "CHALLENGE">("TUTORIAL");
+    const [workshopLanguage, setWorkshopLanguage] = useState<string>("java");
+    const [workshopEstimatedMinutes, setWorkshopEstimatedMinutes] = useState<number>(45);
+    const [workshopMilestones, setWorkshopMilestones] = useState<Array<{
+        id: string;
+        title: string;
+        instructions: string;
+        starterCode?: string;
+        expectedSolution?: string;
+        hints: string[];
+        order: number;
+    }>>([
+        {
+            id: "m-1",
+            title: "Paso 1: Configuración Inicial",
+            instructions: "Implementa la lógica o pasos iniciales solicitados.",
+            starterCode: "// Código inicial del estudiante\n",
+            expectedSolution: "// Solución de referencia\n",
+            hints: ["Lee con atención el enunciado", "Asegúrate de comprobar tipos"],
+            order: 1
+        }
+    ]);
+
+    const [workshopContentView, setWorkshopContentView] = useState<"steps" | "statement">("steps");
+    const [activeWorkshopStepIdx, setActiveWorkshopStepIdx] = useState<number>(0);
+
+    // Asistentes de IA para Talleres
+    const [isAiAllStepsOpen, setIsAiAllStepsOpen] = useState(false);
+    const [aiAllStepsTopic, setAiAllStepsTopic] = useState("");
+    const [aiAllStepsCount, setAiAllStepsCount] = useState(4);
+    const [aiAllStepsLevel, setAiAllStepsLevel] = useState("intermedio");
+    const [isGeneratingAllSteps, setIsGeneratingAllSteps] = useState(false);
+
+    const [isAiSingleStepOpen, setIsAiSingleStepOpen] = useState(false);
+    const [aiSingleStepPrompt, setAiSingleStepPrompt] = useState("");
+    const [isGeneratingSingleStep, setIsGeneratingSingleStep] = useState(false);
+    const [isGeneratingHints, setIsGeneratingHints] = useState(false);
+
+    const handleGenerateAllStepsWithAI = async () => {
+        setIsGeneratingAllSteps(true);
+        try {
+            const titleInput = (document.querySelector('input[name="title"]') as HTMLInputElement)?.value || activity?.title || "Taller Práctico";
+            const result = await generateAllWorkshopStepsAction({
+                title: titleInput,
+                topicPrompt: aiAllStepsTopic.trim() || titleInput,
+                workshopType: selectedType === "WORKSHOP_CODE" ? "WORKSHOP_CODE" : "WORKSHOP_GITHUB",
+                language: workshopLanguage,
+                stepCount: aiAllStepsCount,
+                level: aiAllStepsLevel
+            });
+
+            if (result?.steps && result.steps.length > 0) {
+                const newMilestones = result.steps.map((s, idx) => ({
+                    id: `m-${Date.now()}-${idx}`,
+                    title: s.title || `Paso ${idx + 1}`,
+                    instructions: s.instructions || "",
+                    starterCode: s.starterCode || (selectedType === "WORKSHOP_CODE" ? "// Código inicial del estudiante\n" : undefined),
+                    expectedSolution: s.expectedSolution || (selectedType === "WORKSHOP_CODE" ? "// Solución esperada\n" : undefined),
+                    hints: s.hints && s.hints.length > 0 ? s.hints : ["Revisa atentamente los requisitos"],
+                    order: idx + 1
+                }));
+                setWorkshopMilestones(newMilestones);
+                setActiveWorkshopStepIdx(0);
+                setIsAiAllStepsOpen(false);
+                setAiAllStepsTopic("");
+                toast.success(`¡Taller generado con éxito (${newMilestones.length} pasos creados con IA)!`);
+            }
+        } catch (error: any) {
+            console.error("Error generando pasos con IA:", error);
+            toast.error("No se pudieron generar los pasos con IA", {
+                description: error.message || "Intenta nuevamente con otro prompt."
+            });
+        } finally {
+            setIsGeneratingAllSteps(false);
+        }
+    };
+
+    const handleGenerateSingleStepWithAI = async () => {
+        const currentStep = workshopMilestones[activeWorkshopStepIdx];
+        if (!currentStep) return;
+
+        setIsGeneratingSingleStep(true);
+        try {
+            const titleInput = (document.querySelector('input[name="title"]') as HTMLInputElement)?.value || activity?.title || "Taller";
+            const result = await generateSingleWorkshopStepAction({
+                stepTitle: currentStep.title || `Paso ${activeWorkshopStepIdx + 1}`,
+                prompt: aiSingleStepPrompt.trim(),
+                currentInstructions: currentStep.instructions,
+                workshopType: selectedType === "WORKSHOP_CODE" ? "WORKSHOP_CODE" : "WORKSHOP_GITHUB",
+                language: workshopLanguage,
+                workshopTitle: titleInput
+            });
+
+            if (result) {
+                const updated = [...workshopMilestones];
+                updated[activeWorkshopStepIdx] = {
+                    ...updated[activeWorkshopStepIdx],
+                    title: result.title || updated[activeWorkshopStepIdx].title,
+                    instructions: result.instructions || updated[activeWorkshopStepIdx].instructions,
+                    starterCode: result.starterCode !== undefined ? result.starterCode : updated[activeWorkshopStepIdx].starterCode,
+                    expectedSolution: result.expectedSolution !== undefined ? result.expectedSolution : updated[activeWorkshopStepIdx].expectedSolution,
+                    hints: result.hints && result.hints.length > 0 ? result.hints : updated[activeWorkshopStepIdx].hints
+                };
+                setWorkshopMilestones(updated);
+                setIsAiSingleStepOpen(false);
+                setAiSingleStepPrompt("");
+                toast.success("¡Paso actualizado y enriquecido con IA!");
+            }
+        } catch (error: any) {
+            console.error("Error generando paso con IA:", error);
+            toast.error("Error al asistir este paso con IA", {
+                description: error.message || "Intenta nuevamente."
+            });
+        } finally {
+            setIsGeneratingSingleStep(false);
+        }
+    };
+
+    const handleGenerateHintsForStep = async (stepIdx: number) => {
+        const step = workshopMilestones[stepIdx];
+        if (!step) return;
+
+        setIsGeneratingHints(true);
+        try {
+            const hints = await generateWorkshopStepHintsAction({
+                stepTitle: step.title,
+                instructions: step.instructions,
+                language: workshopLanguage
+            });
+
+            if (hints && hints.length > 0) {
+                const updated = [...workshopMilestones];
+                const currentHints = updated[stepIdx].hints || [];
+                const mergedHints = Array.from(new Set([...currentHints, ...hints]));
+                updated[stepIdx] = { ...updated[stepIdx], hints: mergedHints };
+                setWorkshopMilestones(updated);
+                toast.success(`Se agregaron ${hints.length} pistas sugeridas con IA al paso.`);
+            }
+        } catch (error: any) {
+            console.error("Error al generar pistas:", error);
+            toast.error("Error al generar pistas con IA", {
+                description: error.message
+            });
+        } finally {
+            setIsGeneratingHints(false);
+        }
+    };
 
     const previewActivity = useMemo(() => {
         const titleVal = typeof document !== "undefined" ? (document.querySelector('input[name="title"]') as HTMLInputElement)?.value : "";
@@ -1221,6 +1442,8 @@ function ActivityFormDialog({
                  activity?.type === "AI_INTERVIEW" ? TEMPLATE_AI_INTERVIEW :
                  activity?.type === "VIDEO_PITCH" ? TEMPLATE_VIDEO_PITCH :
                  activity?.type === "CODE_CHALLENGE" ? TEMPLATE_CODE_CHALLENGE :
+                 activity?.type === "WORKSHOP_CODE" ? TEMPLATE_WORKSHOP_CODE :
+                 activity?.type === "WORKSHOP_GITHUB" ? TEMPLATE_WORKSHOP_GITHUB :
                  activity?.type === "PDF_REVIEW" ? TEMPLATE_PDF_REVIEW :
                  activity?.type === "MANUAL" ? TEMPLATE_MANUAL : TEMPLATE_GITHUB)
             );
@@ -1357,6 +1580,37 @@ function ActivityFormDialog({
                             setPdfMaxPages(5);
                             setPdfPageRange("1-5");
                         }
+
+                        // 8. Workshop Config
+                        if (parsedDesc.workshopConfig) {
+                            if (parsedDesc.workshopConfig.deliveryMode) {
+                                setWorkshopDeliveryMode(parsedDesc.workshopConfig.deliveryMode);
+                            }
+                            if (parsedDesc.workshopConfig.language) {
+                                setWorkshopLanguage(parsedDesc.workshopConfig.language);
+                            }
+                            if (typeof parsedDesc.workshopConfig.estimatedMinutes === "number") {
+                                setWorkshopEstimatedMinutes(parsedDesc.workshopConfig.estimatedMinutes);
+                            }
+                            if (Array.isArray(parsedDesc.workshopConfig.milestones) && parsedDesc.workshopConfig.milestones.length > 0) {
+                                setWorkshopMilestones(parsedDesc.workshopConfig.milestones);
+                            }
+                        } else {
+                            setWorkshopDeliveryMode("TUTORIAL");
+                            setWorkshopLanguage("java");
+                            setWorkshopEstimatedMinutes(45);
+                            setWorkshopMilestones([
+                                {
+                                    id: "m-1",
+                                    title: "Paso 1: Configuración Inicial",
+                                    instructions: "Implementa la lógica o pasos iniciales solicitados.",
+                                    starterCode: "// Código inicial del estudiante\n",
+                                    expectedSolution: "// Solución de referencia\n",
+                                    hints: ["Lee con atención el enunciado", "Asegúrate de comprobar tipos"],
+                                    order: 1
+                                }
+                            ]);
+                        }
                     }
                 } catch {
                     // Si hubo error de parseo o era texto plano, recuperar archivos de código del enunciado si aplica
@@ -1394,6 +1648,8 @@ function ActivityFormDialog({
             statement === TEMPLATE_AI_INTERVIEW || 
             statement === TEMPLATE_VIDEO_PITCH || 
             statement === TEMPLATE_CODE_CHALLENGE || 
+            statement === TEMPLATE_WORKSHOP_CODE || 
+            statement === TEMPLATE_WORKSHOP_GITHUB || 
             statement === TEMPLATE_PDF_REVIEW || 
             statement === TEMPLATE_MANUAL)) {
             
@@ -1402,6 +1658,8 @@ function ActivityFormDialog({
             else if (selectedType === "AI_INTERVIEW") setStatement(TEMPLATE_AI_INTERVIEW);
             else if (selectedType === "VIDEO_PITCH") setStatement(TEMPLATE_VIDEO_PITCH);
             else if (selectedType === "CODE_CHALLENGE") setStatement(TEMPLATE_CODE_CHALLENGE);
+            else if (selectedType === "WORKSHOP_CODE") setStatement(TEMPLATE_WORKSHOP_CODE);
+            else if (selectedType === "WORKSHOP_GITHUB") setStatement(TEMPLATE_WORKSHOP_GITHUB);
             else if (selectedType === "PDF_REVIEW") setStatement(TEMPLATE_PDF_REVIEW);
             else if (selectedType === "MANUAL") setStatement(TEMPLATE_MANUAL);
         }
@@ -1766,6 +2024,20 @@ function ActivityFormDialog({
                         pageRange: pdfPageRange,
                     }
                 }));
+            } else if (selectedType === "WORKSHOP_CODE" || selectedType === "WORKSHOP_GITHUB") {
+                formData.set("description", JSON.stringify({
+                    hasChecklist: hasChecklist,
+                    aiWeight: aiWeight,
+                    checklistWeight: checklistWeight,
+                    criteria: criteria,
+                    workshopConfig: {
+                        type: selectedType,
+                        deliveryMode: workshopDeliveryMode,
+                        language: workshopLanguage,
+                        estimatedMinutes: Number(workshopEstimatedMinutes) || 45,
+                        milestones: workshopMilestones,
+                    }
+                }));
             } else if (hasChecklist && selectedType === "GITHUB") {
                 formData.set("description", JSON.stringify({
                     hasChecklist: true,
@@ -1846,8 +2118,8 @@ function ActivityFormDialog({
                                             {isEdit ? "Editar Actividad" : "Crear Nueva Actividad"}
                                         </h2>
                                         {isEdit && (
-                                            <Badge variant="outline" className="font-mono text-[10px] hidden sm:inline-flex shrink-0 font-semibold">
-                                                {activity.type}
+                                            <Badge variant="outline" className={cn("text-[10px] hidden sm:inline-flex shrink-0 font-semibold gap-1", getActivityTypeInfo(activity.type).badgeColor)}>
+                                                {getActivityTypeInfo(activity.type).label}
                                             </Badge>
                                         )}
                                     </div>
@@ -1859,7 +2131,7 @@ function ActivityFormDialog({
 
                             {/* Derecha: Botones de Acción */}
                             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                                {selectedType === "CODE_CHALLENGE" && (
+                                {(selectedType === "CODE_CHALLENGE" || selectedType === "WORKSHOP_CODE" || selectedType === "WORKSHOP_GITHUB") && (
                                     <Button
                                         type="button"
                                         variant="outline"
@@ -1909,7 +2181,7 @@ function ActivityFormDialog({
                                     <FileText className="h-3.5 w-3.5 shrink-0" />
                                     <span>Contenido y Rúbrica</span>
                                 </TabsTrigger>
-                                {(selectedType === "GITHUB" || selectedType === "PDF_REVIEW" || selectedType === "CODE_CHALLENGE" || selectedType === "VIDEO_PITCH" || selectedType === "AI_INTERVIEW" || selectedType === "DB_MODELING") && hasChecklist && (
+                                {(selectedType === "GITHUB" || selectedType === "PDF_REVIEW" || selectedType === "CODE_CHALLENGE" || selectedType === "VIDEO_PITCH" || selectedType === "AI_INTERVIEW" || selectedType === "DB_MODELING" || selectedType === "WORKSHOP_CODE" || selectedType === "WORKSHOP_GITHUB") && hasChecklist && (
                                     <TabsTrigger value="checklist" className="text-xs px-2.5 sm:px-3.5 h-7 font-semibold gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-xs">
                                         <ListChecks className="h-3.5 w-3.5 text-primary shrink-0" />
                                         <span>Lista de Chequeo</span>
@@ -2016,6 +2288,12 @@ function ActivityFormDialog({
                                                                     } else if (t.id === "CODE_CHALLENGE") {
                                                                         setStatement(TEMPLATE_CODE_CHALLENGE);
                                                                         setDescription(TEMPLATE_CODE_CHALLENGE);
+                                                                    } else if (t.id === "WORKSHOP_CODE") {
+                                                                        setStatement(TEMPLATE_WORKSHOP_CODE);
+                                                                        setDescription(TEMPLATE_WORKSHOP_CODE);
+                                                                    } else if (t.id === "WORKSHOP_GITHUB") {
+                                                                        setStatement(TEMPLATE_WORKSHOP_GITHUB);
+                                                                        setDescription(TEMPLATE_WORKSHOP_GITHUB);
                                                                     } else if (t.id === "PDF_REVIEW") {
                                                                         setStatement(TEMPLATE_PDF_REVIEW);
                                                                         setDescription(TEMPLATE_PDF_REVIEW);
@@ -3232,6 +3510,220 @@ function ActivityFormDialog({
                                             </div>
                                         )}
 
+                                        {/* Configuración específica para WORKSHOP_CODE y WORKSHOP_GITHUB */}
+                                        {(selectedType === "WORKSHOP_CODE" || selectedType === "WORKSHOP_GITHUB") && (
+                                            <div className="space-y-4 flex-1 flex flex-col">
+                                                {/* Banner informativo */}
+                                                <div className={cn(
+                                                    "p-3.5 rounded-xl border text-xs space-y-1.5",
+                                                    selectedType === "WORKSHOP_CODE" 
+                                                        ? "border-cyan-500/20 bg-cyan-500/5" 
+                                                        : "border-orange-500/20 bg-orange-500/5"
+                                                )}>
+                                                    <div className="flex items-center gap-2 font-bold text-foreground text-xs">
+                                                        {selectedType === "WORKSHOP_CODE" ? (
+                                                            <>
+                                                                <Terminal className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
+                                                                <span>Taller Codelab de Programación (Paso a Paso)</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <GitBranch className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                                                                <span>Taller / Reto Git & GitHub (Paso a Paso)</span>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                                        {selectedType === "WORKSHOP_CODE"
+                                                            ? "Los estudiantes resuelven pasos secuenciales en el editor integrado Monaco, con código inicial, pistas y validación interactiva paso a paso."
+                                                            : "Los estudiantes realizan commits y avances paso a paso en su repositorio de GitHub, entregando el enlace de auditoría al finalizar."}
+                                                    </p>
+                                                </div>
+
+                                                {/* Parámetros Generales del Taller */}
+                                                <div className="p-4 bg-card rounded-xl border border-border/70 shadow-xs space-y-4">
+                                                    <div className="flex items-center justify-between pb-2 border-b border-border/60">
+                                                        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                                            <SlidersHorizontal className="h-3.5 w-3.5 text-primary" />
+                                                            Parámetros del Taller
+                                                        </span>
+                                                        <Badge variant="outline" className="text-[10px] font-mono">
+                                                            {workshopMilestones.length} {workshopMilestones.length === 1 ? "paso" : "pasos"}
+                                                        </Badge>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                        {/* Modo pedagógico */}
+                                                        <div className="space-y-1.5">
+                                                            <Label className="text-xs font-semibold text-foreground">Modo de Entrega</Label>
+                                                            <div className="grid grid-cols-2 gap-2">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setWorkshopDeliveryMode("TUTORIAL")}
+                                                                    className={cn(
+                                                                        "p-2.5 rounded-lg border text-left transition-all text-xs flex flex-col gap-0.5",
+                                                                        workshopDeliveryMode === "TUTORIAL"
+                                                                            ? "border-primary bg-primary/10 text-primary font-bold ring-1 ring-primary/40"
+                                                                            : "border-border hover:bg-muted/40 text-muted-foreground"
+                                                                    )}
+                                                                >
+                                                                    <span className="flex items-center gap-1.5">🎓 Tutorial Guiado</span>
+                                                                    <span className="text-[10px] opacity-80">Paso a paso con pistas</span>
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setWorkshopDeliveryMode("CHALLENGE")}
+                                                                    className={cn(
+                                                                        "p-2.5 rounded-lg border text-left transition-all text-xs flex flex-col gap-0.5",
+                                                                        workshopDeliveryMode === "CHALLENGE"
+                                                                            ? "border-primary bg-primary/10 text-primary font-bold ring-1 ring-primary/40"
+                                                                            : "border-border hover:bg-muted/40 text-muted-foreground"
+                                                                    )}
+                                                                >
+                                                                    <span className="flex items-center gap-1.5">🏆 Reto / Desafío</span>
+                                                                    <span className="text-[10px] opacity-80">Evaluación secuencial</span>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Tiempo Estimado y Lenguaje */}
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            {selectedType === "WORKSHOP_CODE" && (
+                                                                <div className="space-y-1.5">
+                                                                    <Label className="text-xs font-semibold text-foreground">Lenguaje</Label>
+                                                                    <Select value={workshopLanguage} onValueChange={setWorkshopLanguage}>
+                                                                        <SelectTrigger className="h-9 text-xs">
+                                                                            <SelectValue placeholder="Lenguaje" />
+                                                                        </SelectTrigger>
+                                                                        <SelectContent>
+                                                                            <SelectItem value="java">Java</SelectItem>
+                                                                            <SelectItem value="javascript">JavaScript</SelectItem>
+                                                                            <SelectItem value="typescript">TypeScript</SelectItem>
+                                                                            <SelectItem value="python">Python</SelectItem>
+                                                                            <SelectItem value="csharp">C#</SelectItem>
+                                                                            <SelectItem value="cpp">C++</SelectItem>
+                                                                            <SelectItem value="php">PHP</SelectItem>
+                                                                            <SelectItem value="go">Go</SelectItem>
+                                                                            <SelectItem value="sql">SQL</SelectItem>
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                </div>
+                                                            )}
+                                                            <div className={cn("space-y-1.5", selectedType !== "WORKSHOP_CODE" && "col-span-2")}>
+                                                                <Label className="text-xs font-semibold text-foreground">Tiempo Estimado (min)</Label>
+                                                                <Input
+                                                                    type="number"
+                                                                    min={5}
+                                                                    max={600}
+                                                                    step={5}
+                                                                    value={workshopEstimatedMinutes}
+                                                                    onChange={(e) => setWorkshopEstimatedMinutes(Math.max(5, parseInt(e.target.value) || 30))}
+                                                                    className="h-9 text-xs"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Indicador y botón para configurar pasos en Contenido y Rúbrica */}
+                                                <div className="p-4 rounded-xl border border-primary/25 bg-primary/[0.03] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                                                            <Layers className="h-5 w-5 text-primary" />
+                                                        </div>
+                                                        <div className="space-y-0.5">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-xs font-bold text-foreground">Configuración de Pasos del Taller</span>
+                                                                <Badge variant="outline" className="text-[10px] font-mono font-bold bg-background">
+                                                                    {workshopMilestones.length} {workshopMilestones.length === 1 ? "paso" : "pasos"}
+                                                                </Badge>
+                                                            </div>
+                                                            <p className="text-[11px] text-muted-foreground leading-tight">
+                                                                Los pasos, consignas, código, pistas y asistentes de IA se configuran en la pestaña <strong>Contenido y Rúbrica</strong>.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            setActiveTab("content");
+                                                            setWorkshopContentView("steps");
+                                                        }}
+                                                        className="h-8 text-xs font-bold gap-1.5 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs cursor-pointer"
+                                                    >
+                                                        <span>Configurar en Contenido</span>
+                                                        <ArrowRight className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </div>
+
+                                                {/* Checklist / Sustentación Docente */}
+                                                <div className="p-3.5 bg-muted/15 rounded-xl border border-border/60 space-y-3">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="space-y-0.5">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <ListChecks className="h-4 w-4 text-primary" />
+                                                                <Label htmlFor="has-checklist-workshop" className="text-xs font-bold text-foreground cursor-pointer">
+                                                                    Incluir Rúbrica / Lista de Chequeo Docente
+                                                                </Label>
+                                                            </div>
+                                                            <p className="text-[11px] text-muted-foreground">
+                                                                Permite calificar aspectos específicos o sustentación oral junto con la resolución de los pasos.
+                                                            </p>
+                                                        </div>
+                                                        <Switch
+                                                            id="has-checklist-workshop"
+                                                            checked={hasChecklist}
+                                                            onCheckedChange={(checked) => {
+                                                                setHasChecklist(checked);
+                                                                if (checked && criteria.length === 0) {
+                                                                    handleGenerateCriteria();
+                                                                }
+                                                            }}
+                                                        />
+                                                    </div>
+
+                                                    {hasChecklist && (
+                                                        <div className="pt-2 border-t border-border/50 space-y-3">
+                                                            <div className="flex items-center justify-between text-xs">
+                                                                <span className="font-semibold text-muted-foreground flex items-center gap-1.5">
+                                                                    <Scale className="h-3.5 w-3.5 text-primary" />
+                                                                    Ponderación de la Calificación
+                                                                </span>
+                                                                <Badge variant="outline" className="text-[10px] font-mono">
+                                                                    {aiWeight}% Taller + {checklistWeight}% Sustentación = 100%
+                                                                </Badge>
+                                                            </div>
+                                                            <div className="grid grid-cols-2 gap-3">
+                                                                <div>
+                                                                    <Label className="text-[11px] text-muted-foreground">Peso Resolución Taller ({aiWeight}%)</Label>
+                                                                    <Input
+                                                                        type="number"
+                                                                        min={0}
+                                                                        max={100}
+                                                                        value={aiWeight}
+                                                                        onChange={(e) => handleAiWeightChange(Number(e.target.value))}
+                                                                        className="h-7 text-xs font-mono font-bold"
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <Label className="text-[11px] text-muted-foreground">Peso Sustentación Docente ({checklistWeight}%)</Label>
+                                                                    <Input
+                                                                        type="number"
+                                                                        min={0}
+                                                                        max={100}
+                                                                        value={checklistWeight}
+                                                                        onChange={(e) => handleChecklistWeightChange(Number(e.target.value))}
+                                                                        className="h-7 text-xs font-mono font-bold"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+
                                         {selectedType === "VIDEO_PITCH" && (
                                             <div className="space-y-4 flex-1 flex flex-col">
                                                 <div className="p-3.5 rounded-xl border border-rose-500/20 bg-rose-500/5 text-xs space-y-1.5">
@@ -4055,48 +4547,72 @@ function ActivityFormDialog({
                                                 <div className="p-3 bg-muted/15 rounded-xl border border-border/60 space-y-2.5">
                                                     <div className="flex items-center justify-between">
                                                         <Label className="text-xs font-bold text-foreground">Entidades / Tablas Obligatorias</Label>
-                                                        <Button
-                                                            type="button"
-                                                            size="sm"
-                                                            variant="outline"
-                                                            onClick={() => {
-                                                                setDbRequiredEntities([
-                                                                    ...dbRequiredEntities,
-                                                                    `Tabla_${dbRequiredEntities.length + 1}`
-                                                                ]);
-                                                            }}
-                                                            className="h-6 text-[10px] gap-1 px-2 text-primary hover:text-primary"
-                                                        >
-                                                            <Plus className="h-3 w-3" /> Añadir
-                                                        </Button>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={handleGenerateDbEntities}
+                                                                disabled={isGeneratingDbEntities}
+                                                                className="h-6 text-[10px] gap-1 px-2 text-primary hover:text-primary border-primary/30 hover:bg-primary/5 font-semibold"
+                                                                title="Extraer o deducir entidades/tablas obligatorias basadas en el enunciado con IA"
+                                                            >
+                                                                {isGeneratingDbEntities ? (
+                                                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                                                ) : (
+                                                                    <Sparkles className="h-3 w-3 text-purple-600" />
+                                                                )}
+                                                                {isGeneratingDbEntities ? "Generando..." : "Generar con IA"}
+                                                            </Button>
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => {
+                                                                    setDbRequiredEntities([
+                                                                        ...dbRequiredEntities,
+                                                                        `Tabla_${dbRequiredEntities.length + 1}`
+                                                                    ]);
+                                                                }}
+                                                                className="h-6 text-[10px] gap-1 px-2 text-primary hover:text-primary"
+                                                            >
+                                                                <Plus className="h-3 w-3" /> Añadir
+                                                            </Button>
+                                                        </div>
                                                     </div>
 
                                                     <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                                                        {dbRequiredEntities.map((entity, idx) => (
-                                                            <div key={idx} className="flex items-center gap-2 bg-background p-1.5 rounded-lg border">
-                                                                <span className="text-[10px] font-bold text-muted-foreground w-4 text-center">#{idx + 1}</span>
-                                                                <Input
-                                                                    value={entity}
-                                                                    onChange={(e) => {
-                                                                        const updated = [...dbRequiredEntities];
-                                                                        updated[idx] = e.target.value;
-                                                                        setDbRequiredEntities(updated);
-                                                                    }}
-                                                                    className="h-6 text-xs flex-1 border-none shadow-none focus-visible:ring-0 p-0"
-                                                                />
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="ghost"
-                                                                    size="sm"
-                                                                    onClick={() => {
-                                                                        setDbRequiredEntities(dbRequiredEntities.filter((_, i) => i !== idx));
-                                                                    }}
-                                                                    className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive"
-                                                                >
-                                                                    <Trash2 className="h-3 w-3" />
-                                                                </Button>
+                                                        {dbRequiredEntities.length === 0 ? (
+                                                            <div className="text-center py-3 text-[11px] text-muted-foreground border border-dashed rounded-lg bg-background/50">
+                                                                No hay entidades definidas. Pulsa <strong>Generar con IA</strong> o <strong>Añadir</strong>.
                                                             </div>
-                                                        ))}
+                                                        ) : (
+                                                            dbRequiredEntities.map((entity, idx) => (
+                                                                <div key={idx} className="flex items-center gap-2 bg-background p-1.5 rounded-lg border">
+                                                                    <span className="text-[10px] font-bold text-muted-foreground w-4 text-center">#{idx + 1}</span>
+                                                                    <Input
+                                                                        value={entity}
+                                                                        onChange={(e) => {
+                                                                            const updated = [...dbRequiredEntities];
+                                                                            updated[idx] = e.target.value;
+                                                                            setDbRequiredEntities(updated);
+                                                                        }}
+                                                                        className="h-6 text-xs flex-1 border-none shadow-none focus-visible:ring-0 p-0"
+                                                                    />
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        onClick={() => {
+                                                                            setDbRequiredEntities(dbRequiredEntities.filter((_, i) => i !== idx));
+                                                                        }}
+                                                                        className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive"
+                                                                    >
+                                                                        <Trash2 className="h-3 w-3" />
+                                                                    </Button>
+                                                                </div>
+                                                            ))
+                                                        )}
                                                     </div>
                                                 </div>
 
@@ -4224,68 +4740,581 @@ function ActivityFormDialog({
                                 activeTab !== "content" && "!hidden"
                             )}
                         >
-                            <div className="flex flex-col h-full min-h-0 overflow-hidden space-y-2">
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 shrink-0 px-1">
-                                    <div>
-                                        <Label className="text-xs sm:text-sm font-bold">
-                                            Enunciado / Rúbrica de Evaluación (Markdown)
-                                        </Label>
-                                        <p className="text-[11px] text-muted-foreground leading-tight">
-                                            Define los criterios de evaluación y porcentajes claros para la calificación.
-                                            {selectedType !== "MANUAL" && (
-                                                <span className="text-amber-600 dark:text-amber-400 font-medium inline ml-1">
-                                                    ⚠️ Pautas de formato físico de entrega (ZIP/PDF) serán ignoradas por la IA.
-                                                </span>
+                            {(selectedType === "WORKSHOP_CODE" || selectedType === "WORKSHOP_GITHUB") ? (
+                                <div className="flex flex-col h-full min-h-0 overflow-hidden space-y-2.5">
+                                    {/* Sub-cabecera con pestañas de Pasos vs Enunciado */}
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 shrink-0 px-1 pb-2 border-b border-border/70">
+                                        <div className="flex items-center gap-1.5 sm:gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => setWorkshopContentView("steps")}
+                                                className={cn(
+                                                    "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer",
+                                                    workshopContentView === "steps"
+                                                        ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                                                        : "bg-card text-muted-foreground hover:text-foreground border-border/60"
+                                                )}
+                                            >
+                                                <Layers className="h-3.5 w-3.5" />
+                                                <span>Configuración de Pasos ({workshopMilestones.length})</span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setWorkshopContentView("statement")}
+                                                className={cn(
+                                                    "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer",
+                                                    workshopContentView === "statement"
+                                                        ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                                                        : "bg-card text-muted-foreground hover:text-foreground border-border/60"
+                                                )}
+                                            >
+                                                <FileText className="h-3.5 w-3.5" />
+                                                <span>Enunciado General / Rúbrica</span>
+                                            </button>
+                                        </div>
+
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            {workshopContentView === "steps" ? (
+                                                <>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        onClick={() => setIsAiAllStepsOpen(true)}
+                                                        className="h-8 text-xs font-semibold gap-1.5 bg-gradient-to-r from-primary to-primary/85 hover:from-primary/95 hover:to-primary text-primary-foreground shadow-xs transition-all cursor-pointer"
+                                                    >
+                                                        <Sparkles className="h-3.5 w-3.5 shrink-0" />
+                                                        <span>Generar Todo con IA</span>
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => {
+                                                            const newOrder = workshopMilestones.length + 1;
+                                                            const newStep = {
+                                                                id: `m-${Date.now()}`,
+                                                                title: `Paso ${newOrder}: Nueva Etapa`,
+                                                                instructions: "Describe las instrucciones y consignas para este paso...",
+                                                                starterCode: selectedType === "WORKSHOP_CODE" ? "// Código inicial del estudiante\n" : undefined,
+                                                                expectedSolution: selectedType === "WORKSHOP_CODE" ? "// Solución esperada\n" : undefined,
+                                                                hints: ["Pista de ayuda inicial"],
+                                                                order: newOrder
+                                                            };
+                                                            setWorkshopMilestones([...workshopMilestones, newStep]);
+                                                            setActiveWorkshopStepIdx(workshopMilestones.length);
+                                                        }}
+                                                        className="h-8 text-xs font-semibold gap-1.5 cursor-pointer"
+                                                    >
+                                                        <Plus className="h-3.5 w-3.5" />
+                                                        <span>Añadir Paso</span>
+                                                    </Button>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            setAiInitialContent(undefined);
+                                                            setIsAIGeneratorOpen(true);
+                                                        }}
+                                                        className="h-8 text-xs font-semibold gap-1.5 bg-gradient-to-r from-primary to-primary/85 hover:from-primary/95 hover:to-primary text-primary-foreground shadow-xs transition-all cursor-pointer"
+                                                    >
+                                                        <Sparkles className="h-3.5 w-3.5 shrink-0" />
+                                                        <span>Generar Enunciado con IA</span>
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => {
+                                                            setAiInitialContent(statement);
+                                                            setIsAIGeneratorOpen(true);
+                                                        }}
+                                                        disabled={!statement || statement.trim().length < 10}
+                                                        className="h-8 text-xs font-semibold gap-1.5 border-primary/40 text-primary hover:bg-primary/10 hover:text-primary transition-all cursor-pointer shadow-2xs"
+                                                    >
+                                                        <MessageSquare className="h-3.5 w-3.5 text-primary shrink-0" />
+                                                        <span>Chat IA</span>
+                                                    </Button>
+                                                </>
                                             )}
-                                        </p>
-                                    </div>
-                                    <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
-                                        <Button
-                                            type="button"
-                                            size="sm"
-                                            onClick={() => {
-                                                setAiInitialContent(undefined);
-                                                setIsAIGeneratorOpen(true);
-                                            }}
-                                            className="h-8 text-xs font-semibold gap-1.5 bg-gradient-to-r from-primary to-primary/85 hover:from-primary/95 hover:to-primary text-primary-foreground shadow-xs transition-all cursor-pointer"
-                                        >
-                                            <Sparkles className="h-3.5 w-3.5 shrink-0" />
-                                            <span className="hidden sm:inline">Generar Enunciado con IA</span>
-                                            <span className="sm:hidden">Generar con IA</span>
-                                        </Button>
-                                        <Button
-                                            type="button"
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => {
-                                                setAiInitialContent(statement);
-                                                setIsAIGeneratorOpen(true);
-                                            }}
-                                            disabled={!statement || statement.trim().length < 10}
-                                            className="h-8 text-xs font-semibold gap-1.5 border-primary/40 text-primary hover:bg-primary/10 hover:text-primary transition-all cursor-pointer shadow-2xs"
-                                            title="Toma el enunciado actual del editor y abre el chat de IA para modificarlo, adaptarlo o mejorarlo interactivamente"
-                                        >
-                                            <MessageSquare className="h-3.5 w-3.5 text-primary shrink-0" />
-                                            <span className="hidden sm:inline">Modificar con Chat IA</span>
-                                            <span className="sm:hidden">Chat IA</span>
-                                        </Button>
-                                        <div className="text-[11px] text-muted-foreground items-center gap-1.5 hidden md:flex pl-2 border-l border-border/60">
-                                            <Sparkles className="h-3.5 w-3.5 text-primary" />
-                                            <span>Markdown con vista previa en vivo</span>
                                         </div>
                                     </div>
-                                </div>
 
-                                <div className="flex-1 border border-border/70 rounded-xl overflow-hidden shadow-2xs min-h-0 h-full bg-background" data-color-mode={mode}>
-                                    <MDEditor
-                                        value={statement}
-                                        onChange={(val) => setStatement(val || "")}
-                                        height="100%"
-                                        preview="live"
-                                        className="h-full border-none"
-                                    />
+                                    {/* Vista 1: Configuración Completa de Pasos (Maestro-Detalle: Lista a la Izquierda, Contenido a la Derecha) */}
+                                    {workshopContentView === "steps" && (
+                                        <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-3 overflow-hidden">
+                                            {/* Columna Izquierda: Lista Vertical de Pasos */}
+                                            <div className="w-full md:w-64 lg:w-72 shrink-0 flex flex-col bg-card rounded-xl border border-border/70 shadow-2xs overflow-hidden">
+                                                <div className="p-3 border-b border-border/60 flex items-center justify-between gap-2 shrink-0 bg-muted/20">
+                                                    <div className="flex items-center gap-2">
+                                                        <Layers className="h-4 w-4 text-primary" />
+                                                        <span className="text-xs font-bold text-foreground">Pasos ({workshopMilestones.length})</span>
+                                                    </div>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        onClick={() => {
+                                                            const newOrder = workshopMilestones.length + 1;
+                                                            const newStep = {
+                                                                id: `m-${Date.now()}`,
+                                                                title: `Paso ${newOrder}: Nueva Etapa`,
+                                                                instructions: "Describe las instrucciones y consignas para este paso...",
+                                                                starterCode: selectedType === "WORKSHOP_CODE" ? "// Código inicial del estudiante\n" : undefined,
+                                                                expectedSolution: selectedType === "WORKSHOP_CODE" ? "// Solución esperada\n" : undefined,
+                                                                hints: ["Pista de ayuda inicial"],
+                                                                order: newOrder
+                                                            };
+                                                            setWorkshopMilestones([...workshopMilestones, newStep]);
+                                                            setActiveWorkshopStepIdx(workshopMilestones.length);
+                                                        }}
+                                                        className="h-7 text-xs px-2 text-primary hover:text-primary gap-1 cursor-pointer"
+                                                    >
+                                                        <Plus className="h-3.5 w-3.5" />
+                                                        <span>Añadir</span>
+                                                    </Button>
+                                                </div>
+
+                                                <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1.5 custom-scrollbar">
+                                                    {workshopMilestones.map((m, idx) => {
+                                                        const isActive = activeWorkshopStepIdx === idx;
+                                                        return (
+                                                            <div
+                                                                key={m.id || idx}
+                                                                onClick={() => setActiveWorkshopStepIdx(idx)}
+                                                                className={cn(
+                                                                    "group relative flex items-start gap-2.5 p-2.5 rounded-lg text-xs transition-all border cursor-pointer select-none",
+                                                                    isActive
+                                                                        ? "bg-primary/10 border-primary text-primary font-bold shadow-2xs ring-1 ring-primary/30"
+                                                                        : "bg-background/60 hover:bg-muted/40 border-border/60 text-muted-foreground hover:text-foreground"
+                                                                )}
+                                                            >
+                                                                <span className={cn(
+                                                                    "w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5",
+                                                                    isActive ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
+                                                                )}>
+                                                                    {idx + 1}
+                                                                </span>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <div className={cn("truncate text-xs font-semibold leading-tight", isActive ? "text-primary font-bold" : "text-foreground")}>
+                                                                        {m.title || `Paso ${idx + 1}`}
+                                                                    </div>
+                                                                    <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground">
+                                                                        <span>{m.hints?.length || 0} pistas</span>
+                                                                        {selectedType === "WORKSHOP_CODE" && m.starterCode && (
+                                                                            <span>• Código base</span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                                                    <button
+                                                                        type="button"
+                                                                        disabled={idx === 0}
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            if (idx === 0) return;
+                                                                            const updated = [...workshopMilestones];
+                                                                            const temp = updated[idx - 1];
+                                                                            updated[idx - 1] = updated[idx];
+                                                                            updated[idx] = temp;
+                                                                            setWorkshopMilestones(updated.map((s, i) => ({ ...s, order: i + 1 })));
+                                                                            if (activeWorkshopStepIdx === idx) setActiveWorkshopStepIdx(idx - 1);
+                                                                        }}
+                                                                        className="p-1 hover:text-foreground text-muted-foreground disabled:opacity-20 cursor-pointer"
+                                                                        title="Subir"
+                                                                    >
+                                                                        <ChevronUp className="h-3 w-3" />
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        disabled={idx === workshopMilestones.length - 1}
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            if (idx === workshopMilestones.length - 1) return;
+                                                                            const updated = [...workshopMilestones];
+                                                                            const temp = updated[idx + 1];
+                                                                            updated[idx + 1] = updated[idx];
+                                                                            updated[idx] = temp;
+                                                                            setWorkshopMilestones(updated.map((s, i) => ({ ...s, order: i + 1 })));
+                                                                            if (activeWorkshopStepIdx === idx) setActiveWorkshopStepIdx(idx + 1);
+                                                                        }}
+                                                                        className="p-1 hover:text-foreground text-muted-foreground disabled:opacity-20 cursor-pointer"
+                                                                        title="Bajar"
+                                                                    >
+                                                                        <ChevronDown className="h-3 w-3" />
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        disabled={workshopMilestones.length <= 1}
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            const updated = workshopMilestones.filter((_, i) => i !== idx);
+                                                                            setWorkshopMilestones(updated.map((s, i) => ({ ...s, order: i + 1 })));
+                                                                            setActiveWorkshopStepIdx(Math.max(0, Math.min(activeWorkshopStepIdx, updated.length - 1)));
+                                                                        }}
+                                                                        className="p-1 hover:text-destructive text-muted-foreground disabled:opacity-20 cursor-pointer"
+                                                                        title="Eliminar"
+                                                                    >
+                                                                        <Trash2 className="h-3 w-3" />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+
+                                            {/* Columna Derecha: Contenedor del Paso Seleccionado con scroll propio */}
+                                            {workshopMilestones[activeWorkshopStepIdx] ? (
+                                                <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4 custom-scrollbar">
+                                                    <div className="p-4 bg-card rounded-xl border border-border/70 shadow-2xs space-y-3.5">
+                                                        {/* Fila superior: Título, orden, Asistente IA y eliminar */}
+                                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                                                            <div className="flex items-center gap-2 flex-1">
+                                                                <Badge variant="outline" className="text-xs font-mono font-bold shrink-0 bg-muted/50 px-2 py-0.5">
+                                                                    Paso {activeWorkshopStepIdx + 1} de {workshopMilestones.length}
+                                                                </Badge>
+                                                                <Input
+                                                                    value={workshopMilestones[activeWorkshopStepIdx].title}
+                                                                    onChange={(e) => {
+                                                                        const updated = [...workshopMilestones];
+                                                                        updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], title: e.target.value };
+                                                                        setWorkshopMilestones(updated);
+                                                                    }}
+                                                                    placeholder={`Título del Paso ${activeWorkshopStepIdx + 1}`}
+                                                                    className="h-8 text-xs font-bold bg-background flex-1"
+                                                                />
+                                                            </div>
+
+                                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                                <Button
+                                                                    type="button"
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    onClick={() => setIsAiSingleStepOpen(true)}
+                                                                    className="h-8 text-xs font-semibold gap-1.5 border-primary/40 text-primary hover:bg-primary/10 shadow-2xs cursor-pointer"
+                                                                >
+                                                                    <Sparkles className="h-3.5 w-3.5" />
+                                                                    <span>Asistir Paso con IA</span>
+                                                                </Button>
+
+                                                                <div className="flex items-center border rounded-lg bg-background">
+                                                                    <Button
+                                                                        type="button"
+                                                                        size="icon"
+                                                                        variant="ghost"
+                                                                        disabled={activeWorkshopStepIdx === 0}
+                                                                        onClick={() => {
+                                                                            if (activeWorkshopStepIdx === 0) return;
+                                                                            const updated = [...workshopMilestones];
+                                                                            const temp = updated[activeWorkshopStepIdx - 1];
+                                                                            updated[activeWorkshopStepIdx - 1] = updated[activeWorkshopStepIdx];
+                                                                            updated[activeWorkshopStepIdx] = temp;
+                                                                            setWorkshopMilestones(updated.map((s, i) => ({ ...s, order: i + 1 })));
+                                                                            setActiveWorkshopStepIdx(activeWorkshopStepIdx - 1);
+                                                                        }}
+                                                                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                                        title="Subir posición"
+                                                                    >
+                                                                        <ChevronUp className="h-3.5 w-3.5" />
+                                                                    </Button>
+                                                                    <Button
+                                                                        type="button"
+                                                                        size="icon"
+                                                                        variant="ghost"
+                                                                        disabled={activeWorkshopStepIdx === workshopMilestones.length - 1}
+                                                                        onClick={() => {
+                                                                            if (activeWorkshopStepIdx === workshopMilestones.length - 1) return;
+                                                                            const updated = [...workshopMilestones];
+                                                                            const temp = updated[activeWorkshopStepIdx + 1];
+                                                                            updated[activeWorkshopStepIdx + 1] = updated[activeWorkshopStepIdx];
+                                                                            updated[activeWorkshopStepIdx] = temp;
+                                                                            setWorkshopMilestones(updated.map((s, i) => ({ ...s, order: i + 1 })));
+                                                                            setActiveWorkshopStepIdx(activeWorkshopStepIdx + 1);
+                                                                        }}
+                                                                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                                        title="Bajar posición"
+                                                                    >
+                                                                        <ChevronDown className="h-3.5 w-3.5" />
+                                                                    </Button>
+                                                                </div>
+
+                                                                <Button
+                                                                    type="button"
+                                                                    size="icon"
+                                                                    variant="ghost"
+                                                                    disabled={workshopMilestones.length <= 1}
+                                                                    onClick={() => {
+                                                                        const updated = workshopMilestones.filter((_, i) => i !== activeWorkshopStepIdx);
+                                                                        setWorkshopMilestones(updated.map((s, i) => ({ ...s, order: i + 1 })));
+                                                                        setActiveWorkshopStepIdx(Math.max(0, activeWorkshopStepIdx - 1));
+                                                                    }}
+                                                                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                                                    title="Eliminar paso"
+                                                                >
+                                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Instrucciones del Paso (Markdown) */}
+                                                        <div className="space-y-1.5">
+                                                            <div className="flex items-center justify-between">
+                                                                <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                                                                    <BookOpen className="h-3.5 w-3.5 text-primary" />
+                                                                    <span>Instrucciones y Requisitos del Paso (Markdown)</span>
+                                                                </Label>
+                                                                <Button
+                                                                    type="button"
+                                                                    size="sm"
+                                                                    variant="ghost"
+                                                                    onClick={() => setIsAiSingleStepOpen(true)}
+                                                                    className="h-6 text-[11px] text-primary hover:text-primary gap-1"
+                                                                >
+                                                                    <Sparkles className="h-3 w-3" />
+                                                                    <span>Mejorar Redacción con IA</span>
+                                                                </Button>
+                                                            </div>
+                                                            <Textarea
+                                                                rows={6}
+                                                                value={workshopMilestones[activeWorkshopStepIdx].instructions}
+                                                                onChange={(e) => {
+                                                                    const updated = [...workshopMilestones];
+                                                                    updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], instructions: e.target.value };
+                                                                    setWorkshopMilestones(updated);
+                                                                }}
+                                                                placeholder="Indica qué debe realizar el estudiante en este paso, reglas y directrices..."
+                                                                className="text-xs bg-background leading-relaxed resize-y font-normal"
+                                                            />
+                                                        </div>
+
+                                                        {/* Código Inicial y Solución Esperada para WORKSHOP_CODE */}
+                                                        {selectedType === "WORKSHOP_CODE" && (
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                                                                <div className="space-y-1.5 p-3 rounded-xl border border-cyan-500/20 bg-cyan-500/[0.03]">
+                                                                    <div className="flex items-center justify-between">
+                                                                        <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                                                                            <Code2 className="h-3.5 w-3.5 text-cyan-500" />
+                                                                            <span>Código Inicial (Plantilla para el Alumno)</span>
+                                                                        </Label>
+                                                                        <Button
+                                                                            type="button"
+                                                                            size="sm"
+                                                                            variant="ghost"
+                                                                            onClick={() => setIsAiSingleStepOpen(true)}
+                                                                            className="h-6 text-[11px] text-cyan-600 dark:text-cyan-400 gap-1"
+                                                                        >
+                                                                            <Sparkles className="h-3 w-3" />
+                                                                            <span>Generar con IA</span>
+                                                                        </Button>
+                                                                    </div>
+                                                                    <Textarea
+                                                                        rows={8}
+                                                                        value={workshopMilestones[activeWorkshopStepIdx].starterCode || ""}
+                                                                        onChange={(e) => {
+                                                                            const updated = [...workshopMilestones];
+                                                                            updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], starterCode: e.target.value };
+                                                                            setWorkshopMilestones(updated);
+                                                                        }}
+                                                                        placeholder="// Código base que verá el estudiante al iniciar este paso"
+                                                                        className="text-xs font-mono bg-background resize-y leading-relaxed"
+                                                                    />
+                                                                </div>
+
+                                                                <div className="space-y-1.5 p-3 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.03]">
+                                                                    <div className="flex items-center justify-between">
+                                                                        <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                                                                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                                                                            <span>Solución Esperada de Referencia (Docente)</span>
+                                                                        </Label>
+                                                                        <Button
+                                                                            type="button"
+                                                                            size="sm"
+                                                                            variant="ghost"
+                                                                            onClick={() => setIsAiSingleStepOpen(true)}
+                                                                            className="h-6 text-[11px] text-emerald-600 dark:text-emerald-400 gap-1"
+                                                                        >
+                                                                            <Sparkles className="h-3 w-3" />
+                                                                            <span>Generar con IA</span>
+                                                                        </Button>
+                                                                    </div>
+                                                                    <Textarea
+                                                                        rows={8}
+                                                                        value={workshopMilestones[activeWorkshopStepIdx].expectedSolution || ""}
+                                                                        onChange={(e) => {
+                                                                            const updated = [...workshopMilestones];
+                                                                            updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], expectedSolution: e.target.value };
+                                                                            setWorkshopMilestones(updated);
+                                                                        }}
+                                                                        placeholder="// Solución correcta de referencia"
+                                                                        className="text-xs font-mono bg-background resize-y leading-relaxed"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Pistas Pedagógicas */}
+                                                        <div className="space-y-2 pt-2 border-t border-border/60">
+                                                            <div className="flex items-center justify-between">
+                                                                <div className="flex items-center gap-2">
+                                                                    <HelpCircle className="h-3.5 w-3.5 text-amber-500" />
+                                                                    <Label className="text-xs font-semibold text-foreground">
+                                                                        Pistas y Orientaciones ({workshopMilestones[activeWorkshopStepIdx].hints?.length || 0})
+                                                                    </Label>
+                                                                </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <Button
+                                                                        type="button"
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        disabled={isGeneratingHints}
+                                                                        onClick={() => handleGenerateHintsForStep(activeWorkshopStepIdx)}
+                                                                        className="h-7 text-xs px-2.5 text-amber-700 dark:text-amber-300 border-amber-500/40 hover:bg-amber-500/10 gap-1 cursor-pointer"
+                                                                    >
+                                                                        {isGeneratingHints ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3 text-amber-500" />}
+                                                                        <span>Sugerir Pistas con IA</span>
+                                                                    </Button>
+                                                                    <Button
+                                                                        type="button"
+                                                                        size="sm"
+                                                                        variant="ghost"
+                                                                        onClick={() => {
+                                                                            const updated = [...workshopMilestones];
+                                                                            const currentHints = updated[activeWorkshopStepIdx].hints || [];
+                                                                            updated[activeWorkshopStepIdx] = {
+                                                                                ...updated[activeWorkshopStepIdx],
+                                                                                hints: [...currentHints, `Pista ${currentHints.length + 1}`]
+                                                                            };
+                                                                            setWorkshopMilestones(updated);
+                                                                        }}
+                                                                        className="h-7 text-xs px-2 text-primary hover:text-primary"
+                                                                    >
+                                                                        + Agregar Pista
+                                                                    </Button>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {(workshopMilestones[activeWorkshopStepIdx].hints || []).map((hint, hIdx) => (
+                                                                    <div key={hIdx} className="flex items-center gap-1.5 bg-background border border-border rounded-lg px-2.5 py-1 text-xs shadow-2xs">
+                                                                        <span className="text-[10px]">💡</span>
+                                                                        <input
+                                                                            value={hint}
+                                                                            onChange={(e) => {
+                                                                                const updated = [...workshopMilestones];
+                                                                                const newHints = [...(updated[activeWorkshopStepIdx].hints || [])];
+                                                                                newHints[hIdx] = e.target.value;
+                                                                                updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], hints: newHints };
+                                                                                setWorkshopMilestones(updated);
+                                                                            }}
+                                                                            className="bg-transparent border-none outline-none text-xs w-60 text-foreground"
+                                                                        />
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                const updated = [...workshopMilestones];
+                                                                                const newHints = (updated[activeWorkshopStepIdx].hints || []).filter((_, i) => i !== hIdx);
+                                                                                updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], hints: newHints };
+                                                                                setWorkshopMilestones(updated);
+                                                                            }}
+                                                                            className="text-muted-foreground hover:text-destructive text-sm ml-1 cursor-pointer"
+                                                                        >
+                                                                            ×
+                                                                        </button>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="flex-1 flex flex-col items-center justify-center border border-dashed rounded-xl p-6 text-center text-muted-foreground text-xs">
+                                                    No hay pasos configurados. Haz clic en "Generar Todo con IA" o "Añadir Paso".
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Vista 2: Enunciado General Markdown */}
+                                    {workshopContentView === "statement" && (
+                                        <div className="flex-1 border border-border/70 rounded-xl overflow-hidden shadow-2xs min-h-0 h-full bg-background" data-color-mode={mode}>
+                                            <MDEditor
+                                                value={statement}
+                                                onChange={(val) => setStatement(val || "")}
+                                                height="100%"
+                                                preview="live"
+                                                className="h-full border-none"
+                                            />
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
+                            ) : (
+                                <div className="flex flex-col h-full min-h-0 overflow-hidden space-y-2">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 shrink-0 px-1">
+                                        <div>
+                                            <Label className="text-xs sm:text-sm font-bold">
+                                                Enunciado / Rúbrica de Evaluación (Markdown)
+                                            </Label>
+                                            <p className="text-[11px] text-muted-foreground leading-tight">
+                                                Define los criterios de evaluación y porcentajes claros para la calificación.
+                                                {selectedType !== "MANUAL" && (
+                                                    <span className="text-amber-600 dark:text-amber-400 font-medium inline ml-1">
+                                                        ⚠️ Pautas de formato físico de entrega (ZIP/PDF) serán ignoradas por la IA.
+                                                    </span>
+                                                )}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                onClick={() => {
+                                                    setAiInitialContent(undefined);
+                                                    setIsAIGeneratorOpen(true);
+                                                }}
+                                                className="h-8 text-xs font-semibold gap-1.5 bg-gradient-to-r from-primary to-primary/85 hover:from-primary/95 hover:to-primary text-primary-foreground shadow-xs transition-all cursor-pointer"
+                                            >
+                                                <Sparkles className="h-3.5 w-3.5 shrink-0" />
+                                                <span className="hidden sm:inline">Generar Enunciado con IA</span>
+                                                <span className="sm:hidden">Generar con IA</span>
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => {
+                                                    setAiInitialContent(statement);
+                                                    setIsAIGeneratorOpen(true);
+                                                }}
+                                                disabled={!statement || statement.trim().length < 10}
+                                                className="h-8 text-xs font-semibold gap-1.5 border-primary/40 text-primary hover:bg-primary/10 hover:text-primary transition-all cursor-pointer shadow-2xs"
+                                                title="Toma el enunciado actual del editor y abre el chat de IA para modificarlo, adaptarlo o mejorarlo interactivamente"
+                                            >
+                                                <MessageSquare className="h-3.5 w-3.5 text-primary shrink-0" />
+                                                <span className="hidden sm:inline">Modificar con Chat IA</span>
+                                                <span className="sm:hidden">Chat IA</span>
+                                            </Button>
+                                            <div className="text-[11px] text-muted-foreground items-center gap-1.5 hidden md:flex pl-2 border-l border-border/60">
+                                                <Sparkles className="h-3.5 w-3.5 text-primary" />
+                                                <span>Markdown con vista previa en vivo</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex-1 border border-border/70 rounded-xl overflow-hidden shadow-2xs min-h-0 h-full bg-background" data-color-mode={mode}>
+                                        <MDEditor
+                                            value={statement}
+                                            onChange={(val) => setStatement(val || "")}
+                                            height="100%"
+                                            preview="live"
+                                            className="h-full border-none"
+                                        />
+                                    </div>
+                                </div>
+                            )}
                         </TabsContent>
 
                         {/* Pestaña 3: Lista de Chequeo (Evaluación con Criterios) */}
@@ -4681,16 +5710,176 @@ function ActivityFormDialog({
             <Dialog open={showStudentPreview} onOpenChange={setShowStudentPreview}>
                 <DialogContent showCloseButton={false} className="fixed inset-0 top-0 left-0 z-[100] w-screen h-screen max-w-none! sm:max-w-none! max-h-none! border-none rounded-none translate-x-0! translate-y-0! p-0 flex flex-col bg-background overflow-hidden">
                     <DialogTitle className="sr-only">Modo Estudiante - Vista Previa</DialogTitle>
-                    <CodeChallengeActivityDetails
-                        activity={previewActivity}
-                        userId="teacher-preview-id"
-                        studentName="Profesor (Modo Estudiante)"
-                        isTeacherPreview={true}
-                        onClosePreview={() => setShowStudentPreview(false)}
-                    />
+                    {selectedType === "WORKSHOP_CODE" || selectedType === "WORKSHOP_GITHUB" ? (
+                        <WorkshopActivityDetails
+                            activity={previewActivity as any}
+                            userId="teacher-preview-id"
+                            studentName="Profesor (Modo Estudiante)"
+                            isTeacherPreview={true}
+                            onClosePreview={() => setShowStudentPreview(false)}
+                        />
+                    ) : (
+                        <CodeChallengeActivityDetails
+                            activity={previewActivity as any}
+                            userId="teacher-preview-id"
+                            studentName="Profesor (Modo Estudiante)"
+                            isTeacherPreview={true}
+                            onClosePreview={() => setShowStudentPreview(false)}
+                        />
+                    )}
                 </DialogContent>
             </Dialog>
         )}
+        {/* Modal: Generar Todos los Pasos con IA */}
+        <Dialog open={isAiAllStepsOpen} onOpenChange={setIsAiAllStepsOpen}>
+            <DialogContent className="max-w-md p-5 rounded-2xl border-border/80 shadow-2xl">
+                <DialogHeader className="space-y-1">
+                    <DialogTitle className="text-sm font-black flex items-center gap-2">
+                        <Sparkles className="h-4 w-4 text-primary" />
+                        <span>Generar Secuencia de Pasos con IA</span>
+                    </DialogTitle>
+                    <DialogDescription className="text-xs text-muted-foreground">
+                        Define el reto formativo y la IA creará todos los pasos secuenciales con consignas, código y pistas.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-3.5 py-2">
+                    <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">Temática o Reto del Taller</Label>
+                        <Textarea
+                            rows={3}
+                            value={aiAllStepsTopic}
+                            onChange={(e) => setAiAllStepsTopic(e.target.value)}
+                            placeholder="Ej: Gestión de Inventarios con POO en Java, herencia, interfaces, colecciones y excepciones..."
+                            className="text-xs resize-none"
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold">Cantidad de Pasos</Label>
+                            <Select value={String(aiAllStepsCount)} onValueChange={(val) => setAiAllStepsCount(Number(val))}>
+                                <SelectTrigger className="h-8 text-xs">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="3">3 Pasos (Corto)</SelectItem>
+                                    <SelectItem value="4">4 Pasos (Estándar)</SelectItem>
+                                    <SelectItem value="5">5 Pasos (Completo)</SelectItem>
+                                    <SelectItem value="6">6 Pasos (Avanzado)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold">Nivel Académico</Label>
+                            <Select value={aiAllStepsLevel} onValueChange={setAiAllStepsLevel}>
+                                <SelectTrigger className="h-8 text-xs">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="principiante">Principiante</SelectItem>
+                                    <SelectItem value="intermedio">Intermedio</SelectItem>
+                                    <SelectItem value="avanzado">Avanzado</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                </div>
+
+                <DialogFooter className="gap-2 sm:gap-0 pt-2">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={isGeneratingAllSteps}
+                        onClick={() => setIsAiAllStepsOpen(false)}
+                        className="text-xs"
+                    >
+                        Cancelar
+                    </Button>
+                    <Button
+                        type="button"
+                        size="sm"
+                        disabled={isGeneratingAllSteps}
+                        onClick={handleGenerateAllStepsWithAI}
+                        className="text-xs font-bold gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground"
+                    >
+                        {isGeneratingAllSteps ? (
+                            <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                <span>Generando Pasos...</span>
+                            </>
+                        ) : (
+                            <>
+                                <Sparkles className="h-3.5 w-3.5" />
+                                <span>Generar con IA</span>
+                            </>
+                        )}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
+        {/* Modal: Asistente IA para un Paso Individual */}
+        <Dialog open={isAiSingleStepOpen} onOpenChange={setIsAiSingleStepOpen}>
+            <DialogContent className="max-w-md p-5 rounded-2xl border-border/80 shadow-2xl">
+                <DialogHeader className="space-y-1">
+                    <DialogTitle className="text-sm font-black flex items-center gap-2">
+                        <Sparkles className="h-4 w-4 text-primary" />
+                        <span>Asistente IA para el Paso {activeWorkshopStepIdx + 1}</span>
+                    </DialogTitle>
+                    <DialogDescription className="text-xs text-muted-foreground">
+                        Describe qué deseas que el alumno realice en este paso. La IA redactará las consignas y el código base necesario.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-3 py-2">
+                    <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">Instrucciones u Objetivo del Paso</Label>
+                        <Textarea
+                            rows={4}
+                            value={aiSingleStepPrompt}
+                            onChange={(e) => setAiSingleStepPrompt(e.target.value)}
+                            placeholder="Ej: Crear la clase abstracta Vehiculo con atributos id, marca y el método abstracto calcularConsumo()..."
+                            className="text-xs resize-none"
+                        />
+                    </div>
+                </div>
+
+                <DialogFooter className="gap-2 sm:gap-0 pt-2">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={isGeneratingSingleStep}
+                        onClick={() => setIsAiSingleStepOpen(false)}
+                        className="text-xs"
+                    >
+                        Cancelar
+                    </Button>
+                    <Button
+                        type="button"
+                        size="sm"
+                        disabled={isGeneratingSingleStep}
+                        onClick={handleGenerateSingleStepWithAI}
+                        className="text-xs font-bold gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground"
+                    >
+                        {isGeneratingSingleStep ? (
+                            <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                <span>Asistiendo Paso...</span>
+                            </>
+                        ) : (
+                            <>
+                                <Sparkles className="h-3.5 w-3.5" />
+                                <span>Generar Contenido con IA</span>
+                            </>
+                        )}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
         </>
     );
 }
@@ -4722,20 +5911,29 @@ const getActivityTypeInfo = (type: string) => {
                 iconBg: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400",
             };
         case "DATABASE":
+        case "DB_MODELING":
             return {
-                label: "Bases de Datos",
+                label: "Base de Datos",
                 icon: Database,
                 badgeColor: "bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border-cyan-500/25",
                 accentColor: "from-cyan-500/30 via-cyan-500/10 to-transparent",
                 iconBg: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400",
             };
+        case "VIDEO_PITCH":
+            return {
+                label: "Video Pitch",
+                icon: Video,
+                badgeColor: "bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/25",
+                accentColor: "from-rose-500/30 via-rose-500/10 to-transparent",
+                iconBg: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
+            };
         case "AUDIO_DEFENSE":
             return {
                 label: "Defensa Oral",
                 icon: Headphones,
-                badgeColor: "bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/25",
-                accentColor: "from-rose-500/30 via-rose-500/10 to-transparent",
-                iconBg: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
+                badgeColor: "bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/25",
+                accentColor: "from-violet-500/30 via-violet-500/10 to-transparent",
+                iconBg: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
             };
         case "AI_INTERVIEW":
             return {
@@ -4753,10 +5951,27 @@ const getActivityTypeInfo = (type: string) => {
                 accentColor: "from-emerald-500/30 via-emerald-500/10 to-transparent",
                 iconBg: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
             };
+        case "WORKSHOP_CODE":
+            return {
+                label: "Taller Codelab",
+                icon: Terminal,
+                badgeColor: "bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border-cyan-500/25",
+                accentColor: "from-cyan-500/30 via-cyan-500/10 to-transparent",
+                iconBg: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400",
+            };
+        case "WORKSHOP_GITHUB":
+            return {
+                label: "Taller GitHub",
+                icon: GitBranch,
+                badgeColor: "bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/25",
+                accentColor: "from-orange-500/30 via-orange-500/10 to-transparent",
+                iconBg: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
+            };
+        case "MANUAL":
         default:
             return {
                 label: "Manual",
-                icon: Calendar,
+                icon: Pencil,
                 badgeColor: "bg-zinc-500/10 text-zinc-700 dark:text-zinc-300 border-zinc-500/25",
                 accentColor: "from-zinc-500/30 via-zinc-500/10 to-transparent",
                 iconBg: "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400",
@@ -5151,7 +6366,18 @@ export function ActivityManager({
                                         </div>
                                     </TableCell>
                                     <TableCell className="text-center">
-                                        <Badge variant="outline">{activity.type}</Badge>
+                                        <Badge variant="outline" className={cn("text-[10px] font-bold px-2 py-0.5 border inline-flex items-center gap-1", getActivityTypeInfo(activity.type).badgeColor)}>
+                                            {(() => {
+                                                const ti = getActivityTypeInfo(activity.type);
+                                                const IconComp = ti.icon;
+                                                return (
+                                                    <>
+                                                        <IconComp className="h-3 w-3" />
+                                                        <span>{ti.label}</span>
+                                                    </>
+                                                );
+                                            })()}
+                                        </Badge>
                                     </TableCell>
                                     <TableCell className="text-center">
                                         <div className="flex items-center justify-center text-sm text-muted-foreground">

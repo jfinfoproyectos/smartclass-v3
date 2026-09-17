@@ -18,11 +18,13 @@ import {
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import type { DocPDFSection } from "./DocPagePDF";
 
 interface ConfigControlsProps {
   projectName?: string;
   projectId?: string;
+  rawContent?: string;
+  pageTitle?: string;
+  pageCategory?: string;
   currentCodeTheme: string;
   themes: ThemeInfo[];
   courseSettings: {
@@ -38,206 +40,12 @@ interface ConfigControlsProps {
   toggleSidebar: () => void;
 }
 
-function extractDocContent(defaultProjectName: string = "SmartClass"): {
-  pageTitle: string;
-  pageSubtitle?: string;
-  sections: DocPDFSection[];
-} {
-  const docRoot = document.getElementById("doc-content") || document.querySelector("main") || document.body;
-
-  // Extract main page title (h1)
-  const h1 = docRoot.querySelector("h1");
-  const pageTitle = h1?.textContent?.trim() || defaultProjectName || "Documentación";
-
-  // Subtitle
-  const subtitleEl = docRoot.querySelector("h1 + p, h1 ~ p, .max-w-2xl p");
-  const pageSubtitle = (subtitleEl && subtitleEl !== h1) ? subtitleEl.textContent?.trim() : undefined;
-
-  const sections: DocPDFSection[] = [];
-
-  // 1. Check if there is a rich BlockRenderer container (.select-text)
-  const blockContainer = docRoot.querySelector(".select-text");
-  if (blockContainer) {
-    const blockNodes = blockContainer.children;
-    for (let i = 0; i < blockNodes.length; i++) {
-      const el = blockNodes[i] as HTMLElement;
-
-      // Header block
-      const hEl = el.querySelector("h1, h2, h3, h4, h5, h6");
-      if (hEl && (el.classList.contains("group") || hEl.parentElement === el || el.querySelector("a.anchor") || el.tagName.toLowerCase().startsWith("h"))) {
-        const tag = hEl.tagName.toLowerCase();
-        const level: 'h1' | 'h2' | 'h3' = tag === 'h1' ? 'h1' : tag === 'h3' ? 'h3' : 'h2';
-        const title = hEl.textContent?.replace(/[\*_~`#\[\]\(\)]/g, "").trim();
-        if (title && title !== pageTitle) {
-          sections.push({ type: "header", level, title });
-        }
-        continue;
-      }
-
-      // Code block
-      const preEl = el.querySelector("pre");
-      if (preEl) {
-        const codeEl = preEl.querySelector("code") || preEl;
-        let language: string | undefined;
-        const classMatch = (codeEl.className || "").match(/language-([a-zA-Z0-9_-]+)/);
-        if (classMatch) {
-          language = classMatch[1];
-        } else {
-          const langEl = el.querySelector("span.uppercase, [data-language]");
-          language = langEl?.textContent?.trim() || undefined;
-        }
-        const code = codeEl.textContent || "";
-        if (code.trim()) {
-          sections.push({ type: "code", language, code });
-        }
-        continue;
-      }
-
-      // Callout block (has left bar or border with h5)
-      const h5 = el.querySelector("h5");
-      if (h5) {
-        const calloutTitle = h5.textContent?.trim();
-        const bodyEl = el.querySelector(".text-\\[15px\\], .text-foreground\\/90, p");
-        const calloutText = bodyEl?.textContent?.trim() || el.textContent?.replace(calloutTitle || "", "").trim() || "";
-        sections.push({
-          type: "callout",
-          title: calloutTitle,
-          text: calloutText
-        });
-        continue;
-      }
-
-      // Table block
-      const tableEl = el.querySelector("table");
-      if (tableEl) {
-        const tableHeaders = Array.from(tableEl.querySelectorAll("thead th")).map(th => th.textContent?.trim() || "");
-        const tableRows = Array.from(tableEl.querySelectorAll("tbody tr")).map(tr =>
-          Array.from(tr.querySelectorAll("td")).map(td => td.textContent?.trim() || "")
-        );
-        if (tableHeaders.length > 0 || tableRows.length > 0) {
-          sections.push({
-            type: "table",
-            tableHeaders,
-            tableRows
-          });
-        }
-        continue;
-      }
-
-      // List block
-      const listEl = el.querySelector("ul, ol");
-      if (listEl) {
-        const items = Array.from(listEl.querySelectorAll("li")).map(li => li.textContent?.trim() || "").filter(Boolean);
-        if (items.length > 0) {
-          sections.push({ type: "list", items });
-        }
-        continue;
-      }
-
-      // Paragraph / generic text block
-      const paragraphs = el.querySelectorAll("p");
-      if (paragraphs.length > 0) {
-        paragraphs.forEach(p => {
-          const text = p.textContent?.trim();
-          if (text) {
-            sections.push({ type: "paragraph", text });
-          }
-        });
-      } else {
-        const text = el.textContent?.trim();
-        if (text && text.length > 3) {
-          sections.push({ type: "paragraph", text });
-        }
-      }
-    }
-  }
-
-  // 2. If no sections were found (e.g. topic overview / welcome page or markdown fallback), extract from docRoot
-  if (sections.length === 0) {
-    // Check if there are topic cards
-    const cards = docRoot.querySelectorAll(".grid > a, .grid > div");
-    if (cards.length > 0) {
-      sections.push({
-        type: "header",
-        level: "h2",
-        title: "Temas y Secciones Disponibles"
-      });
-      cards.forEach(card => {
-        const cardTitle = card.querySelector("h3, h4, .font-bold, .font-semibold, span.truncate")?.textContent?.trim();
-        const cardDesc = card.querySelector("p, .text-xs, .text-muted-foreground")?.textContent?.trim();
-        if (cardTitle) {
-          sections.push({
-            type: "callout",
-            title: cardTitle,
-            text: cardDesc || "Módulo de contenido interactivo"
-          });
-        }
-      });
-    }
-
-    // Extract any other headings, paragraphs, and lists in docRoot
-    const contentElements = docRoot.querySelectorAll("h2, h3, h4, p:not(footer p):not(nav p), pre, table, ul, ol");
-    contentElements.forEach(el => {
-      if (el.closest("nav") || el.closest("footer") || el.closest(".no-print")) return;
-
-      const tag = el.tagName.toLowerCase();
-      if (tag === "h2" || tag === "h3" || tag === "h4") {
-        const title = el.textContent?.trim();
-        if (title && title !== pageTitle) {
-          sections.push({
-            type: "header",
-            level: tag === "h3" ? "h3" : "h2",
-            title
-          });
-        }
-      } else if (tag === "p") {
-        const text = el.textContent?.trim();
-        if (text && text !== pageSubtitle && text.length > 5) {
-          sections.push({ type: "paragraph", text });
-        }
-      } else if (tag === "pre") {
-        const codeEl = el.querySelector("code") || el;
-        let language: string | undefined;
-        const classMatch = (codeEl.className || "").match(/language-([a-zA-Z0-9_-]+)/);
-        if (classMatch) language = classMatch[1];
-        const code = codeEl.textContent || "";
-        if (code.trim()) {
-          sections.push({ type: "code", language, code });
-        }
-      } else if (tag === "table") {
-        const tableHeaders = Array.from(el.querySelectorAll("th")).map(th => th.textContent?.trim() || "");
-        const tableRows = Array.from(el.querySelectorAll("tbody tr")).map(tr =>
-          Array.from(tr.querySelectorAll("td")).map(td => td.textContent?.trim() || "")
-        );
-        if (tableHeaders.length > 0 || tableRows.length > 0) {
-          sections.push({ type: "table", tableHeaders, tableRows });
-        }
-      } else if (tag === "ul" || tag === "ol") {
-        const items = Array.from(el.querySelectorAll("li")).map(li => li.textContent?.trim() || "").filter(Boolean);
-        if (items.length > 0) {
-          sections.push({ type: "list", items });
-        }
-      }
-    });
-  }
-
-  if (sections.length === 0) {
-    sections.push({
-      type: "paragraph",
-      text: "Documento oficial generado desde SmartClass."
-    });
-  }
-
-  return {
-    pageTitle,
-    pageSubtitle,
-    sections
-  };
-}
-
 export function ConfigControls({ 
   projectName,
   projectId,
+  rawContent,
+  pageTitle,
+  pageCategory,
   currentCodeTheme, 
   themes, 
   courseSettings, 
@@ -259,29 +67,88 @@ export function ConfigControls({
   const handleDownloadPdf = async () => {
     if (isExporting) return;
     setIsExporting(true);
-    const toastId = toast.loading("Generando documento PDF...", {
-      description: "Compilando estilos y contenido con @react-pdf/renderer",
+    const toastId = toast.loading("Generando documento corporativo PDF...", {
+      description: "Compilando contenido Markdown estándar y maquetación ejecutiva",
     });
 
     try {
       const { pdf } = await import("@react-pdf/renderer");
       const { DocPagePDF } = await import("./DocPagePDF");
 
-      const { pageTitle, pageSubtitle, sections } = extractDocContent(projectName);
+      // 1. Obtener el Markdown real de la lección / página
+      let markdown = rawContent;
+      let title = pageTitle;
+      let category = pageCategory;
+
+      if (!markdown) {
+        const dataEl = document.getElementById("doc-raw-markdown-data");
+        if (dataEl) {
+          const contentText = dataEl.textContent?.trim() || "";
+          if (contentText) {
+            try {
+              markdown = decodeURIComponent(contentText);
+            } catch {
+              markdown = contentText;
+            }
+          }
+          if (!title) title = dataEl.getAttribute("data-title") || undefined;
+          if (!category) category = dataEl.getAttribute("data-category") || undefined;
+        }
+      }
+
+      // 2. Extraer título de h1 en DOM si aún no existe
+      if (!title) {
+        const h1 = document.querySelector("#doc-content h1, main h1, h1");
+        title = h1?.textContent?.trim() || projectName || "Documento Técnico";
+      }
+
+      // 3. Fallback de extracción si no se obtuvo markdown puro
+      if (!markdown) {
+        const docRoot = document.getElementById("doc-content") || document.querySelector("main") || document.body;
+        const nodes = Array.from(docRoot.querySelectorAll("h1, h2, h3, h4, p:not(footer p):not(nav p), pre, table, ul, ol, blockquote"));
+        const fallbackLines: string[] = [];
+        nodes.forEach(node => {
+          if (node.closest("nav") || node.closest("footer") || node.closest(".no-print")) return;
+          const tag = node.tagName.toLowerCase();
+          const txt = node.textContent?.trim() || "";
+          if (!txt) return;
+          if (tag === "h1") fallbackLines.push(`# ${txt}\n`);
+          else if (tag === "h2") fallbackLines.push(`## ${txt}\n`);
+          else if (tag === "h3") fallbackLines.push(`### ${txt}\n`);
+          else if (tag === "h4") fallbackLines.push(`#### ${txt}\n`);
+          else if (tag === "p") fallbackLines.push(`${txt}\n`);
+          else if (tag === "pre") {
+            const codeEl = node.querySelector("code") || node;
+            let lang = "";
+            const match = (codeEl.className || "").match(/language-([a-zA-Z0-9_-]+)/);
+            if (match) lang = match[1];
+            fallbackLines.push(`\`\`\`${lang}\n${codeEl.textContent || txt}\n\`\`\`\n`);
+          }
+          else if (tag === "blockquote") fallbackLines.push(`> ${txt}\n`);
+          else if (tag === "ul" || tag === "ol") {
+            const lis = node.querySelectorAll("li");
+            lis.forEach((li, idx) => {
+              fallbackLines.push(`${tag === "ol" ? `${idx + 1}.` : "-"} ${li.textContent?.trim()}`);
+            });
+            fallbackLines.push("");
+          }
+        });
+        markdown = fallbackLines.join("\n");
+      }
 
       const blob = await pdf(
         <DocPagePDF
           projectName={projectName || "SmartClass"}
-          pageTitle={pageTitle}
-          pageSubtitle={pageSubtitle}
-          sections={sections}
+          pageTitle={title}
+          category={category}
+          markdownContent={markdown}
         />
       ).toBlob();
 
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      const cleanSlug = (pageTitle || projectName || "documento")
+      const cleanSlug = (title || projectName || "documento")
         .toLowerCase()
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
@@ -294,9 +161,9 @@ export function ConfigControls({
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      toast.success("PDF descargado correctamente", {
+      toast.success("PDF generado con éxito", {
         id: toastId,
-        description: `${cleanSlug}.pdf generado exitosamente`,
+        description: `${cleanSlug}.pdf descargado con estilo corporativo.`,
       });
     } catch (err) {
       console.error("Error al generar PDF con @react-pdf/renderer:", err);

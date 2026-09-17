@@ -11,6 +11,7 @@ import { getAvailableThemes } from '@/app/actions/themes';
 import dynamic from 'next/dynamic';
 import { Suspense } from 'react';
 import { Folder, Sparkles } from 'lucide-react';
+import { ensureStandardMarkdown } from '@/features/documentation/components/admin/blockEditorUtils';
 
 // Lazy loading heavy components
 const DocTracker = dynamic(() => import('@/features/documentation/components/reader/DocTracker').then(mod => mod.DocTracker));
@@ -209,11 +210,18 @@ export default async function Page({ params }: PageProps) {
     }
   }
 
+  const standardMarkdown = page ? ensureStandardMarkdown(page.content || "") : "";
+  const pageTitle = page?.title || currentNavItem?.title || project.name;
+  const pageCategory = page?.category || currentNavItem?.title || "Documentación";
+
   return (
     <PublicDocsShell 
       projectName={project.name} 
       projectId={project.slug} 
       navTree={navTree}
+      rawContent={standardMarkdown || undefined}
+      pageTitle={pageTitle}
+      pageCategory={pageCategory}
       currentCodeTheme={allowCodeThemeChange === false ? (userCourse?.docCodeTheme || systemSettings?.appCodeTheme || "one-dark-pro") : studentCodeTheme}
       themes={themes}
       userProgress={userProgress.progress}
@@ -223,11 +231,22 @@ export default async function Page({ params }: PageProps) {
         themeMode: themeMode,
         codeTheme: userCourse?.docCodeTheme || systemSettings?.appCodeTheme || "one-dark-pro",
         allowCodeThemeChange: allowCodeThemeChange,
-        themeColor: userCourse?.docThemeColor || systemSettings?.appThemeColor || "zinc",
+        themeColor: userCourse?.docThemeColor || systemSettings?.appThemeColor || "ocean-breeze",
         allowThemeColorChange: allowThemeColorChange
       }}
     >
       <div className="py-6 w-full">
+        {page && (
+          <div
+            id="doc-raw-markdown-data"
+            style={{ display: "none" }}
+            data-title={page.title || ""}
+            data-category={page.category || ""}
+            aria-hidden="true"
+          >
+            {encodeURIComponent(standardMarkdown)}
+          </div>
+        )}
         {!page ? (
           <div className="relative overflow-hidden rounded-3xl p-8 md:p-12 bg-gradient-to-br from-primary/10 via-background to-primary/5 border border-primary/20 shadow-xl shadow-primary/5 mb-8">
             <div className="absolute -right-12 -top-12 w-64 h-64 bg-primary/10 rounded-full blur-3xl pointer-events-none" />

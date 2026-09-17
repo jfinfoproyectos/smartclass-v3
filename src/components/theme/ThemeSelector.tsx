@@ -45,14 +45,22 @@ export function ThemeSelector({ themes, asSubMenu, className }: ThemeSelectorPro
   const [activeTheme, setActiveTheme] = useState<string | null>(null);
   const { theme } = useTheme();
 
+  const sortedThemes = [...themes].sort((a, b) => {
+    if (a.id === "ocean-breeze") return -1;
+    if (b.id === "ocean-breeze") return 1;
+    return a.name.localeCompare(b.name);
+  });
+
   useEffect(() => {
     setMounted(true);
-    const savedTheme = localStorage.getItem("smartclass-theme") || "default";
-    setActiveTheme(savedTheme);
+    const savedTheme = localStorage.getItem("smartclass-theme");
+    const eff = (!savedTheme || savedTheme === "default") ? "ocean-breeze" : savedTheme;
+    setActiveTheme(eff);
 
     const handleExternalThemeChange = () => {
-      const current = localStorage.getItem("smartclass-theme") || "default";
-      setActiveTheme(current);
+      const current = localStorage.getItem("smartclass-theme");
+      const effCurr = (!current || current === "default") ? "ocean-breeze" : current;
+      setActiveTheme(effCurr);
     };
 
     window.addEventListener("smartclass-theme-changed", handleExternalThemeChange);
@@ -74,14 +82,16 @@ export function ThemeSelector({ themes, asSubMenu, className }: ThemeSelectorPro
     const elId = "smartclass-dynamic-theme";
     let styleEl = document.getElementById(elId);
 
-    if (activeTheme === "default") {
+    if (activeTheme === "zinc") {
       if (styleEl) styleEl.remove();
-      localStorage.setItem("smartclass-theme", "default");
+      localStorage.setItem("smartclass-theme", "zinc");
       localStorage.removeItem("smartclass-theme-css-v2");
+      window.dispatchEvent(new CustomEvent("smartclass-theme-changed"));
       return;
     }
 
-    const themeData = themes.find((t) => t.id === activeTheme);
+    const targetThemeId = (activeTheme === "default") ? "ocean-breeze" : activeTheme;
+    const themeData = themes.find((t) => t.id === targetThemeId);
     if (!themeData) return;
 
     if (!styleEl) {
@@ -116,7 +126,7 @@ h1, h2, h3, h4, h5, h6, .prose h1, .prose h2, .prose h3, .prose h4 {
     // Dynamic Font Loading
     handleFontLoading(finalCss);
     
-    localStorage.setItem("smartclass-theme", activeTheme);
+    localStorage.setItem("smartclass-theme", targetThemeId);
     localStorage.setItem("smartclass-theme-css-v2", finalCss);
     window.dispatchEvent(new CustomEvent("smartclass-theme-changed"));
   }, [activeTheme, themes, mounted]);
@@ -207,23 +217,13 @@ h1, h2, h3, h4, h5, h6, .prose h1, .prose h2, .prose h3, .prose h4 {
           <span>Apariencia (60-30-10)</span>
         </DropdownMenuSubTrigger>
         <DropdownMenuPortal>
-          <DropdownMenuSubContent className="w-56 bg-background/95 backdrop-blur-md border-border/80 shadow-xl">
+          <DropdownMenuSubContent className="w-56 bg-background/95 backdrop-blur-md border-border/80 shadow-xl max-h-80 overflow-y-auto custom-scrollbar">
             <DropdownMenuLabel className="text-[10px] uppercase tracking-widest opacity-60 flex items-center justify-between">
               <span>Paleta 60-30-10</span>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem 
-              onClick={() => handleThemeSelect("default")}
-              className="flex items-center justify-between cursor-pointer text-xs"
-            >
-              <div className="flex items-center gap-2">
-                {renderThemeSwatch()}
-                <span>Predeterminado</span>
-              </div>
-              {activeTheme === "default" && <Check className="w-3 h-3 ml-2" />}
-            </DropdownMenuItem>
 
-            {themes.map((theme) => (
+            {sortedThemes.map((theme) => (
               <DropdownMenuItem 
                 key={theme.id}
                 onClick={() => handleThemeSelect(theme.id)}
@@ -231,11 +231,31 @@ h1, h2, h3, h4, h5, h6, .prose h1, .prose h2, .prose h3, .prose h4 {
               >
                 <div className="flex items-center gap-2">
                   {renderThemeSwatch(theme)}
-                  <span>{theme.name}</span>
+                  <span className="font-medium">
+                    {theme.name}
+                    {theme.id === "ocean-breeze" && (
+                      <span className="ml-1 text-[10px] text-primary font-normal">(Predeterminado)</span>
+                    )}
+                  </span>
                 </div>
-                {activeTheme === theme.id && <Check className="w-3 h-3 ml-2" />}
+                {(activeTheme === theme.id || (theme.id === "ocean-breeze" && (!activeTheme || activeTheme === "default"))) && (
+                  <Check className="w-3 h-3 ml-2 shrink-0" />
+                )}
               </DropdownMenuItem>
             ))}
+
+            <DropdownMenuSeparator />
+
+            <DropdownMenuItem 
+              onClick={() => handleThemeSelect("zinc")}
+              className="flex items-center justify-between cursor-pointer text-xs text-muted-foreground"
+            >
+              <div className="flex items-center gap-2">
+                {renderThemeSwatch()}
+                <span>Neutro (Sin tema)</span>
+              </div>
+              {activeTheme === "zinc" && <Check className="w-3 h-3 ml-2 shrink-0" />}
+            </DropdownMenuItem>
           </DropdownMenuSubContent>
         </DropdownMenuPortal>
       </DropdownMenuSub>
@@ -266,24 +286,13 @@ h1, h2, h3, h4, h5, h6, .prose h1, .prose h2, .prose h3, .prose h4 {
           <p>Paleta de colores (60-30-10)</p>
         </TooltipContent>
       </Tooltip>
-      <DropdownMenuContent align="end" className="w-[200px] bg-background/95 backdrop-blur-md border-border/80 shadow-xl">
+      <DropdownMenuContent align="end" className="w-[210px] bg-background/95 backdrop-blur-md border-border/80 shadow-xl max-h-80 overflow-y-auto custom-scrollbar">
         <DropdownMenuLabel className="text-[10px] uppercase tracking-widest opacity-60 flex items-center justify-between">
           <span>Temas 60-30-10</span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        
-        <DropdownMenuItem 
-          onClick={() => handleThemeSelect("default")}
-          className="flex items-center justify-between cursor-pointer text-xs"
-        >
-          <div className="flex items-center gap-2">
-            {renderThemeSwatch()}
-            <span>Predeterminado</span>
-          </div>
-          {activeTheme === "default" && <Check className="w-3 h-3 ml-2" />}
-        </DropdownMenuItem>
 
-        {themes.map((theme) => (
+        {sortedThemes.map((theme) => (
           <DropdownMenuItem 
             key={theme.id}
             onClick={() => handleThemeSelect(theme.id)}
@@ -291,11 +300,31 @@ h1, h2, h3, h4, h5, h6, .prose h1, .prose h2, .prose h3, .prose h4 {
           >
             <div className="flex items-center gap-2">
               {renderThemeSwatch(theme)}
-              <span>{theme.name}</span>
+              <span className="font-medium">
+                {theme.name}
+                {theme.id === "ocean-breeze" && (
+                  <span className="ml-1 text-[10px] text-primary font-normal">(Predeterminado)</span>
+                )}
+              </span>
             </div>
-            {activeTheme === theme.id && <Check className="w-3 h-3 ml-2 shrink-0" />}
+            {(activeTheme === theme.id || (theme.id === "ocean-breeze" && (!activeTheme || activeTheme === "default"))) && (
+              <Check className="w-3 h-3 ml-2 shrink-0" />
+            )}
           </DropdownMenuItem>
         ))}
+
+        <DropdownMenuSeparator />
+
+        <DropdownMenuItem 
+          onClick={() => handleThemeSelect("zinc")}
+          className="flex items-center justify-between cursor-pointer text-xs text-muted-foreground"
+        >
+          <div className="flex items-center gap-2">
+            {renderThemeSwatch()}
+            <span>Neutro (Sin tema)</span>
+          </div>
+          {activeTheme === "zinc" && <Check className="w-3 h-3 ml-2 shrink-0" />}
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

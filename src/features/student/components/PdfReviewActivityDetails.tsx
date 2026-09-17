@@ -118,21 +118,19 @@ export function PdfReviewActivityDetails({ activity, userId, studentName }: PdfR
                         </div>
                     ) : null}
 
-                    {activity.courseId && (
-                        <Button
-                            asChild
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-8 px-2.5 text-xs font-semibold shrink-0 gap-1 rounded-md border-border/80 hover:bg-accent hover:text-accent-foreground shadow-xs cursor-pointer"
-                            title="Volver a la lista de actividades"
-                        >
-                            <Link href={`/dashboard/student?courseId=${activity.courseId}&tab=activities`}>
-                                <ChevronLeft className="h-3.5 w-3.5" />
-                                <span>Volver</span>
-                            </Link>
-                        </Button>
-                    )}
+                    <Button
+                        asChild
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-2.5 text-xs font-semibold shrink-0 gap-1 rounded-md border-border/80 hover:bg-accent hover:text-accent-foreground shadow-xs cursor-pointer"
+                        title="Volver a la lista de actividades"
+                    >
+                        <Link href={activity.courseId ? `/dashboard/student?courseId=${activity.courseId}&tab=activities` : `/dashboard/student`}>
+                            <ChevronLeft className="h-3.5 w-3.5" />
+                            <span>Volver a actividades</span>
+                        </Link>
+                    </Button>
                 </div>
             </div>
 

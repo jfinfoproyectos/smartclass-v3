@@ -108,7 +108,7 @@ export async function createItemAction(
     order: metadata?.order ? parseInt(metadata.order) : undefined
   };
 
-  // Si el archivo se crea dentro de un tópico que está en borrador, hereda el estado de borrador
+  // Si el archivo se crea dentro de un tópico que está en borrador, hereda el estado de borrador y metadatos de categoría
   if (type === 'file' && normalizedParent) {
     const parentTopic = await prisma.docPage.findFirst({
       where: {
@@ -118,10 +118,16 @@ export async function createItemAction(
           { slug: normalizedParent }
         ]
       },
-      select: { draft: true }
+      select: { draft: true, title: true, categoryOrder: true }
     });
     if (parentTopic?.draft) {
       saveMetadata.draft = true;
+    }
+    if (!saveMetadata.category) {
+      saveMetadata.category = parentTopic?.title || normalizedParent;
+    }
+    if (parentTopic?.categoryOrder !== undefined && saveMetadata.categoryOrder === undefined) {
+      saveMetadata.categoryOrder = parentTopic.categoryOrder;
     }
   }
 
@@ -155,6 +161,48 @@ export async function createItemAction(
       }
     } catch (err) {
       console.warn("Error parsing frontmatter on createItemAction:", err);
+    }
+  }
+
+  // Si es un archivo y no tiene order explícito, siempre debe aparecer al final del tópico (o raíz)
+  if (type === 'file' && saveMetadata.order === undefined) {
+    const allPages = await prisma.docPage.findMany({
+      where: { docProjectId: project.id },
+      select: { slug: true, order: true }
+    });
+
+    const siblings = allPages.filter((p) => {
+      const isTopic = p.slug === 'index' || p.slug.endsWith('/index');
+      if (isTopic) return false;
+      const pParent = p.slug.includes('/') ? p.slug.split('/').slice(0, -1).join('/') : "";
+      return pParent === normalizedParent;
+    });
+
+    if (siblings.length > 0) {
+      const maxOrder = Math.max(...siblings.map(p => p.order ?? 0));
+      saveMetadata.order = maxOrder + 10;
+    } else {
+      saveMetadata.order = 0;
+    }
+  }
+
+  // Si es un tópico y no tiene categoryOrder definido, colocarlo al final de los tópicos
+  if (type === 'folder' && saveMetadata.categoryOrder === undefined) {
+    const topics = await prisma.docPage.findMany({
+      where: {
+        docProjectId: project.id,
+        OR: [
+          { slug: 'index' },
+          { slug: { endsWith: '/index' } }
+        ]
+      },
+      select: { categoryOrder: true }
+    });
+    if (topics.length > 0) {
+      const maxCategoryOrder = Math.max(...topics.map(t => t.categoryOrder ?? 0));
+      saveMetadata.categoryOrder = maxCategoryOrder + 10;
+    } else {
+      saveMetadata.categoryOrder = 0;
     }
   }
   

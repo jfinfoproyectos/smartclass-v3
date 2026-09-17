@@ -36,7 +36,10 @@ export function PublicHeader({
   toggleSidebar,
   topics,
   activeTopicSlug,
-  backUrl = "/"
+  backUrl = "/",
+  rawContent,
+  pageTitle,
+  pageCategory
 }: { 
   projectName: string, 
   projectId: string, 
@@ -57,6 +60,9 @@ export function PublicHeader({
   topics: NavItem[];
   activeTopicSlug: string | null;
   backUrl?: string;
+  rawContent?: string;
+  pageTitle?: string;
+  pageCategory?: string;
 }) {
   const [mounted, setMounted] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -226,6 +232,9 @@ export function PublicHeader({
             <ConfigControls 
               projectName={projectName}
               projectId={projectId}
+              rawContent={rawContent}
+              pageTitle={pageTitle}
+              pageCategory={pageCategory}
               currentCodeTheme={currentCodeTheme} 
               themes={themes} 
               courseSettings={courseSettings} 
