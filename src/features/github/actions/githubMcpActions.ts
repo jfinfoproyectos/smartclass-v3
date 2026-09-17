@@ -232,6 +232,8 @@ export async function askRepoMcpQuestionAction({
     activityId,
     studentId,
     chatId,
+    branch,
+    customToken,
 }: {
     repoUrl: string;
     question: string;
@@ -239,6 +241,8 @@ export async function askRepoMcpQuestionAction({
     activityId?: string;
     studentId?: string;
     chatId?: string;
+    branch?: string;
+    customToken?: string;
 }) {
     const session = await getSession();
     if (!session || (session.user.role !== "teacher" && session.user.role !== "admin")) {
@@ -255,6 +259,8 @@ export async function askRepoMcpQuestionAction({
             question,
             userId: session.user.id,
             chatHistory,
+            branch,
+            customToken,
         });
 
         let savedChatId = chatId || null;
@@ -375,3 +381,74 @@ export async function deleteMcpChatHistoryAction({
         return { success: false, error: error.message };
     }
 }
+
+/**
+ * Conecta y valida un repositorio de GitHub para la herramienta de Chat MCP,
+ * detectando su estructura, ramas disponibles y rama por defecto.
+ */
+export async function connectRepoForChatAction({
+    repoUrl,
+    customToken,
+}: {
+    repoUrl: string;
+    customToken?: string;
+}): Promise<{
+    success: true;
+    owner: string;
+    repo: string;
+    activeBranch: string;
+    branches: string[];
+    defaultBranch: string;
+    fullName: string;
+} | {
+    success: false;
+    error: string;
+    owner?: undefined;
+    repo?: undefined;
+    activeBranch?: undefined;
+    branches?: undefined;
+    defaultBranch?: undefined;
+    fullName?: undefined;
+}> {
+    const session = await getSession();
+    if (!session || (session.user.role !== "teacher" && session.user.role !== "admin")) {
+        throw new Error("Unauthorized");
+    }
+
+    const { githubService } = await import("../services/githubService");
+    const { getGithubToken } = await import("@/lib/githubTokenHelper");
+
+    const repoInfo = githubService.parseGitHubUrl(repoUrl);
+    if (!repoInfo) {
+        return { success: false, error: "La URL de GitHub no es válida. Formato esperado: https://github.com/owner/repo" };
+    }
+
+    const token = customToken?.trim() || (await getGithubToken(session.user.id)) || undefined;
+
+    try {
+        const { branches, defaultBranch } = await githubService.getRepoBranches(
+            repoInfo.owner,
+            repoInfo.repo,
+            token
+        );
+
+        const activeBranch = repoInfo.branch !== "HEAD" ? repoInfo.branch : defaultBranch;
+
+        return {
+            success: true,
+            owner: repoInfo.owner,
+            repo: repoInfo.repo,
+            activeBranch,
+            branches,
+            defaultBranch,
+            fullName: `${repoInfo.owner}/${repoInfo.repo}`,
+        };
+    } catch (error: any) {
+        console.error("Error al conectar repositorio para MCP Chat:", error);
+        return {
+            success: false,
+            error: error.message || "No se pudo conectar al repositorio de GitHub.",
+        };
+    }
+}
+

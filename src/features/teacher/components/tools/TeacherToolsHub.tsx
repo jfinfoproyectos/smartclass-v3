@@ -10,7 +10,11 @@ import {
     CheckCircle2, 
     ArrowRight,
     Sparkles,
-    GraduationCap
+    GraduationCap,
+    BookOpen,
+    Bot,
+    Github,
+    Trash2
 } from "lucide-react";
 import type { CourseWithStudents } from "@/features/teacher/components/TeacherToolsView";
 
@@ -35,6 +39,18 @@ export function TeacherToolsHub({ courses }: TeacherToolsHubProps) {
         router.push(`/dashboard/teacher/tools/git-report`);
     };
 
+    const handleOpenGitDocs = () => {
+        router.push(`/dashboard/teacher/tools/git-docs`);
+    };
+
+    const handleOpenGitChat = () => {
+        router.push(`/dashboard/teacher/tools/git-chat`);
+    };
+
+    const handleOpenGitCleaner = () => {
+        router.push(`/dashboard/teacher/tools/git-cleaner`);
+    };
+
     return (
         <div className="w-full flex-1 flex flex-col space-y-3 p-0.5 sm:p-1 min-h-0">
             {/* Header Banner AI Canvas */}
@@ -50,7 +66,7 @@ export function TeacherToolsHub({ courses }: TeacherToolsHubProps) {
                             Herramientas Interactivas
                         </h1>
                         <p className="text-xs sm:text-sm text-muted-foreground">
-                            Selecciona una herramienta interactiva para dinamizar tu clase en vivo o auditar entregas técnicas en tiempo real.
+                            Selecciona una herramienta interactiva para dinamizar tu clase en vivo, auditar entregas técnicas, chatear con repositorios vía MCP o documentar código con IA.
                         </p>
                     </div>
 
@@ -178,7 +194,7 @@ export function TeacherToolsHub({ courses }: TeacherToolsHubProps) {
                                 <Sparkles className="h-6 w-6" />
                             </div>
                             <Badge variant="secondary" className="bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20 text-[10px] font-bold">
-                                Inteligencia Artificial
+                                Auditoría Git
                             </Badge>
                         </div>
 
@@ -188,7 +204,7 @@ export function TeacherToolsHub({ courses }: TeacherToolsHubProps) {
                                 <ArrowRight className="h-4 w-4 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-primary" />
                             </h3>
                             <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                                Audita repositorios de GitHub con filtro multi-rama, rangos temporales (día, semana, mes) y síntesis en PDF corporativo.
+                                Audita repositorios con filtro multi-rama, rangos temporales y síntesis en PDF ejecutivo corporativo.
                             </p>
                         </div>
 
@@ -218,7 +234,164 @@ export function TeacherToolsHub({ courses }: TeacherToolsHubProps) {
                         </Button>
                     </div>
                 </div>
+
+                {/* Tarjeta 4: Generador de README & Docs con IA */}
+                <div 
+                    onClick={handleOpenGitDocs}
+                    className="group relative overflow-hidden rounded-2xl border border-border/80 hover:border-blue-500/50 bg-card text-card-foreground p-5 sm:p-6 shadow-xs hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col justify-between w-full"
+                >
+                    <div className="space-y-3.5">
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="p-3 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 group-hover:scale-105 transition-transform">
+                                <BookOpen className="h-6 w-6" />
+                            </div>
+                            <Badge variant="secondary" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 text-[10px] font-bold">
+                                Docs & Mermaid IA
+                            </Badge>
+                        </div>
+
+                        <div>
+                            <h3 className="text-base sm:text-lg font-bold text-foreground group-hover:text-primary transition-colors flex items-center gap-1.5">
+                                Generador de README & Docs
+                                <ArrowRight className="h-4 w-4 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-primary" />
+                            </h3>
+                            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                                Genera README profesional con arquitectura Mermaid, licencias oficiales, .gitignore, .env.example y descarga en ZIP.
+                            </p>
+                        </div>
+
+                        <div className="space-y-1.5 pt-2 border-t border-border/60 text-[11px] text-muted-foreground">
+                            <div className="flex items-center gap-2">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                <span>README con diagramas de flujo Mermaid interactivos</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                <span>Suite de gobernanza: LICENSE, .gitignore y .env</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                <span>Descarga individual o empaquetada en .ZIP</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="pt-5 mt-2">
+                        <Button 
+                            type="button" 
+                            className="w-full font-bold text-xs gap-2 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-xs cursor-pointer"
+                        >
+                            <BookOpen className="h-4 w-4" />
+                            Abrir Generador de Docs
+                        </Button>
+                    </div>
+                </div>
+
+                {/* Tarjeta 5: Chat con Repositorio (GitHub MCP) */}
+                <div 
+                    onClick={handleOpenGitChat}
+                    className="group relative overflow-hidden rounded-2xl border border-border/80 hover:border-indigo-500/50 bg-card text-card-foreground p-5 sm:p-6 shadow-xs hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col justify-between w-full"
+                >
+                    <div className="space-y-3.5">
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="p-3 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 group-hover:scale-105 transition-transform">
+                                <Bot className="h-6 w-6" />
+                            </div>
+                            <Badge variant="secondary" className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20 text-[10px] font-bold">
+                                Protocolo MCP
+                            </Badge>
+                        </div>
+
+                        <div>
+                            <h3 className="text-base sm:text-lg font-bold text-foreground group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors flex items-center gap-1.5">
+                                Chat Repositorio MCP
+                                <ArrowRight className="h-4 w-4 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-indigo-500" />
+                            </h3>
+                            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                                Conecta cualquier repositorio y chatea en tiempo real usando herramientas MCP para inspeccionar código, commits y estructura.
+                            </p>
+                        </div>
+
+                        <div className="space-y-1.5 pt-2 border-t border-border/60 text-[11px] text-muted-foreground">
+                            <div className="flex items-center gap-2">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                <span>Herramientas MCP en vivo (archivos, commits, código)</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                <span>Preguntas categorizadas (seguridad, arquitectura, commits)</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                <span>Historial multisesión local y exportación a Markdown</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="pt-5 mt-2">
+                        <Button 
+                            type="button" 
+                            className="w-full font-bold text-xs gap-2 group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-xs cursor-pointer"
+                        >
+                            <Bot className="h-4 w-4" />
+                            Abrir Chat MCP
+                        </Button>
+                    </div>
+                </div>
+
+                {/* Tarjeta 6: Limpiador de Repositorios GitHub */}
+                <div 
+                    onClick={handleOpenGitCleaner}
+                    className="group relative overflow-hidden rounded-2xl border border-border/80 hover:border-red-500/50 bg-card text-card-foreground p-5 sm:p-6 shadow-xs hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col justify-between w-full"
+                >
+                    <div className="space-y-3.5">
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="p-3 rounded-2xl bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 group-hover:scale-105 transition-transform">
+                                <Trash2 className="h-6 w-6" />
+                            </div>
+                            <Badge variant="secondary" className="bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20 text-[10px] font-bold">
+                                Gestión & Limpieza
+                            </Badge>
+                        </div>
+
+                        <div>
+                            <h3 className="text-base sm:text-lg font-bold text-foreground group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors flex items-center gap-1.5">
+                                Limpiador de Repositorios
+                                <ArrowRight className="h-4 w-4 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-red-500" />
+                            </h3>
+                            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                                Elimina masivamente repositorios obsoletos, forks y proyectos de prueba con selección por checkboxes y confirmación segura.
+                            </p>
+                        </div>
+
+                        <div className="space-y-1.5 pt-2 border-t border-border/60 text-[11px] text-muted-foreground">
+                            <div className="flex items-center gap-2">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                <span>Filtros rápidos (solo forks, inactivos, pequeños)</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                <span>Generación asistida de token delete_repo en 1 clic</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                <span>Protocolo estricto de seguridad y respaldo previo</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="pt-5 mt-2">
+                        <Button 
+                            type="button" 
+                            className="w-full font-bold text-xs gap-2 group-hover:bg-red-600 group-hover:text-white transition-all shadow-xs cursor-pointer"
+                        >
+                            <Trash2 className="h-4 w-4" />
+                            Abrir Limpiador
+                        </Button>
+                    </div>
+                </div>
             </div>
         </div>
     );
 }
+

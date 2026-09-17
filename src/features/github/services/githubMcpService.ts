@@ -14,15 +14,21 @@ export async function askGitHubMcpQuestion(params: {
     question: string;
     userId: string;
     chatHistory?: McpChatMessage[];
+    branch?: string;
+    customToken?: string;
 }) {
-    const { repoUrl, question, userId, chatHistory = [] } = params;
+    const { repoUrl, question, userId, chatHistory = [], branch, customToken } = params;
 
     const repoInfo = githubService.parseGitHubUrl(repoUrl);
     if (!repoInfo) {
         throw new Error("URL de GitHub inválida");
     }
 
-    const token = (await getGithubToken(userId)) || undefined;
+    if (branch && branch.trim()) {
+        repoInfo.branch = branch.trim();
+    }
+
+    const token = customToken || (await getGithubToken(userId)) || undefined;
     const model = await getAIModel(userId);
 
     // Definición de Herramientas Estándar del GitHub MCP Server (AI SDK v6)
@@ -141,7 +147,7 @@ export async function askGitHubMcpQuestion(params: {
         }),
 
         search_code: tool({
-            description: "Busca una palabra clave, función o patrón dentro de los archivos del repositorio entregado.",
+            description: "Busca una palabra clave, función o patrón dentro de los nombres y rutas de archivos del repositorio.",
             inputSchema: z.object({
                 query: z.string().describe("Término o patrón a buscar"),
             }),
@@ -150,6 +156,7 @@ export async function askGitHubMcpQuestion(params: {
                     const files = await githubService.getRepoStructure(
                         repoInfo.owner,
                         repoInfo.repo,
+                        repoInfo.branch,
                         token
                     );
                     const matchingFiles: string[] = [];
@@ -174,17 +181,17 @@ export async function askGitHubMcpQuestion(params: {
     };
 
     const systemPrompt = `
-    Actúa como un **Asistente de Inspección para Profesores** utilizando el GitHub Model Context Protocol (MCP).
-    Tu objetivo es ayudar al profesor a auditar e investigar el repositorio entregado por el estudiante:
+    Actúa como un **Asistente de Inspección y Análisis Técnico de Repositorios** utilizando el Model Context Protocol (MCP) de GitHub.
+    Tu objetivo es ayudar al usuario/docente a auditar, inspeccionar, comprender y analizar a fondo el siguiente repositorio de GitHub:
     
-    **REPOSITORIO**: ${repoUrl} (Propietario: ${repoInfo.owner}, Repo: ${repoInfo.repo}, Rama: ${repoInfo.branch})
+    **REPOSITORIO**: ${repoUrl} (Propietario: ${repoInfo.owner}, Repo: ${repoInfo.repo}, Rama de consulta: ${repoInfo.branch})
 
     **REGLAS Y ALCANCE**:
-    1. **NO estás asignando notas ni generando la retroalimentación oficial del estudiante**. Tu respuesta es EXCLUSIVAMENTE para que el profesor inspeccione el repositorio.
-    2. Utiliza autónomamente las herramientas MCP provistas (como \`list_directory_structure\`, \`get_file_contents\`, \`list_commits\`, \`get_commit_details\`, \`search_code\`) para fundamentar tus respuestas con evidencia concreta.
-    3. Si el profesor pide un "reporte de commit", historial o autoría, DEBES usar la herramienta \`list_commits\` para obtener la lista de commits reales y resumirlos detalladamente.
-    4. Tras invocar las herramientas necesarias, SIEMPRE redacta una respuesta explicativa y detallada en Markdown para el profesor basándote en los datos obtenidos.
-    5. Sé claro, profesional, estructurado en Markdown y cita nombres de archivos y commits con hashes o rutas claras.
+    1. Utiliza de manera autónoma las herramientas MCP provistas (\`list_directory_structure\`, \`get_file_contents\`, \`list_commits\`, \`get_commit_details\`, \`search_code\`) para fundamentar todas tus respuestas con evidencia concreta del repositorio real.
+    2. Si se consulta por el historial de commits, autoría, mensajes o frecuencia de cambios, DEBES usar la herramienta \`list_commits\` y \`get_commit_details\` para obtener los commits reales, hashes, autores y fechas.
+    3. Si se consulta por estructura, dependencias, configuración o arquitectura, consulta \`list_directory_structure\` y lee los archivos clave como package.json, requirements.txt, tsconfig, etc. con \`get_file_contents\`.
+    4. Si se consulta por seguridad o buenas prácticas, busca archivos sensibles (.env), tokens expuestos o malas prácticas de credenciales.
+    5. Tras invocar las herramientas necesarias, SIEMPRE redacta una respuesta clara, profesional y estructurada en Markdown (con encabezados, listas, citas de código y tablas cuando sea oportuno).
     `;
 
     const messages = chatHistory.map((msg) => ({
