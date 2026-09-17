@@ -52,7 +52,8 @@ export function TeacherCourseHeader({
     const showThemeSelector = true;
     const router = useRouter();
     const searchParams = useSearchParams();
-    const currentTab = searchParams.get("tab") || "activities";
+    const pathname = usePathname();
+    const currentTab = searchParams.get("tab") || (pathname?.includes("/evaluations") ? "evaluations" : "activities");
 
     return (
         <div className="flex-none bg-background/95 backdrop-blur-xl w-full border-b border-border/50 shadow-sm transition-all duration-300">
@@ -130,16 +131,17 @@ export function TeacherCourseHeader({
 
 function NavTab({ value, icon, label }: { value: string, icon: React.ReactNode, label: string }) {
     const router = useRouter();
+    const pathname = usePathname();
     const { courseId } = useParams();
     const searchParams = useSearchParams();
     const [isPending, startTransition] = useTransition();
 
     const handleClick = (e: React.MouseEvent) => {
         // Optimization: avoid redundant navigations if we are already in the base course path and on the same tab
-        const currentTab = searchParams.get("tab") || "activities";
-        const isBaseCoursePath = !window.location.pathname.includes('/activities/') && 
-                                !window.location.pathname.includes('/evaluations/') &&
-                                !window.location.pathname.includes('/duplicates/');
+        const currentTab = searchParams.get("tab") || (pathname?.includes('/evaluations') ? "evaluations" : "activities");
+        const isBaseCoursePath = !pathname?.includes('/activities/') && 
+                                !pathname?.includes('/evaluations/') &&
+                                !pathname?.includes('/duplicates/');
 
         if (currentTab === value && isBaseCoursePath) {
             return;

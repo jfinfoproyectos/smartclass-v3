@@ -77,6 +77,122 @@ export const githubService = {
         }
     },
 
+    /**
+     * Obtiene de forma rápida y ultra liviana la fecha del primer commit (más antiguo)
+     * y del último commit (más reciente) del repositorio o de una rama dada
+     */
+    async getRepoDateBounds(
+        owner: string, 
+        repo: string, 
+        branch?: string, 
+        token?: string
+    ): Promise<{
+        oldestDate: string | null;
+        latestDate: string | null;
+        oldestDateIso: string | null;
+        latestDateIso: string | null;
+        activeDates: string[];
+    }> {
+        const headers: HeadersInit = {
+            'Accept': 'application/vnd.github.v3+json'
+        };
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        try {
+            const effectiveBranch = branch && branch !== "all" && branch !== "HEAD" ? branch : "";
+            const activeDatesSet = new Set<string>();
+
+            const getRegionalDateOnly = (iso: string | null) => {
+                if (!iso) return null;
+                const d = new Date(iso);
+                if (isNaN(d.getTime())) return null;
+                const pad = (n: number) => String(n).padStart(2, "0");
+                return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+            };
+
+            // Solicitamos 100 commits por página para mapear las fechas activas de forma ultra rápida
+            let url = `https://api.github.com/repos/${owner}/${repo}/commits?per_page=100&page=1`;
+            if (effectiveBranch) {
+                url += `&sha=${encodeURIComponent(effectiveBranch)}`;
+            }
+
+            const res = await fetch(url, { headers });
+            if (!res.ok) {
+                return { oldestDate: null, latestDate: null, oldestDateIso: null, latestDateIso: null, activeDates: [] };
+            }
+
+            const data = await res.json();
+            if (!Array.isArray(data) || data.length === 0) {
+                return { oldestDate: null, latestDate: null, oldestDateIso: null, latestDateIso: null, activeDates: [] };
+            }
+
+            for (const c of data) {
+                const dateIso = c?.commit?.author?.date || c?.commit?.committer?.date;
+                const dStr = getRegionalDateOnly(dateIso);
+                if (dStr) activeDatesSet.add(dStr);
+            }
+
+            const latestIso = data[0]?.commit?.author?.date || data[0]?.commit?.committer?.date || null;
+            let oldestIso = data[data.length - 1]?.commit?.author?.date || data[data.length - 1]?.commit?.committer?.date || latestIso;
+
+            const link = res.headers.get('link');
+            if (link) {
+                const match = link.match(/<([^>]+)>;\s*rel="last"/);
+                if (match) {
+                    const lastUrl = match[1];
+                    try {
+                        const pageMatch = lastUrl.match(/[?&]page=(\d+)/);
+                        const lastPageNum = pageMatch ? parseInt(pageMatch[1], 10) : 1;
+
+                        const intermediatePromises: Promise<any>[] = [];
+                        for (let p = 2; p < Math.min(lastPageNum, 5); p++) {
+                            let pUrl = `https://api.github.com/repos/${owner}/${repo}/commits?per_page=100&page=${p}`;
+                            if (effectiveBranch) pUrl += `&sha=${encodeURIComponent(effectiveBranch)}`;
+                            intermediatePromises.push(fetch(pUrl, { headers }).then(r => r.ok ? r.json() : []).catch(() => []));
+                        }
+
+                        const [lastPageRes, ...intermediatePages] = await Promise.all([
+                            fetch(lastUrl, { headers }).then(r => r.ok ? r.json() : []).catch(() => []),
+                            ...intermediatePromises
+                        ]);
+
+                        for (const pageList of intermediatePages) {
+                            if (Array.isArray(pageList)) {
+                                for (const c of pageList) {
+                                    const dStr = getRegionalDateOnly(c?.commit?.author?.date || c?.commit?.committer?.date);
+                                    if (dStr) activeDatesSet.add(dStr);
+                                }
+                            }
+                        }
+
+                        if (Array.isArray(lastPageRes) && lastPageRes.length > 0) {
+                            for (const c of lastPageRes) {
+                                const dStr = getRegionalDateOnly(c?.commit?.author?.date || c?.commit?.committer?.date);
+                                if (dStr) activeDatesSet.add(dStr);
+                            }
+                            oldestIso = lastPageRes[lastPageRes.length - 1]?.commit?.author?.date || lastPageRes[0]?.commit?.author?.date || oldestIso;
+                        }
+                    } catch {
+                        // ignore and use fallback
+                    }
+                }
+            }
+
+            return {
+                oldestDate: getRegionalDateOnly(oldestIso),
+                latestDate: getRegionalDateOnly(latestIso),
+                oldestDateIso: oldestIso,
+                latestDateIso: latestIso,
+                activeDates: Array.from(activeDatesSet).sort()
+            };
+        } catch (e) {
+            console.warn("[GitHubService] Error al obtener límites de fechas:", e);
+            return { oldestDate: null, latestDate: null, oldestDateIso: null, latestDateIso: null, activeDates: [] };
+        }
+    },
+
     async getFileContent(owner: string, repo: string, path: string, branch: string = "HEAD", token?: string, retries = 3): Promise<string | null> {
         // Use encodeURIComponent for each part of the path separately to avoid breaking slashes
         const encodedPath = path.split('/').map(part => encodeURIComponent(part)).join('/');
@@ -276,5 +392,57 @@ export const githubService = {
             console.warn("[GitHubService] Stats/contributors no disponibles:", error);
         }
         return [];
+    },
+
+    /**
+     * Obtiene los datos de un commit individual por hash SHA o referencia
+     */
+    async getSingleCommit(owner: string, repo: string, ref: string, token?: string): Promise<any | null> {
+        const headers: HeadersInit = {
+            'Accept': 'application/vnd.github.v3+json'
+        };
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        try {
+            const url = `https://api.github.com/repos/${owner}/${repo}/commits/${encodeURIComponent(ref.trim())}`;
+            const response = await fetch(url, { headers });
+            if (!response.ok) return null;
+            return await response.json();
+        } catch (error) {
+            console.error(`[GitHubService] Error al obtener commit individual ${ref}:`, error);
+            return null;
+        }
+    },
+
+    /**
+     * Compara dos commits o referencias (base...head) y obtiene todos los commits y diffs intermedios
+     */
+    async compareCommits(owner: string, repo: string, base: string, head: string, token?: string): Promise<{
+        commits: any[];
+        files: any[];
+        totalCommits: number;
+    } | null> {
+        const headers: HeadersInit = {
+            'Accept': 'application/vnd.github.v3+json'
+        };
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        try {
+            const url = `https://api.github.com/repos/${owner}/${repo}/compare/${encodeURIComponent(base.trim())}...${encodeURIComponent(head.trim())}`;
+            const response = await fetch(url, { headers });
+            if (!response.ok) return null;
+            const data = await response.json();
+            return {
+                commits: Array.isArray(data.commits) ? data.commits : [],
+                files: Array.isArray(data.files) ? data.files : [],
+                totalCommits: data.total_commits || (Array.isArray(data.commits) ? data.commits.length : 0)
+            };
+        } catch (error) {
+            console.error(`[GitHubService] Error al comparar commits ${base}...${head}:`, error);
+            return null;
+        }
     }
 };
+

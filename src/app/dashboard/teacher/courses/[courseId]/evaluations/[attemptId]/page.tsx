@@ -53,7 +53,7 @@ export default async function EvaluationAttemptResultsPage(
     const submissions = await evaluationService.getSubmissionsByAttempt(attemptId);
 
     return (
-        <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto w-full">
+        <div className="p-3 sm:p-5 lg:p-6 w-full max-w-[1720px] mx-auto min-h-screen">
             <SubmissionsManager
                 courseId={courseId}
                 attempt={attempt}

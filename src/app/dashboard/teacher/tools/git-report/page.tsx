@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { GitReportToolView } from "@/features/github/components/reports/GitReportToolView";
-import { getGithubToken } from "@/lib/githubTokenHelper";
+import { getGithubTokenInfo } from "@/lib/githubTokenHelper";
 
 export default async function GitReportToolPage() {
     const session = await auth.api.getSession({ headers: await headers() });
@@ -13,12 +13,12 @@ export default async function GitReportToolPage() {
         redirect("/signin");
     }
 
-    const token = await getGithubToken(session.user.id);
-    const hasUserGithubToken = Boolean(token);
+    const tokenInfo = await getGithubTokenInfo(session.user.id);
 
     return (
         <GitReportToolView 
-            hasUserGithubToken={hasUserGithubToken} 
+            hasUserGithubToken={tokenInfo.hasToken} 
+            tokenSource={tokenInfo.source}
         />
     );
 }

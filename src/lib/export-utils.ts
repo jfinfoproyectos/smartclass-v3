@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs';
 import { getActivityChecklistConfig, extractEvaluationMetadata, stripEvaluationMetadata } from '@/features/teacher/utils/checklistGradingUtils';
-import { formatEvidenceUrl } from '@/lib/utils';
+import { formatEvidenceUrl, formatName } from '@/lib/utils';
 
 /**
  * Export data to Excel file with styling
@@ -926,3 +926,333 @@ export function formatGradeForExport(grade: number | null): string {
     return grade.toFixed(1);
 }
 
+
+
+export interface ExportEvaluationOptions {
+    institutionName?: string;
+    courseName: string;
+    teacherName: string;
+    evaluationTitle: string;
+    startTime: Date | string;
+    endTime: Date | string;
+    submissions: any[];
+    totalQuestions: number;
+    filename?: string;
+}
+
+/**
+ * Export corporate evaluation submissions and statistics report to Excel
+ */
+export async function exportEvaluationSubmissionsToExcel({
+    institutionName = "SmartClass Academic Suite",
+    courseName,
+    teacherName,
+    evaluationTitle,
+    startTime,
+    endTime,
+    submissions,
+    totalQuestions,
+    filename,
+}: ExportEvaluationOptions) {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = institutionName;
+    workbook.created = new Date();
+
+    // Calculations
+    const totalStudents = submissions.length;
+    const submittedOnes = submissions.filter(s => s.submittedAt);
+    const inProgressCount = totalStudents - submittedOnes.length;
+    const scores = submittedOnes.map(s => Number(s.score) || 0);
+    const avgScore = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+    const maxScore = scores.length > 0 ? Math.max(...scores) : 0;
+    const minScore = scores.length > 0 ? Math.min(...scores) : 0;
+    const passCount = scores.filter(s => s >= 3.0).length;
+    const failCount = scores.filter(s => s < 3.0).length;
+    const passRate = submittedOnes.length > 0 ? ((passCount / submittedOnes.length) * 100).toFixed(1) : "0.0";
+    const totalExpulsions = submissions.reduce((acc, s) => acc + (s.expulsions || 0), 0);
+
+    // ==========================================
+    // SHEET 1: Resultados de Evaluación
+    // ==========================================
+    const ws1 = workbook.addWorksheet('Resultados Evaluación');
+    const totalCols = 9;
+
+    // 1. Banner Institucional Principal
+    const titleRow = ws1.addRow([`${institutionName.toUpperCase()} • REPORTE EJECUTIVO DE EVALUACIÓN`]);
+    ws1.mergeCells(1, 1, 1, totalCols);
+    titleRow.height = 34;
+    titleRow.font = { name: 'Calibri', size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
+    titleRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+    titleRow.alignment = { vertical: 'middle', horizontal: 'center' };
+
+    // 2. Subtítulo con Metadatos
+    const dateStr = new Date().toLocaleDateString('es-ES') + ' ' + new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    const subTitleRow = ws1.addRow([`Evaluación: ${evaluationTitle} | Curso: ${courseName} | Docente: ${teacherName} | Emisión: ${dateStr}`]);
+    ws1.mergeCells(2, 1, 2, totalCols);
+    subTitleRow.height = 22;
+    subTitleRow.font = { name: 'Calibri', size: 9.5, bold: true, italic: true, color: { argb: 'FFFFFFFF' } };
+    subTitleRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+    subTitleRow.alignment = { vertical: 'middle', horizontal: 'center' };
+
+    // 3. Espaciador
+    const emptyRow3 = ws1.addRow([]);
+    emptyRow3.height = 8;
+
+    // 4. Bloque de Métricas Resumen (Tarjetas KPI en Excel)
+    const kpiRow1 = ws1.addRow([
+        'TOTAL INSCRITOS', totalStudents,
+        'ENTREGAS RECIBIDAS', `${submittedOnes.length} (${totalStudents > 0 ? ((submittedOnes.length / totalStudents) * 100).toFixed(0) : 0}%)`,
+        'NOTA PROMEDIO', Number(avgScore.toFixed(2)),
+        'APROBADOS (≥ 3.0)', `${passCount} (${passRate}%)`,
+        'FALTAS / EXPULSIONES'
+    ]);
+    kpiRow1.height = 20;
+    kpiRow1.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF475569' } };
+    kpiRow1.alignment = { vertical: 'middle', horizontal: 'center' };
+
+    const kpiRow2 = ws1.addRow([
+        'En Progreso:', inProgressCount,
+        'Nota Máxima:', Number(maxScore.toFixed(2)),
+        'Nota Mínima:', Number(minScore.toFixed(2)),
+        'Reprobados (< 3.0):', failCount,
+        'Incidentes Registrados:', totalExpulsions
+    ]);
+    kpiRow2.height = 20;
+    kpiRow2.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF0F172A' } };
+    kpiRow2.alignment = { vertical: 'middle', horizontal: 'center' };
+
+    // Estilo suave para bloque KPI
+    [kpiRow1, kpiRow2].forEach(row => {
+        row.eachCell((cell) => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+            cell.border = {
+                top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+                bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+                left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+                right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
+            };
+        });
+    });
+
+    // 5. Espaciador
+    const emptyRow6 = ws1.addRow([]);
+    emptyRow6.height = 10;
+
+    // 6. Encabezados de Tabla
+    const headers = [
+        'N°',
+        'Estudiante',
+        'Correo Electrónico',
+        'Estado',
+        'Fecha de Entrega',
+        'Respuestas',
+        'Nota Final (/ 5.0)',
+        'Resultado',
+        'Expulsiones'
+    ];
+    const headerRow = ws1.addRow(headers);
+    headerRow.height = 26;
+    headerRow.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+    headerRow.eachCell((cell) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+        cell.border = {
+            top: { style: 'medium', color: { argb: 'FF0F172A' } },
+            bottom: { style: 'medium', color: { argb: 'FF0F172A' } },
+            left: { style: 'thin', color: { argb: 'FF475569' } },
+            right: { style: 'thin', color: { argb: 'FF475569' } }
+        };
+    });
+
+    // 7. Filas de Estudiantes
+    submissions.forEach((sub, idx) => {
+        const studentName = formatName(sub.user?.name, sub.user?.profile);
+        const email = sub.user?.email || 'N/A';
+        const isSubmitted = Boolean(sub.submittedAt);
+        const statusText = isSubmitted ? 'Enviado' : 'En progreso';
+        const submittedDateStr = isSubmitted && sub.submittedAt
+            ? new Date(sub.submittedAt).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })
+            : '-';
+        const answersRatio = `${sub._count?.answersList || 0} / ${totalQuestions}`;
+        const scoreNum = sub.score !== null && sub.score !== undefined ? Number(Number(sub.score).toFixed(2)) : 0;
+        const resultText = !isSubmitted ? 'EN PROGRESO' : (scoreNum >= 3.0 ? 'APROBADO' : 'REPROBADO');
+        const expulsions = sub.expulsions || 0;
+
+        const row = ws1.addRow([
+            idx + 1,
+            studentName,
+            email,
+            statusText,
+            submittedDateStr,
+            answersRatio,
+            isSubmitted ? scoreNum : '-',
+            resultText,
+            expulsions
+        ]);
+        row.height = 22;
+        row.font = { name: 'Calibri', size: 9.5 };
+
+        // Zebra striping
+        const bgArgb = idx % 2 === 1 ? 'FFF8FAFC' : 'FFFFFFFF';
+        row.eachCell((cell, colIdx) => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgArgb } };
+            cell.border = {
+                bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+            };
+            if (colIdx === 1) cell.alignment = { horizontal: 'center', vertical: 'middle' };
+            else if (colIdx === 2) cell.alignment = { horizontal: 'left', vertical: 'middle' };
+            else if (colIdx === 3) cell.alignment = { horizontal: 'left', vertical: 'middle' };
+            else if (colIdx === 4 || colIdx === 5 || colIdx === 6) cell.alignment = { horizontal: 'center', vertical: 'middle' };
+            else if (colIdx === 7) {
+                cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                if (isSubmitted) {
+                    cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: scoreNum >= 3.0 ? 'FF16A34A' : 'FFDC2626' } };
+                    cell.numFmt = '0.00';
+                }
+            } else if (colIdx === 8) {
+                cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                cell.font = { name: 'Calibri', size: 9, bold: true, color: { argb: resultText === 'APROBADO' ? 'FF16A34A' : resultText === 'REPROBADO' ? 'FFDC2626' : 'FFD97706' } };
+            } else if (colIdx === 9) {
+                cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                if (expulsions > 0) {
+                    cell.font = { name: 'Calibri', size: 9.5, bold: true, color: { argb: 'FFDC2626' } };
+                }
+            }
+        });
+    });
+
+    // 8. Fila de Resumen / Promedio al final
+    const footerRow = ws1.addRow([
+        '',
+        'PROMEDIO GENERAL',
+        '',
+        `${submittedOnes.length} entregados`,
+        '',
+        '',
+        Number(avgScore.toFixed(2)),
+        `${passRate}% aprobados`,
+        totalExpulsions > 0 ? `${totalExpulsions} faltas` : '-'
+    ]);
+    footerRow.height = 24;
+    footerRow.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF0F172A' } };
+    footerRow.eachCell((cell, colIdx) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+        cell.border = {
+            top: { style: 'medium', color: { argb: 'FF94A3B8' } },
+            bottom: { style: 'medium', color: { argb: 'FF94A3B8' } },
+            left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+            right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
+        };
+        if (colIdx === 2 || colIdx === 7 || colIdx === 8) {
+            cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        }
+    });
+
+    // Column widths
+    ws1.getColumn(1).width = 7;   // N°
+    ws1.getColumn(2).width = 34;  // Estudiante
+    ws1.getColumn(3).width = 32;  // Correo
+    ws1.getColumn(4).width = 15;  // Estado
+    ws1.getColumn(5).width = 20;  // Fecha
+    ws1.getColumn(6).width = 16;  // Respuestas
+    ws1.getColumn(7).width = 18;  // Nota
+    ws1.getColumn(8).width = 16;  // Resultado
+    ws1.getColumn(9).width = 15;  // Expulsiones
+
+    // Freeze panes at row 7 (headers) and enable autofilter
+    ws1.views = [{ state: 'frozen', ySplit: 7 }];
+    ws1.autoFilter = {
+        from: { row: 7, column: 1 },
+        to: { row: ws1.rowCount, column: totalCols }
+    };
+
+    // ==========================================
+    // SHEET 2: Estadísticas y Distribución
+    // ==========================================
+    const ws2 = workbook.addWorksheet('Estadísticas y Distribución');
+    const s2Cols = 5;
+
+    // Header Banner
+    const s2Title = ws2.addRow([`${institutionName.toUpperCase()} • DISTRIBUCIÓN ESTADÍSTICA DE CALIFICACIONES`]);
+    ws2.mergeCells(1, 1, 1, s2Cols);
+    s2Title.height = 32;
+    s2Title.font = { name: 'Calibri', size: 12.5, bold: true, color: { argb: 'FFFFFFFF' } };
+    s2Title.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+    s2Title.alignment = { vertical: 'middle', horizontal: 'center' };
+
+    const s2Sub = ws2.addRow([`Evaluación: ${evaluationTitle} — Rango y Frecuencia de Calificaciones`]);
+    ws2.mergeCells(2, 1, 2, s2Cols);
+    s2Sub.height = 20;
+    s2Sub.font = { name: 'Calibri', size: 9.5, bold: true, italic: true, color: { argb: 'FFFFFFFF' } };
+    s2Sub.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+    s2Sub.alignment = { vertical: 'middle', horizontal: 'center' };
+
+    ws2.addRow([]).height = 10;
+
+    // Tabla de Rangos
+    const distHeaders = ['Rango de Calificación', 'Categoría', 'Estudiantes', 'Porcentaje', 'Estado Académico'];
+    const distHeaderRow = ws2.addRow(distHeaders);
+    distHeaderRow.height = 24;
+    distHeaderRow.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    distHeaderRow.alignment = { vertical: 'middle', horizontal: 'center' };
+    distHeaderRow.eachCell(cell => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+        cell.border = {
+            top: { style: 'medium', color: { argb: 'FF0F172A' } },
+            bottom: { style: 'medium', color: { argb: 'FF0F172A' } }
+        };
+    });
+
+    const buckets = [0, 0, 0, 0, 0];
+    scores.forEach(s => { buckets[Math.min(Math.floor(s), 4)]++; });
+    const bucketDefs = [
+        { label: '0.00 – 1.00', cat: 'Crítico / Deficiente', pass: false },
+        { label: '1.01 – 2.00', cat: 'Bajo / Insuficiente', pass: false },
+        { label: '2.01 – 2.99', cat: 'Básico Reprobatorio', pass: false },
+        { label: '3.00 – 4.00', cat: 'Aceptable / Aprobado', pass: true },
+        { label: '4.01 – 5.00', cat: 'Excelente / Sobresaliente', pass: true }
+    ];
+
+    bucketDefs.forEach((b, i) => {
+        const count = buckets[i];
+        const pct = submittedOnes.length > 0 ? ((count / submittedOnes.length) * 100).toFixed(1) + '%' : '0.0%';
+        const r = ws2.addRow([
+            b.label,
+            b.cat,
+            count,
+            pct,
+            b.pass ? 'APROBATORIO' : 'REPROBATORIO'
+        ]);
+        r.height = 22;
+        r.font = { name: 'Calibri', size: 9.5 };
+        const bg = i % 2 === 1 ? 'FFF8FAFC' : 'FFFFFFFF';
+        r.eachCell((cell, colIdx) => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+            cell.border = {
+                bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+            };
+            if (colIdx === 1 || colIdx === 3 || colIdx === 4) cell.alignment = { horizontal: 'center', vertical: 'middle' };
+            else if (colIdx === 2) cell.alignment = { horizontal: 'left', vertical: 'middle' };
+            else if (colIdx === 5) {
+                cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                cell.font = { name: 'Calibri', size: 9.5, bold: true, color: { argb: b.pass ? 'FF16A34A' : 'FFDC2626' } };
+            }
+        });
+    });
+
+    ws2.getColumn(1).width = 22;
+    ws2.getColumn(2).width = 28;
+    ws2.getColumn(3).width = 16;
+    ws2.getColumn(4).width = 16;
+    ws2.getColumn(5).width = 20;
+
+    // Buffer and download
+    const safeTitle = (evaluationTitle || 'Evaluacion').replace(/[^a-zA-Z0-9_\-]/g, '_');
+    const safeFilename = filename || `Reporte_Evaluacion_${safeTitle}_${new Date().toISOString().split('T')[0]}`;
+    const buffer = await workbook.xlsx.writeBuffer();
+    triggerDownload(buffer, safeFilename);
+}

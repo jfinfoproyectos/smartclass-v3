@@ -4,10 +4,15 @@ import { cleanPdfText } from "@/features/documentation/components/pdf/markdownTo
 import type { GitReportData } from "../../services/gitReportService";
 import type { GitAiReportResult } from "../../actions/gitReportActions";
 
+import type { GitReportMode } from "../../actions/gitReportActions";
+
 export interface GitReportCorporatePDFProps {
     reportData: GitReportData;
     aiReport?: GitAiReportResult | null;
     generatedAt?: string;
+    includeAuthors?: boolean;
+    includeCommitHashes?: boolean;
+    reportMode?: GitReportMode;
 }
 
 const COLORS = {
@@ -442,8 +447,19 @@ function getBadgeStyle(badgeColor?: string) {
     }
 }
 
-export function GitReportCorporatePDF({ reportData, aiReport, generatedAt }: GitReportCorporatePDFProps) {
+export function GitReportCorporatePDF({ 
+    reportData, 
+    aiReport, 
+    generatedAt,
+    includeAuthors = true,
+    includeCommitHashes = true,
+    reportMode = "pedagogical"
+}: GitReportCorporatePDFProps) {
     const { repoInfo, summary, contributors, commits, dateRange, selectedBranch } = reportData;
+
+    const shouldShowAuthors = includeAuthors !== undefined ? includeAuthors : (aiReport?.includeAuthors ?? true);
+    const shouldShowHashes = includeCommitHashes !== undefined ? includeCommitHashes : (aiReport?.includeCommitHashes ?? true);
+    const activeMode = reportMode || aiReport?.reportMode || "pedagogical";
 
     const formattedDate = generatedAt || new Date().toLocaleString("es-CO", {
         timeZone: "America/Bogota",
@@ -454,8 +470,20 @@ export function GitReportCorporatePDF({ reportData, aiReport, generatedAt }: Git
         minute: "2-digit"
     });
 
-    const reportTitle = aiReport?.title || `Auditoría y Reporte de Entregas: ${repoInfo.repo}`;
+    const reportTitle = aiReport?.title || (
+        activeMode === "pedagogical" ? `Evaluación Pedagógica y Auditoría Git: ${repoInfo.repo}` :
+        activeMode === "technical" ? `Auditoría Técnica y Arquitectura de Software: ${repoInfo.repo}` :
+        `Informe Ejecutivo de Entregas y Negocio: ${repoInfo.repo}`
+    );
     const branchLabel = selectedBranch === "all" ? "Todas las ramas (Global)" : selectedBranch;
+
+    // Distribución de anchos de columna para la tabla de commits del apéndice
+    const colDateWidth = shouldShowAuthors && shouldShowHashes ? "18%" : (!shouldShowAuthors && !shouldShowHashes) ? "25%" : "22%";
+    const colAuthorWidth = "22%";
+    const colShaWidth = shouldShowAuthors ? "12%" : "15%";
+    const colMsgWidth = shouldShowAuthors && shouldShowHashes ? "48%" :
+                        shouldShowAuthors && !shouldShowHashes ? "56%" :
+                        !shouldShowAuthors && shouldShowHashes ? "63%" : "75%";
 
     return (
         <Document
@@ -478,8 +506,22 @@ export function GitReportCorporatePDF({ reportData, aiReport, generatedAt }: Git
                 {/* Hero Banner Ejecutivo */}
                 <View style={styles.heroBanner}>
                     <View style={styles.badgeRow}>
-                        <View style={styles.badge}>
-                            <Text style={styles.badgeText}>Informe Ejecutivo Oficial</Text>
+                        <View style={[
+                            styles.badge, 
+                            activeMode === "pedagogical" ? { backgroundColor: COLORS.emeraldBg, borderColor: COLORS.emeraldBorder } :
+                            activeMode === "technical" ? { backgroundColor: COLORS.purpleBg, borderColor: COLORS.purpleBorder } :
+                            { backgroundColor: COLORS.blueBg, borderColor: COLORS.blueBorder }
+                        ]}>
+                            <Text style={[
+                                styles.badgeText,
+                                activeMode === "pedagogical" ? { color: COLORS.emeraldText } :
+                                activeMode === "technical" ? { color: COLORS.purpleText } :
+                                { color: COLORS.blueText }
+                            ]}>
+                                {activeMode === "pedagogical" ? "Evaluación Pedagógica Oficial" :
+                                 activeMode === "technical" ? "Auditoría Técnica de Software" :
+                                 "Informe Ejecutivo Oficial"}
+                            </Text>
                         </View>
                         <View style={styles.secondaryBadge}>
                             <Text style={styles.secondaryBadgeText}>Rama: {cleanPdfText(branchLabel)}</Text>
@@ -491,7 +533,11 @@ export function GitReportCorporatePDF({ reportData, aiReport, generatedAt }: Git
 
                     <Text style={styles.mainTitle}>{cleanPdfText(reportTitle)}</Text>
                     <Text style={styles.subtitle}>
-                        Síntesis técnica y estratégica del desarrollo de software elaborada mediante Inteligencia Artificial.
+                        {activeMode === "pedagogical"
+                            ? "Evaluación formativa de competencias técnicas, consistencia del desarrollo y buenas prácticas de Git."
+                            : activeMode === "technical"
+                            ? "Auditoría profunda de arquitectura de software, calidad de código, refactorizaciones y diffs."
+                            : "Síntesis estratégica de valor de negocio, hitos alcanzados y funcionalidades de producto entregadas."}
                     </Text>
 
                     {/* Metadata Grid */}
@@ -509,8 +555,8 @@ export function GitReportCorporatePDF({ reportData, aiReport, generatedAt }: Git
                             <Text style={styles.metaValue}>{summary.totalCommits} registrados</Text>
                         </View>
                         <View style={styles.metaItem}>
-                            <Text style={styles.metaLabel}>Colaboradores</Text>
-                            <Text style={styles.metaValue}>{summary.totalContributors} miembros activos</Text>
+                            <Text style={styles.metaLabel}>{shouldShowAuthors ? "Colaboradores" : "Equipo"}</Text>
+                            <Text style={styles.metaValue}>{summary.totalContributors} {shouldShowAuthors ? "miembros activos" : "desarrolladores"}</Text>
                         </View>
                     </View>
                 </View>
@@ -523,7 +569,7 @@ export function GitReportCorporatePDF({ reportData, aiReport, generatedAt }: Git
                     </View>
                     <View style={styles.kpiCard}>
                         <Text style={styles.kpiValue}>{summary.totalContributors}</Text>
-                        <Text style={styles.kpiLabel}>Autores Activos</Text>
+                        <Text style={styles.kpiLabel}>{shouldShowAuthors ? "Autores Activos" : "Miembros de Equipo"}</Text>
                     </View>
                     <View style={styles.kpiCard}>
                         <Text style={styles.kpiValue}>{summary.activeDaysCount}</Text>
@@ -540,7 +586,11 @@ export function GitReportCorporatePDF({ reportData, aiReport, generatedAt }: Git
                 {/* Resumen Ejecutivo IA */}
                 {aiReport?.executiveSummary ? (
                     <View style={styles.executiveBox}>
-                        <Text style={styles.executiveTitle}>Resumen Ejecutivo de la Actividad</Text>
+                        <Text style={styles.executiveTitle}>
+                            {activeMode === "pedagogical" ? "Dictamen Pedagógico y Resumen Formativo" :
+                             activeMode === "technical" ? "Dictamen Técnico de Arquitectura" :
+                             "Resumen Ejecutivo de la Actividad"}
+                        </Text>
                         <Text style={styles.paragraph}>
                             {cleanPdfText(aiReport.executiveSummary)}
                         </Text>
@@ -552,7 +602,9 @@ export function GitReportCorporatePDF({ reportData, aiReport, generatedAt }: Git
                     <View style={{ marginBottom: 10 }}>
                         <View style={styles.sectionHeading}>
                             <View style={styles.headingBar} />
-                            <Text style={styles.headingText}>Hitos y Entregas Destacadas</Text>
+                            <Text style={styles.headingText}>
+                                {activeMode === "pedagogical" ? "Evidencias y Logros de Aprendizaje" : "Hitos y Entregas Destacadas"}
+                            </Text>
                         </View>
                         {aiReport.keyAchievements.map((ach, idx) => (
                             <View key={idx} style={styles.bulletRow}>
@@ -574,6 +626,8 @@ export function GitReportCorporatePDF({ reportData, aiReport, generatedAt }: Git
                         </View>
                         {aiReport.detailedTasks.map((task, idx) => {
                             const badgeSt = getBadgeStyle(task.badgeColor);
+                            const hasMetaInfo = shouldShowAuthors || (shouldShowHashes && task.relatedCommits && task.relatedCommits.length > 0);
+
                             return (
                                 <View key={idx} style={styles.taskItemCard} wrap={false}>
                                     <View style={styles.taskItemHeader}>
@@ -587,16 +641,20 @@ export function GitReportCorporatePDF({ reportData, aiReport, generatedAt }: Git
                                         </View>
                                     </View>
 
-                                    <View style={styles.taskItemMeta}>
-                                        <Text style={styles.taskItemAuthor}>
-                                            Responsable: {cleanPdfText(task.author)}
-                                        </Text>
-                                        {task.relatedCommits && task.relatedCommits.length > 0 ? (
-                                            <Text style={styles.taskItemCommits}>
-                                                Commits: {task.relatedCommits.slice(0, 4).join(", ")}
-                                            </Text>
-                                        ) : null}
-                                    </View>
+                                    {hasMetaInfo ? (
+                                        <View style={styles.taskItemMeta}>
+                                            {shouldShowAuthors ? (
+                                                <Text style={styles.taskItemAuthor}>
+                                                    Responsable: {cleanPdfText(task.author)}
+                                                </Text>
+                                            ) : null}
+                                            {shouldShowHashes && task.relatedCommits && task.relatedCommits.length > 0 ? (
+                                                <Text style={styles.taskItemCommits}>
+                                                    Commits: {task.relatedCommits.slice(0, 4).join(", ")}
+                                                </Text>
+                                            ) : null}
+                                        </View>
+                                    ) : null}
 
                                     <Text style={styles.taskItemDesc}>
                                         {cleanPdfText(task.description)}
@@ -654,55 +712,59 @@ export function GitReportCorporatePDF({ reportData, aiReport, generatedAt }: Git
                     </View>
                 ) : null}
 
-                {/* Tabla de Colaboradores */}
-                <View style={{ marginBottom: 12 }} wrap={false}>
-                    <View style={styles.sectionHeading}>
-                        <View style={styles.headingBar} />
-                        <Text style={styles.headingText}>Análisis de Esfuerzo por Colaborador</Text>
-                    </View>
-
-                    <View style={styles.table}>
-                        <View style={styles.tableHeaderRow}>
-                            <Text style={[styles.tableHeaderCell, { width: "30%" }]}>Colaborador</Text>
-                            <Text style={[styles.tableHeaderCell, { width: "15%", textAlign: "center" }]}>Commits</Text>
-                            <Text style={[styles.tableHeaderCell, { width: "15%", textAlign: "center" }]}>% Aporte</Text>
-                            <Text style={[styles.tableHeaderCell, { width: "40%" }]}>Rol y Foco Principal</Text>
+                {/* Tabla de Colaboradores (Condicional a shouldShowAuthors) */}
+                {shouldShowAuthors ? (
+                    <View style={{ marginBottom: 12 }} wrap={false}>
+                        <View style={styles.sectionHeading}>
+                            <View style={styles.headingBar} />
+                            <Text style={styles.headingText}>Análisis de Esfuerzo por Colaborador</Text>
                         </View>
-                        {contributors.slice(0, 10).map((c, idx) => {
-                            const highlight = aiReport?.contributorHighlights?.find(
-                                h => h.name.toLowerCase() === c.name.toLowerCase() || (c.login && h.login?.toLowerCase() === c.login.toLowerCase())
-                            );
-                            return (
-                                <View key={idx} style={[styles.tableRow, idx % 2 === 1 ? styles.tableRowAlt : {}]}>
-                                    <View style={{ width: "30%" }}>
-                                        <Text style={styles.tableCellBold}>{cleanPdfText(c.name)}</Text>
-                                        {c.login ? (
-                                            <Text style={[styles.tableCell, { fontSize: 6, color: COLORS.textMuted }]}>
-                                                @{cleanPdfText(c.login)}
-                                            </Text>
-                                        ) : null}
+
+                        <View style={styles.table}>
+                            <View style={styles.tableHeaderRow}>
+                                <Text style={[styles.tableHeaderCell, { width: "30%" }]}>Colaborador</Text>
+                                <Text style={[styles.tableHeaderCell, { width: "15%", textAlign: "center" }]}>Commits</Text>
+                                <Text style={[styles.tableHeaderCell, { width: "15%", textAlign: "center" }]}>% Aporte</Text>
+                                <Text style={[styles.tableHeaderCell, { width: "40%" }]}>Rol y Foco Principal</Text>
+                            </View>
+                            {contributors.slice(0, 10).map((c, idx) => {
+                                const highlight = aiReport?.contributorHighlights?.find(
+                                    h => h.name.toLowerCase() === c.name.toLowerCase() || (c.login && h.login?.toLowerCase() === c.login.toLowerCase())
+                                );
+                                return (
+                                    <View key={idx} style={[styles.tableRow, idx % 2 === 1 ? styles.tableRowAlt : {}]}>
+                                        <View style={{ width: "30%" }}>
+                                            <Text style={styles.tableCellBold}>{cleanPdfText(c.name)}</Text>
+                                            {c.login ? (
+                                                <Text style={[styles.tableCell, { fontSize: 6, color: COLORS.textMuted }]}>
+                                                    @{cleanPdfText(c.login)}
+                                                </Text>
+                                            ) : null}
+                                        </View>
+                                        <Text style={[styles.tableCell, { width: "15%", textAlign: "center" }]}>
+                                            {c.commitsCount}
+                                        </Text>
+                                        <Text style={[styles.tableCellBold, { width: "15%", textAlign: "center", color: COLORS.accent }]}>
+                                            {c.percentage}%
+                                        </Text>
+                                        <Text style={[styles.tableCell, { width: "40%", fontSize: 6.5 }]}>
+                                            {cleanPdfText(highlight?.roleDescription || "Desarrollo y soporte técnico")}
+                                        </Text>
                                     </View>
-                                    <Text style={[styles.tableCell, { width: "15%", textAlign: "center" }]}>
-                                        {c.commitsCount}
-                                    </Text>
-                                    <Text style={[styles.tableCellBold, { width: "15%", textAlign: "center", color: COLORS.accent }]}>
-                                        {c.percentage}%
-                                    </Text>
-                                    <Text style={[styles.tableCell, { width: "40%", fontSize: 6.5 }]}>
-                                        {cleanPdfText(highlight?.roleDescription || "Desarrollo y soporte técnico")}
-                                    </Text>
-                                </View>
-                            );
-                        })}
+                                );
+                            })}
+                        </View>
                     </View>
-                </View>
+                ) : null}
 
                 {/* Cadencia y Recomendaciones */}
                 {aiReport?.cadenceAndHealth ? (
                     <View style={{ marginBottom: 12 }} wrap={false}>
                         <View style={styles.sectionHeading}>
                             <View style={styles.headingBar} />
-                            <Text style={styles.headingText}>Cadencia y Próximos Pasos Recomendados</Text>
+                            <Text style={styles.headingText}>
+                                {activeMode === "pedagogical" ? "Consistencia de Trabajo y Recomendaciones Pedagógicas" : "Cadencia y Próximos Pasos Recomendados"}
+                            </Text>
                         </View>
                         {aiReport.cadenceAndHealth.velocityDescription ? (
                             <Text style={styles.paragraph}>
@@ -729,23 +791,31 @@ export function GitReportCorporatePDF({ reportData, aiReport, generatedAt }: Git
 
                     <View style={styles.table}>
                         <View style={styles.tableHeaderRow}>
-                            <Text style={[styles.tableHeaderCell, { width: "18%" }]}>Fecha / Hora</Text>
-                            <Text style={[styles.tableHeaderCell, { width: "20%" }]}>Autor</Text>
-                            <Text style={[styles.tableHeaderCell, { width: "12%" }]}>SHA</Text>
-                            <Text style={[styles.tableHeaderCell, { width: "50%" }]}>Mensaje del Commit</Text>
+                            <Text style={[styles.tableHeaderCell, { width: colDateWidth }]}>Fecha / Hora</Text>
+                            {shouldShowAuthors ? (
+                                <Text style={[styles.tableHeaderCell, { width: colAuthorWidth }]}>Autor</Text>
+                            ) : null}
+                            {shouldShowHashes ? (
+                                <Text style={[styles.tableHeaderCell, { width: colShaWidth }]}>SHA</Text>
+                            ) : null}
+                            <Text style={[styles.tableHeaderCell, { width: colMsgWidth }]}>Mensaje del Commit</Text>
                         </View>
                         {commits.slice(0, 75).map((cm, idx) => (
                             <View key={idx} style={[styles.tableRow, idx % 2 === 1 ? styles.tableRowAlt : {}]} wrap={false}>
-                                <Text style={[styles.tableCell, { width: "18%", fontSize: 6 }]}>
+                                <Text style={[styles.tableCell, { width: colDateWidth, fontSize: 6 }]}>
                                     {cm.regionalDate} {cm.regionalTime}
                                 </Text>
-                                <Text style={[styles.tableCellBold, { width: "20%", fontSize: 6.5 }]}>
-                                    {cleanPdfText(cm.authorName).slice(0, 28)}
-                                </Text>
-                                <Text style={[styles.tableCellCode, { width: "12%" }]}>
-                                    {cm.shortSha}
-                                </Text>
-                                <Text style={[styles.tableCell, { width: "50%", fontSize: 6.5 }]}>
+                                {shouldShowAuthors ? (
+                                    <Text style={[styles.tableCellBold, { width: colAuthorWidth, fontSize: 6.5 }]}>
+                                        {cleanPdfText(cm.authorName).slice(0, 28)}
+                                    </Text>
+                                ) : null}
+                                {shouldShowHashes ? (
+                                    <Text style={[styles.tableCellCode, { width: colShaWidth }]}>
+                                        {cm.shortSha}
+                                    </Text>
+                                ) : null}
+                                <Text style={[styles.tableCell, { width: colMsgWidth, fontSize: 6.5 }]}>
                                     {cleanPdfText(cm.title).slice(0, 90)}
                                     {cm.files && cm.files.length > 0 ? (
                                         <Text style={{ fontSize: 5.5, color: COLORS.textMuted }}>
