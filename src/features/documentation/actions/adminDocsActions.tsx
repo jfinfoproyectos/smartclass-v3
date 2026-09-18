@@ -1602,12 +1602,21 @@ export async function getProjectEditorialBookDataAction(projectId: string) {
     });
   });
 
+  // Obtener configuración del sistema para institución y logos por defecto si existen
+  const settings = await prisma.systemSettings.findUnique({
+    where: { id: "settings" }
+  }).catch(() => null);
+
+  const institutionName = settings?.institutionName || "SmartClass Academic Press";
+  const defaultLogoUrl = project.imageUrl || settings?.institutionLogo || settings?.siteLogo || "";
+
   return {
     projectName: project.name,
     projectSlug: project.slug,
     authorName,
     academicYear: new Date().getFullYear().toString(),
-    institutionName: "SmartClass Academic Press",
+    institutionName,
+    logoUrl: defaultLogoUrl,
     createdAt: new Date(project.createdAt).toLocaleDateString("es-ES", {
       day: "numeric",
       month: "long",
@@ -1616,5 +1625,69 @@ export async function getProjectEditorialBookDataAction(projectId: string) {
     intro,
     chapters,
   };
+}
+
+/**
+ * Descarga una imagen remota en el servidor y la convierte a un Data URL en Base64
+ * para garantizar compatibilidad total sin bloqueos de CORS en la compilación del PDF.
+ */
+export async function fetchImageAsBase64Action(imageUrl: string): Promise<{ success: boolean; dataUrl?: string; error?: string }> {
+  try {
+    if (!imageUrl || !imageUrl.trim()) {
+      return { success: false, error: "La URL de la imagen no puede estar vacía." };
+    }
+    const cleanUrl = imageUrl.trim();
+
+    if (cleanUrl.startsWith("data:image/")) {
+      return { success: true, dataUrl: cleanUrl };
+    }
+
+    if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+      return { success: false, error: "La URL debe comenzar con http:// o https://" };
+    }
+
+    const response = await fetch(cleanUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept": "image/*,*/*;q=0.8"
+      },
+      signal: AbortSignal.timeout(12000)
+    });
+
+    if (!response.ok) {
+      return { success: false, error: `El servidor remoto respondió con código HTTP ${response.status}.` };
+    }
+
+    const contentType = response.headers.get("content-type") || "image/png";
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const base64 = buffer.toString("base64");
+    const mime = contentType.startsWith("image/") ? contentType.split(";")[0] : "image/png";
+    const dataUrl = `data:${mime};base64,${base64}`;
+
+    return { success: true, dataUrl };
+  } catch (err: any) {
+    console.error("Error al obtener imagen remota como base64:", err);
+    return { success: false, error: err?.message || "No se pudo conectar a la dirección URL de la imagen." };
+  }
+}
+
+/**
+ * Actualiza la imagen / logo oficial de un proyecto documental.
+ */
+export async function updateProjectLogoAction(projectId: string, logoUrl: string) {
+  const session = await verifyAdmin();
+  const project = await checkProjectOwnership(projectId, session);
+
+  await prisma.docProject.update({
+    where: { id: project.id },
+    data: { imageUrl: logoUrl.trim() || null }
+  });
+
+  revalidatePath(`/dashboard/teacher/docs/${project.slug}`, "page");
+  revalidatePath(`/dashboard/teacher/docs/${project.id}`, "page");
+  revalidatePath("/dashboard/teacher/docs");
+
+  return { success: true };
 }
 

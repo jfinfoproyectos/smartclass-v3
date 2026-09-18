@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,6 +24,7 @@ import Editor from "@monaco-editor/react";
 import { gradeCodeChallengeAction } from "@/features/teacher/actions/gradingActions";
 import { GradingModeSelector } from "./GradingModeSelector";
 import { FeedbackViewer } from "@/features/student/components/FeedbackViewer";
+import { ExportFeedbackButtons } from "@/components/ui/export-feedback-buttons";
 import { RUBRIC_LEVELS } from "./CodeProjectInspector";
 import { TeacherChecklistEvaluationPanel } from "./TeacherChecklistEvaluationPanel";
 import { TeacherEvaluationHeaderBadges } from "./TeacherEvaluationHeaderBadges";
@@ -81,6 +82,40 @@ function getLanguageFromFileName(filename: string): string {
         default:
             return "javascript";
     }
+}
+
+// Separar retroalimentación guardada en parte IA y notas docentes
+function parseInitialFeedback(rawFeedback: string | null | undefined) {
+    if (!rawFeedback) return { aiFeedback: "", teacherNotes: "" };
+    const cleanRaw = stripEvaluationMetadata(rawFeedback).replace("[ENTREGA RECHAZADA]\n", "").replace("[ENTREGA RECHAZADA]", "");
+    
+    const teacherMarker = "### 👨‍🏫 Observaciones del Profesor";
+    const altTeacherMarker = "### Observaciones del Profesor";
+    const codeAiMarker = "### Evaluación del Código (IA)";
+    const dividerMarker = "---";
+
+    if (cleanRaw.includes(codeAiMarker)) {
+        const parts = cleanRaw.split(codeAiMarker);
+        let teacherPart = parts[0].trim();
+        if (teacherPart.endsWith(dividerMarker)) {
+            teacherPart = teacherPart.slice(0, -dividerMarker.length).trim();
+        }
+        const aiPart = parts.slice(1).join(codeAiMarker).trim();
+        return { aiFeedback: aiPart, teacherNotes: teacherPart };
+    }
+
+    const activeTeacherMarker = cleanRaw.includes(teacherMarker) ? teacherMarker : (cleanRaw.includes(altTeacherMarker) ? altTeacherMarker : null);
+    if (activeTeacherMarker) {
+        const parts = cleanRaw.split(activeTeacherMarker);
+        let aiPart = parts[0].trim();
+        if (aiPart.endsWith(dividerMarker)) {
+            aiPart = aiPart.slice(0, -dividerMarker.length).trim();
+        }
+        const teacherPart = parts.slice(1).join(activeTeacherMarker).trim();
+        return { aiFeedback: aiPart, teacherNotes: teacherPart };
+    }
+
+    return { aiFeedback: cleanRaw.trim(), teacherNotes: "" };
 }
 
 export function CodeChallengeInspector({
@@ -150,17 +185,29 @@ export function CodeChallengeInspector({
     const aiWeight = checklistConfig?.aiWeight ?? 50;
     const checklistWeight = checklistConfig?.checklistWeight ?? 50;
 
-    const [criteriaLevels, setCriteriaLevels] = useState<Record<string, number | undefined>>({});
-    const [manualSustentacionScore, setManualSustentacionScore] = useState<number | null>(null);
+    const initialParsed = parseInitialFeedback(submission?.feedback);
+    const initialMeta = extractEvaluationMetadata(submission?.feedback);
+
+    const [criteriaLevels, setCriteriaLevels] = useState<Record<string, number | undefined>>(
+        initialMeta?.criteriaLevels || {}
+    );
+    const [manualSustentacionScore, setManualSustentacionScore] = useState<number | null>(
+        initialMeta?.manualSustentacionScore ?? null
+    );
 
     // Estados de calificación
     const [gradeInput, setGradeInput] = useState<string>(
-        submission?.grade !== null && submission?.grade !== undefined ? String(submission.grade) : ""
+        initialMeta?.calculatedFinalGrade !== undefined && initialMeta?.calculatedFinalGrade !== null
+            ? initialMeta.calculatedFinalGrade.toFixed(1)
+            : (submission?.grade !== null && submission?.grade !== undefined ? String(submission.grade) : "")
     );
-    const [teacherNotesInput, setTeacherNotesInput] = useState<string>("");
-    const [aiFeedbackInput, setAiFeedbackInput] = useState<string>("");
-    const [aiGrade, setAiGrade] = useState<number | null>(null);
+    const [teacherNotesInput, setTeacherNotesInput] = useState<string>(initialParsed.teacherNotes);
+    const [aiFeedbackInput, setAiFeedbackInput] = useState<string>(initialParsed.aiFeedback);
+    const [aiGrade, setAiGrade] = useState<number | null>(
+        initialMeta?.aiGrade ?? (submission?.grade !== null && submission?.grade !== undefined ? Number(submission.grade) : null)
+    );
     const [aiResult, setAiResult] = useState<any>(null);
+    const lastStudentIdRef = useRef<string | null>(student?.id || null);
 
     const [isSaving, setIsSaving] = useState(false);
     const [isEvaluatingAI, setIsEvaluatingAI] = useState(false);
@@ -177,21 +224,32 @@ export function CodeChallengeInspector({
         }
     }, [isTeacherGradingEnabled, rightTab]);
 
-    // Sincronizar al cambiar de estudiante
+    // Sincronizar al cambiar de estudiante o al recibir actualización de entrega
     useEffect(() => {
+        const parsed = parseInitialFeedback(submission?.feedback);
         const meta = extractEvaluationMetadata(submission?.feedback);
-        const cleanFeedback = stripEvaluationMetadata(submission?.feedback || "");
 
         setCriteriaLevels(meta?.criteriaLevels || {});
         setManualSustentacionScore(meta?.manualSustentacionScore ?? null);
 
-        const currentAi = meta?.aiGrade ?? null;
-        setAiGrade(currentAi);
-        setAiResult(null);
-        setAiFeedbackInput("");
-        setTeacherNotesInput(cleanFeedback);
+        const currentAi = meta?.aiGrade !== undefined && meta?.aiGrade !== null
+            ? meta.aiGrade
+            : (submission?.grade !== null && submission?.grade !== undefined ? Number(submission.grade) : null);
 
-        if (submission?.grade !== null && submission?.grade !== undefined) {
+        setAiGrade(currentAi);
+
+        // Resetear aiResult en memoria únicamente si se cambió de estudiante
+        if (lastStudentIdRef.current !== student?.id) {
+            lastStudentIdRef.current = student?.id;
+            setAiResult(null);
+        }
+
+        setAiFeedbackInput(parsed.aiFeedback);
+        setTeacherNotesInput(parsed.teacherNotes);
+
+        if (meta?.calculatedFinalGrade !== undefined && meta?.calculatedFinalGrade !== null) {
+            setGradeInput(meta.calculatedFinalGrade.toFixed(1));
+        } else if (submission?.grade !== null && submission?.grade !== undefined) {
             setGradeInput(String(submission.grade));
         } else {
             setGradeInput("");
@@ -521,45 +579,141 @@ export function CodeChallengeInspector({
                                     className="w-full font-bold text-xs gap-2 shadow-xs h-9 cursor-pointer"
                                 >
                                     {isEvaluatingAI ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                                    {isEvaluatingAI ? "Evaluando con IA..." : (aiFeedbackInput ? "Reevaluar con IA" : "Evaluar con IA (Gemini)")}
+                                    {isEvaluatingAI ? "Evaluando con IA..." : ((aiResult || aiFeedbackInput) ? "Reevaluar con IA" : "Evaluar con IA (Gemini)")}
                                 </Button>
 
-                                {aiResult ? (
+                                {(aiResult || aiFeedbackInput) ? (
                                     <div className="space-y-4 animate-in fade-in">
-                                        {/* Score Badges */}
-                                        <div className="grid grid-cols-3 gap-2">
-                                            <div className="p-2 rounded-xl border bg-blue-500/5 border-blue-500/20 text-center space-y-0.5">
-                                                <span className="text-[9px] text-muted-foreground block font-semibold">Nota Sugerida</span>
-                                                <span className="text-sm font-extrabold font-mono text-blue-600 dark:text-blue-400">
-                                                    {aiResult.grade?.toFixed(1)} / 5.0
-                                                </span>
+                                        {/* Cabecera del Reporte y Exportar */}
+                                        <div className="flex items-center justify-between border-b pb-2">
+                                            <div className="flex items-center gap-1.5">
+                                                <Sparkles className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                                                <h4 className="font-bold text-xs">Reporte de Evaluación de Código (Gemini)</h4>
                                             </div>
-                                            <div className="p-2 rounded-xl border bg-purple-500/5 border-purple-500/20 text-center space-y-0.5">
-                                                <span className="text-[9px] text-muted-foreground block font-semibold">Tiempo Big-O</span>
-                                                <span className="text-xs font-extrabold font-mono text-purple-600 dark:text-purple-400">
-                                                    {aiResult.timeComplexity || "O(n)"}
-                                                </span>
-                                            </div>
-                                            <div className="p-2 rounded-xl border bg-emerald-500/5 border-emerald-500/20 text-center space-y-0.5">
-                                                <span className="text-[9px] text-muted-foreground block font-semibold">Eficiencia</span>
-                                                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                                                    {aiResult.algorithmicEfficiency || "Óptima"}
-                                                </span>
-                                            </div>
+                                            {submission && (
+                                                <ExportFeedbackButtons
+                                                    activity={activity}
+                                                    submission={submission}
+                                                    studentName={student?.name || "Estudiante"}
+                                                    studentEmail={student?.email}
+                                                    size="sm"
+                                                />
+                                            )}
                                         </div>
 
-                                        {/* Resumen */}
-                                        {aiResult.summary && (
-                                            <div className="p-3 bg-muted/20 rounded-xl border text-xs space-y-1">
-                                                <span className="font-bold text-foreground block">Diagnóstico del Código:</span>
-                                                <p className="text-muted-foreground leading-relaxed">{aiResult.summary}</p>
+                                        {/* Score Badges y Diagnóstico */}
+                                        {aiResult ? (
+                                            <>
+                                                <div className="grid grid-cols-3 gap-2">
+                                                    <div className="p-2 rounded-xl border bg-blue-500/5 border-blue-500/20 text-center space-y-0.5">
+                                                        <span className="text-[9px] text-muted-foreground block font-semibold">Nota Sugerida</span>
+                                                        <span className="text-sm font-extrabold font-mono text-blue-600 dark:text-blue-400">
+                                                            {aiResult.grade?.toFixed(1)} / 5.0
+                                                        </span>
+                                                    </div>
+                                                    <div className="p-2 rounded-xl border bg-purple-500/5 border-purple-500/20 text-center space-y-0.5">
+                                                        <span className="text-[9px] text-muted-foreground block font-semibold">Tiempo Big-O</span>
+                                                        <span className="text-xs font-extrabold font-mono text-purple-600 dark:text-purple-400">
+                                                            {aiResult.timeComplexity || "O(n)"}
+                                                        </span>
+                                                    </div>
+                                                    <div className="p-2 rounded-xl border bg-emerald-500/5 border-emerald-500/20 text-center space-y-0.5">
+                                                        <span className="text-[9px] text-muted-foreground block font-semibold">Eficiencia</span>
+                                                        <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                                                            {aiResult.algorithmicEfficiency || "Óptima"}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                {aiResult.summary && (
+                                                    <div className="p-3 bg-muted/20 rounded-xl border text-xs space-y-1">
+                                                        <span className="font-bold text-foreground block">Diagnóstico del Código:</span>
+                                                        <p className="text-muted-foreground leading-relaxed">{aiResult.summary}</p>
+                                                    </div>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                                                        Calificación asignada:
+                                                    </span>
+                                                    <span className="text-sm font-extrabold font-mono text-emerald-700 dark:text-emerald-300">
+                                                        {submission?.grade !== null && submission?.grade !== undefined
+                                                            ? Number(submission.grade).toFixed(1)
+                                                            : (aiGrade ? aiGrade.toFixed(1) : "—")}{" "}
+                                                        / 5.0
+                                                    </span>
+                                                </div>
+                                                <Badge variant="outline" className="text-emerald-700 dark:text-emerald-300 border-emerald-300 text-[10px] bg-emerald-500/10">
+                                                    ✓ Evaluación Guardada
+                                                </Badge>
                                             </div>
                                         )}
 
                                         {/* Retroalimentación en Markdown */}
-                                        {aiResult.feedback && (
-                                            <div className="rounded-xl border bg-background p-3">
-                                                <FeedbackViewer feedback={aiResult.feedback} />
+                                        {(aiResult?.feedback || aiFeedbackInput) && (
+                                            <div className="rounded-xl border bg-background p-3 space-y-2">
+                                                <span className="text-xs font-bold text-foreground block">
+                                                    Retroalimentación del Código:
+                                                </span>
+                                                <FeedbackViewer feedback={aiResult?.feedback || aiFeedbackInput} />
+                                            </div>
+                                        )}
+
+                                        {/* Panel de Ajuste Manual cuando no hay rúbrica checklistConfig */}
+                                        {!checklistConfig && (
+                                            <div className="p-3 bg-muted/30 rounded-xl border space-y-3">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-xs font-bold text-foreground">Ajuste de Calificación y Notas</span>
+                                                    {onReject && (
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => onReject(student.id, teacherNotesInput || undefined)}
+                                                            className="h-7 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 gap-1 px-2"
+                                                        >
+                                                            <XCircle className="h-3.5 w-3.5" /> Rechazar Entrega
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-24 space-y-1">
+                                                        <Label className="text-[10px] text-muted-foreground">Nota (0-5)</Label>
+                                                        <Input
+                                                            type="number"
+                                                            step="0.1"
+                                                            min="0"
+                                                            max="5"
+                                                            value={gradeInput}
+                                                            onChange={(e) => setGradeInput(e.target.value)}
+                                                            className="h-8 text-xs font-mono font-bold"
+                                                            placeholder="0.0"
+                                                        />
+                                                    </div>
+                                                    <div className="flex-1 space-y-1">
+                                                        <Label className="text-[10px] text-muted-foreground">Nota docente (opcional)</Label>
+                                                        <Input
+                                                            value={teacherNotesInput}
+                                                            onChange={(e) => setTeacherNotesInput(e.target.value)}
+                                                            className="h-8 text-xs"
+                                                            placeholder="Comentario adicional para el estudiante..."
+                                                        />
+                                                    </div>
+                                                    <div className="self-end">
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            onClick={handleSaveGrade}
+                                                            disabled={isSaving}
+                                                            className="h-8 text-xs font-semibold gap-1"
+                                                        >
+                                                            {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
+                                                            Guardar
+                                                        </Button>
+                                                    </div>
+                                                </div>
                                             </div>
                                         )}
                                     </div>

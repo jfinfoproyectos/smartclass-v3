@@ -1082,6 +1082,10 @@ export async function generateAllWorkshopSteps(params: {
         instructions: string;
         starterCode?: string;
         expectedSolution?: string;
+        targetFilePath?: string;
+        targetFileContent?: string;
+        gitCommands?: Array<{ command: string; explanation: string }>;
+        validationRule?: string;
         hints: string[];
         suggestedMinutes?: number;
     }>;
@@ -1101,35 +1105,46 @@ export async function generateAllWorkshopSteps(params: {
     const isCode = workshopType === "WORKSHOP_CODE";
 
     const systemPrompt = `Eres un docente universitario y diseñador instruccional experto en ingeniería de software y programación.
-Tu objetivo es diseñar un taller formativo práctico paso a paso de tipo ${isCode ? "Codelab interactivo (Monaco Editor)" : "Taller práctico con repositorio Git y GitHub"}.
+Tu objetivo es diseñar un taller formativo práctico paso a paso de tipo ${isCode ? "Codelab interactivo (Monaco Editor)" : "Tutorial GitHub de Proyectos (Paso a Paso con Verificación)"}.
 
 DIRECTRICES OBLIGATORIAS:
-1. Diseña exactamente ${stepCount} pasos pedagógicos secuenciales que vayan de lo simple a lo complejo.
-2. Cada paso debe tener un título claro (ej: "Paso 1: Definición de Entidades Base"), instrucciones detalladas en Markdown explicando el problema y qué debe implementar el estudiante.
+1. Diseña exactamente ${stepCount} pasos pedagógicos secuenciales que construyan un proyecto real de lo simple a lo complejo.
+2. Cada paso debe tener un título claro (ej: "Paso 1: Configuración Inicial del Proyecto y Entorno").
 3. ${isCode 
-    ? `Para cada paso, debes incluir:
-       - starterCode: Código inicial en ${language} con la firma de métodos/clases y comentarios '// TODO' para que el estudiante complete.
-       - expectedSolution: Solución de referencia 100% funcional y correcta en ${language}.
-       - hints: 2 o 3 pistas orientativas sin dar la respuesta completa.`
-    : `Para cada paso en Git & GitHub:
-       - instructions: Comandos git recomendados, diseño de ramas, commits específicos y verificación del código en ${language}.
-       - hints: 2 o 3 pistas pedagógicas sobre Git o la arquitectura solicitada.`}
+    ? `Para cada paso de Codelab, debes incluir:
+       - starterCode: Código inicial en ${language} con comentarios '// TODO'.
+       - expectedSolution: Solución de referencia 100% funcional.
+       - hints: 2 o 3 pistas orientativas.`
+    : `Para cada paso del Tutorial GitHub, debes incluir:
+       - instructions: Explicación didáctica en Markdown detallando qué se construye en este paso, la arquitectura y el propósito.
+       - targetFilePath: Ruta relativa del archivo a crear o modificar en el repositorio (ej: "src/index.js", "README.md", "src/models/user.py", "package.json").
+       - targetFileContent: Código fuente completo, limpio y bien estructurado que el estudiante debe colocar en ese archivo en este paso.
+       - gitCommands: Lista secuencial de comandos Git a ejecutar en la terminal (ej: 'git add ...', 'git commit -m "..."', 'git push origin main'), cada uno con su campo 'explanation' que explique qué hace ese comando y por qué se ejecuta en este punto.
+       - validationRule: Criterio claro de verificación en el repositorio (ej: "El archivo debe existir en la rama y contener las funciones principales").
+       - hints: 2 o 3 pistas pedagógicas sobre Git o la implementación.`}
 4. Nivel académico: ${level}.
-5. Formato de código: Debe ser limpio, con saltos de línea y sangría adecuada de 4 espacios.`;
+5. Formato de código: Limpio, modular, con comentarios breves y sangría estándar.`;
 
-    const userPrompt = `Título del taller: "${title}"
+    const userPrompt = `Título del tutorial/proyecto: "${title}"
 Temática / Requisitos solicitados por el docente:
-${topicPrompt || "Crea un taller completo con pasos secuenciales aplicando buenas prácticas."}
+${topicPrompt || "Crea un proyecto completo con pasos secuenciales aplicando buenas prácticas."}
 Lenguaje principal: ${language}
 Cantidad de pasos solicitados: ${stepCount}`;
 
     const StepSchema = z.object({
-        summary: z.string().describe("Resumen general conciso del taller y sus objetivos"),
+        summary: z.string().describe("Resumen general conciso del tutorial y sus objetivos pedagógicos"),
         steps: z.array(z.object({
             title: z.string().describe("Título del paso con prefijo Paso N: ..."),
             instructions: z.string().describe("Instrucciones detalladas en Markdown con contexto y requerimientos"),
-            starterCode: z.string().optional().describe("Código inicial para el estudiante"),
-            expectedSolution: z.string().optional().describe("Solución de referencia completa y funcional"),
+            starterCode: z.string().optional().describe("Código inicial para Codelab"),
+            expectedSolution: z.string().optional().describe("Solución de referencia completa para Codelab"),
+            targetFilePath: z.string().optional().describe("Ruta relativa del archivo a crear/modificar en el repo GitHub (ej: src/App.js)"),
+            targetFileContent: z.string().optional().describe("Código o contenido completo a crear en el archivo del repositorio"),
+            gitCommands: z.array(z.object({
+                command: z.string().describe("Comando exacto de Git (ej: git add src/App.js)"),
+                explanation: z.string().describe("Explicación pedagógica de lo que hace este comando Git")
+            })).optional().describe("Lista de comandos Git explicados paso a paso"),
+            validationRule: z.string().optional().describe("Regla de validación o criterio a comprobar en GitHub"),
             hints: z.array(z.string()).describe("Lista de 2 a 3 pistas orientativas"),
             suggestedMinutes: z.number().optional().describe("Minutos estimados para este paso (ej: 15)")
         })).min(1).max(8)
@@ -1167,6 +1182,10 @@ export async function generateSingleWorkshopStep(params: {
     instructions: string;
     starterCode?: string;
     expectedSolution?: string;
+    targetFilePath?: string;
+    targetFileContent?: string;
+    gitCommands?: Array<{ command: string; explanation: string }>;
+    validationRule?: string;
     hints: string[];
 }> {
     const {
@@ -1183,27 +1202,39 @@ export async function generateSingleWorkshopStep(params: {
     const model = await getAIModel(userId, aiModelName);
     const isCode = workshopType === "WORKSHOP_CODE";
 
-    const systemPrompt = `Eres un docente universitario experto en ${language}.
-Tu tarea es generar o perfeccionar un PASO pedagógico específico para el taller "${workshopTitle}".
-${isCode ? "El paso se resolverá en un editor de código interactivo." : "El paso se resolverá en Git y GitHub."}
+    const systemPrompt = `Eres un docente universitario experto en ${language} e ingeniería de software.
+Tu tarea es generar o perfeccionar un PASO pedagógico específico para el ${isCode ? "Codelab" : "Tutorial GitHub de proyecto"} "${workshopTitle}".
 
 Debes retornar:
 - title: Título conciso del paso.
-- instructions: Instrucciones detalladas en formato Markdown con el objetivo, requisitos y guía práctica.
-- starterCode: (Opcional, si aplica) Código base con plantillas y comentarios TODO en ${language}.
-- expectedSolution: (Opcional, si aplica) Solución completa de referencia.
-- hints: 2 a 3 pistas pedagógicas.`;
+- instructions: Instrucciones detalladas en formato Markdown con el objetivo, contexto y requerimientos.
+${isCode 
+    ? `- starterCode: Código base con comentarios TODO en ${language}.
+- expectedSolution: Solución completa de referencia funcional.
+- hints: 2 a 3 pistas pedagógicas.`
+    : `- targetFilePath: Ruta relativa del archivo que el alumno debe crear o modificar en su repo (ej: "src/main.py", "README.md", "routes/api.js").
+- targetFileContent: Contenido o código fuente completo a ubicar en ese archivo.
+- gitCommands: Array de comandos Git necesarios (ej: 'git add ...', 'git commit -m "..."', 'git push origin main') con su explicación clara de lo que hace cada uno.
+- validationRule: Criterio de validación en GitHub.
+- hints: 2 a 3 pistas pedagógicas sobre Git o la arquitectura.`}`;
 
     const userPrompt = `Paso: ${stepTitle}
 Instrucciones previas (si las hay): ${currentInstructions}
-Petición o ajuste específico del docente: ${prompt || "Genera el contenido completo y código para este paso."}
+Petición o ajuste específico del docente: ${prompt || "Genera el contenido completo, archivos a crear y comandos Git explicados para este paso."}
 Lenguaje: ${language}`;
 
     const SingleStepSchema = z.object({
         title: z.string().describe("Título del paso"),
         instructions: z.string().describe("Instrucciones claras en Markdown"),
-        starterCode: z.string().optional().describe("Código inicial"),
-        expectedSolution: z.string().optional().describe("Solución de referencia"),
+        starterCode: z.string().optional().describe("Código inicial para Codelab"),
+        expectedSolution: z.string().optional().describe("Solución de referencia para Codelab"),
+        targetFilePath: z.string().optional().describe("Ruta relativa del archivo a crear en GitHub"),
+        targetFileContent: z.string().optional().describe("Contenido/código del archivo a crear en GitHub"),
+        gitCommands: z.array(z.object({
+            command: z.string().describe("Comando Git"),
+            explanation: z.string().describe("Explicación pedagógica del comando")
+        })).optional().describe("Comandos Git paso a paso con explicación"),
+        validationRule: z.string().optional().describe("Regla de validación"),
         hints: z.array(z.string()).describe("2 a 3 pistas pedagógicas")
     });
 

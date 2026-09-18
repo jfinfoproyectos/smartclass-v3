@@ -21,13 +21,22 @@ import {
   Award,
   AlertCircle,
   Copy,
-  Check
+  Check,
+  Search,
+  FolderGit2,
+  ArrowRight,
+  BookOpen,
+  FileCode,
+  Lock,
+  RefreshCw,
+  Info
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import Editor from "@monaco-editor/react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import { submitActivityAction } from "../actions/submissionActions";
+import { verifyWorkshopGithubStepAction, VerifyStepResult } from "../actions/workshopActions";
 import { FeedbackViewer } from "./FeedbackViewer";
 import { cn } from "@/lib/utils";
 
@@ -37,6 +46,40 @@ interface WorkshopActivityDetailsProps {
   studentName: string;
   isTeacherPreview?: boolean;
   onClosePreview?: () => void;
+}
+
+function parseRepo(url: string) {
+  try {
+    const u = new URL(url.trim());
+    const parts = u.pathname.split("/").filter(Boolean);
+    if (parts.length >= 2) {
+      const owner = parts[0];
+      const repo = parts[1].replace(/\.git$/, "");
+      return { owner, repo, fullName: `${owner}/${repo}` };
+    }
+  } catch {}
+  return null;
+}
+
+function getMonacoLanguage(lang?: string, filePath?: string): string {
+  if (filePath) {
+    const ext = filePath.split(".").pop()?.toLowerCase();
+    if (ext === "js" || ext === "jsx") return "javascript";
+    if (ext === "ts" || ext === "tsx") return "typescript";
+    if (ext === "py") return "python";
+    if (ext === "java") return "java";
+    if (ext === "html") return "html";
+    if (ext === "css") return "css";
+    if (ext === "json") return "json";
+    if (ext === "md") return "markdown";
+    if (ext === "sql") return "sql";
+    if (ext === "sh") return "shell";
+  }
+  if (!lang) return "javascript";
+  const l = lang.toLowerCase();
+  if (l === "node" || l === "js") return "javascript";
+  if (l === "ts") return "typescript";
+  return l;
 }
 
 export function WorkshopActivityDetails({
@@ -63,7 +106,7 @@ export function WorkshopActivityDetails({
     return {
       workshopConfig: {
         type: activity?.type || "WORKSHOP_CODE",
-        deliveryMode: "PRACTICE",
+        deliveryMode: "TUTORIAL",
         language: "javascript",
         estimatedMinutes: 45,
         milestones: []
@@ -73,25 +116,57 @@ export function WorkshopActivityDetails({
   }, [activity?.description, activity?.type]);
 
   const milestones: any[] = workshopConfig.milestones || [];
+  const isCodeLab = activity.type === "WORKSHOP_CODE";
+
   const [activeStepIndex, setActiveStepIndex] = useState(0);
   const [codePerMilestone, setCodePerMilestone] = useState<Record<number, string>>({});
   const [completedSteps, setCompletedSteps] = useState<Record<number, boolean>>({});
   const [showHint, setShowHint] = useState<Record<number, boolean>>({});
+  
+  // GitHub específico
   const [repoUrl, setRepoUrl] = useState("");
   const [repoBranch, setRepoBranch] = useState("main");
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationResults, setVerificationResults] = useState<Record<number, VerifyStepResult>>({});
+
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedFilePath, setCopiedFilePath] = useState(false);
+  const [copiedCmdIdx, setCopiedCmdIdx] = useState<number | null>(null);
 
   const submission = activity.submissions?.[0];
   const isSubmitted = !!submission;
   const isGraded = submission && submission.grade !== null && submission.grade !== undefined;
+
+  // Cargar estado guardado en LocalStorage
+  useEffect(() => {
+    if (typeof window !== "undefined" && activity?.id && userId) {
+      try {
+        const savedRepo = localStorage.getItem(`smartclass_w_repo_${activity.id}_${userId}`);
+        if (savedRepo && !repoUrl) setRepoUrl(savedRepo);
+
+        const savedBranch = localStorage.getItem(`smartclass_w_branch_${activity.id}_${userId}`);
+        if (savedBranch && (!repoBranch || repoBranch === "main")) setRepoBranch(savedBranch);
+
+        const savedCompleted = localStorage.getItem(`smartclass_w_steps_${activity.id}_${userId}`);
+        if (savedCompleted) {
+          const parsed = JSON.parse(savedCompleted);
+          if (parsed && typeof parsed === "object") {
+            setCompletedSteps(parsed);
+          }
+        }
+      } catch (e) {
+        console.warn("Error cargando caché local del taller:", e);
+      }
+    }
+  }, [activity?.id, userId]);
 
   // Initialize milestone codes
   useEffect(() => {
     if (milestones.length > 0) {
       const initialCode: Record<number, string> = {};
       milestones.forEach((m, idx) => {
-        initialCode[idx] = m.starterCode || "";
+        initialCode[idx] = m.starterCode || m.targetFileContent || "";
       });
       setCodePerMilestone(initialCode);
     }
@@ -101,24 +176,132 @@ export function WorkshopActivityDetails({
     title: "Consigna",
     instructions: activity.statement || rawDescription || "Realiza los pasos indicados en la actividad.",
     starterCode: "",
+    targetFilePath: "src/index.js",
+    targetFileContent: "",
+    gitCommands: [],
     hintText: ""
   };
 
-  const isCodeLab = activity.type === "WORKSHOP_CODE";
-  const language = currentMilestone.language || workshopConfig.language || "javascript";
+  const currentFilePath = currentMilestone.targetFilePath || "src/index.js";
+  const currentLanguage = getMonacoLanguage(workshopConfig.language, currentFilePath);
+
+  // Comandos Git predeterminados si el paso no los define
+  const currentGitCommands: Array<{ command: string; explanation: string }> = 
+    (currentMilestone.gitCommands && currentMilestone.gitCommands.length > 0)
+      ? currentMilestone.gitCommands
+      : [
+          { command: `git add ${currentFilePath || "."}`, explanation: "Prepara los cambios del archivo para el próximo commit." },
+          { command: `git commit -m "feat: completar paso ${activeStepIndex + 1}"`, explanation: "Confirma los cambios en el historial de Git local." },
+          { command: `git push origin ${repoBranch || "main"}`, explanation: "Sube los cambios confirmados a tu repositorio remoto en GitHub." }
+        ];
+
+  const parsedRepoInfo = useMemo(() => {
+    return repoUrl ? parseRepo(repoUrl) : null;
+  }, [repoUrl]);
+
+  const handleUpdateRepoUrl = (val: string) => {
+    setRepoUrl(val);
+    if (typeof window !== "undefined" && activity?.id && userId) {
+      localStorage.setItem(`smartclass_w_repo_${activity.id}_${userId}`, val);
+    }
+  };
+
+  const handleUpdateRepoBranch = (val: string) => {
+    setRepoBranch(val);
+    if (typeof window !== "undefined" && activity?.id && userId) {
+      localStorage.setItem(`smartclass_w_branch_${activity.id}_${userId}`, val);
+    }
+  };
+
+  const markStepAsCompletedInStorage = (stepIdx: number) => {
+    setCompletedSteps((prev) => {
+      const updated = { ...prev, [stepIdx]: true };
+      if (typeof window !== "undefined" && activity?.id && userId) {
+        localStorage.setItem(`smartclass_w_steps_${activity.id}_${userId}`, JSON.stringify(updated));
+      }
+      return updated;
+    });
+  };
 
   const handleCopyCode = (text: string) => {
     navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 2000);
     toast.success("Código copiado al portapapeles");
   };
 
-  const handleValidateStep = (stepIdx: number) => {
-    setCompletedSteps((prev) => ({ ...prev, [stepIdx]: true }));
+  const handleCopyFilePath = (path: string) => {
+    navigator.clipboard.writeText(path);
+    setCopiedFilePath(true);
+    setTimeout(() => setCopiedFilePath(false), 2000);
+    toast.success("Ruta del archivo copiada");
+  };
+
+  const handleCopyGitCommand = (cmd: string, idx: number) => {
+    navigator.clipboard.writeText(cmd);
+    setCopiedCmdIdx(idx);
+    setTimeout(() => setCopiedCmdIdx(null), 2000);
+    toast.success(`Comando '${cmd}' copiado`);
+  };
+
+  const handleCopyAllGitCommands = () => {
+    const all = currentGitCommands.map(c => c.command).join("\n");
+    navigator.clipboard.writeText(all);
+    toast.success("Secuencia completa de comandos copiada");
+  };
+
+  // Verificación en Codelab
+  const handleValidateCodelabStep = (stepIdx: number) => {
+    markStepAsCompletedInStorage(stepIdx);
     toast.success(`¡Paso ${stepIdx + 1} completado con éxito!`);
     if (stepIdx < milestones.length - 1) {
       setActiveStepIndex(stepIdx + 1);
+    }
+  };
+
+  // Verificación en GitHub (Tutorial GitHub)
+  const handleVerifyStepInGitHub = async (stepIdx: number) => {
+    if (!repoUrl.trim()) {
+      toast.error("Por favor ingresa primero la URL de tu repositorio GitHub.");
+      return;
+    }
+
+    setIsVerifying(true);
+    const toastId = toast.loading(`Verificando paso ${stepIdx + 1} en GitHub...`, {
+      description: `Consultando repositorio y rama '${repoBranch || "main"}'...`
+    });
+
+    try {
+      const result = await verifyWorkshopGithubStepAction({
+        activityId: activity.id,
+        repoUrl: repoUrl.trim(),
+        branch: repoBranch.trim() || "main",
+        stepIndex: stepIdx,
+        milestone: currentMilestone
+      });
+
+      setVerificationResults((prev) => ({ ...prev, [stepIdx]: result }));
+
+      if (result.success) {
+        markStepAsCompletedInStorage(stepIdx);
+        toast.success(`¡Paso ${stepIdx + 1} verificado con éxito en GitHub!`, {
+          id: toastId,
+          description: result.message
+        });
+      } else {
+        toast.error(`Paso ${stepIdx + 1} no verificado`, {
+          id: toastId,
+          description: result.message
+        });
+      }
+    } catch (err: any) {
+      console.error("Error al verificar paso en GitHub:", err);
+      toast.error("Error al consultar la API de GitHub", {
+        id: toastId,
+        description: err?.message || "Comprueba tu conexión e intenta de nuevo."
+      });
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -127,8 +310,7 @@ export function WorkshopActivityDetails({
     try {
       const formData = new FormData();
       formData.set("activityId", activity.id);
-      
-      // Submit repo url or serialized code
+
       if (!isCodeLab) {
         if (!repoUrl.trim()) {
           toast.error("Por favor ingresa la URL de tu repositorio GitHub.");
@@ -149,16 +331,18 @@ export function WorkshopActivityDetails({
       if (result?.error) {
         toast.error(result.message || "Error al enviar la actividad");
       } else {
-        toast.success("¡Actividad entregada exitosamente!");
+        toast.success("¡Tutorial entregado exitosamente para evaluación docente!");
       }
     } catch (err: any) {
-      toast.error(err.message || "Error al entregar la actividad.");
+      toast.error(err.message || "Error al entregar el tutorial.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const allCompleted = milestones.length > 0 && Object.keys(completedSteps).length >= milestones.length;
+  const totalCompleted = Object.keys(completedSteps).filter(k => !!completedSteps[Number(k)]).length;
+  const isCurrentStepCompleted = !!completedSteps[activeStepIndex];
+  const lastVerification = verificationResults[activeStepIndex];
 
   return (
     <div className="flex flex-col h-full min-h-0 bg-background text-foreground animate-in fade-in duration-300">
@@ -166,8 +350,8 @@ export function WorkshopActivityDetails({
       <div className="flex items-center justify-between gap-4 p-3.5 border-b border-border/80 bg-card/60 backdrop-blur-md shrink-0">
         <div className="flex items-center gap-2.5">
           <div className={cn(
-            "p-2 rounded-xl text-white font-bold",
-            isCodeLab ? "bg-purple-600" : "bg-blue-600"
+            "p-2 rounded-xl text-white font-bold shadow-xs",
+            isCodeLab ? "bg-purple-600" : "bg-gradient-to-br from-orange-500 to-amber-600"
           )}>
             {isCodeLab ? <Terminal className="w-5 h-5" /> : <GitBranch className="w-5 h-5" />}
           </div>
@@ -180,15 +364,15 @@ export function WorkshopActivityDetails({
                 "text-[10px] font-mono font-bold",
                 isCodeLab
                   ? "bg-purple-500/10 text-purple-600 border-purple-500/20"
-                  : "bg-blue-500/10 text-blue-600 border-blue-500/20"
+                  : "bg-orange-500/10 text-orange-600 border-orange-500/20 dark:text-orange-400"
               )}>
-                {isCodeLab ? "Monaco Codelab" : "Taller GitHub"}
+                {isCodeLab ? "Monaco Codelab" : "Tutorial GitHub"}
               </Badge>
             </div>
             <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-0.5">
-              <span className="flex items-center gap-1">
-                <Layers className="w-3 h-3" />
-                {milestones.length} {milestones.length === 1 ? "Paso" : "Pasos"}
+              <span className="flex items-center gap-1 font-medium">
+                <Layers className="w-3 h-3 text-primary" />
+                {totalCompleted} de {milestones.length} pasos completados
               </span>
               {workshopConfig.estimatedMinutes && (
                 <span className="flex items-center gap-1">
@@ -207,7 +391,7 @@ export function WorkshopActivityDetails({
               variant="outline"
               size="sm"
               onClick={onClosePreview}
-              className="text-xs h-8 px-2.5 font-bold border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
+              className="text-xs h-8 px-2.5 font-bold border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 cursor-pointer"
             >
               Cerrar Vista Previa
             </Button>
@@ -222,7 +406,12 @@ export function WorkshopActivityDetails({
               onClick={handleFinalSubmit}
               disabled={isSubmitting}
               size="sm"
-              className="gap-2 font-bold text-xs rounded-xl shadow-md shadow-primary/20 bg-primary hover:bg-primary/90"
+              className={cn(
+                "gap-2 font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer",
+                totalCompleted >= milestones.length
+                  ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20"
+                  : "bg-primary hover:bg-primary/90 text-primary-foreground shadow-primary/20"
+              )}
             >
               {isSubmitting ? (
                 <>
@@ -232,7 +421,7 @@ export function WorkshopActivityDetails({
               ) : (
                 <>
                   <Send className="w-3.5 h-3.5" />
-                  <span>Entregar Taller</span>
+                  <span>{isCodeLab ? "Entregar Codelab" : "Entregar Tutorial GitHub"}</span>
                 </>
               )}
             </Button>
@@ -253,7 +442,7 @@ export function WorkshopActivityDetails({
                 type="button"
                 onClick={() => setActiveStepIndex(idx)}
                 className={cn(
-                  "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all border shrink-0",
+                  "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all border shrink-0 cursor-pointer",
                   isActive
                     ? "bg-primary text-primary-foreground border-primary shadow-xs"
                     : isCompleted
@@ -284,11 +473,11 @@ export function WorkshopActivityDetails({
 
       {/* Split Work Area */}
       <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
-        {/* Left Column: Instructions & Hints */}
+        {/* Left Column: Instructions & Project Guidelines */}
         <div className="w-full md:w-1/2 flex flex-col border-r border-border/70 bg-card/40 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-4 custom-scrollbar">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Badge variant="outline" className="text-[10px] font-mono uppercase tracking-wider">
+              <Badge variant="outline" className="text-[10px] font-mono uppercase tracking-wider bg-muted/40">
                 Paso {activeStepIndex + 1} de {milestones.length || 1}
               </Badge>
               {currentMilestone.suggestedMinutes && (
@@ -306,7 +495,7 @@ export function WorkshopActivityDetails({
           {/* Instructions Markdown */}
           <div className="prose dark:prose-invert prose-xs max-w-none leading-relaxed text-foreground/90 bg-card p-4 rounded-2xl border border-border/70 shadow-xs">
             <ReactMarkdown>
-              {currentMilestone.instructions || "Sigue las instrucciones del paso y escribe el código correspondiente."}
+              {currentMilestone.instructions || "Sigue las instrucciones del paso y realiza los avances correspondientes."}
             </ReactMarkdown>
           </div>
 
@@ -315,7 +504,7 @@ export function WorkshopActivityDetails({
             <div className="p-3.5 rounded-2xl border border-blue-500/20 bg-blue-500/5 text-xs space-y-1">
               <div className="flex items-center gap-1.5 font-bold text-blue-600 dark:text-blue-400 text-xs">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Criterio de Validación</span>
+                <span>Criterio de Validación Automática</span>
               </div>
               <p className="text-[11px] text-muted-foreground leading-relaxed">
                 {currentMilestone.validationRule}
@@ -329,7 +518,7 @@ export function WorkshopActivityDetails({
               <button
                 type="button"
                 onClick={() => setShowHint((prev) => ({ ...prev, [activeStepIndex]: !prev[activeStepIndex] }))}
-                className="flex items-center justify-between w-full text-xs font-bold text-amber-600 dark:text-amber-400 hover:underline"
+                className="flex items-center justify-between w-full text-xs font-bold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
               >
                 <div className="flex items-center gap-1.5">
                   <Lightbulb className="w-4 h-4" />
@@ -346,26 +535,28 @@ export function WorkshopActivityDetails({
             </div>
           )}
 
-          {/* Mark Milestone Completed Button */}
-          <div className="pt-4 mt-auto">
-            <Button
-              onClick={() => handleValidateStep(activeStepIndex)}
-              className={cn(
-                "w-full rounded-2xl font-bold text-xs gap-2 shadow-sm transition-all",
-                completedSteps[activeStepIndex]
-                  ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                  : "bg-primary hover:bg-primary/90 text-primary-foreground"
-              )}
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>
-                {completedSteps[activeStepIndex] ? "Paso Completado (Revalidar)" : "Marcar Paso como Resuelto"}
-              </span>
-            </Button>
-          </div>
+          {/* Codelab validation button (only for WORKSHOP_CODE) */}
+          {isCodeLab && (
+            <div className="pt-4 mt-auto">
+              <Button
+                onClick={() => handleValidateCodelabStep(activeStepIndex)}
+                className={cn(
+                  "w-full rounded-2xl font-bold text-xs gap-2 shadow-sm transition-all cursor-pointer",
+                  isCurrentStepCompleted
+                    ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                    : "bg-primary hover:bg-primary/90 text-primary-foreground"
+                )}
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>
+                  {isCurrentStepCompleted ? "Paso Completado (Revalidar)" : "Marcar Paso como Resuelto"}
+                </span>
+              </Button>
+            </div>
+          )}
         </div>
 
-        {/* Right Column: Monaco Code Editor or GitHub Connector */}
+        {/* Right Column: Code Editor (Codelab) OR Interactive GitHub Step Runner */}
         <div className="w-full md:w-1/2 flex flex-col min-h-0 bg-card overflow-hidden">
           {isCodeLab ? (
             <div className="flex flex-col h-full min-h-0">
@@ -373,7 +564,7 @@ export function WorkshopActivityDetails({
               <div className="flex items-center justify-between px-4 py-2 border-b border-border/70 bg-muted/40 shrink-0 text-xs">
                 <div className="flex items-center gap-2">
                   <Code2 className="w-3.5 h-3.5 text-primary" />
-                  <span className="font-mono font-bold uppercase text-[11px]">{language}</span>
+                  <span className="font-mono font-bold uppercase text-[11px]">{currentLanguage}</span>
                 </div>
 
                 <div className="flex items-center gap-1">
@@ -389,7 +580,7 @@ export function WorkshopActivityDetails({
                         toast.info("Código base restaurado.");
                       }
                     }}
-                    className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground gap-1"
+                    className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground gap-1 cursor-pointer"
                     title="Restablecer código base"
                   >
                     <RotateCcw className="w-3 h-3" />
@@ -399,10 +590,10 @@ export function WorkshopActivityDetails({
                     variant="ghost"
                     size="sm"
                     onClick={() => handleCopyCode(codePerMilestone[activeStepIndex] || "")}
-                    className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground gap-1"
+                    className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground gap-1 cursor-pointer"
                     title="Copiar código"
                   >
-                    {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                    {copiedCode ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
                     <span>Copiar</span>
                   </Button>
                 </div>
@@ -412,7 +603,7 @@ export function WorkshopActivityDetails({
               <div className="flex-1 min-h-0">
                 <Editor
                   height="100%"
-                  language={language}
+                  language={currentLanguage}
                   theme={editorTheme}
                   value={codePerMilestone[activeStepIndex] ?? currentMilestone.starterCode ?? ""}
                   onChange={(val) => {
@@ -434,74 +625,284 @@ export function WorkshopActivityDetails({
               </div>
             </div>
           ) : (
-            /* GitHub Repo Connector */
-            <div className="flex flex-col h-full min-h-0 p-6 space-y-5 overflow-y-auto custom-scrollbar">
-              <div className="p-4 rounded-2xl border border-blue-500/20 bg-blue-500/5 space-y-2">
-                <div className="flex items-center gap-2 font-bold text-sm text-foreground">
-                  <GitBranch className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                  <span>Repositorio GitHub del Estudiante</span>
-                </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  Conecta tu repositorio público o privado de GitHub. Desarrolla las consignas de cada paso en tu entorno local, realiza commits y haz push a tu rama.
-                </p>
-              </div>
+            /* Tutorial GitHub Runner */
+            <div className="flex flex-col h-full min-h-0 overflow-y-auto p-4 sm:p-5 space-y-4 custom-scrollbar">
+              
+              {/* Tarjeta 1: Vinculación de Repositorio GitHub del Estudiante */}
+              <div className="p-4 rounded-2xl border border-orange-500/25 bg-gradient-to-br from-orange-500/[0.04] to-amber-500/[0.02] space-y-3 shadow-2xs">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-lg bg-orange-500/10 text-orange-600 dark:text-orange-400">
+                      <GitBranch className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-bold text-foreground">
+                        Repositorio GitHub del Estudiante
+                      </h3>
+                      <p className="text-[10px] text-muted-foreground">
+                        Vincula tu repositorio para que la plataforma verifique tus avances en cada paso.
+                      </p>
+                    </div>
+                  </div>
 
-              <div className="space-y-3 bg-card p-4 rounded-2xl border border-border/70">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-foreground">URL del Repositorio GitHub</label>
-                  <Input
-                    value={repoUrl}
-                    onChange={(e) => setRepoUrl(e.target.value)}
-                    placeholder="https://github.com/usuario/mi-taller-logistica"
-                    className="text-xs rounded-xl bg-background/60"
-                  />
+                  {parsedRepoInfo && (
+                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px] font-mono gap-1 px-2 shrink-0">
+                      <CheckCircle2 className="w-3 h-3" />
+                      <span>{parsedRepoInfo.fullName}</span>
+                    </Badge>
+                  )}
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-foreground">Rama de Trabajo (Branch)</label>
-                  <Input
-                    value={repoBranch}
-                    onChange={(e) => setRepoBranch(e.target.value)}
-                    placeholder="main"
-                    className="text-xs rounded-xl bg-background/60 font-mono"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="sm:col-span-2 space-y-1">
+                    <label className="text-[11px] font-semibold text-foreground">URL del Repositorio</label>
+                    <Input
+                      value={repoUrl}
+                      onChange={(e) => handleUpdateRepoUrl(e.target.value)}
+                      placeholder="https://github.com/usuario/mi-proyecto"
+                      className="h-8 text-xs bg-background/80"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-foreground">Rama (Branch)</label>
+                    <Input
+                      value={repoBranch}
+                      onChange={(e) => handleUpdateRepoBranch(e.target.value)}
+                      placeholder="main"
+                      className="h-8 text-xs font-mono bg-background/80"
+                    />
+                  </div>
                 </div>
 
                 {repoUrl && (
+                  <div className="flex items-center justify-between pt-1 border-t border-orange-500/15 text-[11px]">
+                    <span className="text-muted-foreground text-[10px]">
+                      Los avances se comprobarán en la rama <strong className="font-mono text-foreground">{repoBranch || "main"}</strong>
+                    </span>
+                    <a
+                      href={repoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-primary hover:underline font-semibold text-xs"
+                    >
+                      <span>Abrir en GitHub</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              {/* Tarjeta 2: Archivo a Crear o Modificar en el Repositorio */}
+              <div className="p-4 rounded-2xl border border-border/80 bg-card space-y-3 shadow-2xs">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FolderGit2 className="w-4 h-4 text-orange-500 shrink-0" />
+                    <div className="min-w-0">
+                      <span className="text-xs font-bold text-foreground block">
+                        Archivo a crear o modificar en tu proyecto
+                      </span>
+                      <code className="text-[11px] text-primary font-mono font-bold truncate block">
+                        {currentFilePath}
+                      </code>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleCopyFilePath(currentFilePath)}
+                      className="h-7 px-2 text-[11px] gap-1 cursor-pointer"
+                      title="Copiar ruta del archivo"
+                    >
+                      {copiedFilePath ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                      <span>Ruta</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleCopyCode(currentMilestone.targetFileContent || currentMilestone.starterCode || "")}
+                      disabled={!(currentMilestone.targetFileContent || currentMilestone.starterCode)}
+                      className="h-7 px-2 text-[11px] gap-1 cursor-pointer"
+                      title="Copiar código del archivo"
+                    >
+                      {copiedCode ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                      <span>Código</span>
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Visor de Código Fuente de Referencia / Plantilla */}
+                {(currentMilestone.targetFileContent || currentMilestone.starterCode) ? (
+                  <div className="rounded-xl border border-border/80 overflow-hidden bg-muted/20">
+                    <div className="px-3 py-1.5 border-b border-border/60 bg-muted/40 flex items-center justify-between text-[10px] text-muted-foreground font-mono">
+                      <span>{currentFilePath}</span>
+                      <span>{currentLanguage.toUpperCase()}</span>
+                    </div>
+                    <div className="h-44">
+                      <Editor
+                        height="100%"
+                        language={currentLanguage}
+                        theme={editorTheme}
+                        value={currentMilestone.targetFileContent || currentMilestone.starterCode || ""}
+                        options={{
+                          readOnly: true,
+                          fontSize: 12,
+                          minimap: { enabled: false },
+                          scrollBeyondLastLine: false,
+                          lineNumbers: "on",
+                          domReadOnly: true,
+                          wordWrap: "on"
+                        }}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3 border border-dashed rounded-xl text-center text-xs text-muted-foreground">
+                    Crea el archivo <code className="font-mono text-foreground">{currentFilePath}</code> según las instrucciones del panel izquierdo.
+                  </div>
+                )}
+              </div>
+
+              {/* Tarjeta 3: Comandos Git Paso a Paso con Explicación Didáctica */}
+              <div className="p-4 rounded-2xl border border-border/80 bg-card space-y-3 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Terminal className="w-4 h-4 text-blue-500 shrink-0" />
+                    <div>
+                      <h4 className="text-xs font-bold text-foreground">
+                        Comandos Git a Ejecutar en tu Terminal
+                      </h4>
+                      <p className="text-[10px] text-muted-foreground">
+                        Ejecuta estos comandos en tu proyecto local antes de presionar verificar.
+                      </p>
+                    </div>
+                  </div>
+
                   <Button
-                    asChild
+                    type="button"
                     variant="outline"
                     size="sm"
-                    className="w-full text-xs gap-1.5 rounded-xl border-border/80"
+                    onClick={handleCopyAllGitCommands}
+                    className="h-7 text-[11px] px-2 gap-1 text-primary border-primary/30 hover:bg-primary/10 cursor-pointer"
                   >
-                    <a href={repoUrl} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      <span>Abrir Repositorio en GitHub</span>
-                    </a>
+                    <Copy className="w-3 h-3" />
+                    <span>Copiar Todos</span>
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  {currentGitCommands.map((cmdObj, idx) => (
+                    <div
+                      key={idx}
+                      className="p-2.5 rounded-xl border border-border/70 bg-muted/15 hover:bg-muted/30 transition-colors space-y-1.5"
+                    >
+                      {/* Fila del Comando Terminal */}
+                      <div className="flex items-center justify-between gap-2 bg-background/80 rounded-lg p-2 border border-border/60 font-mono text-xs">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className="text-muted-foreground select-none font-bold text-[11px]">$</span>
+                          <span className="font-bold text-foreground break-all select-all">{cmdObj.command}</span>
+                        </div>
+
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleCopyGitCommand(cmdObj.command, idx)}
+                          className="h-6 px-2 text-[10px] shrink-0 gap-1 text-muted-foreground hover:text-foreground cursor-pointer"
+                        >
+                          {copiedCmdIdx === idx ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                          <span>Copiar</span>
+                        </Button>
+                      </div>
+
+                      {/* Explicación Pedagógica del Comando */}
+                      {cmdObj.explanation && (
+                        <div className="flex items-start gap-1.5 px-1 text-[11px] text-muted-foreground leading-relaxed">
+                          <span className="text-amber-500 text-xs mt-0.5">💡</span>
+                          <div>
+                            <strong className="text-foreground/90 font-medium">¿Qué hace este comando? </strong>
+                            <span>{cmdObj.explanation}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Retroalimentación de la Última Verificación */}
+              {lastVerification && (
+                <div className={cn(
+                  "p-3.5 rounded-2xl border text-xs space-y-1.5 animate-in fade-in duration-200",
+                  lastVerification.success
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-950 dark:text-emerald-200"
+                    : "border-amber-500/30 bg-amber-500/10 text-amber-950 dark:text-amber-200"
+                )}>
+                  <div className="flex items-center gap-2 font-bold text-xs">
+                    {lastVerification.success ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
+                    )}
+                    <span>{lastVerification.success ? "¡Paso Cumplido con Éxito!" : "Pendiente de Verificación"}</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed">
+                    {lastVerification.message}
+                  </p>
+                  {lastVerification.details?.hint && (
+                    <div className="pt-1 text-[10px] opacity-90 border-t border-current/20">
+                      <strong>Orientación:</strong> {lastVerification.details.hint}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Botones de Acción de Verificación e Interacción */}
+              <div className="pt-2 space-y-2">
+                <Button
+                  onClick={() => handleVerifyStepInGitHub(activeStepIndex)}
+                  disabled={isVerifying || !repoUrl.trim()}
+                  className={cn(
+                    "w-full rounded-2xl font-bold text-xs h-11 gap-2 shadow-md transition-all cursor-pointer",
+                    isCurrentStepCompleted
+                      ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20"
+                      : "bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white shadow-orange-500/20"
+                  )}
+                >
+                  {isVerifying ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Verificando en GitHub (comprobando archivos y commits)...</span>
+                    </>
+                  ) : isCurrentStepCompleted ? (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Paso Verificado en GitHub (Volver a Comprobar)</span>
+                    </>
+                  ) : (
+                    <>
+                      <Search className="w-4 h-4" />
+                      <span>Verificar en Repositorio GitHub</span>
+                    </>
+                  )}
+                </Button>
+
+                {isCurrentStepCompleted && activeStepIndex < milestones.length - 1 && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setActiveStepIndex(activeStepIndex + 1)}
+                    className="w-full rounded-xl text-xs font-semibold gap-1.5 border-border/80 hover:bg-muted/40 cursor-pointer"
+                  >
+                    <span>Avanzar al Paso {activeStepIndex + 2}</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
                   </Button>
                 )}
               </div>
 
-              {/* Starter Code snippet for this milestone if available */}
-              {currentMilestone.starterCode && (
-                <div className="space-y-2 bg-card p-4 rounded-2xl border border-border/70">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-foreground">Código Base para este Paso</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleCopyCode(currentMilestone.starterCode)}
-                      className="h-6 px-2 text-[11px] gap-1"
-                    >
-                      <Copy className="w-3 h-3" />
-                      <span>Copiar</span>
-                    </Button>
-                  </div>
-                  <pre className="text-[11px] font-mono bg-muted/40 p-3 rounded-xl overflow-x-auto text-foreground">
-                    {currentMilestone.starterCode}
-                  </pre>
-                </div>
-              )}
             </div>
           )}
         </div>

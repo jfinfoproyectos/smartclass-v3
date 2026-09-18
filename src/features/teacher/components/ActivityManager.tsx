@@ -246,19 +246,22 @@ Completar de manera práctica y secuencial los pasos de código propuestos en el
 * **Resolución de Pasos (70%)**: Cumplimiento de la lógica, estructura y algoritmos solicitados en cada paso.
 * **Buenas Prácticas y Calidad de Código (30%)**: Nomenclatura, modularización, legibilidad y manejo de casos borde.`;
 
-const TEMPLATE_WORKSHOP_GITHUB = `# Taller Práctico con Repositorio Git y GitHub
+const TEMPLATE_WORKSHOP_GITHUB = `# Tutorial Práctico con Repositorio GitHub
 
-## Objetivo del Taller
-Desarrollar y consolidar competencias de versionamiento y desarrollo colaborativo utilizando Git y GitHub paso a paso.
+## Objetivo del Proyecto
+Construir un proyecto de software paso a paso en tu propio repositorio de GitHub, aplicando buenas prácticas de desarrollo, comandos de versionamiento Git y validaciones interactivas por cada etapa.
 
-## Instrucciones del Taller
-1. Clona o crea tu repositorio para la actividad según las indicaciones.
-2. Avanza por los pasos secuenciales realizando los commits y branches solicitados.
-3. Conecta y entrega el enlace público de tu repositorio de GitHub para auditar los avances.
+## Flujo de Trabajo
+1. Vincula la URL de tu repositorio GitHub y selecciona la rama de trabajo.
+2. Lee con atención las instrucciones de cada paso del proyecto.
+3. Crea o edita los archivos y contenidos solicitados en tu repositorio local.
+4. Ejecuta los comandos de Git explicados en cada paso y realiza \`git push\` a tu repositorio.
+5. Haz clic en **"Verificar en Repositorio GitHub"** para comprobar automáticamente el avance y desbloquear el siguiente paso.
+6. Al completar todos los pasos, entrega tu tutorial para la calificación docente.
 
 ## Criterios de Evaluación
-* **Cumplimiento de Pasos Técnicos (60%)**: Implementación correcta del código y estructura en cada paso.
-* **Historial de Versionamiento y Ramas (40%)**: Calidad de commits, ramas semánticas y flujo Git ordenado.`;
+* **Cumplimiento de Pasos Técnicos y Archivos (60%)**: Implementación correcta del código y estructura en cada paso.
+* **Historial de Versionamiento y Flujo Git (40%)**: Calidad de commits, mensajes semánticos y ramas de trabajo ordenadas.`;
 
 function SortablePathItem({ id, path, index, onRemove }: { id: string; path: string; index: number; onRemove: (index: number) => void }) {
     const {
@@ -623,12 +626,12 @@ const ACTIVITY_TYPES = [
     },
     {
         id: "WORKSHOP_GITHUB",
-        title: "Taller / Reto Git & GitHub",
-        shortTitle: "Taller GitHub",
-        badge: "Git & Pasos IA",
+        title: "Tutorial Git & GitHub de Proyectos",
+        shortTitle: "Tutorial GitHub",
+        badge: "Tutorial Git & Pasos",
         badgeColor: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-200 dark:border-orange-800/40",
         icon: GitBranch,
-        description: "Taller práctico basado en repositorios GitHub con pasos guiados, commits ordenados y ramas de desarrollo.",
+        description: "Tutorial guiado paso a paso con repositorio GitHub, comandos Git explicados y verificación interactiva por cada etapa.",
     },
     {
         id: "MANUAL",
@@ -1204,16 +1207,28 @@ function ActivityFormDialog({
         instructions: string;
         starterCode?: string;
         expectedSolution?: string;
+        targetFilePath?: string;
+        targetFileContent?: string;
+        gitCommands?: Array<{ command: string; explanation: string }>;
+        validationRule?: string;
         hints: string[];
         order: number;
     }>>([
         {
             id: "m-1",
-            title: "Paso 1: Configuración Inicial",
-            instructions: "Implementa la lógica o pasos iniciales solicitados.",
+            title: "Paso 1: Configuración Inicial del Proyecto",
+            instructions: "Implementa la estructura base y los archivos iniciales del repositorio.",
             starterCode: "// Código inicial del estudiante\n",
             expectedSolution: "// Solución de referencia\n",
-            hints: ["Lee con atención el enunciado", "Asegúrate de comprobar tipos"],
+            targetFilePath: "README.md",
+            targetFileContent: "# Mi Proyecto\n\nProyecto desarrollado paso a paso con buenas prácticas y Git.",
+            gitCommands: [
+                { command: "git add .", explanation: "Prepara todos los archivos modificados para el commit." },
+                { command: 'git commit -m "feat: setup inicial del proyecto"', explanation: "Crea el commit inicial en el historial de Git." },
+                { command: "git push origin main", explanation: "Envía los cambios a la rama principal en GitHub." }
+            ],
+            validationRule: "El archivo debe existir en la rama y no estar vacío",
+            hints: ["Lee con atención el enunciado", "Asegúrate de comprobar la ruta del archivo"],
             order: 1
         }
     ]);
@@ -1221,7 +1236,7 @@ function ActivityFormDialog({
     const [workshopContentView, setWorkshopContentView] = useState<"steps" | "statement">("steps");
     const [activeWorkshopStepIdx, setActiveWorkshopStepIdx] = useState<number>(0);
 
-    // Asistentes de IA para Talleres
+    // Asistentes de IA para Talleres y Tutoriales GitHub
     const [isAiAllStepsOpen, setIsAiAllStepsOpen] = useState(false);
     const [aiAllStepsTopic, setAiAllStepsTopic] = useState("");
     const [aiAllStepsCount, setAiAllStepsCount] = useState(4);
@@ -1236,7 +1251,7 @@ function ActivityFormDialog({
     const handleGenerateAllStepsWithAI = async () => {
         setIsGeneratingAllSteps(true);
         try {
-            const titleInput = (document.querySelector('input[name="title"]') as HTMLInputElement)?.value || activity?.title || "Taller Práctico";
+            const titleInput = (document.querySelector('input[name="title"]') as HTMLInputElement)?.value || activity?.title || "Tutorial GitHub";
             const result = await generateAllWorkshopStepsAction({
                 title: titleInput,
                 topicPrompt: aiAllStepsTopic.trim() || titleInput,
@@ -1247,12 +1262,20 @@ function ActivityFormDialog({
             });
 
             if (result?.steps && result.steps.length > 0) {
-                const newMilestones = result.steps.map((s, idx) => ({
+                const newMilestones = result.steps.map((s: any, idx: number) => ({
                     id: `m-${Date.now()}-${idx}`,
                     title: s.title || `Paso ${idx + 1}`,
                     instructions: s.instructions || "",
                     starterCode: s.starterCode || (selectedType === "WORKSHOP_CODE" ? "// Código inicial del estudiante\n" : undefined),
                     expectedSolution: s.expectedSolution || (selectedType === "WORKSHOP_CODE" ? "// Solución esperada\n" : undefined),
+                    targetFilePath: s.targetFilePath || (selectedType === "WORKSHOP_GITHUB" ? "README.md" : undefined),
+                    targetFileContent: s.targetFileContent || (selectedType === "WORKSHOP_GITHUB" ? "# Proyecto\n" : undefined),
+                    gitCommands: s.gitCommands && s.gitCommands.length > 0 ? s.gitCommands : (selectedType === "WORKSHOP_GITHUB" ? [
+                        { command: "git add .", explanation: "Prepara los cambios para el commit." },
+                        { command: `git commit -m "feat: completar paso ${idx + 1}"`, explanation: "Confirma los cambios con mensaje descriptivo." },
+                        { command: "git push origin main", explanation: "Envía los commits a GitHub." }
+                    ] : undefined),
+                    validationRule: s.validationRule || (selectedType === "WORKSHOP_GITHUB" ? "El archivo debe existir en la rama y no estar vacío" : undefined),
                     hints: s.hints && s.hints.length > 0 ? s.hints : ["Revisa atentamente los requisitos"],
                     order: idx + 1
                 }));
@@ -1260,7 +1283,7 @@ function ActivityFormDialog({
                 setActiveWorkshopStepIdx(0);
                 setIsAiAllStepsOpen(false);
                 setAiAllStepsTopic("");
-                toast.success(`¡Taller generado con éxito (${newMilestones.length} pasos creados con IA)!`);
+                toast.success(`¡Tutorial generado con éxito (${newMilestones.length} pasos creados con IA)!`);
             }
         } catch (error: any) {
             console.error("Error generando pasos con IA:", error);
@@ -1278,7 +1301,7 @@ function ActivityFormDialog({
 
         setIsGeneratingSingleStep(true);
         try {
-            const titleInput = (document.querySelector('input[name="title"]') as HTMLInputElement)?.value || activity?.title || "Taller";
+            const titleInput = (document.querySelector('input[name="title"]') as HTMLInputElement)?.value || activity?.title || "Tutorial GitHub";
             const result = await generateSingleWorkshopStepAction({
                 stepTitle: currentStep.title || `Paso ${activeWorkshopStepIdx + 1}`,
                 prompt: aiSingleStepPrompt.trim(),
@@ -1290,12 +1313,17 @@ function ActivityFormDialog({
 
             if (result) {
                 const updated = [...workshopMilestones];
+                const resAny = result as any;
                 updated[activeWorkshopStepIdx] = {
                     ...updated[activeWorkshopStepIdx],
                     title: result.title || updated[activeWorkshopStepIdx].title,
                     instructions: result.instructions || updated[activeWorkshopStepIdx].instructions,
                     starterCode: result.starterCode !== undefined ? result.starterCode : updated[activeWorkshopStepIdx].starterCode,
                     expectedSolution: result.expectedSolution !== undefined ? result.expectedSolution : updated[activeWorkshopStepIdx].expectedSolution,
+                    targetFilePath: resAny.targetFilePath !== undefined ? resAny.targetFilePath : updated[activeWorkshopStepIdx].targetFilePath,
+                    targetFileContent: resAny.targetFileContent !== undefined ? resAny.targetFileContent : updated[activeWorkshopStepIdx].targetFileContent,
+                    gitCommands: resAny.gitCommands !== undefined ? resAny.gitCommands : updated[activeWorkshopStepIdx].gitCommands,
+                    validationRule: resAny.validationRule !== undefined ? resAny.validationRule : updated[activeWorkshopStepIdx].validationRule,
                     hints: result.hints && result.hints.length > 0 ? result.hints : updated[activeWorkshopStepIdx].hints
                 };
                 setWorkshopMilestones(updated);
@@ -3529,14 +3557,14 @@ function ActivityFormDialog({
                                                         ) : (
                                                             <>
                                                                 <GitBranch className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                                                                <span>Taller / Reto Git & GitHub (Paso a Paso)</span>
+                                                                <span>Tutorial de Proyectos en Git & GitHub (Paso a Paso)</span>
                                                             </>
                                                         )}
                                                     </div>
                                                     <p className="text-[11px] text-muted-foreground leading-relaxed">
                                                         {selectedType === "WORKSHOP_CODE"
                                                             ? "Los estudiantes resuelven pasos secuenciales en el editor integrado Monaco, con código inicial, pistas y validación interactiva paso a paso."
-                                                            : "Los estudiantes realizan commits y avances paso a paso en su repositorio de GitHub, entregando el enlace de auditoría al finalizar."}
+                                                            : "Los estudiantes vinculan su repositorio de GitHub y construyen un proyecto paso a paso, ejecutando comandos Git explicados y verificando interactivamente cada avance."}
                                                     </p>
                                                 </div>
 
@@ -4797,6 +4825,14 @@ function ActivityFormDialog({
                                                                 instructions: "Describe las instrucciones y consignas para este paso...",
                                                                 starterCode: selectedType === "WORKSHOP_CODE" ? "// Código inicial del estudiante\n" : undefined,
                                                                 expectedSolution: selectedType === "WORKSHOP_CODE" ? "// Solución esperada\n" : undefined,
+                                                                targetFilePath: selectedType === "WORKSHOP_GITHUB" ? "src/index.js" : undefined,
+                                                                targetFileContent: selectedType === "WORKSHOP_GITHUB" ? "// Código o contenido del archivo\n" : undefined,
+                                                                gitCommands: selectedType === "WORKSHOP_GITHUB" ? [
+                                                                    { command: "git add .", explanation: "Prepara los cambios realizados para el commit." },
+                                                                    { command: `git commit -m "feat: implementar paso ${newOrder}"`, explanation: "Confirma los cambios en el historial local." },
+                                                                    { command: "git push origin main", explanation: "Envía los cambios a la rama principal en GitHub." }
+                                                                ] : undefined,
+                                                                validationRule: selectedType === "WORKSHOP_GITHUB" ? "El archivo debe existir en la rama y no estar vacío" : undefined,
                                                                 hints: ["Pista de ayuda inicial"],
                                                                 order: newOrder
                                                             };
@@ -4864,6 +4900,14 @@ function ActivityFormDialog({
                                                                 instructions: "Describe las instrucciones y consignas para este paso...",
                                                                 starterCode: selectedType === "WORKSHOP_CODE" ? "// Código inicial del estudiante\n" : undefined,
                                                                 expectedSolution: selectedType === "WORKSHOP_CODE" ? "// Solución esperada\n" : undefined,
+                                                                targetFilePath: selectedType === "WORKSHOP_GITHUB" ? "src/index.js" : undefined,
+                                                                targetFileContent: selectedType === "WORKSHOP_GITHUB" ? "// Código o contenido del archivo\n" : undefined,
+                                                                gitCommands: selectedType === "WORKSHOP_GITHUB" ? [
+                                                                    { command: "git add .", explanation: "Prepara los cambios realizados para el commit." },
+                                                                    { command: `git commit -m "feat: implementar paso ${newOrder}"`, explanation: "Confirma los cambios en el historial local." },
+                                                                    { command: "git push origin main", explanation: "Envía los cambios a la rama principal en GitHub." }
+                                                                ] : undefined,
+                                                                validationRule: selectedType === "WORKSHOP_GITHUB" ? "El archivo debe existir en la rama y no estar vacío" : undefined,
                                                                 hints: ["Pista de ayuda inicial"],
                                                                 order: newOrder
                                                             };
@@ -5152,6 +5196,215 @@ function ActivityFormDialog({
                                                                         placeholder="// Solución correcta de referencia"
                                                                         className="text-xs font-mono bg-background resize-y leading-relaxed"
                                                                     />
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Archivo Objetivo y Comandos Git para WORKSHOP_GITHUB (Tutorial GitHub) */}
+                                                        {selectedType === "WORKSHOP_GITHUB" && (
+                                                            <div className="space-y-4 pt-1">
+                                                                {/* Archivo Objetivo en el Repositorio */}
+                                                                <div className="p-3.5 rounded-xl border border-orange-500/20 bg-orange-500/[0.03] space-y-3">
+                                                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <FolderGit2 className="h-4 w-4 text-orange-500" />
+                                                                            <div>
+                                                                                <Label className="text-xs font-bold text-foreground">
+                                                                                    Archivo a Crear o Modificar en el Repositorio
+                                                                                </Label>
+                                                                                <p className="text-[10px] text-muted-foreground">
+                                                                                    Ruta relativa dentro del repositorio (ej: src/App.jsx, README.md, package.json).
+                                                                                </p>
+                                                                            </div>
+                                                                        </div>
+                                                                        <Input
+                                                                            value={workshopMilestones[activeWorkshopStepIdx].targetFilePath || ""}
+                                                                            onChange={(e) => {
+                                                                                const updated = [...workshopMilestones];
+                                                                                updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], targetFilePath: e.target.value };
+                                                                                setWorkshopMilestones(updated);
+                                                                            }}
+                                                                            placeholder="src/index.js (o README.md)"
+                                                                            className="h-8 text-xs font-mono bg-background w-full sm:w-64"
+                                                                        />
+                                                                    </div>
+
+                                                                    {/* Contenido / Plantilla del Archivo */}
+                                                                    <div className="space-y-1.5">
+                                                                        <div className="flex items-center justify-between">
+                                                                            <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                                                                                <Code2 className="h-3.5 w-3.5 text-orange-500" />
+                                                                                <span>Contenido o Código Fuente Sugerido para el Archivo</span>
+                                                                            </Label>
+                                                                            <Button
+                                                                                type="button"
+                                                                                size="sm"
+                                                                                variant="ghost"
+                                                                                onClick={() => setIsAiSingleStepOpen(true)}
+                                                                                className="h-6 text-[11px] text-orange-600 dark:text-orange-400 gap-1 cursor-pointer"
+                                                                            >
+                                                                                <Sparkles className="h-3 w-3" />
+                                                                                <span>Generar con IA</span>
+                                                                            </Button>
+                                                                        </div>
+                                                                        <Textarea
+                                                                            rows={7}
+                                                                            value={workshopMilestones[activeWorkshopStepIdx].targetFileContent || ""}
+                                                                            onChange={(e) => {
+                                                                                const updated = [...workshopMilestones];
+                                                                                updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], targetFileContent: e.target.value };
+                                                                                setWorkshopMilestones(updated);
+                                                                            }}
+                                                                            placeholder="// Código o contenido completo que el estudiante debe crear en este archivo..."
+                                                                            className="text-xs font-mono bg-background resize-y leading-relaxed"
+                                                                        />
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Comandos Git Guiados con Explicación Pedagógica */}
+                                                                <div className="p-3.5 rounded-xl border border-blue-500/20 bg-blue-500/[0.03] space-y-3">
+                                                                    <div className="flex items-center justify-between">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <Terminal className="h-4 w-4 text-blue-500" />
+                                                                            <div>
+                                                                                <Label className="text-xs font-bold text-foreground">
+                                                                                    Comandos Git del Paso (con Explicación Pedagógica)
+                                                                                </Label>
+                                                                                <p className="text-[10px] text-muted-foreground">
+                                                                                    Indica al alumno los comandos a ejecutar en su terminal y qué hace cada uno.
+                                                                                </p>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            <Button
+                                                                                type="button"
+                                                                                size="sm"
+                                                                                variant="outline"
+                                                                                onClick={() => {
+                                                                                    const updated = [...workshopMilestones];
+                                                                                    const currentTarget = updated[activeWorkshopStepIdx].targetFilePath || "archivo";
+                                                                                    updated[activeWorkshopStepIdx] = {
+                                                                                        ...updated[activeWorkshopStepIdx],
+                                                                                        gitCommands: [
+                                                                                            { command: `git add ${currentTarget}`, explanation: `Prepara el archivo ${currentTarget} para ser registrado en el commit.` },
+                                                                                            { command: `git commit -m "feat: implementar ${updated[activeWorkshopStepIdx].title || "paso"}"`, explanation: "Confirma los cambios en el historial local con un mensaje claro." },
+                                                                                            { command: "git push origin main", explanation: "Envía los commits locales al repositorio remoto en GitHub." }
+                                                                                        ]
+                                                                                    };
+                                                                                    setWorkshopMilestones(updated);
+                                                                                    toast.success("Comandos Git estándar insertados.");
+                                                                                }}
+                                                                                className="h-7 text-[11px] px-2.5 text-blue-600 dark:text-blue-400 border-blue-500/30 hover:bg-blue-500/10 gap-1 cursor-pointer"
+                                                                            >
+                                                                                <Sparkles className="h-3 w-3" />
+                                                                                <span>Flujo Estándar</span>
+                                                                            </Button>
+                                                                            <Button
+                                                                                type="button"
+                                                                                size="sm"
+                                                                                variant="ghost"
+                                                                                onClick={() => {
+                                                                                    const updated = [...workshopMilestones];
+                                                                                    const currentCmds = updated[activeWorkshopStepIdx].gitCommands || [];
+                                                                                    updated[activeWorkshopStepIdx] = {
+                                                                                        ...updated[activeWorkshopStepIdx],
+                                                                                        gitCommands: [
+                                                                                            ...currentCmds,
+                                                                                            { command: "git status", explanation: "Muestra el estado actual del árbol de trabajo y archivos modificados." }
+                                                                                        ]
+                                                                                    };
+                                                                                    setWorkshopMilestones(updated);
+                                                                                }}
+                                                                                className="h-7 text-[11px] px-2 text-primary hover:text-primary gap-1 cursor-pointer"
+                                                                            >
+                                                                                <Plus className="h-3 w-3" />
+                                                                                <span>Añadir Comando</span>
+                                                                            </Button>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="space-y-2">
+                                                                        {(workshopMilestones[activeWorkshopStepIdx].gitCommands || []).map((cmdObj, cIdx) => (
+                                                                            <div key={cIdx} className="p-2.5 rounded-lg border border-border/70 bg-background space-y-1.5 shadow-2xs">
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <span className="text-[10px] font-mono font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                                                                                        #{cIdx + 1}
+                                                                                    </span>
+                                                                                    <div className="flex-1 relative">
+                                                                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-mono text-muted-foreground">$</span>
+                                                                                        <Input
+                                                                                            value={cmdObj.command}
+                                                                                            onChange={(e) => {
+                                                                                                const updated = [...workshopMilestones];
+                                                                                                const cmds = [...(updated[activeWorkshopStepIdx].gitCommands || [])];
+                                                                                                cmds[cIdx] = { ...cmds[cIdx], command: e.target.value };
+                                                                                                updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], gitCommands: cmds };
+                                                                                                setWorkshopMilestones(updated);
+                                                                                            }}
+                                                                                            placeholder="git add ."
+                                                                                            className="h-7 text-xs font-mono pl-6 bg-muted/20"
+                                                                                        />
+                                                                                    </div>
+                                                                                    <Button
+                                                                                        type="button"
+                                                                                        size="icon"
+                                                                                        variant="ghost"
+                                                                                        onClick={() => {
+                                                                                            const updated = [...workshopMilestones];
+                                                                                            const cmds = (updated[activeWorkshopStepIdx].gitCommands || []).filter((_, i) => i !== cIdx);
+                                                                                            updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], gitCommands: cmds };
+                                                                                            setWorkshopMilestones(updated);
+                                                                                        }}
+                                                                                        className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0 cursor-pointer"
+                                                                                        title="Eliminar comando"
+                                                                                    >
+                                                                                        <Trash2 className="h-3 w-3" />
+                                                                                    </Button>
+                                                                                </div>
+                                                                                <div className="pl-6">
+                                                                                    <Input
+                                                                                        value={cmdObj.explanation}
+                                                                                        onChange={(e) => {
+                                                                                            const updated = [...workshopMilestones];
+                                                                                            const cmds = [...(updated[activeWorkshopStepIdx].gitCommands || [])];
+                                                                                            cmds[cIdx] = { ...cmds[cIdx], explanation: e.target.value };
+                                                                                            updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], gitCommands: cmds };
+                                                                                            setWorkshopMilestones(updated);
+                                                                                        }}
+                                                                                        placeholder="¿Qué hace este comando? (Explicación pedagógica para el alumno)"
+                                                                                        className="h-6 text-[11px] text-muted-foreground bg-transparent border-dashed"
+                                                                                    />
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+
+                                                                        {(!workshopMilestones[activeWorkshopStepIdx].gitCommands || workshopMilestones[activeWorkshopStepIdx].gitCommands?.length === 0) && (
+                                                                            <div className="p-3 border border-dashed rounded-lg text-center text-xs text-muted-foreground">
+                                                                                No hay comandos configurados para este paso. Haz clic en "Flujo Estándar" o "Añadir Comando".
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Criterio de Validación Automática en GitHub */}
+                                                                <div className="p-3 rounded-xl border border-border/70 bg-card space-y-1.5">
+                                                                    <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                                                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                                                                        <span>Criterio de Validación Automática en GitHub</span>
+                                                                    </Label>
+                                                                    <Input
+                                                                        value={workshopMilestones[activeWorkshopStepIdx].validationRule || ""}
+                                                                        onChange={(e) => {
+                                                                            const updated = [...workshopMilestones];
+                                                                            updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], validationRule: e.target.value };
+                                                                            setWorkshopMilestones(updated);
+                                                                        }}
+                                                                        placeholder="ej: El archivo debe existir en la rama y no estar vacío (o 'contener: express, router')"
+                                                                        className="h-8 text-xs bg-background"
+                                                                    />
+                                                                    <p className="text-[10px] text-muted-foreground">
+                                                                        El sistema comprobará mediante la API de GitHub que el estudiante haya hecho push del archivo antes de desbloquear el siguiente paso.
+                                                                    </p>
                                                                 </div>
                                                             </div>
                                                         )}
@@ -5961,7 +6214,7 @@ const getActivityTypeInfo = (type: string) => {
             };
         case "WORKSHOP_GITHUB":
             return {
-                label: "Taller GitHub",
+                label: "Tutorial GitHub",
                 icon: GitBranch,
                 badgeColor: "bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/25",
                 accentColor: "from-orange-500/30 via-orange-500/10 to-transparent",

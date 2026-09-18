@@ -1,12 +1,26 @@
 import React from "react";
-import { Document, Page, Text, View, StyleSheet, Link } from "@react-pdf/renderer";
+import { Document, Page, Text, View, StyleSheet, Link, Image } from "@react-pdf/renderer";
 import { 
   parseMarkdownToEditorialSections, 
   getTokenColor, 
   cleanPdfText,
   EditorialSection, 
-  InlineToken 
+  InlineToken,
+  getCodeThemePalette,
+  CodeThemeConfig,
+  THEME_ACCENTS,
+  parseColorToHex
 } from "./markdownToPdfAst";
+
+export interface EditorialThemeConfig {
+  adoptTheme?: boolean;
+  adoptCodeTheme?: boolean;
+  themeId?: string;
+  themeName?: string;
+  primaryColor?: string;
+  codeThemeId?: string;
+  codeThemeName?: string;
+}
 
 export interface EditorialBookData {
   projectName: string;
@@ -16,7 +30,9 @@ export interface EditorialBookData {
   academicYear?: string;
   institutionName?: string;
   edition?: string;
+  logoUrl?: string;
   createdAt?: string;
+  themeConfig?: EditorialThemeConfig;
   intro?: {
     title: string;
     content: string;
@@ -34,34 +50,69 @@ export interface EditorialBookData {
   }>;
 }
 
-const COLORS = {
-  primary: "#0f172a",      // Slate 900 profundo
-  primaryDark: "#020617",  // Slate 950
-  secondary: "#1e293b",    // Slate 800
-  accent: "#0d9488",       // Teal 600
-  accentLight: "#f0fdfa",  // Teal 50
-  accentBorder: "#ccfbf1", // Teal 100
-  gold: "#d97706",         // Amber 600
-  goldLight: "#fef3c7",
-  surface: "#ffffff",
-  surfaceAlt: "#f8fafc",   // Slate 50
-  border: "#e2e8f0",       // Slate 200
-  borderDark: "#cbd5e1",   // Slate 300
-  text: "#334155",         // Slate 700
-  textDark: "#0f172a",     // Slate 900
-  textMuted: "#64748b",    // Slate 500
-  codeBg: "#0f172a",       // Fondo terminal oscuro
-  codeBorder: "#1e293b",
-  codeBar: "#1e293b",
-};
+function blendWithWhite(hex: string, percent: number): string {
+  const clean = hex.replace("#", "");
+  const r = parseInt(clean.substring(0, 2), 16) || 13;
+  const g = parseInt(clean.substring(2, 4), 16) || 148;
+  const b = parseInt(clean.substring(4, 6), 16) || 136;
+  const nr = Math.round(r + (255 - r) * (1 - percent));
+  const ng = Math.round(g + (255 - g) * (1 - percent));
+  const nb = Math.round(b + (255 - b) * (1 - percent));
+  return `#${nr.toString(16).padStart(2, "0")}${ng.toString(16).padStart(2, "0")}${nb.toString(16).padStart(2, "0")}`;
+}
 
-const styles = StyleSheet.create({
-  // Portada
-  coverPage: {
-    padding: 0,
-    backgroundColor: "#ffffff",
-    fontFamily: "Helvetica",
-  },
+export function resolveEditorialTheme(themeConfig?: EditorialThemeConfig) {
+  const adoptTheme = themeConfig?.adoptTheme ?? false;
+  const adoptCodeTheme = themeConfig?.adoptCodeTheme ?? false;
+
+  let accent = "#0d9488"; // Teal clásico SmartClass
+  if (adoptTheme) {
+    if (themeConfig?.primaryColor) {
+      accent = parseColorToHex(themeConfig.primaryColor, "#0d9488");
+    } else if (themeConfig?.themeId && THEME_ACCENTS[themeConfig.themeId]) {
+      accent = THEME_ACCENTS[themeConfig.themeId];
+    }
+  }
+
+  const codeThemeId = adoptCodeTheme ? (themeConfig?.codeThemeId || "one-dark-pro") : "one-dark-pro";
+  const codePalette = getCodeThemePalette(codeThemeId);
+
+  const colors = {
+    primary: "#0f172a",      // Slate 900 profundo
+    primaryDark: "#020617",  // Slate 950
+    secondary: "#1e293b",    // Slate 800
+    accent,
+    accentLight: blendWithWhite(accent, 0.08),
+    accentBorder: blendWithWhite(accent, 0.28),
+    gold: "#d97706",         // Amber 600
+    goldLight: "#fef3c7",
+    surface: "#ffffff",
+    surfaceAlt: "#f8fafc",   // Slate 50
+    border: "#e2e8f0",       // Slate 200
+    borderDark: "#cbd5e1",   // Slate 300
+    text: "#334155",         // Slate 700
+    textDark: "#0f172a",     // Slate 900
+    textMuted: "#64748b",    // Slate 500
+    codeBg: codePalette.bg,
+    codeBorder: codePalette.border,
+    codeBar: codePalette.headerBg,
+    codeLineNumber: codePalette.lineNumbers,
+    codeText: codePalette.text,
+  };
+
+  return { colors, codePalette };
+}
+
+export type EditorialColors = ReturnType<typeof resolveEditorialTheme>["colors"];
+
+function buildEditorialStyles(COLORS: EditorialColors) {
+  return StyleSheet.create({
+    // Portada
+    coverPage: {
+      padding: 0,
+      backgroundColor: "#ffffff",
+      fontFamily: "Helvetica",
+    },
   coverContainer: {
     height: "100%",
     display: "flex",
@@ -70,11 +121,17 @@ const styles = StyleSheet.create({
   },
   coverHeaderBanner: {
     backgroundColor: COLORS.primary,
-    paddingTop: 54,
-    paddingBottom: 40,
+    paddingTop: 48,
+    paddingBottom: 36,
     paddingHorizontal: 48,
     borderBottomWidth: 4,
     borderBottomColor: COLORS.accent,
+  },
+  coverHeaderTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
   },
   coverEditorialTag: {
     fontSize: 9,
@@ -82,7 +139,23 @@ const styles = StyleSheet.create({
     color: COLORS.accent,
     textTransform: "uppercase",
     letterSpacing: 2,
-    marginBottom: 16,
+  },
+  coverLogoContainer: {
+    backgroundColor: "#ffffff",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    maxHeight: 46,
+    maxWidth: 130,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.25)",
+  },
+  coverLogoImage: {
+    maxHeight: 36,
+    maxWidth: 114,
+    objectFit: "contain",
   },
   coverTitle: {
     fontSize: 28,
@@ -177,6 +250,24 @@ const styles = StyleSheet.create({
     paddingBottom: 5,
     borderBottomWidth: 0.75,
     borderBottomColor: COLORS.border,
+  },
+  imageBlockContainer: {
+    marginVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  editorialContentImage: {
+    maxHeight: 260,
+    maxWidth: 480,
+    borderRadius: 4,
+    objectFit: "contain",
+  },
+  imageCaptionText: {
+    fontSize: 8,
+    color: COLORS.textMuted,
+    marginTop: 4,
+    textAlign: "center",
+    fontFamily: "Helvetica-Oblique",
   },
   runningHeaderLeft: {
     fontSize: 7.5,
@@ -525,6 +616,9 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     paddingHorizontal: 8,
   },
+  tableDataRowAlt: {
+    backgroundColor: COLORS.surfaceAlt,
+  },
   tableDataCell: {
     fontSize: 8,
     color: COLORS.text,
@@ -566,13 +660,34 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.border,
     marginVertical: 12,
   },
-});
+  });
+}
+
+const stylesCache = new Map<string, any>();
+
+function getEditorialStyles(colors: EditorialColors) {
+  const key = `${colors.accent}_${colors.codeBg}_${colors.codeBar}`;
+  if (stylesCache.has(key)) return stylesCache.get(key);
+  const s = buildEditorialStyles(colors);
+  stylesCache.set(key, s);
+  return s;
+}
+
+const defaultTheme = resolveEditorialTheme();
+const defaultStyles = getEditorialStyles(defaultTheme.colors);
+const defaultCodeTheme = defaultTheme.codePalette;
 
 interface SectionRendererProps {
   sections: EditorialSection[];
+  styles?: any;
+  codeTheme?: CodeThemeConfig;
 }
 
-function SectionRenderer({ sections }: SectionRendererProps) {
+function SectionRenderer({ 
+  sections, 
+  styles = defaultStyles, 
+  codeTheme = defaultCodeTheme 
+}: SectionRendererProps) {
   return (
     <View>
       {sections.map((sec, idx) => {
@@ -653,7 +768,7 @@ function SectionRenderer({ sections }: SectionRendererProps) {
                             <Text
                               key={tokIdx}
                               style={{
-                                color: getTokenColor(token.type),
+                                color: getTokenColor(token.type, codeTheme),
                                 fontFamily: "Courier",
                               }}
                             >
@@ -801,7 +916,7 @@ function SectionRenderer({ sections }: SectionRendererProps) {
                     key={rIdx}
                     style={[
                       styles.tableDataRow,
-                      rIdx % 2 === 1 ? { backgroundColor: COLORS.surfaceAlt } : {}
+                      rIdx % 2 === 1 ? styles.tableDataRowAlt : undefined
                     ]}
                     wrap={false}
                   >
@@ -816,6 +931,18 @@ function SectionRenderer({ sections }: SectionRendererProps) {
             );
           }
 
+          case 'image': {
+            if (!sec.url) return null;
+            return (
+              <View key={idx} style={styles.imageBlockContainer} wrap={false}>
+                <Image src={sec.url} style={styles.editorialContentImage} />
+                {sec.title ? (
+                  <Text style={styles.imageCaptionText}>{sec.title}</Text>
+                ) : null}
+              </View>
+            );
+          }
+
           default:
             return null;
         }
@@ -825,6 +952,9 @@ function SectionRenderer({ sections }: SectionRendererProps) {
 }
 
 export function EditorialBookPDF({ bookData }: { bookData: EditorialBookData }) {
+  const { colors, codePalette } = resolveEditorialTheme(bookData.themeConfig);
+  const styles = getEditorialStyles(colors);
+
   const cleanProjectName = cleanPdfText(bookData.projectName) || "Libro Técnico";
   const cleanSubtitle = cleanPdfText(bookData.subtitle || "Compendio estructurado de lecciones, fundamentos teóricos y ejercicios prácticos de ingeniería.");
   const cleanAuthorName = cleanPdfText(bookData.authorName) || "Profesor Titular";
@@ -848,9 +978,16 @@ export function EditorialBookPDF({ bookData }: { bookData: EditorialBookData }) 
       <Page size="A4" style={styles.coverPage}>
         <View style={styles.coverContainer}>
           <View style={styles.coverHeaderBanner}>
-            <Text style={styles.coverEditorialTag}>
-              {cleanInstitutionName} • SERIE EDITORIAL • {cleanEdition}
-            </Text>
+            <View style={styles.coverHeaderTopRow}>
+              <Text style={[styles.coverEditorialTag, { flex: 1, paddingRight: 12 }]}>
+                {cleanInstitutionName} • SERIE EDITORIAL • {cleanEdition}
+              </Text>
+              {bookData.logoUrl ? (
+                <View style={styles.coverLogoContainer}>
+                  <Image src={bookData.logoUrl} style={styles.coverLogoImage} />
+                </View>
+              ) : null}
+            </View>
             <Text style={styles.coverTitle}>
               {cleanProjectName}
             </Text>
@@ -870,13 +1007,13 @@ export function EditorialBookPDF({ bookData }: { bookData: EditorialBookData }) 
             <View style={{ flexDirection: "row", gap: 12 }}>
               <View style={[styles.coverFeatureBox, { flex: 1, marginBottom: 0 }]}>
                 <Text style={styles.coverFeatureTitle}>Módulos</Text>
-                <Text style={{ fontSize: 18, fontFamily: "Helvetica-Bold", color: COLORS.accent }}>
+                <Text style={{ fontSize: 18, fontFamily: "Helvetica-Bold", color: colors.accent }}>
                   {chapters.length} Capítulos
                 </Text>
               </View>
               <View style={[styles.coverFeatureBox, { flex: 1, marginBottom: 0 }]}>
                 <Text style={styles.coverFeatureTitle}>Contenido</Text>
-                <Text style={{ fontSize: 18, fontFamily: "Helvetica-Bold", color: COLORS.primary }}>
+                <Text style={{ fontSize: 18, fontFamily: "Helvetica-Bold", color: colors.primary }}>
                   {totalLessons} Lecciones
                 </Text>
               </View>
@@ -921,7 +1058,7 @@ export function EditorialBookPDF({ bookData }: { bookData: EditorialBookData }) 
                     <Text style={styles.tocChapterTitle}>
                       CAPÍTULO {String(ch.number).padStart(2, "0")}: {chTitleClean}
                     </Text>
-                    <Text style={{ fontSize: 8, color: COLORS.accent, fontFamily: "Helvetica-Bold" }}>
+                    <Text style={{ fontSize: 8, color: colors.accent, fontFamily: "Helvetica-Bold" }}>
                       Ir al capítulo ▸
                     </Text>
                   </View>
@@ -936,7 +1073,7 @@ export function EditorialBookPDF({ bookData }: { bookData: EditorialBookData }) 
                       <View style={styles.tocLessonRow}>
                         <Text style={styles.tocLessonNumber}>{les.number}</Text>
                         <Text style={styles.tocLessonTitle}>{lesTitleClean}</Text>
-                        <Text style={{ fontSize: 7.5, color: COLORS.accent }}>▸</Text>
+                        <Text style={{ fontSize: 7.5, color: colors.accent }}>▸</Text>
                       </View>
                     </Link>
                   );
@@ -971,7 +1108,11 @@ export function EditorialBookPDF({ bookData }: { bookData: EditorialBookData }) 
             <Text style={styles.runningHeaderRight}>{cleanPdfText(intro.title || "Introducción")}</Text>
           </View>
 
-          <SectionRenderer sections={parseMarkdownToEditorialSections(intro.content)} />
+          <SectionRenderer 
+            sections={parseMarkdownToEditorialSections(intro.content)} 
+            styles={styles} 
+            codeTheme={codePalette} 
+          />
 
           <View style={styles.runningFooter} fixed>
             <Text style={styles.runningFooterLeft}>
@@ -1042,7 +1183,7 @@ export function EditorialBookPDF({ bookData }: { bookData: EditorialBookData }) 
 
               {/* Si el tópico tiene contenido propio introductorio en su index */}
               {introSections.length > 0 && (
-                <SectionRenderer sections={introSections} />
+                <SectionRenderer sections={introSections} styles={styles} codeTheme={codePalette} />
               )}
 
               <View style={styles.runningFooter} fixed>
@@ -1088,7 +1229,7 @@ export function EditorialBookPDF({ bookData }: { bookData: EditorialBookData }) 
                   </View>
 
                   {/* Renderizado Completo de Secciones */}
-                  <SectionRenderer sections={lessonSections} />
+                  <SectionRenderer sections={lessonSections} styles={styles} codeTheme={codePalette} />
 
                   <View style={styles.runningFooter} fixed>
                     <Text style={styles.runningFooterLeft}>

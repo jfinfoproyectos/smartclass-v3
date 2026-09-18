@@ -524,6 +524,29 @@ export function AiInterviewInspector({
                                             </div>
                                         )}
                                     </div>
+                                ) : submission?.feedback ? (
+                                    <div className="space-y-4 animate-in fade-in">
+                                        <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                                                    Calificación asignada:
+                                                </span>
+                                                <span className="text-sm font-extrabold font-mono text-emerald-700 dark:text-emerald-300">
+                                                    {submission.grade !== null && submission.grade !== undefined ? Number(submission.grade).toFixed(1) : "—"} / 5.0
+                                                </span>
+                                            </div>
+                                            <Badge variant="outline" className="text-emerald-700 dark:text-emerald-300 border-emerald-300 text-[10px] bg-emerald-500/10">
+                                                ✓ Evaluación Guardada
+                                            </Badge>
+                                        </div>
+
+                                        <div className="rounded-xl border bg-background p-3 space-y-2">
+                                            <span className="text-xs font-bold text-foreground block">
+                                                Retroalimentación de la Evaluación:
+                                            </span>
+                                            <FeedbackViewer feedback={stripEvaluationMetadata(submission.feedback)} />
+                                        </div>
+                                    </div>
                                 ) : (
                                     <div className="flex flex-col items-center justify-center h-48 text-center space-y-2 text-muted-foreground">
                                         <Bot className="h-8 w-8 text-teal-600/40 animate-pulse" />

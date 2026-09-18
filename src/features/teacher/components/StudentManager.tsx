@@ -1320,7 +1320,7 @@ function getActivityTypeLabel(type: string) {
         case "CODE_PROJECT": return "Proyecto Código";
         case "CODE_CHALLENGE": return "Code Challenge";
         case "WORKSHOP_CODE": return "Taller Codelab";
-        case "WORKSHOP_GITHUB": return "Taller GitHub";
+        case "WORKSHOP_GITHUB": return "Tutorial GitHub";
         case "VIDEO_PITCH": return "Video Pitch";
         case "AUDIO_DEFENSE": return "Defensa Oral";
         case "AI_INTERVIEW": return "Entrevista IA";
