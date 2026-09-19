@@ -441,6 +441,12 @@ export function CodeChallengeInspector({
                             </div>
                         )}
 
+                        {submission?.reevaluationRequested && (
+                            <Badge className="bg-purple-500/15 text-purple-900 dark:bg-purple-500/20 dark:text-purple-300 border border-purple-500/30 gap-1 font-semibold animate-pulse shadow-2xs text-xs">
+                                <RotateCcw className="h-3.5 w-3.5" /> Reevaluación Solicitada
+                            </Badge>
+                        )}
+
                         {isTeacherGradingEnabled && checklistConfig ? (
                             <TeacherEvaluationHeaderBadges
                                 checklistConfig={checklistConfig}
@@ -462,6 +468,20 @@ export function CodeChallengeInspector({
                 <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 min-h-0 overflow-hidden">
                     {/* Columna Izquierda: Monaco Editor con los archivos del alumno */}
                     <div className={cn("flex flex-col border-r border-border min-h-0 overflow-hidden", checklistConfig ? "lg:col-span-6" : "lg:col-span-7")}>
+                        {submission?.reevaluationRequested && (
+                            <div className="px-3 py-2 bg-purple-500/10 border-b border-purple-500/20 text-purple-900 dark:text-purple-200 text-xs font-semibold flex items-center justify-between gap-2 shrink-0">
+                                <div className="flex items-center gap-2">
+                                    <RotateCcw className="h-4 w-4 text-purple-600 shrink-0" />
+                                    <span>El estudiante actualizó su código tras haber recibido calificación. Evalúa con IA o guarda la nueva nota.</span>
+                                </div>
+                                {submission?.lastSubmittedAt && (
+                                    <span className="text-[10px] text-purple-700 dark:text-purple-300 font-normal shrink-0">
+                                        Entregado: {new Date(submission.lastSubmittedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                )}
+                            </div>
+                        )}
+
                         <div className="flex items-center justify-between p-2 border-b bg-muted/20">
                             <Tabs value={leftTab} onValueChange={(v) => setLeftTab(v as any)}>
                                 <TabsList className="h-7 p-0.5">

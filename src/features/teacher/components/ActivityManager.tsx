@@ -3122,12 +3122,17 @@ function ActivityFormDialog({
                                         {selectedType === "CODE_CHALLENGE" && (
                                             <div className="space-y-4 flex-1 flex flex-col">
                                                 <div className="p-3.5 rounded-xl border border-blue-500/20 bg-blue-500/5 text-xs space-y-1.5">
-                                                    <div className="flex items-center gap-2 font-bold text-foreground text-xs">
-                                                        <Terminal className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                                                        <span>Taller de Código (Resolución en Monaco Editor)</span>
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <div className="flex items-center gap-2 font-bold text-foreground text-xs">
+                                                            <Terminal className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                                                            <span>Taller de Código (Resolución en Monaco Editor)</span>
+                                                        </div>
+                                                        <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 gap-1 font-semibold shrink-0">
+                                                            <CheckCircle2 className="h-3 w-3 text-emerald-500" /> Entregas actualizables
+                                                        </Badge>
                                                     </div>
                                                     <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                                        El estudiante resolverá los archivos asignados dentro de un editor Monaco integrado (VS Code). Redacta en <strong>Contenido y Rúbrica</strong> las instrucciones y configura aquí los archivos iniciales.
+                                                        El estudiante resolverá los archivos asignados dentro de un editor Monaco integrado (VS Code). Podrá actualizar su entrega libremente hasta la fecha límite, incluso si ya ha sido calificada por el docente.
                                                     </p>
                                                 </div>
 

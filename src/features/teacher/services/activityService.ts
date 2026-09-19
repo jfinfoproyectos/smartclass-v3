@@ -176,10 +176,19 @@ export const activityService = {
             throw new Error("La fecha límite para esta actividad ha pasado. Ya no se aceptan entregas ni solicitudes de reevaluación.");
         }
 
-        // Check max attempts (bypass for MANUAL, VIDEO_PITCH, AUDIO_DEFENSE, teacher grading, or pending/rejected activities)
+        // Check max attempts (bypass for flexible activities where student can update until deadline, teacher grading, or pending/rejected activities)
         const currentAttempts = existingSubmission?.attemptCount || 0;
         const isPendingGrading = existingSubmission && (existingSubmission.grade === null || existingSubmission.grade === undefined);
-        const isFlexibleSubmissionType = activity.type === "MANUAL" || activity.type === "VIDEO_PITCH" || activity.type === "AUDIO_DEFENSE" || activity.type === "GITHUB" || activity.type === "PDF_REVIEW";
+        const isFlexibleSubmissionType =
+            activity.type === "MANUAL" ||
+            activity.type === "VIDEO_PITCH" ||
+            activity.type === "AUDIO_DEFENSE" ||
+            activity.type === "GITHUB" ||
+            activity.type === "PDF_REVIEW" ||
+            activity.type === "CODE_CHALLENGE" ||
+            activity.type === "CODE_PROJECT" ||
+            activity.type === "WORKSHOP_CODE" ||
+            activity.type === "WORKSHOP_GITHUB";
 
         if (!isTeacherGrading && !isRejected && !isPendingGrading && !isFlexibleSubmissionType && currentAttempts >= activity.maxAttempts) {
             throw new Error(`Has alcanzado el límite máximo de intentos (${activity.maxAttempts}) para esta actividad.`);
@@ -217,7 +226,7 @@ export const activityService = {
         }
 
         // Check cooldown period (5 minutes) - only for auto-graded AI activities that consume evaluation tokens
-        const isAutoGradedWithAI = activity.type === "CODE_CHALLENGE" || activity.type === "DB_MODELING" || activity.type === "AI_INTERVIEW";
+        const isAutoGradedWithAI = activity.type === "DB_MODELING" || activity.type === "AI_INTERVIEW";
 
         if (!isTeacherGrading && !isRejected && !isPendingGrading && isAutoGradedWithAI && existingSubmission && existingSubmission.lastSubmittedAt) {
             const now = new Date().getTime();

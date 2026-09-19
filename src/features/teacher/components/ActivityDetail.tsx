@@ -1143,7 +1143,7 @@ export function ActivityDetail({
                                             ) : status === "submitted" ? (
                                                 isRejected ? (
                                                     <Badge className="bg-rose-500/15 text-rose-900 dark:bg-rose-500/20 dark:text-rose-300 border border-rose-500/30 font-semibold hover:bg-rose-500/20">Rechazado</Badge>
-                                                ) : (activity.type === "GITHUB" || activity.type === "PDF_REVIEW" || activity.type === "CODE_PROJECT" || activity.type === "MANUAL") ? (
+                                                ) : (activity.type === "GITHUB" || activity.type === "PDF_REVIEW" || activity.type === "CODE_PROJECT" || activity.type === "MANUAL" || activity.type === "CODE_CHALLENGE" || activity.type === "WORKSHOP_CODE" || activity.type === "WORKSHOP_GITHUB") ? (
                                                     <Badge className="bg-amber-500/15 text-amber-900 dark:bg-amber-500/20 dark:text-amber-300 border border-amber-500/30 font-semibold gap-1 hover:bg-amber-500/20 shadow-2xs">
                                                         ⭐ Por Calificar
                                                     </Badge>

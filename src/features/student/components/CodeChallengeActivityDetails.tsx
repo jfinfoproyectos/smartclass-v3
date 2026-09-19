@@ -192,6 +192,7 @@ export function CodeChallengeActivityDetails({
     const submission = activity.submissions?.[0];
     const isSubmitted = !!submission;
     const isGraded = submission && submission.grade !== null && submission.grade !== undefined;
+    const isReevaluationRequested = submission?.reevaluationRequested ?? false;
     const isDeadlinePassed = activity.deadline && new Date(activity.deadline) < new Date();
 
     // Extraer configuración de lista de chequeo docente
@@ -577,7 +578,11 @@ export function CodeChallengeActivityDetails({
                 return;
             }
 
-            toast.success("✓ ¡Solución de código entregada exitosamente!");
+            toast.success(
+                isGraded 
+                    ? "✓ ¡Entrega actualizada exitosamente! El profesor podrá revisar tus cambios." 
+                    : "✓ ¡Solución de código entregada exitosamente!"
+            );
             window.location.reload();
         } catch (err: any) {
             toast.error(err.message || "Error al entregar la actividad.");
@@ -620,6 +625,19 @@ export function CodeChallengeActivityDetails({
                             <span className="hidden sm:inline">Modo Prueba Docente</span>
                             <span className="sm:hidden">Prueba</span>
                         </Badge>
+                    ) : isReevaluationRequested ? (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                            <Badge className="bg-purple-500/15 text-purple-900 dark:bg-purple-500/20 dark:text-purple-300 border border-purple-500/30 gap-1 font-semibold animate-pulse shadow-2xs text-[10px] sm:text-xs">
+                                <RotateCcw className="h-3 w-3" /> Reevaluación Solicitada
+                            </Badge>
+                            {isGraded && (
+                                <div className="flex items-center gap-1 bg-muted/60 border border-border/80 text-muted-foreground px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-medium shrink-0">
+                                    <span className="text-[9px] uppercase font-bold opacity-80">Nota previa:</span>
+                                    <span className="font-bold font-mono">{submission.grade.toFixed(1)}</span>
+                                    <span className="text-[9px] opacity-75">/ 5.0</span>
+                                </div>
+                            )}
+                        </div>
                     ) : checklistConfig && isGraded && evalMetadata ? (
                         <div className="flex items-center gap-1.5 flex-wrap">
                             {evalMetadata.aiGrade !== undefined && evalMetadata.aiGrade !== null && (
@@ -903,8 +921,19 @@ export function CodeChallengeActivityDetails({
                                 )
                             ) : isGraded ? (
                                 <div className="space-y-4">
+                                    {isReevaluationRequested && (
+                                        <div className="p-3 bg-purple-500/10 border border-purple-500/30 text-purple-900 dark:text-purple-200 rounded-xl text-xs font-semibold flex items-start gap-2.5">
+                                            <RotateCcw className="h-4 w-4 text-purple-600 shrink-0 mt-0.5" />
+                                            <div className="space-y-0.5">
+                                                <p className="font-bold">Entrega actualizada enviada</p>
+                                                <p className="text-[11px] font-normal text-purple-800 dark:text-purple-300">
+                                                    Has actualizado tu solución de código. El profesor revisará tu nueva entrega y actualizará la calificación correspondiente. Puedes seguir realizando ajustes hasta la fecha límite.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
                                     <div className="p-4 rounded-xl border bg-primary/5 border-primary/20 space-y-1 text-center">
-                                        <span className="text-xs font-semibold text-muted-foreground">Calificación Final</span>
+                                        <span className="text-xs font-semibold text-muted-foreground">{isReevaluationRequested ? "Calificación Previa" : "Calificación Final"}</span>
                                         <div className="text-3xl font-extrabold font-mono text-primary">
                                             {submission.grade.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">/ 5.0</span>
                                         </div>
@@ -1128,10 +1157,26 @@ export function CodeChallengeActivityDetails({
                         <div className="p-2 sm:p-2.5 border-t bg-card flex items-center justify-between gap-2 shrink-0">
                             <span
                                 className="text-[11px] sm:text-xs text-muted-foreground truncate"
-                                title={isSubmitted ? "Código enviado. Puedes seguir editando y actualizar tu entrega antes del límite." : "Resuelve el código solicitado en el editor y haz clic en entregar."}
+                                title={
+                                    isDeadlinePassed 
+                                        ? "El plazo límite de entrega ha expirado." 
+                                        : isReevaluationRequested
+                                        ? "Entrega actualizada enviada. Puedes seguir editando y actualizar antes de la fecha límite."
+                                        : isGraded
+                                        ? "Esta actividad ya fue calificada, pero puedes actualizar tu entrega hasta la fecha límite."
+                                        : isSubmitted
+                                        ? "Código enviado. Puedes seguir editando y actualizar tu entrega antes del límite."
+                                        : "Resuelve el código solicitado en el editor y haz clic en entregar."
+                                }
                             >
-                                {isSubmitted ? (
-                                    <span className="text-emerald-600 dark:text-emerald-400 font-medium">✓ Entregado (actualizable)</span>
+                                {isDeadlinePassed ? (
+                                    <span className="text-destructive font-medium">Plazo de entrega finalizado</span>
+                                ) : isReevaluationRequested ? (
+                                    <span className="text-purple-600 dark:text-purple-400 font-medium">✓ Entrega actualizada (en espera de revisión docente)</span>
+                                ) : isGraded ? (
+                                    <span className="text-emerald-600 dark:text-emerald-400 font-medium">✓ Calificado (puedes actualizar tu entrega hasta la fecha límite)</span>
+                                ) : isSubmitted ? (
+                                    <span className="text-emerald-600 dark:text-emerald-400 font-medium">✓ Entregado (actualizable hasta la fecha límite)</span>
                                 ) : (
                                     <span>Resuelve y entrega tu solución</span>
                                 )}
@@ -1140,9 +1185,20 @@ export function CodeChallengeActivityDetails({
                                 type="button"
                                 onClick={handleSubmit}
                                 disabled={isSubmitting || isDeadlinePassed}
-                                className="font-bold text-xs gap-1.5 bg-blue-600 hover:bg-blue-700 text-white shadow-xs shrink-0 h-8 sm:h-9 px-3 cursor-pointer"
+                                className={cn(
+                                    "font-bold text-xs gap-1.5 shadow-xs shrink-0 h-8 sm:h-9 px-3 cursor-pointer",
+                                    isReevaluationRequested || isGraded
+                                        ? "bg-purple-600 hover:bg-purple-700 text-white"
+                                        : "bg-blue-600 hover:bg-blue-700 text-white"
+                                )}
                             >
-                                {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                                {isSubmitting ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : isReevaluationRequested || isGraded ? (
+                                    <RotateCcw className="h-3.5 w-3.5" />
+                                ) : (
+                                    <Send className="h-3.5 w-3.5" />
+                                )}
                                 <span>{isSubmitted ? "Actualizar Entrega" : "Entregar Actividad"}</span>
                             </Button>
                         </div>
