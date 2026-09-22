@@ -198,8 +198,8 @@ export const activityService = {
         const isRejection = data.grade === null;
         
         if (!isRejection) {
-            if (activity.type === "GITHUB" || activity.type === "CODE_PROJECT") {
-                if (!data.url.includes("github.com")) {
+            if (activity.type === "GITHUB" || activity.type === "CODE_PROJECT" || activity.type === "WORKSHOP_GITHUB") {
+                if (!data.url || !data.url.includes("github.com")) {
                     throw new Error("Invalid GitHub URL");
                 }
 

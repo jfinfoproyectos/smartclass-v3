@@ -13,7 +13,7 @@ import {
     Loader2, CheckCircle, Eye, Copy, Check, RotateCcw, ExternalLink, Zap, X, Link as LinkIcon, AlertTriangle, ClipboardList,
     ChevronLeft, ChevronRight, ChevronDown, Maximize2, Minimize2, ListChecks, HelpCircle, CheckCircle2, MinusCircle, XCircle, Info, ZoomIn, ZoomOut,
     GitCommitVertical, ArrowUp, ArrowDown, GripVertical, ListOrdered, ArrowUpDown, GitBranch, UserCheck, SlidersHorizontal,
-    Terminal, Video, Mic, MessageSquareQuote, Database
+    Terminal, Video, Mic, MessageSquareQuote, Database, GitCompare
 } from "lucide-react";
 import {
     DropdownMenu,
@@ -27,7 +27,7 @@ import { toast } from "sonner";
 import { formatName, cn } from "@/lib/utils";
 import { scanRepositoryAction, fetchRepoFilesAction, getRepoBranchesAction } from "@/features/github/actions/githubActions";
 import { githubService } from "@/features/github/services/githubService";
-import { analyzeGitHubFileAction, finalizeGitHubGradingAction, improveFeedbackAction } from "@/features/teacher/actions/gradingActions";
+import { analyzeGitHubFileAction, finalizeGitHubGradingAction, improveFeedbackAction, gradeWorkshopGithubAction } from "@/features/teacher/actions/gradingActions";
 import { 
     getActivityChecklistConfig, 
     extractEvaluationMetadata, 
@@ -50,7 +50,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import Editor, { loader } from "@monaco-editor/react";
+import Editor, { DiffEditor, loader } from "@monaco-editor/react";
 import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
 import {
@@ -161,8 +161,9 @@ function getBasename(pathStr: string): string {
 
 // Smart path matcher: exact match, endsWith match, or filename/basename match
 function isPathMatch(rf: string, cp: string): boolean {
-    const rfLower = rf.toLowerCase();
-    const cpLower = cp.toLowerCase();
+    if (!rf || !cp || !rf.trim() || !cp.trim()) return false;
+    const rfLower = rf.trim().toLowerCase().replace(/^[/\\]+/, "");
+    const cpLower = cp.trim().toLowerCase().replace(/^[/\\]+/, "");
     if (rfLower === cpLower) return true;
     if (rfLower.endsWith(cpLower)) return true;
     if (cpLower.endsWith(rfLower)) return true;
@@ -357,12 +358,25 @@ export function CodeProjectInspector({
     const router = useRouter();
     const { resolvedTheme } = useTheme();
     const [mounted, setMounted] = useState(false);
+    const isWorkshopGithub = activity?.type === "WORKSHOP_GITHUB";
+
+    // Extraer pasos del workshop si es de tipo WORKSHOP_GITHUB
+    const workshopMilestones = useMemo(() => {
+        try {
+            const parsed = JSON.parse(activity?.description || "{}");
+            if (parsed.workshopConfig?.milestones && Array.isArray(parsed.workshopConfig.milestones)) {
+                return parsed.workshopConfig.milestones;
+            }
+        } catch {}
+        return [];
+    }, [activity?.description]);
+
     const [isScanning, setIsScanning] = useState(false);
     const [repoFiles, setRepoFiles] = useState<string[]>([]);
     const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [fileViewMode, setFileViewMode] = useState<"required" | "explorer" | "order">(
-        activity?.filePaths ? "required" : "explorer"
+        (activity?.filePaths || isWorkshopGithub) ? "required" : "explorer"
     );
     const showAllRepoFiles = fileViewMode === "explorer";
     const setShowAllRepoFiles = (show: boolean) => setFileViewMode(show ? "explorer" : "required");
@@ -468,7 +482,14 @@ export function CodeProjectInspector({
     const [isLoadingPreview, setIsLoadingPreview] = useState(false);
     const [copied, setCopied] = useState(false);
     const [textZoom, setTextZoom] = useState<number>(1.0);
+    const [isDiffMode, setIsDiffMode] = useState(false);
     const fileCache = useRef<Record<string, string>>({});
+
+    // Encuentra el hito del workshop correspondiente al archivo actualmente previsualizado
+    const activeWorkshopMilestone = useMemo(() => {
+        if (!isWorkshopGithub || !previewFile) return null;
+        return workshopMilestones.find((m: any) => isPathMatch(previewFile, m.targetFilePath || ""));
+    }, [isWorkshopGithub, previewFile, workshopMilestones]);
 
     // AI Grading state
     const [isEvaluating, setIsEvaluating] = useState(false);
@@ -642,11 +663,17 @@ export function CodeProjectInspector({
             setRepoFiles(files);
             
             // Extract required files configured for activity
-            const configuredList: string[] = typeof activity?.filePaths === "string"
+            let configuredList: string[] = typeof activity?.filePaths === "string"
                 ? activity.filePaths.split(',').map((s: string) => s.trim()).filter(Boolean)
                 : Array.isArray(activity?.filePaths)
                 ? activity.filePaths.map((s: any) => String(s).trim()).filter(Boolean)
                 : [];
+
+            if (configuredList.length === 0 && isWorkshopGithub && workshopMilestones.length > 0) {
+                configuredList = workshopMilestones
+                    .map((m: any) => m.targetFilePath ? String(m.targetFilePath).trim() : "")
+                    .filter(Boolean);
+            }
 
             // In "Requeridos" mode, auto-select required files found in repo, strictly preserving configured order
             let initialSelection: string[] = [];
@@ -824,6 +851,70 @@ export function CodeProjectInspector({
         }
     };
 
+    const handleRunWorkshopAIEvaluation = async () => {
+        if (!submission?.url) {
+            toast.error("No hay URL de repositorio entregada.");
+            return;
+        }
+
+        setIsEvaluating(true);
+        setGradingLogs([]);
+        setGradingResult(null);
+        setShowLogs(true);
+
+        const addLog = (msg: string) => setGradingLogs(prev => [...prev, msg]);
+
+        try {
+            addLog("🚀 Iniciando Auditoría Paso a Paso de Tutorial GitHub con IA...");
+            if (selectedBranch) {
+                addLog(`🌿 Rama seleccionada para evaluación: "${selectedBranch}"`);
+            }
+            addLog(`📋 Analizando cumplimiento de los ${workshopMilestones.length} pasos del proyecto...`);
+            addLog(`📡 Verificando existencia y contenido de archivos objetivo en el repositorio...`);
+
+            const result = await gradeWorkshopGithubAction({
+                activityId: activity.id,
+                studentUserId: student.id,
+                repoUrl: effectiveRepoUrl || submission.url,
+                branch: selectedBranch || undefined,
+                courseId: activity.courseId,
+                gradingMode: gradingMode
+            });
+
+            for (const ev of result.stepEvaluations || []) {
+                const icon = ev.status === "COMPLETED" ? "✅" : ev.status === "PARTIAL" ? "⚠️" : "❌";
+                addLog(`${icon} Paso ${ev.stepIndex + 1} [${ev.targetFilePath}]: ${ev.status} (${ev.score.toFixed(1)}/5.0) - ${ev.feedback}`);
+            }
+
+            if (result.gitWorkflow) {
+                const gw = result.gitWorkflow;
+                const gwIcon = gw.status === "EXCELLENT" ? "🌟" : gw.status === "ACCEPTABLE" ? "✅" : "⚠️";
+                addLog(`${gwIcon} Auditoría Git: ${gw.status} (${gw.score.toFixed(1)}/5.0) - ${gw.commitSummary}`);
+                if (gw.feedback) {
+                    addLog(`💬 Observación Git: ${gw.feedback}`);
+                }
+            }
+
+            setGradingResult(result);
+            const rawAi = result.rawAiGrade ?? result.grade;
+            const effectiveCombined = checklistConfig
+                ? calculateCombinedFinalGrade(rawAi, checklistScore, aiWeight, checklistWeight)
+                : result.grade;
+            setGradeInput(effectiveCombined.toFixed(1));
+            setAiFeedbackInput(stripEvaluationMetadata(result.feedback));
+            setActiveTab("ai_report");
+            router.refresh();
+
+            addLog(`🎉 Auditoría completada: ${result.completedSteps}/${result.totalSteps} pasos cumplidos. Nota calculada: ${effectiveCombined.toFixed(1)} / 5.0`);
+            toast.success(`Evaluación de tutorial completada: Nota ${effectiveCombined.toFixed(1)} / 5.0`);
+        } catch (err: any) {
+            addLog(`❌ Error en evaluación del tutorial: ${err.message}`);
+            toast.error("Error al auditar pasos del tutorial", { description: err.message });
+        } finally {
+            setIsEvaluating(false);
+        }
+    };
+
     const handleImproveTeacherNotes = async () => {
         if (!teacherNotesInput || teacherNotesInput.trim().length < 5) {
             toast.error("Escribe al menos algunas palabras de observaciones para mejorar con IA.");
@@ -903,15 +994,22 @@ export function CodeProjectInspector({
 
     // Parse activity.filePaths configured for the activity
     const configuredPathsList: string[] = useMemo(() => {
-        if (!activity?.filePaths) return [];
-        if (typeof activity.filePaths === "string") {
-            return activity.filePaths.split(',').map((s: string) => s.trim()).filter(Boolean);
+        if (activity?.filePaths) {
+            if (typeof activity.filePaths === "string") {
+                const list = activity.filePaths.split(',').map((s: string) => s.trim()).filter(Boolean);
+                if (list.length > 0) return list;
+            } else if (Array.isArray(activity.filePaths)) {
+                const list = activity.filePaths.map((s: any) => String(s).trim()).filter(Boolean);
+                if (list.length > 0) return list;
+            }
         }
-        if (Array.isArray(activity.filePaths)) {
-            return activity.filePaths.map((s: any) => String(s).trim()).filter(Boolean);
+        if (isWorkshopGithub && workshopMilestones.length > 0) {
+            return workshopMilestones
+                .map((m: any) => m.targetFilePath ? String(m.targetFilePath).trim() : "")
+                .filter(Boolean);
         }
         return [];
-    }, [activity?.filePaths]);
+    }, [activity?.filePaths, isWorkshopGithub, workshopMilestones]);
 
     // Matching files found in repo using smart path/basename matching, strictly preserving configured order
     const foundConfiguredFiles = useMemo(() => {
@@ -1190,18 +1288,33 @@ export function CodeProjectInspector({
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                    <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => setIsAIGradingDialogOpen(true)}
-                        disabled={selectedFiles.length === 0 || isEvaluating}
-                        variant="default"
-                        className="h-7 px-3 text-xs gap-1.5 font-bold shadow-xs transition-all"
-                        title={selectedFiles.length === 0 ? "Selecciona al menos un archivo para calificar con IA" : "Calificar archivos seleccionados con IA"}
-                    >
-                        {isEvaluating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                        Calificar con IA {selectedFiles.length > 0 && `(${selectedFiles.length})`}
-                    </Button>
+                    {isWorkshopGithub ? (
+                        <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => setIsAIGradingDialogOpen(true)}
+                            disabled={isEvaluating}
+                            variant="default"
+                            className="h-7 px-3 text-xs gap-1.5 font-bold shadow-xs transition-all bg-amber-600 hover:bg-amber-700 text-white"
+                            title="Auditar cumplimiento de todos los pasos del tutorial con IA"
+                        >
+                            {isEvaluating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                            Auditar Pasos con IA ({workshopMilestones.length})
+                        </Button>
+                    ) : (
+                        <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => setIsAIGradingDialogOpen(true)}
+                            disabled={selectedFiles.length === 0 || isEvaluating}
+                            variant="default"
+                            className="h-7 px-3 text-xs gap-1.5 font-bold shadow-xs transition-all"
+                            title={selectedFiles.length === 0 ? "Selecciona al menos un archivo para calificar con IA" : "Calificar archivos seleccionados con IA"}
+                        >
+                            {isEvaluating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                            Calificar con IA {selectedFiles.length > 0 && `(${selectedFiles.length})`}
+                        </Button>
+                    )}
 
                     {checklistConfig ? (
                         <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 flex-wrap animate-in fade-in">
@@ -1314,9 +1427,11 @@ export function CodeProjectInspector({
                                             ? "bg-background text-foreground shadow-xs font-bold border border-border/50" 
                                             : "text-muted-foreground hover:text-foreground"
                                     }`}
-                                    title="Mostrar archivos requeridos por la actividad"
+                                    title={isWorkshopGithub ? "Mostrar pasos obligatorios y archivos del tutorial" : "Mostrar archivos requeridos por la actividad"}
                                 >
-                                    🎯 Requeridos ({foundConfiguredFiles.length})
+                                    {isWorkshopGithub 
+                                        ? `📋 Pasos (${foundConfiguredFiles.length}/${workshopMilestones.length})` 
+                                        : `🎯 Requeridos (${foundConfiguredFiles.length})`}
                                 </button>
                                 <button
                                     type="button"
@@ -1523,6 +1638,88 @@ export function CodeProjectInspector({
                                 ) : filteredFiles.length === 0 ? (
                                     <div className="text-center py-12 text-muted-foreground text-xs">
                                         No se encontraron archivos.
+                                    </div>
+                                ) : isWorkshopGithub && fileViewMode === "required" && workshopMilestones.length > 0 ? (
+                                    <div className="space-y-1.5 p-0.5">
+                                        {workshopMilestones.map((m: any, idx: number) => {
+                                            const path = (m.targetFilePath || "").trim();
+                                            const isInstructional = m.requiresFile === false || !path;
+                                            const isFound = !isInstructional && repoFiles.some(rf => isPathMatch(rf, path));
+                                            const matchedRepoPath = (!isInstructional && isFound) ? (repoFiles.find(rf => isPathMatch(rf, path)) || path) : path;
+                                            const isPreviewing = Boolean(previewFile && matchedRepoPath && previewFile === matchedRepoPath);
+                                            const isSelected = Boolean(matchedRepoPath && selectedFiles.includes(matchedRepoPath));
+
+                                            return (
+                                                <div 
+                                                    key={m.id || idx}
+                                                    onClick={() => {
+                                                        if (isFound && matchedRepoPath) handleLoadFilePreview(matchedRepoPath);
+                                                    }}
+                                                    className={cn(
+                                                        "p-2 rounded-lg border text-xs transition-all cursor-pointer group",
+                                                        isInstructional 
+                                                            ? "bg-muted/30 border-muted-foreground/20 hover:border-muted-foreground/40" 
+                                                            : isFound 
+                                                            ? "bg-card hover:border-primary/50" 
+                                                            : "bg-destructive/5 border-destructive/20 opacity-80",
+                                                        isPreviewing && "ring-2 ring-primary border-transparent bg-primary/5"
+                                                    )}
+                                                >
+                                                    <div className="flex items-center justify-between gap-1 mb-1">
+                                                        <div className="flex items-center gap-1.5 min-w-0">
+                                                            {!isInstructional && isFound && (
+                                                                <Checkbox
+                                                                    id={`check-workshop-${idx}`}
+                                                                    checked={isSelected}
+                                                                    onCheckedChange={(checked) => {
+                                                                        if (checked) {
+                                                                            setSelectedFiles(prev => [...prev, matchedRepoPath]);
+                                                                            handleLoadFilePreview(matchedRepoPath);
+                                                                        } else {
+                                                                            setSelectedFiles(prev => prev.filter(p => p !== matchedRepoPath));
+                                                                        }
+                                                                    }}
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                    className="shrink-0"
+                                                                />
+                                                            )}
+                                                            <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 font-bold shrink-0">
+                                                                Paso {m.stepNumber || idx + 1}
+                                                            </Badge>
+                                                            <span className="font-semibold text-[11px] text-foreground truncate">{m.title}</span>
+                                                        </div>
+                                                        {isInstructional ? (
+                                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 font-bold shrink-0">
+                                                                Instructivo
+                                                            </Badge>
+                                                        ) : isFound ? (
+                                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 bg-emerald-500/10 text-emerald-600 border-emerald-500/30 font-bold shrink-0">
+                                                                En repo
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 bg-destructive/10 text-destructive border-destructive/30 font-bold shrink-0">
+                                                                Falta
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                    {path ? (
+                                                        <div className="flex items-center justify-between gap-1 text-[10px] font-mono text-muted-foreground pl-0.5">
+                                                            <span className="truncate flex items-center gap-1">
+                                                                <FileCode className="h-3 w-3 text-primary shrink-0" />
+                                                                <span className={cn(isFound ? "text-foreground font-mono" : "text-destructive font-semibold")}>{path}</span>
+                                                            </span>
+                                                            {isFound && (
+                                                                <Eye className="h-3 w-3 opacity-60 group-hover:opacity-100 shrink-0 text-muted-foreground hover:text-foreground" />
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-[10px] text-muted-foreground/70 italic pl-0.5">
+                                                            Paso instructivo / metodológico (sin archivo requerido)
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 ) : (
                                     filteredFiles.map((path) => {
@@ -1779,6 +1976,21 @@ export function CodeProjectInspector({
                                     </div>
                                 </div>
                                 <div className="flex-1 overflow-y-auto p-4 space-y-4" style={{ zoom: textZoom }}>
+                                    {isWorkshopGithub && workshopMilestones.length > 0 && (
+                                        <div className="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-2 mb-4">
+                                            <div className="flex items-center gap-2">
+                                                <Badge className="bg-amber-600 text-white font-bold text-xs">
+                                                    Tutorial Guiado de Proyecto
+                                                </Badge>
+                                                <span className="font-semibold text-xs text-amber-900 dark:text-amber-200">
+                                                    {workshopMilestones.length} Pasos Obligatorios
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-muted-foreground leading-relaxed">
+                                                Todas las indicaciones y el código completo están definidos para cada paso. La meta es que el estudiante construya el repositorio íntegro.
+                                            </p>
+                                        </div>
+                                    )}
                                     <FeedbackViewer 
                                         feedback={activity.statement || "**No hay un enunciado o rúbrica cargada para esta actividad.**"} 
                                     />
@@ -1795,8 +2007,31 @@ export function CodeProjectInspector({
                                         <span className="font-mono text-foreground font-medium truncate">
                                             {previewFile || "Selecciona un archivo para inspeccionar..."}
                                         </span>
+                                        {activeWorkshopMilestone && (
+                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 font-bold shrink-0">
+                                                Paso {activeWorkshopMilestone.order || activeWorkshopMilestone.stepNumber || 1}
+                                            </Badge>
+                                        )}
                                     </div>
-                                    <div className="flex items-center gap-1 shrink-0">
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        {isWorkshopGithub && activeWorkshopMilestone?.targetFileContent && previewContent && (
+                                            <Button
+                                                type="button"
+                                                variant={isDiffMode ? "default" : "outline"}
+                                                size="sm"
+                                                onClick={() => setIsDiffMode(prev => !prev)}
+                                                className={cn(
+                                                    "h-7 text-xs gap-1.5 px-2.5 font-semibold cursor-pointer transition-all",
+                                                    isDiffMode 
+                                                        ? "bg-amber-600 hover:bg-amber-700 text-white shadow-xs" 
+                                                        : "border-amber-500/40 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10"
+                                                )}
+                                                title={isDiffMode ? "Volver a ver el archivo del estudiante" : "Comparar lado a lado con la solución esperada del paso"}
+                                            >
+                                                <GitCompare className="h-3.5 w-3.5" />
+                                                <span>{isDiffMode ? "Ver Código Alumno" : "Comparar Diff"}</span>
+                                            </Button>
+                                        )}
                                         {previewContent && (
                                             <Button
                                                 type="button"
@@ -1829,28 +2064,48 @@ export function CodeProjectInspector({
                                             <p className="text-xs">Descargando archivo desde GitHub...</p>
                                         </div>
                                     ) : previewContent ? (
-                                        <Editor
-                                            height="100%"
-                                            language={getMonacoLanguage(previewFile)}
-                                            value={previewContent}
-                                            theme={mounted && resolvedTheme === "dark" ? "vs-dark" : "light"}
-                                            options={{
-                                                readOnly: true,
-                                                domReadOnly: true,
-                                                minimap: { enabled: true },
-                                                lineNumbers: "on",
-                                                scrollBeyondLastLine: false,
-                                                wordWrap: "on",
-                                                fontFamily: "'Fira Code', 'Monaco', 'Cascadia Code', monospace",
-                                                fontSize: 12,
-                                                padding: { top: 12, bottom: 12 },
-                                                folding: true,
-                                                contextmenu: true,
-                                                automaticLayout: true,
-                                                renderLineHighlight: "all",
-                                                cursorStyle: "line",
-                                            }}
-                                        />
+                                        isDiffMode && activeWorkshopMilestone?.targetFileContent ? (
+                                            <DiffEditor
+                                                height="100%"
+                                                language={getMonacoLanguage(previewFile)}
+                                                original={activeWorkshopMilestone.targetFileContent}
+                                                modified={previewContent}
+                                                theme={mounted && resolvedTheme === "dark" ? "vs-dark" : "light"}
+                                                options={{
+                                                    readOnly: true,
+                                                    domReadOnly: true,
+                                                    renderSideBySide: true,
+                                                    minimap: { enabled: false },
+                                                    fontSize: 12,
+                                                    fontFamily: "'Fira Code', 'Monaco', 'Cascadia Code', monospace",
+                                                    wordWrap: "on",
+                                                    automaticLayout: true
+                                                }}
+                                            />
+                                        ) : (
+                                            <Editor
+                                                height="100%"
+                                                language={getMonacoLanguage(previewFile)}
+                                                value={previewContent}
+                                                theme={mounted && resolvedTheme === "dark" ? "vs-dark" : "light"}
+                                                options={{
+                                                    readOnly: true,
+                                                    domReadOnly: true,
+                                                    minimap: { enabled: true },
+                                                    lineNumbers: "on",
+                                                    scrollBeyondLastLine: false,
+                                                    wordWrap: "on",
+                                                    fontFamily: "'Fira Code', 'Monaco', 'Cascadia Code', monospace",
+                                                    fontSize: 12,
+                                                    padding: { top: 12, bottom: 12 },
+                                                    folding: true,
+                                                    contextmenu: true,
+                                                    automaticLayout: true,
+                                                    renderLineHighlight: "all",
+                                                    cursorStyle: "line",
+                                                }}
+                                            />
+                                        )
                                     ) : (
                                         <div className="flex flex-col items-center justify-center h-full text-slate-500 gap-2">
                                             <Code2 className="h-10 w-10 opacity-30" />
@@ -1977,18 +2232,20 @@ export function CodeProjectInspector({
                                         <div className="flex flex-col items-center justify-center h-64 text-center space-y-3">
                                             <Sparkles className="h-10 w-10 text-primary opacity-40 animate-pulse" />
                                             <p className="text-xs text-muted-foreground max-w-sm">
-                                                Aún no se ha ejecutado la evaluación inteligente para este estudiante.
+                                                {isWorkshopGithub
+                                                    ? `Aún no se ha auditado el cumplimiento de los ${workshopMilestones.length} pasos del proyecto en el repositorio del estudiante.`
+                                                    : "Aún no se ha ejecutado la evaluación inteligente para este estudiante."}
                                             </p>
                                             <Button
                                                 type="button"
                                                 size="sm"
                                                 onClick={() => setIsAIGradingDialogOpen(true)}
-                                                disabled={selectedFiles.length === 0}
+                                                disabled={isWorkshopGithub ? false : selectedFiles.length === 0}
                                                 variant="default"
                                                 className="font-bold gap-2 text-xs"
                                             >
                                                 <Sparkles className="h-3.5 w-3.5" />
-                                                Iniciar Evaluación con IA
+                                                {isWorkshopGithub ? `Auditar los ${workshopMilestones.length} Pasos con IA` : "Iniciar Evaluación con IA"}
                                             </Button>
                                         </div>
                                     )}
@@ -2583,10 +2840,12 @@ export function CodeProjectInspector({
                     <DialogHeader className="shrink-0">
                         <DialogTitle className="flex items-center gap-2 text-lg font-bold">
                             <Sparkles className="h-5 w-5 text-purple-600 shrink-0" />
-                            Evaluación con IA (Gemini)
+                            {isWorkshopGithub ? "Auditoría con IA de Tutorial GitHub" : "Evaluación con IA (Gemini)"}
                         </DialogTitle>
                         <DialogDescription className="text-xs">
-                            Se analizarán los <strong>{selectedFiles.length} archivos</strong> seleccionados frente a la rúbrica de la actividad.
+                            {isWorkshopGithub
+                                ? `Se auditarán los ${workshopMilestones.length} pasos obligatorios del proyecto frente al repositorio GitHub del estudiante.`
+                                : `Se analizarán los ${selectedFiles.length} archivos seleccionados frente a la rúbrica de la actividad.`}
                         </DialogDescription>
                     </DialogHeader>
 
@@ -2596,43 +2855,96 @@ export function CodeProjectInspector({
                             <GradingModeSelector gradingMode={gradingMode} setGradingMode={setGradingMode} />
                         </div>
 
-                        {/* Ordered Evaluation Files List */}
-                        <div className="space-y-2 min-w-0">
-                            <div className="flex items-center justify-between">
-                                <Label className="text-xs font-semibold flex items-center gap-1.5">
-                                    <ListOrdered className="h-3.5 w-3.5 text-primary" />
-                                    Archivos y Orden de Evaluación ({selectedFiles.length})
-                                </Label>
-                                <span className="text-[10px] text-muted-foreground">
-                                    Arrastra o usa flechas
-                                </span>
+                        {/* If workshop, show milestone checklist; else show draggable file list */}
+                        {isWorkshopGithub ? (
+                            <div className="space-y-2 min-w-0">
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-xs font-semibold flex items-center gap-1.5">
+                                        <ListChecks className="h-3.5 w-3.5 text-amber-500" />
+                                        Pasos Obligatorios a Auditar ({workshopMilestones.length})
+                                    </Label>
+                                    <span className="text-[10px] text-muted-foreground">
+                                        Rama: <strong className="font-mono text-foreground">{selectedBranch || "main"}</strong>
+                                    </span>
+                                </div>
+                                <div className="max-h-48 overflow-y-auto rounded-xl border p-2 bg-muted/20 space-y-1.5 scrollbar-thin min-w-0">
+                                    {workshopMilestones.map((m: any, idx: number) => {
+                                        const path = (m.targetFilePath || "").trim();
+                                        const isInstructional = m.requiresFile === false || !path;
+                                        const exists = !isInstructional && repoFiles.some(rf => isPathMatch(rf, path));
+                                        return (
+                                            <div key={m.id || idx} className="flex items-center justify-between p-2 rounded-lg border bg-background/90 text-xs">
+                                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                    <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-mono font-bold bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 shrink-0">
+                                                        Paso {m.stepNumber || idx + 1}
+                                                    </Badge>
+                                                    <div className="truncate">
+                                                        <span className="font-semibold block truncate">{m.title}</span>
+                                                        <span className="text-[10.5px] font-mono text-muted-foreground flex items-center gap-1 truncate">
+                                                            <FileCode className="h-3 w-3 text-primary shrink-0" />
+                                                            {path || "Paso instructivo (sin archivo)"}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <Badge 
+                                                    variant="outline" 
+                                                    className={cn(
+                                                        "text-[9px] px-1.5 py-0 h-4 font-bold shrink-0 ml-2",
+                                                        isInstructional
+                                                            ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30"
+                                                            : exists 
+                                                            ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30" 
+                                                            : "bg-destructive/10 text-destructive border-destructive/30"
+                                                    )}
+                                                >
+                                                    {isInstructional ? "Instructivo" : exists ? "En repo" : "Falta"}
+                                                </Badge>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                                <p className="text-[10.5px] text-muted-foreground leading-relaxed">
+                                    La IA inspeccionará el código fuente de cada paso en GitHub, verificará la completitud del proyecto y generará una retroalimentación detallada con tabla de cumplimiento y nota calculada.
+                                </p>
                             </div>
-                            <div className="max-h-44 overflow-y-auto rounded-xl border p-1.5 bg-muted/20 space-y-1 scrollbar-thin min-w-0">
-                                <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEndOrder}>
-                                    <SortableContext items={selectedFiles} strategy={verticalListSortingStrategy}>
-                                        <div className="flex flex-col gap-1 w-full min-w-0">
-                                            {selectedFiles.map((filePath, index) => (
-                                                <SortableEvaluationFileItem
-                                                    key={filePath}
-                                                    id={filePath}
-                                                    path={filePath}
-                                                    index={index}
-                                                    total={selectedFiles.length}
-                                                    onMoveUp={handleMoveUp}
-                                                    onMoveDown={handleMoveDown}
-                                                    onRemove={handleRemoveSelectedFile}
-                                                    onPreview={handleLoadFilePreview}
-                                                    isPreviewing={previewFile === filePath}
-                                                />
-                                            ))}
-                                        </div>
-                                    </SortableContext>
-                                </DndContext>
+                        ) : (
+                            <div className="space-y-2 min-w-0">
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-xs font-semibold flex items-center gap-1.5">
+                                        <ListOrdered className="h-3.5 w-3.5 text-primary" />
+                                        Archivos y Orden de Evaluación ({selectedFiles.length})
+                                    </Label>
+                                    <span className="text-[10px] text-muted-foreground">
+                                        Arrastra o usa flechas
+                                    </span>
+                                </div>
+                                <div className="max-h-44 overflow-y-auto rounded-xl border p-1.5 bg-muted/20 space-y-1 scrollbar-thin min-w-0">
+                                    <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEndOrder}>
+                                        <SortableContext items={selectedFiles} strategy={verticalListSortingStrategy}>
+                                            <div className="flex flex-col gap-1 w-full min-w-0">
+                                                {selectedFiles.map((filePath, index) => (
+                                                    <SortableEvaluationFileItem
+                                                        key={filePath}
+                                                        id={filePath}
+                                                        path={filePath}
+                                                        index={index}
+                                                        total={selectedFiles.length}
+                                                        onMoveUp={handleMoveUp}
+                                                        onMoveDown={handleMoveDown}
+                                                        onRemove={handleRemoveSelectedFile}
+                                                        onPreview={handleLoadFilePreview}
+                                                        isPreviewing={previewFile === filePath}
+                                                    />
+                                                ))}
+                                            </div>
+                                        </SortableContext>
+                                    </DndContext>
+                                </div>
+                                <p className="text-[10.5px] text-muted-foreground leading-relaxed">
+                                    La IA evaluará los archivos en este orden secuencial, acumulando el análisis de cada uno para aplicar la rúbrica.
+                                </p>
                             </div>
-                            <p className="text-[10.5px] text-muted-foreground leading-relaxed">
-                                La IA evaluará los archivos en este orden secuencial, acumulando el análisis de cada uno para aplicar la rúbrica.
-                            </p>
-                        </div>
+                        )}
 
                         {/* Progress logs stream console */}
                         {gradingLogs.length > 0 && (
@@ -2669,9 +2981,13 @@ export function CodeProjectInspector({
                         </Button>
                         <Button
                             type="button"
-                            disabled={isEvaluating || selectedFiles.length === 0}
+                            disabled={isEvaluating || (isWorkshopGithub ? workshopMilestones.length === 0 : selectedFiles.length === 0)}
                             onClick={async () => {
-                                await handleRunAIEvaluation();
+                                if (isWorkshopGithub) {
+                                    await handleRunWorkshopAIEvaluation();
+                                } else {
+                                    await handleRunAIEvaluation();
+                                }
                                 setIsAIGradingDialogOpen(false);
                                 setActiveTab("ai_report");
                             }}
@@ -2681,7 +2997,7 @@ export function CodeProjectInspector({
                             {isEvaluating ? (
                                 <><Loader2 className="h-4 w-4 animate-spin" /> Evaluando...</>
                             ) : (
-                                <><Sparkles className="h-4 w-4" /> Iniciar Evaluación con IA</>
+                                <><Sparkles className="h-4 w-4" /> {isWorkshopGithub ? `Auditar ${workshopMilestones.length} Pasos con IA` : "Iniciar Evaluación con IA"}</>
                             )}
                         </Button>
                     </DialogFooter>

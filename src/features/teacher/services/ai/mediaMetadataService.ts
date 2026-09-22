@@ -1,5 +1,5 @@
 export interface MediaMetadata {
-    platform: "Loom" | "YouTube" | "Google Drive" | "Direct Video" | "Direct Audio" | "Web Link";
+    platform: "Loom" | "YouTube" | "Google Drive" | "Direct Video" | "Direct Audio" | "Vocaroo" | "Spotify" | "Vimeo" | "Web Link";
     title?: string;
     description?: string;
     duration?: number; // in seconds
@@ -171,12 +171,14 @@ export async function extractMediaMetadata(rawUrl: string): Promise<MediaMetadat
 
     // 4. DIRECT VIDEO / AUDIO
     const isDirectVideo = /\.(mp4|webm|ogg|mov)($|\?)/i.test(url);
-    const isDirectAudio = /\.(mp3|wav|ogg|m4a|aac)($|\?)/i.test(url);
+    const isDirectAudio = /\.(mp3|wav|ogg|m4a|aac|flac)($|\?)/i.test(url);
     if (isDirectVideo || isDirectAudio) {
         try {
             const headRes = await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(6000) });
+            const fileName = url.split("/").pop()?.split("?")[0] || (isDirectVideo ? "video" : "audio");
             return {
                 platform: isDirectVideo ? "Direct Video" : "Direct Audio",
+                title: `${isDirectVideo ? "Video" : "Pista de audio"} directo (${fileName})`,
                 isAccessible: headRes.ok,
             };
         } catch {
@@ -187,7 +189,40 @@ export async function extractMediaMetadata(rawUrl: string): Promise<MediaMetadat
         }
     }
 
-    // 5. GENERIC URL
+    // 5. VOCAROO
+    const vocarooMatch = url.match(/(?:vocaroo\.com\/|voca\.ro\/)([a-zA-Z0-9]+)/);
+    if (vocarooMatch && vocarooMatch[1]) {
+        const id = vocarooMatch[1];
+        return {
+            platform: "Vocaroo",
+            title: `Grabación de audio en Vocaroo (${id})`,
+            description: `Audio técnico alojado en Vocaroo. Enlace reproducible directamente.`,
+            isAccessible: true,
+        };
+    }
+
+    // 6. SPOTIFY PODCASTS
+    const spotifyMatch = url.match(/open\.spotify\.com\/(?:intl-[a-z]+\/)?(episode|track)\/([a-zA-Z0-9]+)/);
+    if (spotifyMatch && spotifyMatch[2]) {
+        let spotifyTitle: string | undefined;
+        try {
+            const oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`;
+            const res = await fetch(oembedUrl, { signal: AbortSignal.timeout(5000) });
+            if (res.ok) {
+                const data = await res.json();
+                spotifyTitle = data.title;
+            }
+        } catch {
+            // Ignored
+        }
+        return {
+            platform: "Spotify",
+            title: spotifyTitle || `Episodio de podcast en Spotify (${spotifyMatch[1]})`,
+            isAccessible: true,
+        };
+    }
+
+    // 7. GENERIC URL
     try {
         const res = await fetch(url, {
             headers: { "User-Agent": "Mozilla/5.0" },

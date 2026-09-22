@@ -5,7 +5,7 @@ import {
     MessageSquare, Users, ClipboardCheck, Clock, BookOpen, GraduationCap, 
     FileText, AlertCircle, ArrowLeft, Calendar, ArrowRight, LayoutGrid, List,
     Sparkles, FolderGit2, Code2, Terminal, Video, Headphones, MessageSquareQuote, Database, Target, CheckCircle2,
-    Layers
+    Layers, GitBranch
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,22 @@ import { TabEmptyState } from "@/components/ui/tab-empty-state";
 
 const getActivityTypeInfo = (type: string) => {
     switch (type) {
+        case "WORKSHOP_GITHUB":
+            return {
+                label: "Tutorial GitHub",
+                icon: GitBranch,
+                badgeColor: "bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/25",
+                accentColor: "from-orange-500/30 via-orange-500/10 to-transparent",
+                iconBg: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
+            };
+        case "WORKSHOP_CODE":
+            return {
+                label: "Taller Codelab",
+                icon: Terminal,
+                badgeColor: "bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/25",
+                accentColor: "from-purple-500/30 via-purple-500/10 to-transparent",
+                iconBg: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
+            };
         case "GITHUB":
             return {
                 label: "IA GitHub",

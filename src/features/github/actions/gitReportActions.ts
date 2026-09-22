@@ -43,6 +43,7 @@ export interface GitAiReportResult {
     reportMode?: GitReportMode;
     includeAuthors?: boolean;
     includeCommitHashes?: boolean;
+    includeCommitDates?: boolean;
     executiveSummary: string;
     keyAchievements: string[];
     detailedTasks: GitDetailedTask[];
@@ -269,6 +270,7 @@ export async function generateGitAiReportAction(params: {
     reportMode?: GitReportMode;
     includeAuthors?: boolean;
     includeCommitHashes?: boolean;
+    includeCommitDates?: boolean;
 }): Promise<GitAiReportResult> {
     const session = await getSession();
     if (!session) {
@@ -290,7 +292,8 @@ export async function generateGitAiReportAction(params: {
         contributors, 
         reportMode = "pedagogical", 
         includeAuthors = true, 
-        includeCommitHashes = true 
+        includeCommitHashes = true,
+        includeCommitDates = true
     } = params;
 
     // Filtrar archivos poco informativos o autogenerados (lockfiles, bundles minificados, maps)
@@ -323,7 +326,7 @@ export async function generateGitAiReportAction(params: {
 
         return {
             sha: includeCommitHashes ? c.shortSha : undefined,
-            date: `${c.regionalDate} ${c.regionalTime}`,
+            date: includeCommitDates ? `${c.regionalDate} ${c.regionalTime}` : undefined,
             author: includeAuthors ? (c.authorLogin || c.authorName) : "Equipo",
             message: c.title,
             body: c.body ? c.body.substring(0, 200) : undefined,
@@ -621,6 +624,7 @@ ${allDetailedTasks.length > 0 ? `Tareas técnicas extraídas del análisis profu
             reportMode,
             includeAuthors,
             includeCommitHashes,
+            includeCommitDates,
             title: parsed.title || defaultTitle,
             periodLabel: parsed.periodLabel || dateRangeLabel,
             executiveSummary: repairFeedbackText(parsed.executiveSummary || ""),

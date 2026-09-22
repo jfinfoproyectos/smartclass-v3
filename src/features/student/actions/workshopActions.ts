@@ -36,6 +36,12 @@ export interface VerifyStepResult {
         repoOwner?: string;
         repoName?: string;
         hint?: string;
+        latestCommit?: {
+            sha: string;
+            message: string;
+            author: string;
+            date: string;
+        };
     };
 }
 
@@ -59,6 +65,21 @@ export async function verifyWorkshopGithubStepAction(
         }
 
         const { activityId, repoUrl, branch = "main", stepIndex, milestone } = params;
+
+        const requiresFile = (milestone as any)?.requiresFile !== undefined
+            ? (milestone as any).requiresFile
+            : Boolean(milestone.targetFilePath && milestone.targetFilePath.trim().length > 0);
+        const requiresGit = (milestone as any)?.requiresGitCommands !== undefined
+            ? (milestone as any).requiresGitCommands
+            : Boolean(milestone.gitCommands && milestone.gitCommands.length > 0);
+
+        // Si el paso no requiere archivo ni comandos git (es solo de lectura / instrucciones)
+        if (!requiresFile && !requiresGit) {
+            return {
+                success: true,
+                message: `¡Paso ${stepIndex + 1} completado! Este paso es de lectura o conceptual y no requiere comprobación en GitHub.`
+            };
+        }
 
         if (!repoUrl || !repoUrl.trim()) {
             return {
@@ -112,11 +133,11 @@ export async function verifyWorkshopGithubStepAction(
             };
         }
 
-        // 4. Determinar archivo objetivo a verificar
-        let targetPath = milestone.targetFilePath?.trim() || "";
+        // 4. Determinar archivo objetivo a verificar (solo si el paso requiere archivo)
+        let targetPath = requiresFile ? (milestone.targetFilePath?.trim() || "") : "";
 
-        // Si no tiene targetFilePath explícito, intentar inferir del título o instrucciones
-        if (!targetPath) {
+        // Si requiere archivo pero no tiene targetFilePath explícito, intentar inferir del título
+        if (requiresFile && !targetPath) {
             const matchFile = milestone.title?.match(/[\w\-./]+\.[a-zA-Z0-9]+/);
             if (matchFile) {
                 targetPath = matchFile[0];
@@ -213,6 +234,29 @@ export async function verifyWorkshopGithubStepAction(
                 }
             }
 
+            // Extraer el commit más reciente de la rama para mostrarlo en vivo
+            let latestCommit: { sha: string; message: string; author: string; date: string } | undefined;
+            try {
+                const branchCommits = await githubService.getRepoCommits(
+                    repoInfo.owner,
+                    repoInfo.repo,
+                    effectiveBranch,
+                    token || undefined,
+                    1
+                );
+                if (branchCommits && branchCommits.length > 0) {
+                    const c = branchCommits[0];
+                    latestCommit = {
+                        sha: (c.sha || "").slice(0, 7),
+                        message: (c.commit?.message || "").split("\n")[0].slice(0, 100),
+                        author: c.commit?.author?.name || "Estudiante",
+                        date: c.commit?.author?.date || ""
+                    };
+                }
+            } catch {
+                // ignorar
+            }
+
             return {
                 success: true,
                 message: `¡Paso ${stepIndex + 1} verificado con éxito! El archivo '${cleanPath}' fue validado en la rama '${effectiveBranch}'.`,
@@ -222,7 +266,8 @@ export async function verifyWorkshopGithubStepAction(
                     fileFound: true,
                     contentMatched: true,
                     repoOwner: repoInfo.owner,
-                    repoName: repoInfo.repo
+                    repoName: repoInfo.repo,
+                    latestCommit
                 }
             };
         }
@@ -249,13 +294,22 @@ export async function verifyWorkshopGithubStepAction(
             };
         }
 
+        const firstCommit = commits[0];
+        const latestCommit = {
+            sha: (firstCommit.sha || "").slice(0, 7),
+            message: (firstCommit.commit?.message || "").split("\n")[0].slice(0, 100),
+            author: firstCommit.commit?.author?.name || "Estudiante",
+            date: firstCommit.commit?.author?.date || ""
+        };
+
         return {
             success: true,
             message: `¡Paso ${stepIndex + 1} verificado con éxito! Conexión y commits confirmados en la rama '${effectiveBranch}'.`,
             details: {
                 checkedBranch: effectiveBranch,
                 repoOwner: repoInfo.owner,
-                repoName: repoInfo.repo
+                repoName: repoInfo.repo,
+                latestCommit
             }
         };
 

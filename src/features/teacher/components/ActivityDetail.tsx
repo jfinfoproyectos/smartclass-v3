@@ -2648,6 +2648,8 @@ export function ActivityDetail({
                                         activity={activity}
                                         userId="teacher-preview-id"
                                         studentName="Profesor (Modo Estudiante)"
+                                        isTeacherPreview={true}
+                                        onClosePreview={() => setShowStudentPreview(false)}
                                     />
                                 </div>
                             </div>

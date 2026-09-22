@@ -12,6 +12,7 @@ export interface GitReportCorporatePDFProps {
     generatedAt?: string;
     includeAuthors?: boolean;
     includeCommitHashes?: boolean;
+    includeCommitDates?: boolean;
     reportMode?: GitReportMode;
 }
 
@@ -453,12 +454,14 @@ export function GitReportCorporatePDF({
     generatedAt,
     includeAuthors = true,
     includeCommitHashes = true,
+    includeCommitDates = true,
     reportMode = "pedagogical"
 }: GitReportCorporatePDFProps) {
     const { repoInfo, summary, contributors, commits, dateRange, selectedBranch } = reportData;
 
     const shouldShowAuthors = includeAuthors !== undefined ? includeAuthors : (aiReport?.includeAuthors ?? true);
     const shouldShowHashes = includeCommitHashes !== undefined ? includeCommitHashes : (aiReport?.includeCommitHashes ?? true);
+    const shouldShowDates = includeCommitDates !== undefined ? includeCommitDates : (aiReport?.includeCommitDates ?? true);
     const activeMode = reportMode || aiReport?.reportMode || "pedagogical";
 
     const formattedDate = generatedAt || new Date().toLocaleString("es-CO", {
@@ -478,12 +481,53 @@ export function GitReportCorporatePDF({
     const branchLabel = selectedBranch === "all" ? "Todas las ramas (Global)" : selectedBranch;
 
     // Distribución de anchos de columna para la tabla de commits del apéndice
-    const colDateWidth = shouldShowAuthors && shouldShowHashes ? "18%" : (!shouldShowAuthors && !shouldShowHashes) ? "25%" : "22%";
-    const colAuthorWidth = "22%";
-    const colShaWidth = shouldShowAuthors ? "12%" : "15%";
-    const colMsgWidth = shouldShowAuthors && shouldShowHashes ? "48%" :
-                        shouldShowAuthors && !shouldShowHashes ? "56%" :
-                        !shouldShowAuthors && shouldShowHashes ? "63%" : "75%";
+    let colDateWidth = "18%";
+    let colAuthorWidth = "22%";
+    let colShaWidth = "12%";
+    let colMsgWidth = "48%";
+
+    if (shouldShowDates) {
+        if (shouldShowAuthors && shouldShowHashes) {
+            colDateWidth = "18%";
+            colAuthorWidth = "22%";
+            colShaWidth = "12%";
+            colMsgWidth = "48%";
+        } else if (shouldShowAuthors && !shouldShowHashes) {
+            colDateWidth = "22%";
+            colAuthorWidth = "22%";
+            colShaWidth = "0%";
+            colMsgWidth = "56%";
+        } else if (!shouldShowAuthors && shouldShowHashes) {
+            colDateWidth = "22%";
+            colAuthorWidth = "0%";
+            colShaWidth = "15%";
+            colMsgWidth = "63%";
+        } else {
+            colDateWidth = "25%";
+            colAuthorWidth = "0%";
+            colShaWidth = "0%";
+            colMsgWidth = "75%";
+        }
+    } else {
+        colDateWidth = "0%";
+        if (shouldShowAuthors && shouldShowHashes) {
+            colAuthorWidth = "26%";
+            colShaWidth = "14%";
+            colMsgWidth = "60%";
+        } else if (shouldShowAuthors && !shouldShowHashes) {
+            colAuthorWidth = "28%";
+            colShaWidth = "0%";
+            colMsgWidth = "72%";
+        } else if (!shouldShowAuthors && shouldShowHashes) {
+            colAuthorWidth = "0%";
+            colShaWidth = "18%";
+            colMsgWidth = "82%";
+        } else {
+            colAuthorWidth = "0%";
+            colShaWidth = "0%";
+            colMsgWidth = "100%";
+        }
+    }
 
     return (
         <Document
@@ -626,7 +670,7 @@ export function GitReportCorporatePDF({
                         </View>
                         {aiReport.detailedTasks.map((task, idx) => {
                             const badgeSt = getBadgeStyle(task.badgeColor);
-                            const hasMetaInfo = shouldShowAuthors || (shouldShowHashes && task.relatedCommits && task.relatedCommits.length > 0);
+                            const hasMetaInfo = (shouldShowDates && task.date) || shouldShowAuthors || (shouldShowHashes && task.relatedCommits && task.relatedCommits.length > 0);
 
                             return (
                                 <View key={idx} style={styles.taskItemCard} wrap={false}>
@@ -643,6 +687,11 @@ export function GitReportCorporatePDF({
 
                                     {hasMetaInfo ? (
                                         <View style={styles.taskItemMeta}>
+                                            {shouldShowDates && task.date ? (
+                                                <Text style={[styles.taskItemAuthor, { color: COLORS.textMuted }]}>
+                                                    Fecha: {cleanPdfText(task.date)}
+                                                </Text>
+                                            ) : null}
                                             {shouldShowAuthors ? (
                                                 <Text style={styles.taskItemAuthor}>
                                                     Responsable: {cleanPdfText(task.author)}
@@ -714,8 +763,8 @@ export function GitReportCorporatePDF({
 
                 {/* Tabla de Colaboradores (Condicional a shouldShowAuthors) */}
                 {shouldShowAuthors ? (
-                    <View style={{ marginBottom: 12 }} wrap={false}>
-                        <View style={styles.sectionHeading}>
+                    <View style={{ marginBottom: 12 }}>
+                        <View style={styles.sectionHeading} wrap={false}>
                             <View style={styles.headingBar} />
                             <Text style={styles.headingText}>Análisis de Esfuerzo por Colaborador</Text>
                         </View>
@@ -732,7 +781,7 @@ export function GitReportCorporatePDF({
                                     h => h.name.toLowerCase() === c.name.toLowerCase() || (c.login && h.login?.toLowerCase() === c.login.toLowerCase())
                                 );
                                 return (
-                                    <View key={idx} style={[styles.tableRow, idx % 2 === 1 ? styles.tableRowAlt : {}]}>
+                                    <View key={idx} style={[styles.tableRow, idx % 2 === 1 ? styles.tableRowAlt : {}]} wrap={false}>
                                         <View style={{ width: "30%" }}>
                                             <Text style={styles.tableCellBold}>{cleanPdfText(c.name)}</Text>
                                             {c.login ? (
@@ -759,8 +808,8 @@ export function GitReportCorporatePDF({
 
                 {/* Cadencia y Recomendaciones */}
                 {aiReport?.cadenceAndHealth ? (
-                    <View style={{ marginBottom: 12 }} wrap={false}>
-                        <View style={styles.sectionHeading}>
+                    <View style={{ marginBottom: 12 }}>
+                        <View style={styles.sectionHeading} wrap={false}>
                             <View style={styles.headingBar} />
                             <Text style={styles.headingText}>
                                 {activeMode === "pedagogical" ? "Consistencia de Trabajo y Recomendaciones Pedagógicas" : "Cadencia y Próximos Pasos Recomendados"}
@@ -772,7 +821,7 @@ export function GitReportCorporatePDF({
                             </Text>
                         ) : null}
                         {aiReport.cadenceAndHealth.recommendations?.map((rec, idx) => (
-                            <View key={idx} style={styles.bulletRow}>
+                            <View key={idx} style={styles.bulletRow} wrap={false}>
                                 <Text style={styles.bulletDot}>→</Text>
                                 <Text style={styles.bulletText}>{cleanPdfText(rec)}</Text>
                             </View>
@@ -791,7 +840,9 @@ export function GitReportCorporatePDF({
 
                     <View style={styles.table}>
                         <View style={styles.tableHeaderRow}>
-                            <Text style={[styles.tableHeaderCell, { width: colDateWidth }]}>Fecha / Hora</Text>
+                            {shouldShowDates ? (
+                                <Text style={[styles.tableHeaderCell, { width: colDateWidth }]}>Fecha / Hora</Text>
+                            ) : null}
                             {shouldShowAuthors ? (
                                 <Text style={[styles.tableHeaderCell, { width: colAuthorWidth }]}>Autor</Text>
                             ) : null}
@@ -802,9 +853,11 @@ export function GitReportCorporatePDF({
                         </View>
                         {commits.slice(0, 75).map((cm, idx) => (
                             <View key={idx} style={[styles.tableRow, idx % 2 === 1 ? styles.tableRowAlt : {}]} wrap={false}>
-                                <Text style={[styles.tableCell, { width: colDateWidth, fontSize: 6 }]}>
-                                    {cm.regionalDate} {cm.regionalTime}
-                                </Text>
+                                {shouldShowDates ? (
+                                    <Text style={[styles.tableCell, { width: colDateWidth, fontSize: 6 }]}>
+                                        {cm.regionalDate} {cm.regionalTime}
+                                    </Text>
+                                ) : null}
                                 {shouldShowAuthors ? (
                                     <Text style={[styles.tableCellBold, { width: colAuthorWidth, fontSize: 6.5 }]}>
                                         {cleanPdfText(cm.authorName).slice(0, 28)}

@@ -2,7 +2,13 @@
 export const githubService = {
     parseGitHubUrl(url: string) {
         try {
-            const urlObj = new URL(url);
+            if (!url || typeof url !== 'string') return null;
+            let normalizedUrl = url.trim();
+            if (!normalizedUrl.startsWith("http://") && !normalizedUrl.startsWith("https://")) {
+                normalizedUrl = "https://" + normalizedUrl;
+            }
+
+            const urlObj = new URL(normalizedUrl);
             const pathParts = urlObj.pathname.split('/').filter(Boolean);
             // Expected format: /owner/repo or /owner/repo/tree/branch/...
             if (pathParts.length < 2) return null;
@@ -18,6 +24,12 @@ export const githubService = {
             // If URL contains /tree/branch or /blob/branch
             if (pathParts.length >= 4 && (pathParts[2] === "tree" || pathParts[2] === "blob")) {
                 branch = pathParts.slice(3).join('/');
+            } else if (urlObj.hash && urlObj.hash.length > 1) {
+                // If URL contains hash like #main or #feature/branch (used by workshop activities)
+                const cleanHash = decodeURIComponent(urlObj.hash.slice(1)).split('?')[0].split('&')[0].trim();
+                if (cleanHash) {
+                    branch = cleanHash;
+                }
             }
 
             return { owner, repo, branch };

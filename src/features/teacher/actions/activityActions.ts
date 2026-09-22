@@ -110,11 +110,11 @@ export async function updateActivityAction(formData: FormData) {
     const isGroupActivityStr = formData.get("isGroupActivity") as string | null;
     const groupScope = formData.get("groupScope") as string | null;
 
-    await activityService.updateActivity(id, {
-        title: title || undefined,
-        description: description || undefined,
-        statement: statement || undefined,
-        filePaths: filePaths || undefined,
+    const updated = await activityService.updateActivity(id, {
+        title: title !== null ? title : undefined,
+        description: description !== null ? description : undefined,
+        statement: statement !== null ? statement : undefined,
+        filePaths: filePaths !== null ? filePaths : undefined,
         deadline: deadlineStr ? new Date(deadlineStr) : undefined,
         openDate: openDateStr ? new Date(openDateStr) : undefined,
         type: type || undefined,
@@ -145,6 +145,8 @@ export async function updateActivityAction(formData: FormData) {
     }
     revalidatePath(`/dashboard/student`);
     revalidatePath(`/dashboard/teacher`);
+
+    return updated;
 }
 
 export async function deleteActivityAction(formData: FormData) {
@@ -347,7 +349,11 @@ export async function generateAllWorkshopStepsAction(params: {
     title: string;
     topicPrompt: string;
     workshopType: "WORKSHOP_CODE" | "WORKSHOP_GITHUB";
+    statement?: string;
     language?: string;
+    techStack?: string;
+    architectureFocus?: string;
+    generateFullContent?: boolean;
     stepCount?: number;
     level?: string;
     aiModelName?: string;
@@ -368,9 +374,14 @@ export async function generateSingleWorkshopStepAction(params: {
     stepTitle: string;
     prompt?: string;
     currentInstructions?: string;
+    targetFilePath?: string;
     workshopType: "WORKSHOP_CODE" | "WORKSHOP_GITHUB";
+    statement?: string;
     language?: string;
+    techStack?: string;
     workshopTitle?: string;
+    stepIndex?: number;
+    totalSteps?: number;
     aiModelName?: string;
 }) {
     const session = await getSession();
@@ -385,9 +396,99 @@ export async function generateSingleWorkshopStepAction(params: {
     });
 }
 
+export async function generateWorkshopStepInstructionsAction(params: {
+    stepTitle: string;
+    targetFilePath?: string;
+    currentInstructions?: string;
+    currentCode?: string;
+    workshopTitle?: string;
+    statement?: string;
+    language?: string;
+    techStack?: string;
+    aiModelName?: string;
+}) {
+    const session = await getSession();
+    if (!session || session.user.role !== "teacher") {
+        throw new Error("Unauthorized");
+    }
+
+    const { generateWorkshopStepInstructions } = await import("../services/ai/activityContentService");
+    return await generateWorkshopStepInstructions({
+        ...params,
+        userId: session.user.id
+    });
+}
+
+export async function generateWorkshopStepCodeAction(params: {
+    stepTitle: string;
+    targetFilePath: string;
+    stepInstructions?: string;
+    currentCode?: string;
+    workshopTitle?: string;
+    statement?: string;
+    language?: string;
+    techStack?: string;
+    aiModelName?: string;
+}) {
+    const session = await getSession();
+    if (!session || session.user.role !== "teacher") {
+        throw new Error("Unauthorized");
+    }
+
+    const { generateWorkshopStepCode } = await import("../services/ai/activityContentService");
+    return await generateWorkshopStepCode({
+        ...params,
+        userId: session.user.id
+    });
+}
+
+export async function generateWorkshopStepCodeExplanationAction(params: {
+    stepTitle: string;
+    targetFilePath?: string;
+    code: string;
+    statement?: string;
+    language?: string;
+    techStack?: string;
+    aiModelName?: string;
+}) {
+    const session = await getSession();
+    if (!session || session.user.role !== "teacher") {
+        throw new Error("Unauthorized");
+    }
+
+    const { generateWorkshopStepCodeExplanation } = await import("../services/ai/activityContentService");
+    return await generateWorkshopStepCodeExplanation({
+        ...params,
+        userId: session.user.id
+    });
+}
+
+export async function suggestWorkshopStepGitCommandsAction(params: {
+    stepTitle: string;
+    targetFilePath?: string;
+    stepIndex: number;
+    totalSteps: number;
+    statement?: string;
+    language?: string;
+    techStack?: string;
+    aiModelName?: string;
+}) {
+    const session = await getSession();
+    if (!session || session.user.role !== "teacher") {
+        throw new Error("Unauthorized");
+    }
+
+    const { suggestWorkshopStepGitCommands } = await import("../services/ai/activityContentService");
+    return await suggestWorkshopStepGitCommands({
+        ...params,
+        userId: session.user.id
+    });
+}
+
 export async function generateWorkshopStepHintsAction(params: {
     stepTitle: string;
     instructions: string;
+    statement?: string;
     language?: string;
     aiModelName?: string;
 }) {
@@ -402,5 +503,40 @@ export async function generateWorkshopStepHintsAction(params: {
         userId: session.user.id
     });
 }
+
+export async function refineWorkshopStepsAction(params: {
+    steps: Array<{
+        id: string;
+        title: string;
+        instructions: string;
+        starterCode?: string;
+        expectedSolution?: string;
+        requiresFile?: boolean;
+        requiresGitCommands?: boolean;
+        targetFilePath?: string;
+        targetFileContent?: string;
+        gitCommands?: Array<{ command: string; explanation: string }>;
+        validationRule?: string;
+        hints?: string[];
+        order: number;
+    }>;
+    instruction: string;
+    statement?: string;
+    workshopType: "WORKSHOP_CODE" | "WORKSHOP_GITHUB";
+    techStack?: string;
+    aiModelName?: string;
+}) {
+    const session = await getSession();
+    if (!session || session.user.role !== "teacher") {
+        throw new Error("Unauthorized");
+    }
+
+    const { refineWorkshopSteps } = await import("../services/ai/activityContentService");
+    return await refineWorkshopSteps({
+        ...params,
+        userId: session.user.id
+    });
+}
+
 
 

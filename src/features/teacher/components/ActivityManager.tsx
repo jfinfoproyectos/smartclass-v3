@@ -22,10 +22,10 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { createActivityAction, updateActivityAction, deleteActivityAction, generateChecklistCriteriaAction, verifyCriterionRelationAction, balanceCriteriaPercentagesAction, generateCodeFileTemplateAction, generateRequiredTopicsAction, generateAllWorkshopStepsAction, generateSingleWorkshopStepAction, generateWorkshopStepHintsAction } from "@/features/teacher/actions/activityActions";
+import { createActivityAction, updateActivityAction, deleteActivityAction, generateChecklistCriteriaAction, verifyCriterionRelationAction, balanceCriteriaPercentagesAction, generateCodeFileTemplateAction, generateRequiredTopicsAction, generateAllWorkshopStepsAction, generateSingleWorkshopStepAction, generateWorkshopStepHintsAction, generateWorkshopStepInstructionsAction, generateWorkshopStepCodeAction, generateWorkshopStepCodeExplanationAction, suggestWorkshopStepGitCommandsAction } from "@/features/teacher/actions/activityActions";
 import { scanRepositoryAction } from "@/features/github/actions/githubActions";
 import { getMissingSubmissionsAction } from "@/features/teacher/actions/studentActions";
-import { Plus, Calendar, FileText, MessageSquare, Pencil, Trash2, Eye, X, ChevronUp, ChevronDown, AlertCircle, Sparkles, Upload, Download, Loader2, Search, UserX, GripVertical, LayoutGrid, List, Save, Settings2, Code2, FolderGit2, CheckCircle2, Clock, SlidersHorizontal, Info, ListChecks, CheckSquare, RefreshCw, Bot, Cpu, HelpCircle, MessageSquareQuote, Shuffle, Scale, Crown, Users, Terminal, Video, Database, Mic, Headphones, FileCode, Target, Layers, FileCheck, BookOpen, GitBranch, ArrowRight } from "lucide-react";
+import { Plus, Minus, Calendar, FileText, MessageSquare, Pencil, Trash2, Eye, X, ChevronUp, ChevronDown, AlertCircle, Sparkles, Upload, Download, Loader2, Search, UserX, GripVertical, LayoutGrid, List, Save, Settings2, Code2, FolderGit2, CheckCircle2, Clock, SlidersHorizontal, Info, ListChecks, CheckSquare, RefreshCw, Bot, Cpu, HelpCircle, MessageSquareQuote, Shuffle, Scale, Crown, Users, Terminal, Video, Database, Mic, Headphones, FileCode, Target, Layers, FileCheck, BookOpen, GitBranch, ArrowRight, Lock } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,7 +33,9 @@ import { AICanvasCard } from "@/components/ui/ai-canvas-card";
 import { toast } from "sonner";
 import { ActivityGroupsModal } from "./ActivityGroupsModal";
 import { AIGenerateDialog } from "./AIGenerateDialog";
+import { AIModifyStepsDialog } from "./AIModifyStepsDialog";
 import Editor from "@monaco-editor/react";
+import { formatCodeString } from "@/lib/codeFormatter";
 import {
     Tooltip,
     TooltipContent,
@@ -983,10 +985,18 @@ function ActivityFormDialog({
 }) {
     const isEdit = Boolean(activity);
     const router = useRouter();
+    const prevOpenRef = useRef(false);
+    const loadedActivityIdRef = useRef<string | null | undefined>(undefined);
+    const isImportingRef = useRef(false);
     const [activeTab, setActiveTab] = useState<string>("config");
     const [selectedType, setSelectedType] = useState<string>(activity?.type || "GITHUB");
     const [description, setDescription] = useState(activity?.description || "**Instrucciones de la actividad**\n\n...");
-    const [statement, setStatement] = useState(activity?.statement || TEMPLATE_GITHUB);
+    const [statement, setStatement] = useState(
+        activity?.statement || (
+            (activity?.type === "WORKSHOP_GITHUB" || activity?.type === "WORKSHOP_CODE") ? "" :
+            TEMPLATE_GITHUB
+        )
+    );
     const [hasChecklist, setHasChecklist] = useState<boolean>(false);
     const [criteria, setCriteria] = useState<EvaluationCriterion[]>([]);
     const [aiWeight, setAiWeight] = useState<number>(30); // 30% por defecto para evaluación IA
@@ -1190,6 +1200,7 @@ function ActivityFormDialog({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isAIGeneratorOpen, setIsAIGeneratorOpen] = useState(false);
     const [aiInitialContent, setAiInitialContent] = useState<string | undefined>(undefined);
+    const [aiGeneratorTarget, setAiGeneratorTarget] = useState<"statement" | "step_instructions">("statement");
     const [showStudentPreview, setShowStudentPreview] = useState(false);
 
     // Configuración específica para PDF_REVIEW (Optimización de páginas para IA)
@@ -1207,88 +1218,240 @@ function ActivityFormDialog({
         instructions: string;
         starterCode?: string;
         expectedSolution?: string;
+        requiresFile?: boolean;
+        requiresGitCommands?: boolean;
         targetFilePath?: string;
         targetFileContent?: string;
+        codeExplanation?: string;
+        localVerification?: string;
         gitCommands?: Array<{ command: string; explanation: string }>;
         validationRule?: string;
         hints: string[];
         order: number;
-    }>>([
-        {
-            id: "m-1",
-            title: "Paso 1: Configuración Inicial del Proyecto",
-            instructions: "Implementa la estructura base y los archivos iniciales del repositorio.",
-            starterCode: "// Código inicial del estudiante\n",
-            expectedSolution: "// Solución de referencia\n",
-            targetFilePath: "README.md",
-            targetFileContent: "# Mi Proyecto\n\nProyecto desarrollado paso a paso con buenas prácticas y Git.",
-            gitCommands: [
-                { command: "git add .", explanation: "Prepara todos los archivos modificados para el commit." },
-                { command: 'git commit -m "feat: setup inicial del proyecto"', explanation: "Crea el commit inicial en el historial de Git." },
-                { command: "git push origin main", explanation: "Envía los cambios a la rama principal en GitHub." }
-            ],
-            validationRule: "El archivo debe existir en la rama y no estar vacío",
-            hints: ["Lee con atención el enunciado", "Asegúrate de comprobar la ruta del archivo"],
-            order: 1
-        }
-    ]);
+    }>>([]);
 
-    const [workshopContentView, setWorkshopContentView] = useState<"steps" | "statement">("steps");
+    const getWorkshopFileExtension = (lang?: string, stack?: string): string => {
+        const combined = `${lang || ""} ${stack || ""}`.toLowerCase();
+        if (combined.includes("python") || combined.includes("py") || combined.includes("django") || combined.includes("fastapi")) return "py";
+        if (combined.includes("java") || combined.includes("spring")) return "java";
+        if (combined.includes("typescript") || combined.includes("ts") || combined.includes("nest") || combined.includes("angular")) return "ts";
+        if (combined.includes("c#") || combined.includes("csharp") || combined.includes(".net") || combined.includes("dotnet")) return "cs";
+        if (combined.includes("cpp") || combined.includes("c++")) return "cpp";
+        if (combined.includes("c ") || combined.endsWith(" c")) return "c";
+        if (combined.includes("php")) return "php";
+        if (combined.includes("go") || combined.includes("golang")) return "go";
+        if (combined.includes("rust")) return "rs";
+        if (combined.includes("ruby")) return "rb";
+        if (combined.includes("kotlin")) return "kt";
+        if (combined.includes("html")) return "html";
+        if (combined.includes("react") || combined.includes("next")) return "tsx";
+        return "js";
+    };
+
+    const getDefaultWorkshopStepPath = (stepIdxOrOrder: number, lang?: string, stack?: string): string => {
+        const ext = getWorkshopFileExtension(lang, stack);
+        if (stepIdxOrOrder === 1 || stepIdxOrOrder === 0) return "README.md";
+        return `src/step${stepIdxOrOrder}.${ext}`;
+    };
+
+    // Enunciado primero por defecto; la pestaña de pasos solo se habilita si existe enunciado
+    const [workshopContentView, setWorkshopContentView] = useState<"steps" | "statement">("statement");
     const [activeWorkshopStepIdx, setActiveWorkshopStepIdx] = useState<number>(0);
+    const hasWorkshopStatement = Boolean(statement && statement.trim().length > 0);
+
+    // Si el usuario borra o no tiene enunciado, restringir la navegación forzando la pestaña de enunciado
+    useEffect(() => {
+        if (!hasWorkshopStatement && workshopContentView === "steps") {
+            setWorkshopContentView("statement");
+        }
+    }, [hasWorkshopStatement, workshopContentView]);
 
     // Asistentes de IA para Talleres y Tutoriales GitHub
     const [isAiAllStepsOpen, setIsAiAllStepsOpen] = useState(false);
+    const [isAiModifyStepsOpen, setIsAiModifyStepsOpen] = useState(false);
     const [aiAllStepsTopic, setAiAllStepsTopic] = useState("");
-    const [aiAllStepsCount, setAiAllStepsCount] = useState(4);
-    const [aiAllStepsLevel, setAiAllStepsLevel] = useState("intermedio");
+    const [aiAllStepsMode, setAiAllStepsMode] = useState<"structure_only" | "full_tutorial">("structure_only");
     const [isGeneratingAllSteps, setIsGeneratingAllSteps] = useState(false);
 
     const [isAiSingleStepOpen, setIsAiSingleStepOpen] = useState(false);
     const [aiSingleStepPrompt, setAiSingleStepPrompt] = useState("");
     const [isGeneratingSingleStep, setIsGeneratingSingleStep] = useState(false);
+    const [isGeneratingStepInstructions, setIsGeneratingStepInstructions] = useState(false);
+    const [isGeneratingStepCode, setIsGeneratingStepCode] = useState(false);
+    const [isGeneratingStepCodeExplanation, setIsGeneratingStepCodeExplanation] = useState(false);
+    const [isGeneratingStepGit, setIsGeneratingStepGit] = useState(false);
     const [isGeneratingHints, setIsGeneratingHints] = useState(false);
 
-    const handleGenerateAllStepsWithAI = async () => {
+    // Extracción estricta de contexto a partir del Enunciado General
+    const statementContext = useMemo(() => {
+        if (!statement || statement.trim().length < 20) {
+            return {
+                detectedStack: "",
+                detectedArchitecture: "",
+                focusOptions: [] as Array<{ label: string; promptText: string }>
+            };
+        }
+
+        const text = statement.trim();
+
+        // 1. Detectar Stack Tecnológico a partir del texto
+        let detectedStack = "";
+        const stackSection = text.match(/(?:Stack Tecnológico|Tecnologías|Herramientas|Lenguaje)[\s\S]*?(?=\n##|\n\n\n|$)/i);
+        if (stackSection) {
+            const lines = stackSection[0]
+                .split("\n")
+                .map((l: string) => l.replace(/^[*\-•#\s]+/, "").trim())
+                .filter((l: string) => l.length > 3 && !l.toLowerCase().startsWith("stack") && !l.toLowerCase().startsWith("tecnolog"));
+            if (lines.length > 0) {
+                detectedStack = lines.slice(0, 3).join(" • ");
+            }
+        }
+        if (!detectedStack) {
+            const known = [
+                "Spring Boot", "Java 17", "Java", "FastAPI", "Python", "Django", "Express", "Node.js",
+                "React", "Next.js", "Vue", "Angular", "TypeScript", "Go", "PostgreSQL", "MySQL", "H2", "MongoDB"
+            ];
+            const found = known.filter(k => new RegExp(`\\b${k}\\b`, "i").test(text));
+            if (found.length > 0) {
+                detectedStack = found.slice(0, 4).join(" + ");
+            }
+        }
+
+        // 2. Detectar Arquitectura
+        let detectedArchitecture = "";
+        const archSection = text.match(/(?:Patrón de Diseño|Arquitectura|Patrón|Estructura)[\s\S]*?(?=\n##|\n\n\n|$)/i);
+        if (archSection) {
+            const archLine = archSection[0].split("\n").find((l: string) => /capas|controller|service|clean|hexagonal|mvc|modular|tdd/i.test(l));
+            if (archLine) {
+                detectedArchitecture = archLine.replace(/^[*\-•#\s]+/, "").replace(/[*_`]/g, "").trim();
+            }
+        }
+
+        // 3. Generar opciones de enfoque estrictamente basadas en el enunciado
+        const options: Array<{ label: string; promptText: string }> = [];
+
+        options.push({
+            label: "🎯 Estructura Completa del Enunciado",
+            promptText: "Estructurar los pasos pedagógicos para implementar fielmente la totalidad del proyecto y requerimientos solicitados en el Enunciado General."
+        });
+
+        if (/controller|service|repository|capas/i.test(text)) {
+            options.push({
+                label: "🏛️ Arquitectura en Capas (Controller → Service → Repository)",
+                promptText: "Estructurar los pasos siguiendo rigurosamente la arquitectura en capas especificada en el enunciado: Entidades/Modelos, Repositorios de persistencia, Servicios de negocio y Controladores REST."
+            });
+        }
+
+        if (/crud|endpoint|rest|get|post|put|delete/i.test(text)) {
+            options.push({
+                label: "⚡ Endpoints y Operaciones CRUD",
+                promptText: "Priorizar en los pasos la implementación de los endpoints REST y operaciones CRUD definidos en el catálogo de recursos del enunciado."
+            });
+        }
+
+        if (/h2|jpa|base de datos|entidad|entity|tabla|sql|persisten/i.test(text)) {
+            options.push({
+                label: "💾 Persistencia y Modelos de Datos",
+                promptText: "Enfocar los pasos en la configuración del almacenamiento (base de datos / JPA) y los modelos de datos solicitados en el enunciado."
+            });
+        }
+
+        if (/validac|error|exception|seguridad|auth|jwt/i.test(text)) {
+            options.push({
+                label: "🛡️ Validaciones y Reglas del Enunciado",
+                promptText: "Asegurar que los pasos incluyan el manejo de excepciones, validaciones de entrada y reglas de negocio descritas en el enunciado."
+            });
+        }
+
+        if (/git flow|git|commit|ramas|rama/i.test(text)) {
+            options.push({
+                label: "🌿 Git Flow y Commits Semánticos",
+                promptText: "Diseñar los pasos alineados al flujo de ramas y commits semánticos exigidos en la metodología de trabajo del enunciado."
+            });
+        }
+
+        return {
+            detectedStack,
+            detectedArchitecture,
+            detectedArch: detectedArchitecture,
+            focusOptions: options.slice(0, 5)
+        };
+    }, [statement]);
+
+    // Generar la totalidad de pasos de la actividad con IA (Estructura o Completo)
+    const handleGenerateAllStepsWithAI = async (isFullArg?: boolean | React.MouseEvent) => {
+        const isFull = typeof isFullArg === "boolean" ? isFullArg : aiAllStepsMode === "full_tutorial";
         setIsGeneratingAllSteps(true);
         try {
             const titleInput = (document.querySelector('input[name="title"]') as HTMLInputElement)?.value || activity?.title || "Tutorial GitHub";
+            const effectiveStack = statementContext.detectedStack || workshopLanguage;
+            const effectiveArch = statementContext.detectedArch || undefined;
+
             const result = await generateAllWorkshopStepsAction({
                 title: titleInput,
-                topicPrompt: aiAllStepsTopic.trim() || titleInput,
+                topicPrompt: aiAllStepsTopic.trim() || "Construir e implementar secuencialmente paso a paso la totalidad de los requerimientos y componentes definidos en el Enunciado General de la actividad.",
                 workshopType: selectedType === "WORKSHOP_CODE" ? "WORKSHOP_CODE" : "WORKSHOP_GITHUB",
+                statement: statement?.trim() || undefined,
                 language: workshopLanguage,
-                stepCount: aiAllStepsCount,
-                level: aiAllStepsLevel
+                techStack: effectiveStack,
+                architectureFocus: effectiveArch,
+                generateFullContent: isFull,
+                stepCount: undefined,
+                level: undefined
             });
 
             if (result?.steps && result.steps.length > 0) {
-                const newMilestones = result.steps.map((s: any, idx: number) => ({
-                    id: `m-${Date.now()}-${idx}`,
-                    title: s.title || `Paso ${idx + 1}`,
-                    instructions: s.instructions || "",
-                    starterCode: s.starterCode || (selectedType === "WORKSHOP_CODE" ? "// Código inicial del estudiante\n" : undefined),
-                    expectedSolution: s.expectedSolution || (selectedType === "WORKSHOP_CODE" ? "// Solución esperada\n" : undefined),
-                    targetFilePath: s.targetFilePath || (selectedType === "WORKSHOP_GITHUB" ? "README.md" : undefined),
-                    targetFileContent: s.targetFileContent || (selectedType === "WORKSHOP_GITHUB" ? "# Proyecto\n" : undefined),
-                    gitCommands: s.gitCommands && s.gitCommands.length > 0 ? s.gitCommands : (selectedType === "WORKSHOP_GITHUB" ? [
-                        { command: "git add .", explanation: "Prepara los cambios para el commit." },
-                        { command: `git commit -m "feat: completar paso ${idx + 1}"`, explanation: "Confirma los cambios con mensaje descriptivo." },
-                        { command: "git push origin main", explanation: "Envía los commits a GitHub." }
-                    ] : undefined),
-                    validationRule: s.validationRule || (selectedType === "WORKSHOP_GITHUB" ? "El archivo debe existir en la rama y no estar vacío" : undefined),
-                    hints: s.hints && s.hints.length > 0 ? s.hints : ["Revisa atentamente los requisitos"],
-                    order: idx + 1
-                }));
+                const newMilestones = result.steps.map((s: any, idx: number) => {
+                    const cleanTitle = s.title || `Paso ${idx + 1}`;
+                    const hasFile = s.requiresFile !== undefined
+                        ? Boolean(s.requiresFile)
+                        : Boolean(s.targetFilePath && s.targetFilePath.trim().length > 0);
+                    const hasGit = s.requiresGitCommands !== undefined
+                        ? Boolean(s.requiresGitCommands)
+                        : Boolean(s.gitCommands && s.gitCommands.length > 0);
+                    const targetFile = hasFile ? (s.targetFilePath || (selectedType === "WORKSHOP_GITHUB" ? getDefaultWorkshopStepPath(idx === 0 ? 1 : idx + 1, workshopLanguage, effectiveStack) : undefined)) : undefined;
+                    return {
+                        id: `m-${Date.now()}-${idx}`,
+                        title: cleanTitle,
+                        instructions: s.instructions || `Objetivo: Completar la etapa ${idx + 1}.`,
+                        starterCode: undefined,
+                        expectedSolution: undefined,
+                        requiresFile: hasFile,
+                        requiresGitCommands: hasGit,
+                        targetFilePath: targetFile,
+                        targetFileContent: isFull && hasFile ? (s.targetFileContent || "") : "",
+                        codeExplanation: s.codeExplanation || undefined,
+                        localVerification: s.localVerification || undefined,
+                        gitCommands: selectedType === "WORKSHOP_GITHUB" && hasGit ? (
+                            s.gitCommands && s.gitCommands.length > 0 ? s.gitCommands : [
+                                { command: `git add ${targetFile || "."}`, explanation: `Prepara los cambios de ${targetFile || "este paso"} para el commit.` },
+                                { command: `git commit -m "feat: paso ${idx + 1} - ${cleanTitle.replace(/^Paso \d+:\s*/i, "")}"`, explanation: "Confirma los cambios en el historial local con mensaje descriptivo." },
+                                { command: "git push origin main", explanation: "Envía los commits a la rama principal en GitHub." }
+                            ]
+                        ) : [],
+                        validationRule: hasFile ? (s.validationRule || "El archivo debe existir en la rama y no estar vacío") : undefined,
+                        hints: selectedType === "WORKSHOP_GITHUB" ? [] : (s.hints && s.hints.length > 0 ? s.hints : []),
+                        order: idx + 1
+                    };
+                });
                 setWorkshopMilestones(newMilestones);
                 setActiveWorkshopStepIdx(0);
                 setIsAiAllStepsOpen(false);
                 setAiAllStepsTopic("");
-                toast.success(`¡Tutorial generado con éxito (${newMilestones.length} pasos creados con IA)!`);
+                if (isFull) {
+                    toast.success(`¡Tutorial de ${newMilestones.length} pasos con código completo generado!`);
+                } else {
+                    toast.success(`¡Estructura de ${newMilestones.length} pasos generada con éxito!`, {
+                        description: 'Genera el código con "Generar Código con IA" o "Asistir Paso Completo" en cada paso.'
+                    });
+                }
+            } else {
+                toast.error("La IA no pudo planificar los pasos. Intenta nuevamente.");
             }
         } catch (error: any) {
             console.error("Error generando pasos con IA:", error);
-            toast.error("No se pudieron generar los pasos con IA", {
-                description: error.message || "Intenta nuevamente con otro prompt."
+            toast.error("Error al generar la secuencia de pasos con IA", {
+                description: error.message || "Verifica la conexión con el modelo de IA."
             });
         } finally {
             setIsGeneratingAllSteps(false);
@@ -1302,34 +1465,51 @@ function ActivityFormDialog({
         setIsGeneratingSingleStep(true);
         try {
             const titleInput = (document.querySelector('input[name="title"]') as HTMLInputElement)?.value || activity?.title || "Tutorial GitHub";
+            const effectiveStack = statementContext.detectedStack || workshopLanguage;
             const result = await generateSingleWorkshopStepAction({
                 stepTitle: currentStep.title || `Paso ${activeWorkshopStepIdx + 1}`,
                 prompt: aiSingleStepPrompt.trim(),
                 currentInstructions: currentStep.instructions,
+                targetFilePath: currentStep.targetFilePath,
                 workshopType: selectedType === "WORKSHOP_CODE" ? "WORKSHOP_CODE" : "WORKSHOP_GITHUB",
+                statement: statement?.trim() || undefined,
                 language: workshopLanguage,
-                workshopTitle: titleInput
+                techStack: effectiveStack,
+                workshopTitle: titleInput,
+                stepIndex: activeWorkshopStepIdx + 1,
+                totalSteps: workshopMilestones.length
             });
 
             if (result) {
                 const updated = [...workshopMilestones];
                 const resAny = result as any;
+                const hasFile = resAny.requiresFile !== undefined
+                    ? Boolean(resAny.requiresFile)
+                    : Boolean(resAny.targetFilePath?.trim() || updated[activeWorkshopStepIdx].targetFilePath?.trim());
+                const hasGit = resAny.requiresGitCommands !== undefined
+                    ? Boolean(resAny.requiresGitCommands)
+                    : Boolean((resAny.gitCommands && resAny.gitCommands.length > 0) || (updated[activeWorkshopStepIdx].gitCommands && updated[activeWorkshopStepIdx].gitCommands.length > 0));
+
                 updated[activeWorkshopStepIdx] = {
                     ...updated[activeWorkshopStepIdx],
                     title: result.title || updated[activeWorkshopStepIdx].title,
                     instructions: result.instructions || updated[activeWorkshopStepIdx].instructions,
+                    requiresFile: hasFile,
+                    requiresGitCommands: hasGit,
                     starterCode: result.starterCode !== undefined ? result.starterCode : updated[activeWorkshopStepIdx].starterCode,
                     expectedSolution: result.expectedSolution !== undefined ? result.expectedSolution : updated[activeWorkshopStepIdx].expectedSolution,
-                    targetFilePath: resAny.targetFilePath !== undefined ? resAny.targetFilePath : updated[activeWorkshopStepIdx].targetFilePath,
+                    targetFilePath: resAny.targetFilePath || updated[activeWorkshopStepIdx].targetFilePath,
                     targetFileContent: resAny.targetFileContent !== undefined ? resAny.targetFileContent : updated[activeWorkshopStepIdx].targetFileContent,
-                    gitCommands: resAny.gitCommands !== undefined ? resAny.gitCommands : updated[activeWorkshopStepIdx].gitCommands,
-                    validationRule: resAny.validationRule !== undefined ? resAny.validationRule : updated[activeWorkshopStepIdx].validationRule,
-                    hints: result.hints && result.hints.length > 0 ? result.hints : updated[activeWorkshopStepIdx].hints
+                    codeExplanation: resAny.codeExplanation !== undefined ? resAny.codeExplanation : updated[activeWorkshopStepIdx].codeExplanation,
+                    localVerification: resAny.localVerification !== undefined ? resAny.localVerification : updated[activeWorkshopStepIdx].localVerification,
+                    gitCommands: resAny.gitCommands && resAny.gitCommands.length > 0 ? resAny.gitCommands : updated[activeWorkshopStepIdx].gitCommands,
+                    validationRule: resAny.validationRule || updated[activeWorkshopStepIdx].validationRule,
+                    hints: selectedType === "WORKSHOP_GITHUB" ? [] : (result.hints && result.hints.length > 0 ? result.hints : updated[activeWorkshopStepIdx].hints)
                 };
                 setWorkshopMilestones(updated);
                 setIsAiSingleStepOpen(false);
                 setAiSingleStepPrompt("");
-                toast.success("¡Paso actualizado y enriquecido con IA!");
+                toast.success("¡Paso asistido con éxito (instrucciones, código y Git)!");
             }
         } catch (error: any) {
             console.error("Error generando paso con IA:", error);
@@ -1341,6 +1521,289 @@ function ActivityFormDialog({
         }
     };
 
+    // Asistente Granular: Redactar / Mejorar Explicación didáctica sin tocar el código
+    const handleGenerateStepInstructionsWithAI = async () => {
+        const currentStep = workshopMilestones[activeWorkshopStepIdx];
+        if (!currentStep) return;
+
+        setIsGeneratingStepInstructions(true);
+        try {
+            const titleInput = (document.querySelector('input[name="title"]') as HTMLInputElement)?.value || activity?.title || "Tutorial GitHub";
+            const enhancedInstructions = await generateWorkshopStepInstructionsAction({
+                stepTitle: currentStep.title || `Paso ${activeWorkshopStepIdx + 1}`,
+                targetFilePath: currentStep.targetFilePath,
+                currentInstructions: currentStep.instructions,
+                currentCode: selectedType === "WORKSHOP_GITHUB" ? currentStep.targetFileContent : currentStep.starterCode,
+                workshopTitle: titleInput,
+                statement: statement?.trim() || undefined,
+                language: workshopLanguage,
+                techStack: statementContext.detectedStack || workshopLanguage
+            });
+
+            if (enhancedInstructions) {
+                const updated = [...workshopMilestones];
+                updated[activeWorkshopStepIdx] = {
+                    ...updated[activeWorkshopStepIdx],
+                    instructions: enhancedInstructions
+                };
+                setWorkshopMilestones(updated);
+                toast.success("¡Explicación didáctica redactada con éxito!");
+            }
+        } catch (error: any) {
+            console.error("Error redactando instrucciones:", error);
+            toast.error("Error al redactar explicación con IA", {
+                description: error.message || "Intenta nuevamente."
+            });
+        } finally {
+            setIsGeneratingStepInstructions(false);
+        }
+    };
+
+    // Asistente Granular: Generar Código Fuente 100% Funcional sin tocar las instrucciones
+    const handleGenerateStepCodeWithAI = async () => {
+        const currentStep = workshopMilestones[activeWorkshopStepIdx];
+        if (!currentStep) return;
+
+        const targetPath = currentStep.targetFilePath?.trim() || (selectedType === "WORKSHOP_GITHUB" ? "src/index.js" : "solucion.js");
+        setIsGeneratingStepCode(true);
+        try {
+            const titleInput = (document.querySelector('input[name="title"]') as HTMLInputElement)?.value || activity?.title || "Tutorial GitHub";
+            const generatedCode = await generateWorkshopStepCodeAction({
+                stepTitle: currentStep.title || `Paso ${activeWorkshopStepIdx + 1}`,
+                targetFilePath: targetPath,
+                stepInstructions: currentStep.instructions,
+                currentCode: selectedType === "WORKSHOP_GITHUB" ? currentStep.targetFileContent : currentStep.expectedSolution,
+                workshopTitle: titleInput,
+                statement: statement?.trim() || undefined,
+                language: workshopLanguage,
+                techStack: statementContext.detectedStack || workshopLanguage
+            });
+
+            if (generatedCode) {
+                const formattedCode = formatCodeString(generatedCode, targetPath);
+                const updated = [...workshopMilestones];
+                if (selectedType === "WORKSHOP_GITHUB") {
+                    updated[activeWorkshopStepIdx] = {
+                        ...updated[activeWorkshopStepIdx],
+                        targetFilePath: targetPath,
+                        targetFileContent: formattedCode
+                    };
+                } else {
+                    updated[activeWorkshopStepIdx] = {
+                        ...updated[activeWorkshopStepIdx],
+                        expectedSolution: formattedCode
+                    };
+                }
+                setWorkshopMilestones(updated);
+                toast.success("¡Código fuente completo y formateado generado con éxito!");
+            }
+        } catch (error: any) {
+            console.error("Error generando código con IA:", error);
+            toast.error("Error al generar código con IA", {
+                description: error.message || "Intenta nuevamente."
+            });
+        } finally {
+            setIsGeneratingStepCode(false);
+        }
+    };
+
+    // Asistente Granular: Explicación Pedagógica del Código con IA
+    const handleGenerateStepCodeExplanationWithAI = async () => {
+        const currentStep = workshopMilestones[activeWorkshopStepIdx];
+        if (!currentStep) return;
+
+        const code = selectedType === "WORKSHOP_GITHUB" ? currentStep.targetFileContent : currentStep.starterCode;
+        if (!code || code.trim().length === 0) {
+            toast.error("Para generar la explicación didáctica, primero debes redactar o generar el código de este paso.");
+            return;
+        }
+
+        setIsGeneratingStepCodeExplanation(true);
+        try {
+            const titleInput = (document.querySelector('input[name="title"]') as HTMLInputElement)?.value || activity?.title || "Tutorial GitHub";
+            const explanation = await generateWorkshopStepCodeExplanationAction({
+                stepTitle: currentStep.title || `Paso ${activeWorkshopStepIdx + 1}`,
+                targetFilePath: currentStep.targetFilePath || "src/index.js",
+                code: code,
+                statement: statement?.trim() || undefined,
+                language: workshopLanguage,
+                techStack: statementContext.detectedStack || workshopLanguage
+            });
+
+            if (explanation) {
+                const updated = [...workshopMilestones];
+                updated[activeWorkshopStepIdx] = {
+                    ...updated[activeWorkshopStepIdx],
+                    codeExplanation: explanation
+                };
+                setWorkshopMilestones(updated);
+                toast.success("¡Explicación didáctica del código generada con éxito!");
+            }
+        } catch (error: any) {
+            console.error("Error generando explicación del código con IA:", error);
+            toast.error("Error al generar la explicación del código con IA", {
+                description: error.message || "Intenta nuevamente."
+            });
+        } finally {
+            setIsGeneratingStepCodeExplanation(false);
+        }
+    };
+
+    // Asistente Granular: Sugerir Comandos Git con IA
+    const handleSuggestGitCommandsWithAI = async () => {
+        const currentStep = workshopMilestones[activeWorkshopStepIdx];
+        if (!currentStep) return;
+
+        setIsGeneratingStepGit(true);
+        try {
+            const suggested = await suggestWorkshopStepGitCommandsAction({
+                stepTitle: currentStep.title || `Paso ${activeWorkshopStepIdx + 1}`,
+                targetFilePath: currentStep.targetFilePath || "src/index.js",
+                stepIndex: activeWorkshopStepIdx + 1,
+                totalSteps: workshopMilestones.length,
+                statement: statement?.trim() || undefined,
+                language: workshopLanguage,
+                techStack: statementContext.detectedStack || workshopLanguage
+            });
+
+            if (suggested && suggested.length > 0) {
+                const updated = [...workshopMilestones];
+                updated[activeWorkshopStepIdx] = {
+                    ...updated[activeWorkshopStepIdx],
+                    gitCommands: suggested
+                };
+                setWorkshopMilestones(updated);
+                toast.success("¡Comandos Git sugeridos con éxito!");
+            }
+        } catch (error: any) {
+            console.error("Error sugiriendo comandos Git con IA:", error);
+            toast.error("Error al sugerir comandos Git", {
+                description: error.message || "Intenta nuevamente."
+            });
+        } finally {
+            setIsGeneratingStepGit(false);
+        }
+    };
+
+    const [isBatchGeneratingSteps, setIsBatchGeneratingSteps] = useState(false);
+    const [batchStepProgress, setBatchStepProgress] = useState<string>("");
+
+    // Asistente en Lote: Completar Código y Explicaciones de todos los pasos que estén vacíos
+    const handleBatchCompleteStepsWithAI = async () => {
+        if (!statement || statement.trim().length < 20) {
+            toast.warning("Para completar los pasos con IA se requiere un enunciado general.");
+            return;
+        }
+        if (workshopMilestones.length === 0) {
+            toast.warning("No hay pasos en el tutorial. Primero crea o planifica los pasos.");
+            return;
+        }
+
+        const titleInput = (document.querySelector('input[name="title"]') as HTMLInputElement)?.value || activity?.title || "Tutorial GitHub";
+        const effectiveStack = statementContext.detectedStack || workshopLanguage;
+
+        setIsBatchGeneratingSteps(true);
+        try {
+            let workingMilestones = [...workshopMilestones];
+            let completedCount = 0;
+
+            for (let i = 0; i < workingMilestones.length; i++) {
+                const step = workingMilestones[i];
+                const hasFile = step.requiresFile !== undefined ? step.requiresFile : Boolean(step.targetFilePath && step.targetFilePath.trim().length > 0);
+                if (!hasFile) continue;
+
+                const needsCode = !step.targetFileContent || step.targetFileContent.trim().length === 0;
+                const needsExplanation = !step.codeExplanation || step.codeExplanation.trim().length === 0;
+
+                if (!needsCode && !needsExplanation) continue;
+
+                setBatchStepProgress(`Paso ${i + 1}/${workingMilestones.length}: ${(step.title || "").slice(0, 18)}...`);
+
+                let currentCode = step.targetFileContent || "";
+                let currentExplanation = step.codeExplanation || "";
+
+                // 1. Si falta código fuente, generarlo completamente
+                if (needsCode) {
+                    const targetPath = step.targetFilePath?.trim() || (selectedType === "WORKSHOP_GITHUB" ? (i === 0 ? "README.md" : `src/step${i + 1}.js`) : "solucion.js");
+                    const generatedCode = await generateWorkshopStepCodeAction({
+                        stepTitle: step.title || `Paso ${i + 1}`,
+                        targetFilePath: targetPath,
+                        stepInstructions: step.instructions,
+                        currentCode: undefined,
+                        workshopTitle: titleInput,
+                        statement: statement?.trim() || undefined,
+                        language: workshopLanguage,
+                        techStack: effectiveStack
+                    });
+
+                    if (generatedCode) {
+                        currentCode = formatCodeString(generatedCode, targetPath);
+                    }
+                }
+
+                // 2. Si falta explicación didáctica y tenemos código, generarla
+                if (needsExplanation && currentCode && currentCode.trim().length > 0) {
+                    const generatedExplanation = await generateWorkshopStepCodeExplanationAction({
+                        stepTitle: step.title || `Paso ${i + 1}`,
+                        targetFilePath: step.targetFilePath || "src/index.js",
+                        code: currentCode,
+                        statement: statement?.trim() || undefined,
+                        language: workshopLanguage,
+                        techStack: effectiveStack
+                    });
+
+                    if (generatedExplanation) {
+                        currentExplanation = generatedExplanation;
+                    }
+                }
+
+                workingMilestones = workingMilestones.map((m, idx) => idx === i ? {
+                    ...m,
+                    targetFileContent: formatCodeString(currentCode, m.targetFilePath || ""),
+                    codeExplanation: currentExplanation
+                } : m);
+
+                setWorkshopMilestones([...workingMilestones]);
+                completedCount++;
+            }
+
+            if (completedCount > 0) {
+                toast.success(`¡Se completaron ${completedCount} pasos con código formateado y explicaciones!`);
+            } else {
+                toast.info("Todos los pasos del tutorial ya tienen código fuente y explicaciones.");
+            }
+        } catch (error: any) {
+            console.error("Error completando pasos con IA en lote:", error);
+            toast.error("Ocurrió un error al completar pasos con IA", {
+                description: error.message || "Intenta nuevamente."
+            });
+        } finally {
+            setIsBatchGeneratingSteps(false);
+            setBatchStepProgress("");
+        }
+    };
+
+    // Dar formato e indentación estándar al código fuente del paso actual
+    const handleFormatCurrentStepCode = () => {
+        const currentStep = workshopMilestones[activeWorkshopStepIdx];
+        if (!currentStep) return;
+        const targetPath = currentStep.targetFilePath?.trim() || (selectedType === "WORKSHOP_GITHUB" ? "src/index.js" : "solucion.js");
+        const raw = selectedType === "WORKSHOP_GITHUB" ? currentStep.targetFileContent : currentStep.expectedSolution;
+        if (!raw || raw.trim().length === 0) {
+            toast.info("No hay código en este paso para formatear.");
+            return;
+        }
+        const formatted = formatCodeString(raw, targetPath);
+        const updated = [...workshopMilestones];
+        if (selectedType === "WORKSHOP_GITHUB") {
+            updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], targetFileContent: formatted };
+        } else {
+            updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], expectedSolution: formatted };
+        }
+        setWorkshopMilestones(updated);
+        toast.success("¡Código formateado con sangrías y saltos de línea!");
+    };
+
     const handleGenerateHintsForStep = async (stepIdx: number) => {
         const step = workshopMilestones[stepIdx];
         if (!step) return;
@@ -1350,6 +1813,7 @@ function ActivityFormDialog({
             const hints = await generateWorkshopStepHintsAction({
                 stepTitle: step.title,
                 instructions: step.instructions,
+                statement: statement?.trim() || undefined,
                 language: workshopLanguage
             });
 
@@ -1371,27 +1835,83 @@ function ActivityFormDialog({
         }
     };
 
+    const handleAddNewWorkshopStep = () => {
+        if (workshopMilestones.length >= 25) {
+            toast.warning("El límite recomendado para una buena experiencia es de 25 pasos por tutorial.");
+            return;
+        }
+
+        const newOrder = workshopMilestones.length + 1;
+        const defaultStepPath = getDefaultWorkshopStepPath(newOrder, workshopLanguage, statementContext.detectedStack);
+        const newStep = {
+            id: `m-${Date.now()}`,
+            title: selectedType === "WORKSHOP_GITHUB"
+                ? (newOrder === 1 ? "Paso 1: Configuración Inicial del Repositorio" : `Paso ${newOrder}: Nueva Etapa`)
+                : `Paso ${newOrder}: Nueva Etapa`,
+            instructions: selectedType === "WORKSHOP_GITHUB"
+                ? (newOrder === 1 ? "Inicializa la estructura del proyecto y prepara los primeros archivos del repositorio." : "Describe el objetivo e indicaciones para este paso...")
+                : "Describe las instrucciones y consignas para este paso...",
+            starterCode: selectedType === "WORKSHOP_CODE" ? "// Código inicial del estudiante\n" : undefined,
+            expectedSolution: selectedType === "WORKSHOP_CODE" ? "// Solución esperada\n" : undefined,
+            requiresFile: true,
+            requiresGitCommands: true,
+            targetFilePath: selectedType === "WORKSHOP_GITHUB" ? defaultStepPath : undefined,
+            targetFileContent: "",
+            gitCommands: selectedType === "WORKSHOP_GITHUB" ? [
+                { command: `git add ${defaultStepPath}`, explanation: "Prepara los cambios realizados para el commit." },
+                { command: `git commit -m "feat: implementar paso ${newOrder}"`, explanation: "Confirma los cambios en el historial local." },
+                { command: "git push origin main", explanation: "Envía los cambios a la rama principal en GitHub." }
+            ] : undefined,
+            validationRule: selectedType === "WORKSHOP_GITHUB" ? "El archivo debe existir en la rama y no estar vacío" : undefined,
+            hints: selectedType === "WORKSHOP_GITHUB" ? [] : ["Pista de ayuda inicial"],
+            order: newOrder
+        };
+        setWorkshopMilestones([...workshopMilestones, newStep]);
+        setActiveWorkshopStepIdx(workshopMilestones.length);
+    };
+
     const previewActivity = useMemo(() => {
         const titleVal = typeof document !== "undefined" ? (document.querySelector('input[name="title"]') as HTMLInputElement)?.value : "";
         const deadlineVal = typeof document !== "undefined" ? (document.querySelector('input[name="deadlineLocal"]') as HTMLInputElement)?.value : "";
-        return {
-            id: activity?.id || "preview-code-challenge",
-            title: titleVal || activity?.title || "Taller de Código (Vista Previa)",
-            statement: statement || activity?.statement || "",
-            deadline: deadlineVal ? new Date(deadlineVal).toISOString() : (activity?.deadline || new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString()),
-            courseId: courseId,
-            course: { title: "Curso Actual" },
-            type: "CODE_CHALLENGE",
-            description: JSON.stringify({
+
+        let descObj: any = {};
+        if (selectedType === "WORKSHOP_CODE" || selectedType === "WORKSHOP_GITHUB") {
+            descObj = {
+                workshopConfig: {
+                    type: selectedType,
+                    deliveryMode: selectedType === "WORKSHOP_GITHUB" ? "TUTORIAL" : workshopDeliveryMode,
+                    language: workshopLanguage,
+                    estimatedMinutes: Number(workshopEstimatedMinutes) || 45,
+                    milestones: selectedType === "WORKSHOP_GITHUB"
+                        ? workshopMilestones.map(m => ({ ...m, hints: [] }))
+                        : workshopMilestones,
+                }
+            };
+        } else {
+            descObj = {
                 challengeConfig: {
                     language: challengeLanguage,
                     template: challengeFiles[0]?.content || "",
                     files: challengeFiles
                 }
-            }),
+            };
+        }
+
+        return {
+            id: activity?.id || "preview-activity",
+            title: titleVal || activity?.title || (selectedType === "WORKSHOP_GITHUB" ? "Tutorial GitHub (Vista Previa)" : "Taller de Código (Vista Previa)"),
+            statement: statement || activity?.statement || "",
+            deadline: deadlineVal ? new Date(deadlineVal).toISOString() : (activity?.deadline || new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString()),
+            courseId: courseId,
+            course: { title: "Curso Actual" },
+            type: selectedType,
+            description: JSON.stringify(descObj),
             submissions: []
         };
-    }, [activity, statement, courseId, challengeLanguage, challengeFiles, showStudentPreview]);
+    }, [
+        activity, statement, courseId, challengeLanguage, challengeFiles, showStudentPreview,
+        selectedType, workshopDeliveryMode, workshopLanguage, workshopEstimatedMinutes, workshopMilestones
+    ]);
 
     const formRef = useRef<HTMLFormElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1460,6 +1980,14 @@ function ActivityFormDialog({
     // Sincronizar datos inmediatamente al abrir el modal o cambiar la actividad
     useEffect(() => {
         if (isOpen) {
+            const isFreshOpen = !prevOpenRef.current && isOpen;
+            const isDifferentActivity = loadedActivityIdRef.current !== activity?.id;
+            if (!isFreshOpen && !isDifferentActivity) {
+                return;
+            }
+            prevOpenRef.current = true;
+            loadedActivityIdRef.current = activity?.id;
+
             setActiveTab("config");
             setSelectedType(activity?.type || "GITHUB");
             setDescription(activity?.description || "**Instrucciones de la actividad**\n\n...");
@@ -1470,8 +1998,8 @@ function ActivityFormDialog({
                  activity?.type === "AI_INTERVIEW" ? TEMPLATE_AI_INTERVIEW :
                  activity?.type === "VIDEO_PITCH" ? TEMPLATE_VIDEO_PITCH :
                  activity?.type === "CODE_CHALLENGE" ? TEMPLATE_CODE_CHALLENGE :
-                 activity?.type === "WORKSHOP_CODE" ? TEMPLATE_WORKSHOP_CODE :
-                 activity?.type === "WORKSHOP_GITHUB" ? TEMPLATE_WORKSHOP_GITHUB :
+                 activity?.type === "WORKSHOP_CODE" ? "" :
+                 activity?.type === "WORKSHOP_GITHUB" ? "" :
                  activity?.type === "PDF_REVIEW" ? TEMPLATE_PDF_REVIEW :
                  activity?.type === "MANUAL" ? TEMPLATE_MANUAL : TEMPLATE_GITHUB)
             );
@@ -1621,23 +2149,19 @@ function ActivityFormDialog({
                                 setWorkshopEstimatedMinutes(parsedDesc.workshopConfig.estimatedMinutes);
                             }
                             if (Array.isArray(parsedDesc.workshopConfig.milestones) && parsedDesc.workshopConfig.milestones.length > 0) {
-                                setWorkshopMilestones(parsedDesc.workshopConfig.milestones);
+                                const formattedMilestones = parsedDesc.workshopConfig.milestones.map((m: any) => ({
+                                    ...m,
+                                    targetFileContent: m.targetFileContent ? formatCodeString(m.targetFileContent, m.targetFilePath || "") : m.targetFileContent,
+                                    starterCode: m.starterCode ? formatCodeString(m.starterCode, m.targetFilePath || "") : m.starterCode,
+                                    expectedSolution: m.expectedSolution ? formatCodeString(m.expectedSolution, m.targetFilePath || "") : m.expectedSolution
+                                }));
+                                setWorkshopMilestones(formattedMilestones);
                             }
                         } else {
                             setWorkshopDeliveryMode("TUTORIAL");
-                            setWorkshopLanguage("java");
+                            setWorkshopLanguage("javascript");
                             setWorkshopEstimatedMinutes(45);
-                            setWorkshopMilestones([
-                                {
-                                    id: "m-1",
-                                    title: "Paso 1: Configuración Inicial",
-                                    instructions: "Implementa la lógica o pasos iniciales solicitados.",
-                                    starterCode: "// Código inicial del estudiante\n",
-                                    expectedSolution: "// Solución de referencia\n",
-                                    hints: ["Lee con atención el enunciado", "Asegúrate de comprobar tipos"],
-                                    order: 1
-                                }
-                            ]);
+                            setWorkshopMilestones([]);
                         }
                     }
                 } catch {
@@ -1656,6 +2180,11 @@ function ActivityFormDialog({
                 setCriteria([]);
                 setAiWeight(30);
                 setChecklistWeight(70);
+                setWorkshopDeliveryMode("TUTORIAL");
+                setWorkshopLanguage("javascript");
+                setWorkshopEstimatedMinutes(45);
+                setWorkshopMilestones([]);
+                setActiveWorkshopStepIdx(0);
                 if (activity?.type === "CODE_CHALLENGE" && activity?.statement) {
                     const recovered = extractCodeChallengeFilesFromMarkdown(activity.statement);
                     if (recovered.length > 0) {
@@ -1665,11 +2194,19 @@ function ActivityFormDialog({
                     }
                 }
             }
+        } else {
+            prevOpenRef.current = false;
+            loadedActivityIdRef.current = undefined;
         }
     }, [isOpen, activity]);
 
     // Auto-fill template if statement is blank or standard
     useEffect(() => {
+        if (isImportingRef.current) {
+            isImportingRef.current = false;
+            return;
+        }
+        if (importedData) return;
         if (!activity && (!statement || 
             statement === TEMPLATE_GITHUB || 
             statement === TEMPLATE_DB_MODELING || 
@@ -1686,8 +2223,14 @@ function ActivityFormDialog({
             else if (selectedType === "AI_INTERVIEW") setStatement(TEMPLATE_AI_INTERVIEW);
             else if (selectedType === "VIDEO_PITCH") setStatement(TEMPLATE_VIDEO_PITCH);
             else if (selectedType === "CODE_CHALLENGE") setStatement(TEMPLATE_CODE_CHALLENGE);
-            else if (selectedType === "WORKSHOP_CODE") setStatement(TEMPLATE_WORKSHOP_CODE);
-            else if (selectedType === "WORKSHOP_GITHUB") setStatement(TEMPLATE_WORKSHOP_GITHUB);
+            else if (selectedType === "WORKSHOP_CODE") {
+                setStatement("");
+                setDescription("");
+            }
+            else if (selectedType === "WORKSHOP_GITHUB") {
+                setStatement("");
+                setDescription("");
+            }
             else if (selectedType === "PDF_REVIEW") setStatement(TEMPLATE_PDF_REVIEW);
             else if (selectedType === "MANUAL") setStatement(TEMPLATE_MANUAL);
         }
@@ -1879,24 +2422,192 @@ function ActivityFormDialog({
 
     const handleExport = () => {
         if (!formRef.current) return;
-        const formData = new FormData(formRef.current);
+        const form = formRef.current;
+        const formData = new FormData(form);
         const data = Object.fromEntries(formData.entries());
-        (data as any).isGroupActivity = isGroupActivity;
-        if (hasChecklist) {
-            (data as any).hasChecklist = true;
-            (data as any).aiWeight = aiWeight;
-            (data as any).checklistWeight = checklistWeight;
-            (data as any).criteria = criteria;
+
+        const titleVal = (form.querySelector('[name="title"]') as HTMLInputElement)?.value?.trim() || activity?.title || "actividad";
+        const openDateLocalVal = (form.querySelector('[name="openDateLocal"]') as HTMLInputElement)?.value || "";
+        const deadlineLocalVal = (form.querySelector('[name="deadlineLocal"]') as HTMLInputElement)?.value || "";
+        const openDateIso = openDateLocalVal ? new Date(openDateLocalVal).toISOString() : (activity?.openDate ? new Date(activity.openDate).toISOString() : null);
+        const deadlineIso = deadlineLocalVal ? new Date(deadlineLocalVal).toISOString() : (activity?.deadline ? new Date(activity.deadline).toISOString() : null);
+        const allowLinkSubmissionVal = (form.querySelector('[name="allowLinkSubmission"]') as HTMLInputElement)?.checked ?? (activity?.allowLinkSubmission ?? false);
+        const filePathsVal = (form.querySelector('[name="filePaths"]') as HTMLInputElement)?.value ?? (activity?.filePaths || "");
+
+        // 1. Export Data base completa
+        const exportData: Record<string, any> = {
+            ...data,
+            version: "2.0",
+            title: titleVal,
+            type: selectedType,
+            statement: statement || "",
+            isGroupActivity: isGroupActivity,
+            groupScope: groupScope,
+            openDateLocal: openDateLocalVal,
+            openDate: openDateIso,
+            deadlineLocal: deadlineLocalVal,
+            deadline: deadlineIso,
+            allowLinkSubmission: allowLinkSubmissionVal,
+            filePaths: filePathsVal,
+            hasChecklist: hasChecklist,
+            aiWeight: aiWeight,
+            checklistWeight: checklistWeight,
+            criteria: criteria,
+        };
+
+        // 2. Configuraciones específicas completas según la modalidad
+        if (selectedType === "CODE_CHALLENGE") {
+            const detectedLanguage = challengeFiles.length > 0 && challengeFiles[0].name.includes(".")
+                ? getLanguageFromFileName(challengeFiles[0].name)
+                : challengeLanguage;
+            exportData.challengeLanguage = detectedLanguage || challengeLanguage;
+            exportData.challengeFiles = challengeFiles;
+            exportData.challengeConfig = {
+                language: detectedLanguage || challengeLanguage,
+                files: challengeFiles,
+            };
+            exportData.description = JSON.stringify({
+                hasChecklist,
+                aiWeight,
+                checklistWeight,
+                criteria,
+                challengeConfig: exportData.challengeConfig,
+            });
+        } else if (selectedType === "PDF_REVIEW") {
+            exportData.pdfReviewMode = pdfReviewMode;
+            exportData.pdfMaxPages = pdfMaxPages;
+            exportData.pdfPageRange = pdfPageRange;
+            exportData.pdfReviewConfig = {
+                mode: pdfReviewMode,
+                maxPages: pdfMaxPages,
+                pageRange: pdfPageRange,
+            };
+            exportData.description = JSON.stringify({
+                hasChecklist,
+                aiWeight,
+                checklistWeight,
+                criteria,
+                pdfReviewConfig: exportData.pdfReviewConfig,
+            });
+        } else if (selectedType === "VIDEO_PITCH") {
+            exportData.pitchMaxMinutes = pitchMaxMinutes;
+            exportData.pitchRequiredTopics = pitchRequiredTopics;
+            exportData.pitchConfig = {
+                maxDurationMinutes: pitchMaxMinutes,
+                requiredTopics: pitchRequiredTopics,
+            };
+            exportData.description = JSON.stringify({
+                hasChecklist,
+                aiWeight,
+                checklistWeight,
+                criteria,
+                pitchConfig: exportData.pitchConfig,
+            });
+        } else if (selectedType === "AUDIO_DEFENSE") {
+            exportData.audioMaxMinutes = audioMaxMinutes;
+            exportData.audioRequiredTopics = audioRequiredTopics;
+            exportData.audioConfig = {
+                maxDurationMinutes: audioMaxMinutes,
+                requiredTopics: audioRequiredTopics,
+            };
+            exportData.description = JSON.stringify({
+                hasChecklist,
+                aiWeight,
+                checklistWeight,
+                criteria,
+                audioConfig: exportData.audioConfig,
+            });
+        } else if (selectedType === "AI_INTERVIEW") {
+            exportData.interviewQuestionsCount = interviewQuestionsCount;
+            exportData.interviewTargetRole = interviewTargetRole;
+            exportData.interviewFocusAreas = interviewFocusAreas;
+            exportData.interviewConfig = {
+                questionsCount: interviewQuestionsCount,
+                targetRole: interviewTargetRole,
+                focusAreas: interviewFocusAreas,
+            };
+            exportData.description = JSON.stringify({
+                hasChecklist,
+                aiWeight,
+                checklistWeight,
+                criteria,
+                interviewConfig: exportData.interviewConfig,
+            });
+        } else if (selectedType === "DB_MODELING") {
+            exportData.dbDeliveryMode = dbDeliveryMode;
+            exportData.dbTargetEngine = dbTargetEngine;
+            exportData.dbRequiredNormalization = dbRequiredNormalization;
+            exportData.dbRequiredEntities = dbRequiredEntities;
+            exportData.dbIncludeDiagram = dbIncludeDiagram;
+            exportData.dbIncludeDdl = dbIncludeDdl;
+            exportData.dbIncludeDml = dbIncludeDml;
+            exportData.dbIncludeQueries = dbIncludeQueries;
+            exportData.dbConfig = {
+                deliveryMode: dbDeliveryMode,
+                targetEngine: dbTargetEngine,
+                requiredNormalization: dbRequiredNormalization,
+                requiredEntities: dbRequiredEntities,
+                scopeOptions: {
+                    includeDiagram: dbIncludeDiagram,
+                    includeDdl: dbIncludeDdl,
+                    includeDml: dbIncludeDml,
+                    includeQueries: dbIncludeQueries,
+                },
+            };
+            exportData.description = JSON.stringify({
+                hasChecklist,
+                aiWeight,
+                checklistWeight,
+                criteria,
+                dbConfig: exportData.dbConfig,
+            });
+        } else if (selectedType === "WORKSHOP_CODE" || selectedType === "WORKSHOP_GITHUB") {
+            const cleanedMilestones = selectedType === "WORKSHOP_GITHUB"
+                ? workshopMilestones.map(m => ({ ...m, hints: [] }))
+                : workshopMilestones;
+            exportData.workshopDeliveryMode = selectedType === "WORKSHOP_GITHUB" ? "TUTORIAL" : workshopDeliveryMode;
+            exportData.workshopLanguage = workshopLanguage;
+            exportData.workshopEstimatedMinutes = Number(workshopEstimatedMinutes) || 45;
+            exportData.workshopMilestones = cleanedMilestones;
+            exportData.workshopConfig = {
+                type: selectedType,
+                deliveryMode: selectedType === "WORKSHOP_GITHUB" ? "TUTORIAL" : workshopDeliveryMode,
+                language: workshopLanguage,
+                estimatedMinutes: Number(workshopEstimatedMinutes) || 45,
+                milestones: cleanedMilestones,
+            };
+            if (selectedType === "WORKSHOP_GITHUB") {
+                const uniquePaths = Array.from(new Set(cleanedMilestones.map(m => m.targetFilePath?.trim()).filter(Boolean)));
+                exportData.filePaths = uniquePaths.join(',');
+            }
+            exportData.description = JSON.stringify({
+                hasChecklist,
+                aiWeight,
+                checklistWeight,
+                criteria,
+                workshopConfig: exportData.workshopConfig,
+            });
+        } else if (hasChecklist && selectedType === "GITHUB") {
+            exportData.description = JSON.stringify({
+                hasChecklist: true,
+                aiWeight,
+                checklistWeight,
+                criteria,
+            });
+        } else {
+            exportData.description = description || "";
         }
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        const title = formData.get("title")?.toString().replace(/[^a-z0-9-]/gi, '_').toLowerCase() || "actividad";
+        const safeTitle = titleVal.replace(/[^a-z0-9-]/gi, '_').toLowerCase() || "actividad";
         const dateStr = format(new Date(), "yyyy-MM-dd-HHmm");
-        a.download = `${title}_${dateStr}.json`;
+        a.download = `${safeTitle}_${selectedType.toLowerCase()}_${dateStr}.json`;
         a.click();
         URL.revokeObjectURL(url);
+        toast.success("✓ Configuración de la actividad exportada exitosamente");
     };
 
     const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1906,20 +2617,236 @@ function ActivityFormDialog({
         reader.onload = (e) => {
             try {
                 const data = JSON.parse(e.target?.result as string);
-                if (data.description !== undefined) setDescription(data.description);
-                if (data.statement !== undefined) setStatement(data.statement);
-                if (data.type !== undefined) setSelectedType(data.type);
-                if (data.isGroupActivity !== undefined) setIsGroupActivity(Boolean(data.isGroupActivity));
-                if (data.hasChecklist !== undefined) setHasChecklist(Boolean(data.hasChecklist));
-                if (data.aiWeight !== undefined) setAiWeight(Number(data.aiWeight));
-                if (data.checklistWeight !== undefined) setChecklistWeight(Number(data.checklistWeight));
-                if (Array.isArray(data.criteria)) setCriteria(data.criteria);
-                setImportedData(data);
+                isImportingRef.current = true;
+
+                // Extraer descripción serializada si existe
+                let parsedDesc: any = null;
+                if (data.description) {
+                    if (typeof data.description === "object") {
+                        parsedDesc = data.description;
+                    } else if (typeof data.description === "string") {
+                        try {
+                            parsedDesc = JSON.parse(data.description);
+                        } catch {
+                            parsedDesc = null;
+                        }
+                    }
+                }
+
+                // 1. Tipo de actividad
+                const targetType = data.type || parsedDesc?.workshopConfig?.type || parsedDesc?.type;
+                if (targetType) {
+                    setSelectedType(targetType);
+                }
+
+                // 2. Enunciado (statement) y descripción
+                if (data.statement !== undefined) {
+                    setStatement(data.statement);
+                }
+                if (data.description !== undefined) {
+                    setDescription(typeof data.description === "string" ? data.description : JSON.stringify(data.description));
+                }
+
+                // 3. Modalidad grupal
+                if (data.isGroupActivity !== undefined) {
+                    setIsGroupActivity(Boolean(data.isGroupActivity));
+                }
+                if (data.groupScope !== undefined) {
+                    setGroupScope(data.groupScope === "ACTIVITY" ? "ACTIVITY" : "COURSE");
+                }
+
+                // 4. Checklist, rúbrica y ponderación
+                const hasChecklistVal = data.hasChecklist ?? parsedDesc?.hasChecklist;
+                if (hasChecklistVal !== undefined) {
+                    setHasChecklist(Boolean(hasChecklistVal));
+                }
+                const aiWeightVal = data.aiWeight ?? parsedDesc?.aiWeight;
+                if (aiWeightVal !== undefined) {
+                    setAiWeight(Number(aiWeightVal));
+                }
+                const checklistWeightVal = data.checklistWeight ?? parsedDesc?.checklistWeight;
+                if (checklistWeightVal !== undefined) {
+                    setChecklistWeight(Number(checklistWeightVal));
+                }
+                const criteriaVal = data.criteria || parsedDesc?.criteria;
+                if (Array.isArray(criteriaVal)) {
+                    setCriteria(criteriaVal);
+                }
+
+                // 5. Code Challenge (Taller de Código)
+                const challengeCfg = data.challengeConfig || parsedDesc?.challengeConfig;
+                const cLanguage = data.challengeLanguage || challengeCfg?.language;
+                if (cLanguage) {
+                    setChallengeLanguage(cLanguage);
+                }
+                const cFiles = data.challengeFiles || challengeCfg?.files;
+                if (Array.isArray(cFiles) && cFiles.length > 0) {
+                    setChallengeFiles(cFiles);
+                    setSelectedChallengeFileId(cFiles[0].id || "1");
+                } else if (challengeCfg?.starterCode) {
+                    const ext = getExtensionFromLanguage(cLanguage || "javascript");
+                    setChallengeFiles([
+                        { id: "1", name: `solucion.${ext}`, content: challengeCfg.starterCode }
+                    ]);
+                    setSelectedChallengeFileId("1");
+                } else if (targetType === "CODE_CHALLENGE" && data.statement) {
+                    const recovered = extractCodeChallengeFilesFromMarkdown(data.statement);
+                    if (recovered.length > 0) {
+                        setChallengeFiles(recovered);
+                        setSelectedChallengeFileId(recovered[0].id);
+                        if (!cLanguage) setChallengeLanguage(getLanguageFromFileName(recovered[0].name));
+                    }
+                }
+
+                // 6. PDF Review (Informe PDF)
+                const pdfCfg = data.pdfReviewConfig || parsedDesc?.pdfReviewConfig;
+                const pdfMode = data.pdfReviewMode || pdfCfg?.mode;
+                if (pdfMode) {
+                    setPdfReviewMode(pdfMode);
+                }
+                const pdfPages = data.pdfMaxPages ?? pdfCfg?.maxPages;
+                if (pdfPages !== undefined) {
+                    setPdfMaxPages(Number(pdfPages));
+                }
+                const pdfRange = data.pdfPageRange || pdfCfg?.pageRange;
+                if (pdfRange) {
+                    setPdfPageRange(pdfRange);
+                }
+
+                // 7. Video Pitch
+                const pitchCfg = data.pitchConfig || parsedDesc?.pitchConfig;
+                const pitchMins = data.pitchMaxMinutes ?? pitchCfg?.maxDurationMinutes;
+                if (pitchMins !== undefined) {
+                    setPitchMaxMinutes(Number(pitchMins));
+                }
+                const pitchTopics = data.pitchRequiredTopics || pitchCfg?.requiredTopics;
+                if (Array.isArray(pitchTopics)) {
+                    setPitchRequiredTopics(pitchTopics);
+                }
+
+                // 8. Audio Podcast / Defense
+                const audioCfg = data.audioConfig || parsedDesc?.audioConfig;
+                const audioMins = data.audioMaxMinutes ?? audioCfg?.maxDurationMinutes;
+                if (audioMins !== undefined) {
+                    setAudioMaxMinutes(Number(audioMins));
+                }
+                const audioTopics = data.audioRequiredTopics || audioCfg?.requiredTopics;
+                if (Array.isArray(audioTopics)) {
+                    setAudioRequiredTopics(audioTopics);
+                }
+
+                // 9. AI Interview (Entrevista Técnica)
+                const interviewCfg = data.interviewConfig || parsedDesc?.interviewConfig;
+                const intQuestions = data.interviewQuestionsCount ?? interviewCfg?.questionsCount;
+                if (intQuestions !== undefined) {
+                    setInterviewQuestionsCount(Number(intQuestions));
+                }
+                const intRole = data.interviewTargetRole || interviewCfg?.targetRole;
+                if (intRole) {
+                    setInterviewTargetRole(intRole);
+                }
+                const intFocus = data.interviewFocusAreas || interviewCfg?.focusAreas;
+                if (Array.isArray(intFocus)) {
+                    setInterviewFocusAreas(intFocus);
+                }
+
+                // 10. DB Modeling (Base de Datos)
+                const dbCfg = data.dbConfig || parsedDesc?.dbConfig;
+                const dbDelivery = data.dbDeliveryMode || dbCfg?.deliveryMode;
+                if (dbDelivery) {
+                    setDbDeliveryMode(dbDelivery);
+                }
+                const dbEngine = data.dbTargetEngine || dbCfg?.targetEngine;
+                if (dbEngine) {
+                    setDbTargetEngine(dbEngine);
+                }
+                const dbNorm = data.dbRequiredNormalization || dbCfg?.requiredNormalization;
+                if (dbNorm) {
+                    setDbRequiredNormalization(dbNorm);
+                }
+                const dbEntities = data.dbRequiredEntities || dbCfg?.requiredEntities;
+                if (Array.isArray(dbEntities)) {
+                    setDbRequiredEntities(dbEntities);
+                }
+                const dbScope = dbCfg?.scopeOptions;
+                if (data.dbIncludeDiagram !== undefined) setDbIncludeDiagram(Boolean(data.dbIncludeDiagram));
+                else if (dbScope?.includeDiagram !== undefined) setDbIncludeDiagram(Boolean(dbScope.includeDiagram));
+
+                if (data.dbIncludeDdl !== undefined) setDbIncludeDdl(Boolean(data.dbIncludeDdl));
+                else if (dbScope?.includeDdl !== undefined) setDbIncludeDdl(Boolean(dbScope.includeDdl));
+
+                if (data.dbIncludeDml !== undefined) setDbIncludeDml(Boolean(data.dbIncludeDml));
+                else if (dbScope?.includeDml !== undefined) setDbIncludeDml(Boolean(dbScope.includeDml));
+
+                if (data.dbIncludeQueries !== undefined) setDbIncludeQueries(Boolean(data.dbIncludeQueries));
+                else if (dbScope?.includeQueries !== undefined) setDbIncludeQueries(Boolean(dbScope.includeQueries));
+
+                // 11. Workshop Codelab y Tutorial GitHub
+                const workshopCfg = data.workshopConfig || parsedDesc?.workshopConfig;
+                const wMilestones = data.workshopMilestones || workshopCfg?.milestones;
+                if (Array.isArray(wMilestones)) {
+                    const formatted = wMilestones.map((m: any) => ({
+                        ...m,
+                        targetFileContent: m.targetFileContent ? formatCodeString(m.targetFileContent, m.targetFilePath || "") : m.targetFileContent,
+                        starterCode: m.starterCode ? formatCodeString(m.starterCode, m.targetFilePath || "") : m.starterCode,
+                        expectedSolution: m.expectedSolution ? formatCodeString(m.expectedSolution, m.targetFilePath || "") : m.expectedSolution
+                    }));
+                    setWorkshopMilestones(formatted);
+                    if (formatted.length > 0) {
+                        setWorkshopContentView("steps");
+                    }
+                }
+                const wLang = data.workshopLanguage || workshopCfg?.language;
+                if (wLang) {
+                    setWorkshopLanguage(wLang);
+                }
+                const wDelivery = data.workshopDeliveryMode || workshopCfg?.deliveryMode;
+                if (wDelivery) {
+                    setWorkshopDeliveryMode(wDelivery);
+                }
+                const wMins = data.workshopEstimatedMinutes ?? workshopCfg?.estimatedMinutes;
+                if (wMins !== undefined) {
+                    setWorkshopEstimatedMinutes(Number(wMins));
+                }
+
+                // 12. Fechas locales para inputs
+                const openDateLocal = data.openDateLocal || (data.openDate ? new Date(new Date(data.openDate).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : undefined);
+                const deadlineLocal = data.deadlineLocal || (data.deadline ? new Date(new Date(data.deadline).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : undefined);
+
+                // Guardar en importedData para los inputs que usan defaultValue
+                const updatedImported = {
+                    ...data,
+                    openDateLocal,
+                    deadlineLocal,
+                };
+                setImportedData(updatedImported);
+
+                // Re-renderizar formulario sincronizado
                 setFormKey(k => k + 1);
-                toast.success("Parámetros importados correctamente");
+
+                // Sincronizar directamente los inputs DOM si existen
+                setTimeout(() => {
+                    if (data.title) {
+                        const titleInput = document.getElementById("title") as HTMLInputElement;
+                        if (titleInput) titleInput.value = data.title;
+                    }
+                    if (openDateLocal) {
+                        const openInput = document.getElementById("openDateLocal") as HTMLInputElement;
+                        if (openInput) openInput.value = openDateLocal;
+                    }
+                    if (deadlineLocal) {
+                        const deadlineInput = document.getElementById("deadlineLocal") as HTMLInputElement;
+                        if (deadlineInput) deadlineInput.value = deadlineLocal;
+                    }
+                }, 50);
+
+                const typeInfo = getActivityTypeInfo(targetType || "GITHUB");
+                toast.success(`✓ Actividad "${data.title || typeInfo.label}" importada correctamente`, {
+                    description: `Modalidad: ${typeInfo.label}`
+                });
             } catch (err) {
                 console.error("Error al importar", err);
-                toast.error("Archivo JSON inválido");
+                toast.error("Archivo JSON inválido o estructura incompatible");
             }
         };
         reader.readAsText(file);
@@ -1986,6 +2913,7 @@ function ActivityFormDialog({
                         requiredNormalization: dbRequiredNormalization,
                         requiredEntities: dbRequiredEntities,
                         scopeOptions: {
+                            includeDiagram: dbIncludeDiagram,
                             includeDdl: dbIncludeDdl,
                             includeDml: dbIncludeDml,
                             includeQueries: dbIncludeQueries,
@@ -2053,6 +2981,10 @@ function ActivityFormDialog({
                     }
                 }));
             } else if (selectedType === "WORKSHOP_CODE" || selectedType === "WORKSHOP_GITHUB") {
+                const cleanedMilestones = selectedType === "WORKSHOP_GITHUB"
+                    ? workshopMilestones.map(m => ({ ...m, hints: [] }))
+                    : workshopMilestones;
+
                 formData.set("description", JSON.stringify({
                     hasChecklist: hasChecklist,
                     aiWeight: aiWeight,
@@ -2060,12 +2992,17 @@ function ActivityFormDialog({
                     criteria: criteria,
                     workshopConfig: {
                         type: selectedType,
-                        deliveryMode: workshopDeliveryMode,
+                        deliveryMode: selectedType === "WORKSHOP_GITHUB" ? "TUTORIAL" : workshopDeliveryMode,
                         language: workshopLanguage,
                         estimatedMinutes: Number(workshopEstimatedMinutes) || 45,
-                        milestones: workshopMilestones,
+                        milestones: cleanedMilestones,
                     }
                 }));
+
+                if (selectedType === "WORKSHOP_GITHUB") {
+                    const uniquePaths = Array.from(new Set(workshopMilestones.map(m => m.targetFilePath?.trim()).filter(Boolean)));
+                    formData.set("filePaths", uniquePaths.join(','));
+                }
             } else if (hasChecklist && selectedType === "GITHUB") {
                 formData.set("description", JSON.stringify({
                     hasChecklist: true,
@@ -2084,12 +3021,20 @@ function ActivityFormDialog({
 
             if (isEdit) {
                 await updateActivityAction(formData);
-                toast.success("✓ Actividad actualizada exitosamente. Los cambios han sido guardados.");
+                if ((selectedType === "WORKSHOP_CODE" || selectedType === "WORKSHOP_GITHUB") && workshopMilestones.length === 0) {
+                    toast.info("✓ Actividad actualizada. Recuerda que no tiene pasos configurados aún; puedes planificarlos con IA o crearlos manualmente.", { duration: 5000 });
+                } else {
+                    toast.success("✓ Actividad actualizada exitosamente. Los cambios han sido guardados.");
+                }
                 router.refresh();
                 onClose();
             } else {
                 await createActivityAction(formData);
-                toast.success("Actividad creada exitosamente");
+                if ((selectedType === "WORKSHOP_CODE" || selectedType === "WORKSHOP_GITHUB") && workshopMilestones.length === 0) {
+                    toast.info("✓ Actividad creada. Recuerda que no tiene pasos configurados aún; puedes planificarlos con IA o crearlos manualmente.", { duration: 5000 });
+                } else {
+                    toast.success("Actividad creada exitosamente");
+                }
                 router.refresh();
                 onClose();
             }
@@ -2317,11 +3262,13 @@ function ActivityFormDialog({
                                                                         setStatement(TEMPLATE_CODE_CHALLENGE);
                                                                         setDescription(TEMPLATE_CODE_CHALLENGE);
                                                                     } else if (t.id === "WORKSHOP_CODE") {
-                                                                        setStatement(TEMPLATE_WORKSHOP_CODE);
-                                                                        setDescription(TEMPLATE_WORKSHOP_CODE);
+                                                                        setStatement("");
+                                                                        setDescription("");
+                                                                        setWorkshopContentView("statement");
                                                                     } else if (t.id === "WORKSHOP_GITHUB") {
-                                                                        setStatement(TEMPLATE_WORKSHOP_GITHUB);
-                                                                        setDescription(TEMPLATE_WORKSHOP_GITHUB);
+                                                                        setStatement("");
+                                                                        setDescription("");
+                                                                        setWorkshopContentView("statement");
                                                                     } else if (t.id === "PDF_REVIEW") {
                                                                         setStatement(TEMPLATE_PDF_REVIEW);
                                                                         setDescription(TEMPLATE_PDF_REVIEW);
@@ -3587,48 +4534,80 @@ function ActivityFormDialog({
 
                                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                         {/* Modo pedagógico */}
-                                                        <div className="space-y-1.5">
-                                                            <Label className="text-xs font-semibold text-foreground">Modo de Entrega</Label>
-                                                            <div className="grid grid-cols-2 gap-2">
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => setWorkshopDeliveryMode("TUTORIAL")}
-                                                                    className={cn(
-                                                                        "p-2.5 rounded-lg border text-left transition-all text-xs flex flex-col gap-0.5",
-                                                                        workshopDeliveryMode === "TUTORIAL"
-                                                                            ? "border-primary bg-primary/10 text-primary font-bold ring-1 ring-primary/40"
-                                                                            : "border-border hover:bg-muted/40 text-muted-foreground"
-                                                                    )}
-                                                                >
-                                                                    <span className="flex items-center gap-1.5">🎓 Tutorial Guiado</span>
-                                                                    <span className="text-[10px] opacity-80">Paso a paso con pistas</span>
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => setWorkshopDeliveryMode("CHALLENGE")}
-                                                                    className={cn(
-                                                                        "p-2.5 rounded-lg border text-left transition-all text-xs flex flex-col gap-0.5",
-                                                                        workshopDeliveryMode === "CHALLENGE"
-                                                                            ? "border-primary bg-primary/10 text-primary font-bold ring-1 ring-primary/40"
-                                                                            : "border-border hover:bg-muted/40 text-muted-foreground"
-                                                                    )}
-                                                                >
-                                                                    <span className="flex items-center gap-1.5">🏆 Reto / Desafío</span>
-                                                                    <span className="text-[10px] opacity-80">Evaluación secuencial</span>
-                                                                </button>
+                                                        {selectedType === "WORKSHOP_GITHUB" ? (
+                                                            <div className="space-y-1.5">
+                                                                <Label className="text-xs font-semibold text-foreground">Tipo de Taller</Label>
+                                                                <div className="p-2.5 rounded-lg border border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-300 text-xs flex items-center gap-2.5">
+                                                                    <GitBranch className="h-4 w-4 text-orange-500 shrink-0" />
+                                                                    <div className="space-y-0.5">
+                                                                        <span className="font-bold block">Tutorial Guiado de Proyecto</span>
+                                                                        <span className="text-[10px] text-muted-foreground block leading-tight">
+                                                                            El estudiante construye el proyecto completo en su repositorio con todas las indicaciones, código fuente y comandos Git en cada paso.
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
                                                             </div>
-                                                        </div>
+                                                        ) : (
+                                                            <div className="space-y-1.5">
+                                                                <Label className="text-xs font-semibold text-foreground">Modo de Entrega</Label>
+                                                                <div className="grid grid-cols-2 gap-2">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setWorkshopDeliveryMode("TUTORIAL")}
+                                                                        className={cn(
+                                                                            "p-2.5 rounded-lg border text-left transition-all text-xs flex flex-col gap-0.5",
+                                                                            workshopDeliveryMode === "TUTORIAL"
+                                                                                ? "border-primary bg-primary/10 text-primary font-bold ring-1 ring-primary/40"
+                                                                                : "border-border hover:bg-muted/40 text-muted-foreground"
+                                                                        )}
+                                                                    >
+                                                                        <span className="flex items-center gap-1.5">🎓 Tutorial Guiado</span>
+                                                                        <span className="text-[10px] opacity-80">Paso a paso con pistas</span>
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setWorkshopDeliveryMode("CHALLENGE")}
+                                                                        className={cn(
+                                                                            "p-2.5 rounded-lg border text-left transition-all text-xs flex flex-col gap-0.5",
+                                                                            workshopDeliveryMode === "CHALLENGE"
+                                                                                ? "border-primary bg-primary/10 text-primary font-bold ring-1 ring-primary/40"
+                                                                                : "border-border hover:bg-muted/40 text-muted-foreground"
+                                                                        )}
+                                                                    >
+                                                                        <span className="flex items-center gap-1.5">🏆 Reto / Desafío</span>
+                                                                        <span className="text-[10px] opacity-80">Evaluación secuencial</span>
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
 
-                                                        {/* Tiempo Estimado y Lenguaje */}
-                                                        <div className="grid grid-cols-2 gap-2">
-                                                            {selectedType === "WORKSHOP_CODE" && (
-                                                                <div className="space-y-1.5">
-                                                                    <Label className="text-xs font-semibold text-foreground">Lenguaje</Label>
-                                                                    <Select value={workshopLanguage} onValueChange={setWorkshopLanguage}>
-                                                                        <SelectTrigger className="h-9 text-xs">
-                                                                            <SelectValue placeholder="Lenguaje" />
-                                                                        </SelectTrigger>
-                                                                        <SelectContent>
+                                                    {/* Tiempo Estimado y Lenguaje / Stack */}
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div className="space-y-1.5">
+                                                            <Label className="text-xs font-semibold text-foreground">
+                                                                {selectedType === "WORKSHOP_GITHUB" ? "Lenguaje / Stack Tecnológico" : "Lenguaje"}
+                                                            </Label>
+                                                            <Select value={workshopLanguage} onValueChange={setWorkshopLanguage}>
+                                                                <SelectTrigger className="h-9 text-xs">
+                                                                    <SelectValue placeholder="Lenguaje / Stack" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    {selectedType === "WORKSHOP_GITHUB" ? (
+                                                                        <>
+                                                                            <SelectItem value="javascript">JavaScript / Node.js</SelectItem>
+                                                                            <SelectItem value="typescript">TypeScript / React / Next.js</SelectItem>
+                                                                            <SelectItem value="python">Python (FastAPI / Django)</SelectItem>
+                                                                            <SelectItem value="java">Java (Spring Boot / Maven)</SelectItem>
+                                                                            <SelectItem value="csharp">C# / .NET Core</SelectItem>
+                                                                            <SelectItem value="php">PHP / Laravel</SelectItem>
+                                                                            <SelectItem value="go">Go / Gin</SelectItem>
+                                                                            <SelectItem value="html">HTML5 / CSS3 / JS Vanilla</SelectItem>
+                                                                            <SelectItem value="cpp">C++</SelectItem>
+                                                                            <SelectItem value="sql">SQL / Base de Datos</SelectItem>
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
                                                                             <SelectItem value="java">Java</SelectItem>
                                                                             <SelectItem value="javascript">JavaScript</SelectItem>
                                                                             <SelectItem value="typescript">TypeScript</SelectItem>
@@ -3638,44 +4617,46 @@ function ActivityFormDialog({
                                                                             <SelectItem value="php">PHP</SelectItem>
                                                                             <SelectItem value="go">Go</SelectItem>
                                                                             <SelectItem value="sql">SQL</SelectItem>
-                                                                        </SelectContent>
-                                                                    </Select>
-                                                                </div>
-                                                            )}
-                                                            <div className={cn("space-y-1.5", selectedType !== "WORKSHOP_CODE" && "col-span-2")}>
-                                                                <Label className="text-xs font-semibold text-foreground">Tiempo Estimado (min)</Label>
-                                                                <Input
-                                                                    type="number"
-                                                                    min={5}
-                                                                    max={600}
-                                                                    step={5}
-                                                                    value={workshopEstimatedMinutes}
-                                                                    onChange={(e) => setWorkshopEstimatedMinutes(Math.max(5, parseInt(e.target.value) || 30))}
-                                                                    className="h-9 text-xs"
-                                                                />
-                                                            </div>
+                                                                        </>
+                                                                    )}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </div>
+                                                        <div className="space-y-1.5">
+                                                            <Label className="text-xs font-semibold text-foreground">Tiempo Estimado (min)</Label>
+                                                            <Input
+                                                                type="number"
+                                                                min={5}
+                                                                max={600}
+                                                                step={5}
+                                                                value={workshopEstimatedMinutes}
+                                                                onChange={(e) => setWorkshopEstimatedMinutes(Math.max(5, parseInt(e.target.value) || 30))}
+                                                                className="h-9 text-xs"
+                                                            />
                                                         </div>
                                                     </div>
                                                 </div>
 
-                                                {/* Indicador y botón para configurar pasos en Contenido y Rúbrica */}
-                                                <div className="p-4 rounded-xl border border-primary/25 bg-primary/[0.03] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
-                                                            <Layers className="h-5 w-5 text-primary" />
-                                                        </div>
-                                                        <div className="space-y-0.5">
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="text-xs font-bold text-foreground">Configuración de Pasos del Taller</span>
-                                                                <Badge variant="outline" className="text-[10px] font-mono font-bold bg-background">
-                                                                    {workshopMilestones.length} {workshopMilestones.length === 1 ? "paso" : "pasos"}
-                                                                </Badge>
-                                                            </div>
-                                                            <p className="text-[11px] text-muted-foreground leading-tight">
-                                                                Los pasos, consignas, código, pistas y asistentes de IA se configuran en la pestaña <strong>Contenido y Rúbrica</strong>.
-                                                            </p>
-                                                        </div>
+                                            {/* Indicador y botón para configurar pasos en Contenido y Rúbrica */}
+                                            <div className="p-4 rounded-xl border border-primary/25 bg-primary/[0.03] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                                                        <Layers className="h-5 w-5 text-primary" />
                                                     </div>
+                                                    <div className="space-y-0.5">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs font-bold text-foreground">Configuración de Pasos del Taller</span>
+                                                            <Badge variant="outline" className="text-[10px] font-mono font-bold bg-background">
+                                                                {workshopMilestones.length} {workshopMilestones.length === 1 ? "paso" : "pasos"}
+                                                            </Badge>
+                                                        </div>
+                                                        <p className="text-[11px] text-muted-foreground leading-tight">
+                                                            {selectedType === "WORKSHOP_GITHUB"
+                                                                ? <>Cada paso incluye las indicaciones completas, archivo, código fuente y comandos Git explicados. Se configuran en la pestaña <strong>Contenido y Rúbrica</strong>.</>
+                                                                : <>Los pasos, consignas, código, pistas y asistentes de IA se configuran en la pestaña <strong>Contenido y Rúbrica</strong>.</>}
+                                                        </p>
+                                                    </div>
+                                                </div>
                                                     <Button
                                                         type="button"
                                                         size="sm"
@@ -4778,19 +5759,7 @@ function ActivityFormDialog({
                                     {/* Sub-cabecera con pestañas de Pasos vs Enunciado */}
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 shrink-0 px-1 pb-2 border-b border-border/70">
                                         <div className="flex items-center gap-1.5 sm:gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => setWorkshopContentView("steps")}
-                                                className={cn(
-                                                    "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer",
-                                                    workshopContentView === "steps"
-                                                        ? "bg-primary text-primary-foreground border-primary shadow-xs"
-                                                        : "bg-card text-muted-foreground hover:text-foreground border-border/60"
-                                                )}
-                                            >
-                                                <Layers className="h-3.5 w-3.5" />
-                                                <span>Configuración de Pasos ({workshopMilestones.length})</span>
-                                            </button>
+                                            {/* 1. Pestaña de Enunciado General / Rúbrica (Primero) */}
                                             <button
                                                 type="button"
                                                 onClick={() => setWorkshopContentView("statement")}
@@ -4804,6 +5773,37 @@ function ActivityFormDialog({
                                                 <FileText className="h-3.5 w-3.5" />
                                                 <span>Enunciado General / Rúbrica</span>
                                             </button>
+
+                                            {/* 2. Pestaña de Configuración de Pasos (Solo se habilita si existe enunciado) */}
+                                            <button
+                                                type="button"
+                                                disabled={!hasWorkshopStatement}
+                                                onClick={() => {
+                                                    if (!hasWorkshopStatement) {
+                                                        toast.warning("Para configurar los pasos, primero debes redactar o generar el Enunciado General.");
+                                                        return;
+                                                    }
+                                                    setWorkshopContentView("steps");
+                                                }}
+                                                title={!hasWorkshopStatement ? "Primero debes redactar o generar el Enunciado General" : undefined}
+                                                className={cn(
+                                                    "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border",
+                                                    !hasWorkshopStatement
+                                                        ? "opacity-50 cursor-not-allowed bg-muted/40 text-muted-foreground/60 border-border/40"
+                                                        : workshopContentView === "steps"
+                                                        ? "bg-primary text-primary-foreground border-primary shadow-xs cursor-pointer"
+                                                        : "bg-card text-muted-foreground hover:text-foreground border-border/60 cursor-pointer"
+                                                )}
+                                            >
+                                                <Layers className="h-3.5 w-3.5" />
+                                                <span>Configuración de Pasos ({workshopMilestones.length})</span>
+                                                {!hasWorkshopStatement && (
+                                                    <span className="flex items-center gap-1 ml-0.5 text-[10px] text-amber-600 dark:text-amber-400 font-semibold">
+                                                        <Lock className="h-3 w-3" />
+                                                        <span className="hidden lg:inline">(Requiere Enunciado)</span>
+                                                    </span>
+                                                )}
+                                            </button>
                                         </div>
 
                                         <div className="flex items-center gap-2 shrink-0">
@@ -4812,46 +5812,125 @@ function ActivityFormDialog({
                                                     <Button
                                                         type="button"
                                                         size="sm"
-                                                        onClick={() => setIsAiAllStepsOpen(true)}
-                                                        className="h-8 text-xs font-semibold gap-1.5 bg-gradient-to-r from-primary to-primary/85 hover:from-primary/95 hover:to-primary text-primary-foreground shadow-xs transition-all cursor-pointer"
+                                                        onClick={() => {
+                                                            if (!statement || statement.trim().length < 20) {
+                                                                toast.warning("Para planificar los pasos del proyecto, primero debes generar o redactar el Enunciado General.", {
+                                                                    description: "Te hemos redirigido a la pestaña de Enunciado."
+                                                                });
+                                                                setWorkshopContentView("statement");
+                                                                return;
+                                                            }
+                                                            setIsAiAllStepsOpen(true);
+                                                        }}
+                                                        className="h-8 text-xs font-bold gap-1.5 bg-gradient-to-r from-primary to-primary/85 hover:from-primary/95 hover:to-primary text-primary-foreground shadow-xs transition-all cursor-pointer"
+                                                        title="Planificar la estructura u hoja de ruta del tutorial con IA"
                                                     >
                                                         <Sparkles className="h-3.5 w-3.5 shrink-0" />
-                                                        <span>Generar Todo con IA</span>
+                                                        <span>Planificar Pasos con IA</span>
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        disabled={isBatchGeneratingSteps || workshopMilestones.length === 0}
+                                                        onClick={handleBatchCompleteStepsWithAI}
+                                                        className="h-8 text-xs font-semibold gap-1.5 border-emerald-500/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 cursor-pointer shadow-2xs"
+                                                        title="Analiza cada paso y genera automáticamente el código fuente y la explicación pedagógica para aquellos pasos que falten o estén vacíos"
+                                                    >
+                                                        {isBatchGeneratingSteps ? (
+                                                            <>
+                                                                <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600 dark:text-emerald-400" />
+                                                                <span className="truncate max-w-[140px] sm:max-w-none">{batchStepProgress || "Completando..."}</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Sparkles className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                                                <span className="hidden sm:inline">⚡ Completar Códigos con IA</span>
+                                                                <span className="sm:hidden">⚡ Códigos IA</span>
+                                                            </>
+                                                        )}
                                                     </Button>
                                                     <Button
                                                         type="button"
                                                         size="sm"
                                                         variant="outline"
                                                         onClick={() => {
-                                                            const newOrder = workshopMilestones.length + 1;
-                                                            const newStep = {
-                                                                id: `m-${Date.now()}`,
-                                                                title: `Paso ${newOrder}: Nueva Etapa`,
-                                                                instructions: "Describe las instrucciones y consignas para este paso...",
-                                                                starterCode: selectedType === "WORKSHOP_CODE" ? "// Código inicial del estudiante\n" : undefined,
-                                                                expectedSolution: selectedType === "WORKSHOP_CODE" ? "// Solución esperada\n" : undefined,
-                                                                targetFilePath: selectedType === "WORKSHOP_GITHUB" ? "src/index.js" : undefined,
-                                                                targetFileContent: selectedType === "WORKSHOP_GITHUB" ? "// Código o contenido del archivo\n" : undefined,
-                                                                gitCommands: selectedType === "WORKSHOP_GITHUB" ? [
-                                                                    { command: "git add .", explanation: "Prepara los cambios realizados para el commit." },
-                                                                    { command: `git commit -m "feat: implementar paso ${newOrder}"`, explanation: "Confirma los cambios en el historial local." },
-                                                                    { command: "git push origin main", explanation: "Envía los cambios a la rama principal en GitHub." }
-                                                                ] : undefined,
-                                                                validationRule: selectedType === "WORKSHOP_GITHUB" ? "El archivo debe existir en la rama y no estar vacío" : undefined,
-                                                                hints: ["Pista de ayuda inicial"],
-                                                                order: newOrder
-                                                            };
-                                                            setWorkshopMilestones([...workshopMilestones, newStep]);
-                                                            setActiveWorkshopStepIdx(workshopMilestones.length);
+                                                            if (!hasWorkshopStatement) {
+                                                                toast.warning("Para modificar los pasos del proyecto, primero debes generar o redactar el Enunciado General.", {
+                                                                    description: "Te hemos redirigido a la pestaña de Enunciado."
+                                                                });
+                                                                setWorkshopContentView("statement");
+                                                                return;
+                                                            }
+                                                            setIsAiModifyStepsOpen(true);
                                                         }}
+                                                        disabled={!hasWorkshopStatement}
+                                                        className="h-8 text-xs font-semibold gap-1.5 border-primary/40 text-primary hover:bg-primary/10 hover:text-primary transition-all cursor-pointer shadow-2xs"
+                                                        title="Abre el chat interactivo de IA para agregar, eliminar, reordenar o modificar la estructura de pasos del proyecto"
+                                                    >
+                                                        <MessageSquare className="h-3.5 w-3.5 text-primary shrink-0" />
+                                                        <span className="hidden sm:inline">Modificar con Chat IA</span>
+                                                        <span className="sm:hidden">Chat IA</span>
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={handleAddNewWorkshopStep}
                                                         className="h-8 text-xs font-semibold gap-1.5 cursor-pointer"
                                                     >
                                                         <Plus className="h-3.5 w-3.5" />
                                                         <span>Añadir Paso</span>
                                                     </Button>
+                                                    {selectedType === "WORKSHOP_GITHUB" && (
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => {
+                                                                const setupStep = {
+                                                                    id: `m-setup-${Date.now()}`,
+                                                                    title: "Paso 1: Inicialización y .gitignore",
+                                                                    instructions: "Inicializa el repositorio local de Git y añade el archivo `.gitignore` para omitir dependencias y variables de entorno del stack.",
+                                                                    targetFilePath: ".gitignore",
+                                                                    targetFileContent: "# Dependencias y entorno\nnode_modules/\n.env\n.env.local\ndist/\nbuild/\n.DS_Store\n",
+                                                                    gitCommands: [
+                                                                        { command: "git init", explanation: "Inicializa el repositorio Git en la carpeta del proyecto." },
+                                                                        { command: "git branch -M main", explanation: "Renombra la rama principal a 'main'." },
+                                                                        { command: "git add .gitignore", explanation: "Agrega el archivo .gitignore al staging area." },
+                                                                        { command: 'git commit -m "chore: inicializar repositorio y configurar .gitignore"', explanation: "Confirma los cambios iniciales en el historial local." },
+                                                                        { command: "git push -u origin main", explanation: "Sube la rama principal a tu repositorio de GitHub." }
+                                                                    ],
+                                                                    validationRule: "El archivo .gitignore debe existir en la rama y no estar vacío",
+                                                                    hints: [],
+                                                                    order: 1
+                                                                };
+                                                                const reordered = [setupStep, ...workshopMilestones].map((s, i) => ({ ...s, order: i + 1 }));
+                                                                setWorkshopMilestones(reordered);
+                                                                setActiveWorkshopStepIdx(0);
+                                                                toast.success("Paso 1 de Inicialización y .gitignore insertado al inicio.");
+                                                            }}
+                                                            className="h-8 text-xs font-semibold gap-1.5 border-orange-500/30 text-orange-700 dark:text-orange-400 hover:bg-orange-500/10 cursor-pointer"
+                                                            title="Inserta un paso de inicialización de repositorio y .gitignore al principio del tutorial"
+                                                        >
+                                                            <FolderGit2 className="h-3.5 w-3.5" />
+                                                            <span>Paso Setup (.gitignore)</span>
+                                                        </Button>
+                                                    )}
                                                 </>
                                             ) : (
                                                 <>
+                                                    {hasWorkshopStatement && (
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            onClick={() => setWorkshopContentView("steps")}
+                                                            className="h-8 text-xs font-bold gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-all cursor-pointer"
+                                                        >
+                                                            <span>Configurar Pasos ({workshopMilestones.length})</span>
+                                                            <ArrowRight className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                    )}
                                                     <Button
                                                         type="button"
                                                         size="sm"
@@ -4869,19 +5948,52 @@ function ActivityFormDialog({
                                                         size="sm"
                                                         variant="outline"
                                                         onClick={() => {
+                                                            setAiGeneratorTarget("statement");
                                                             setAiInitialContent(statement);
                                                             setIsAIGeneratorOpen(true);
                                                         }}
                                                         disabled={!statement || statement.trim().length < 10}
                                                         className="h-8 text-xs font-semibold gap-1.5 border-primary/40 text-primary hover:bg-primary/10 hover:text-primary transition-all cursor-pointer shadow-2xs"
+                                                        title="Toma el enunciado actual del editor y abre el chat de IA para modificarlo, adaptarlo o mejorarlo interactivamente"
                                                     >
                                                         <MessageSquare className="h-3.5 w-3.5 text-primary shrink-0" />
-                                                        <span>Chat IA</span>
+                                                        <span className="hidden sm:inline">Modificar con Chat IA</span>
+                                                        <span className="sm:hidden">Chat IA</span>
                                                     </Button>
                                                 </>
                                             )}
                                         </div>
                                     </div>
+
+                                    {/* Banner informativo si no hay enunciado aún */}
+                                    {workshopContentView === "steps" && (!statement || statement.trim().length < 20) && (
+                                        <div className="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shrink-0">
+                                            <div className="flex items-start sm:items-center gap-2.5">
+                                                <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
+                                                <div>
+                                                    <p className="font-bold text-amber-900 dark:text-amber-200">
+                                                        Enunciado General Requerido
+                                                    </p>
+                                                    <p className="text-amber-800/80 dark:text-amber-300/80 text-[11px] leading-relaxed">
+                                                        Para crear y planificar los pasos del proyecto, la actividad debe contar primero con un Enunciado General. Todos los pasos se basarán en los requerimientos de dicho enunciado.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                onClick={() => {
+                                                    setWorkshopContentView("statement");
+                                                    setAiInitialContent(undefined);
+                                                    setIsAIGeneratorOpen(true);
+                                                }}
+                                                className="h-7 px-3 text-xs font-bold gap-1.5 shrink-0 bg-amber-600 hover:bg-amber-700 text-white shadow-xs cursor-pointer"
+                                            >
+                                                <Sparkles className="h-3 w-3" />
+                                                <span>Generar Enunciado con IA</span>
+                                            </Button>
+                                        </div>
+                                    )}
 
                                     {/* Vista 1: Configuración Completa de Pasos (Maestro-Detalle: Lista a la Izquierda, Contenido a la Derecha) */}
                                     {workshopContentView === "steps" && (
@@ -4897,28 +6009,7 @@ function ActivityFormDialog({
                                                         type="button"
                                                         size="sm"
                                                         variant="ghost"
-                                                        onClick={() => {
-                                                            const newOrder = workshopMilestones.length + 1;
-                                                            const newStep = {
-                                                                id: `m-${Date.now()}`,
-                                                                title: `Paso ${newOrder}: Nueva Etapa`,
-                                                                instructions: "Describe las instrucciones y consignas para este paso...",
-                                                                starterCode: selectedType === "WORKSHOP_CODE" ? "// Código inicial del estudiante\n" : undefined,
-                                                                expectedSolution: selectedType === "WORKSHOP_CODE" ? "// Solución esperada\n" : undefined,
-                                                                targetFilePath: selectedType === "WORKSHOP_GITHUB" ? "src/index.js" : undefined,
-                                                                targetFileContent: selectedType === "WORKSHOP_GITHUB" ? "// Código o contenido del archivo\n" : undefined,
-                                                                gitCommands: selectedType === "WORKSHOP_GITHUB" ? [
-                                                                    { command: "git add .", explanation: "Prepara los cambios realizados para el commit." },
-                                                                    { command: `git commit -m "feat: implementar paso ${newOrder}"`, explanation: "Confirma los cambios en el historial local." },
-                                                                    { command: "git push origin main", explanation: "Envía los cambios a la rama principal en GitHub." }
-                                                                ] : undefined,
-                                                                validationRule: selectedType === "WORKSHOP_GITHUB" ? "El archivo debe existir en la rama y no estar vacío" : undefined,
-                                                                hints: ["Pista de ayuda inicial"],
-                                                                order: newOrder
-                                                            };
-                                                            setWorkshopMilestones([...workshopMilestones, newStep]);
-                                                            setActiveWorkshopStepIdx(workshopMilestones.length);
-                                                        }}
+                                                        onClick={handleAddNewWorkshopStep}
                                                         className="h-7 text-xs px-2 text-primary hover:text-primary gap-1 cursor-pointer"
                                                     >
                                                         <Plus className="h-3.5 w-3.5" />
@@ -4927,7 +6018,28 @@ function ActivityFormDialog({
                                                 </div>
 
                                                 <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1.5 custom-scrollbar">
-                                                    {workshopMilestones.map((m, idx) => {
+                                                    {workshopMilestones.length === 0 ? (
+                                                        <div className="h-full min-h-[180px] flex flex-col items-center justify-center text-center p-4 text-muted-foreground">
+                                                            <Layers className="h-7 w-7 text-muted-foreground/30 mb-2" />
+                                                            <p className="text-xs font-semibold text-foreground">Sin pasos creados</p>
+                                                            <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
+                                                                {(!statement || statement.trim().length < 20)
+                                                                    ? "Primero genera o redacta el Enunciado General del proyecto."
+                                                                    : "Planifica con IA o añade el primer paso manualmente."}
+                                                            </p>
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={handleAddNewWorkshopStep}
+                                                                className="mt-3 h-7 text-xs gap-1 cursor-pointer border-dashed"
+                                                            >
+                                                                <Plus className="h-3.5 w-3.5" />
+                                                                <span>Añadir Paso 1</span>
+                                                            </Button>
+                                                        </div>
+                                                    ) : (
+                                                        workshopMilestones.map((m, idx) => {
                                                         const isActive = activeWorkshopStepIdx === idx;
                                                         return (
                                                             <div
@@ -4950,10 +6062,39 @@ function ActivityFormDialog({
                                                                     <div className={cn("truncate text-xs font-semibold leading-tight", isActive ? "text-primary font-bold" : "text-foreground")}>
                                                                         {m.title || `Paso ${idx + 1}`}
                                                                     </div>
-                                                                    <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground">
-                                                                        <span>{m.hints?.length || 0} pistas</span>
-                                                                        {selectedType === "WORKSHOP_CODE" && m.starterCode && (
-                                                                            <span>• Código base</span>
+                                                                    <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground flex-wrap">
+                                                                        {selectedType === "WORKSHOP_GITHUB" ? (
+                                                                            (() => {
+                                                                                const hasF = m.requiresFile !== undefined ? m.requiresFile : Boolean(m.targetFilePath && m.targetFilePath.trim());
+                                                                                const hasG = m.requiresGitCommands !== undefined ? m.requiresGitCommands : Boolean(m.gitCommands && m.gitCommands.length > 0);
+                                                                                if (!hasF && !hasG) {
+                                                                                    return <span className="text-purple-600 dark:text-purple-400 font-semibold">• Solo instrucciones</span>;
+                                                                                }
+                                                                                if (!hasF && hasG) {
+                                                                                    return (
+                                                                                        <>
+                                                                                            <span className="text-muted-foreground">Sin archivo</span>
+                                                                                            <span className="text-blue-600 dark:text-blue-400 font-semibold">• {m.gitCommands?.length || 0} git cmds</span>
+                                                                                        </>
+                                                                                    );
+                                                                                }
+                                                                                return (
+                                                                                    <>
+                                                                                        <span className="font-mono truncate max-w-[100px]">{m.targetFilePath || "Sin archivo"}</span>
+                                                                                        {m.targetFileContent ? (
+                                                                                            <span className="text-emerald-600 dark:text-emerald-400 font-semibold">• Con código</span>
+                                                                                        ) : (
+                                                                                            <span className="text-amber-600 dark:text-amber-400 font-medium">• Sin contenido</span>
+                                                                                        )}
+                                                                                        {!hasG && <span className="text-muted-foreground">• Sin Git</span>}
+                                                                                    </>
+                                                                                );
+                                                                            })()
+                                                                        ) : (
+                                                                            <>
+                                                                                <span>{m.hints?.length || 0} pistas</span>
+                                                                                {m.starterCode && <span>• Código base</span>}
+                                                                            </>
                                                                         )}
                                                                     </div>
                                                                 </div>
@@ -4997,22 +6138,21 @@ function ActivityFormDialog({
                                                                     </button>
                                                                     <button
                                                                         type="button"
-                                                                        disabled={workshopMilestones.length <= 1}
                                                                         onClick={(e) => {
                                                                             e.stopPropagation();
                                                                             const updated = workshopMilestones.filter((_, i) => i !== idx);
                                                                             setWorkshopMilestones(updated.map((s, i) => ({ ...s, order: i + 1 })));
                                                                             setActiveWorkshopStepIdx(Math.max(0, Math.min(activeWorkshopStepIdx, updated.length - 1)));
                                                                         }}
-                                                                        className="p-1 hover:text-destructive text-muted-foreground disabled:opacity-20 cursor-pointer"
-                                                                        title="Eliminar"
+                                                                        className="p-1 hover:text-destructive text-muted-foreground cursor-pointer"
+                                                                        title="Eliminar paso"
                                                                     >
                                                                         <Trash2 className="h-3 w-3" />
                                                                     </button>
                                                                 </div>
                                                             </div>
                                                         );
-                                                    })}
+                                                    }))}
                                                 </div>
                                             </div>
 
@@ -5027,7 +6167,7 @@ function ActivityFormDialog({
                                                                     Paso {activeWorkshopStepIdx + 1} de {workshopMilestones.length}
                                                                 </Badge>
                                                                 <Input
-                                                                    value={workshopMilestones[activeWorkshopStepIdx].title}
+                                                                    value={workshopMilestones[activeWorkshopStepIdx].title || ""}
                                                                     onChange={(e) => {
                                                                         const updated = [...workshopMilestones];
                                                                         updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], title: e.target.value };
@@ -5044,10 +6184,11 @@ function ActivityFormDialog({
                                                                     size="sm"
                                                                     variant="outline"
                                                                     onClick={() => setIsAiSingleStepOpen(true)}
-                                                                    className="h-8 text-xs font-semibold gap-1.5 border-primary/40 text-primary hover:bg-primary/10 shadow-2xs cursor-pointer"
+                                                                    className="h-8 text-xs font-bold gap-1.5 border-primary/50 text-primary hover:bg-primary/10 shadow-2xs cursor-pointer"
+                                                                    title="Asistente integral: genera explicaciones, archivo, código y comandos Git para este paso"
                                                                 >
                                                                     <Sparkles className="h-3.5 w-3.5" />
-                                                                    <span>Asistir Paso con IA</span>
+                                                                    <span>Asistir Paso Completo</span>
                                                                 </Button>
 
                                                                 <div className="flex items-center border rounded-lg bg-background">
@@ -5095,13 +6236,12 @@ function ActivityFormDialog({
                                                                     type="button"
                                                                     size="icon"
                                                                     variant="ghost"
-                                                                    disabled={workshopMilestones.length <= 1}
                                                                     onClick={() => {
                                                                         const updated = workshopMilestones.filter((_, i) => i !== activeWorkshopStepIdx);
                                                                         setWorkshopMilestones(updated.map((s, i) => ({ ...s, order: i + 1 })));
-                                                                        setActiveWorkshopStepIdx(Math.max(0, activeWorkshopStepIdx - 1));
+                                                                        setActiveWorkshopStepIdx(Math.max(0, Math.min(activeWorkshopStepIdx, updated.length - 1)));
                                                                     }}
-                                                                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                                                    className="h-7 w-7 text-muted-foreground hover:text-destructive cursor-pointer"
                                                                     title="Eliminar paso"
                                                                 >
                                                                     <Trash2 className="h-3.5 w-3.5" />
@@ -5109,35 +6249,71 @@ function ActivityFormDialog({
                                                             </div>
                                                         </div>
 
-                                                        {/* Instrucciones del Paso (Markdown) */}
+                                                        {/* Instrucciones del Paso (Editor Markdown idéntico a la actividad GitHub) */}
                                                         <div className="space-y-1.5">
-                                                            <div className="flex items-center justify-between">
-                                                                <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                                                                    <BookOpen className="h-3.5 w-3.5 text-primary" />
-                                                                    <span>Instrucciones y Requisitos del Paso (Markdown)</span>
-                                                                </Label>
-                                                                <Button
-                                                                    type="button"
-                                                                    size="sm"
-                                                                    variant="ghost"
-                                                                    onClick={() => setIsAiSingleStepOpen(true)}
-                                                                    className="h-6 text-[11px] text-primary hover:text-primary gap-1"
-                                                                >
-                                                                    <Sparkles className="h-3 w-3" />
-                                                                    <span>Mejorar Redacción con IA</span>
-                                                                </Button>
+                                                            <div className="flex items-center justify-between flex-wrap gap-2">
+                                                                <div>
+                                                                    <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                                                                        <BookOpen className="h-3.5 w-3.5 text-primary" />
+                                                                        <span>Instrucciones y Requisitos del Paso (Markdown)</span>
+                                                                    </Label>
+                                                                    <p className="text-[10px] text-muted-foreground">
+                                                                        Redacta las indicaciones didácticas con formato enriquecido Markdown.
+                                                                    </p>
+                                                                </div>
+                                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                                    <Button
+                                                                        type="button"
+                                                                        size="sm"
+                                                                        variant="ghost"
+                                                                        disabled={isGeneratingStepInstructions}
+                                                                        onClick={handleGenerateStepInstructionsWithAI}
+                                                                        className="h-6 text-[11px] font-semibold text-primary hover:text-primary hover:bg-primary/10 gap-1 cursor-pointer"
+                                                                        title="Redacta o enriquece las explicaciones didácticas en Markdown sin alterar el código"
+                                                                    >
+                                                                        {isGeneratingStepInstructions ? (
+                                                                            <>
+                                                                                <Loader2 className="h-3 w-3 animate-spin" />
+                                                                                <span>Redactando...</span>
+                                                                            </>
+                                                                        ) : (
+                                                                            <>
+                                                                                <Sparkles className="h-3 w-3" />
+                                                                                <span>Redactar con IA</span>
+                                                                            </>
+                                                                        )}
+                                                                    </Button>
+                                                                    <Button
+                                                                        type="button"
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        onClick={() => {
+                                                                            setAiGeneratorTarget("step_instructions");
+                                                                            setAiInitialContent(workshopMilestones[activeWorkshopStepIdx]?.instructions || "");
+                                                                            setIsAIGeneratorOpen(true);
+                                                                        }}
+                                                                        className="h-6 text-[11px] font-semibold text-primary hover:text-primary hover:bg-primary/10 border-primary/30 gap-1 cursor-pointer shadow-2xs"
+                                                                        title="Abre el chat interactivo de IA para adaptar o modificar las instrucciones de este paso conversando con la IA"
+                                                                    >
+                                                                        <MessageSquare className="h-3 w-3 text-primary shrink-0" />
+                                                                        <span>Modificar con Chat IA</span>
+                                                                    </Button>
+                                                                </div>
                                                             </div>
-                                                            <Textarea
-                                                                rows={6}
-                                                                value={workshopMilestones[activeWorkshopStepIdx].instructions}
-                                                                onChange={(e) => {
-                                                                    const updated = [...workshopMilestones];
-                                                                    updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], instructions: e.target.value };
-                                                                    setWorkshopMilestones(updated);
-                                                                }}
-                                                                placeholder="Indica qué debe realizar el estudiante en este paso, reglas y directrices..."
-                                                                className="text-xs bg-background leading-relaxed resize-y font-normal"
-                                                            />
+
+                                                            <div className="border border-border/70 rounded-xl overflow-hidden shadow-2xs bg-background" data-color-mode={mode}>
+                                                                <MDEditor
+                                                                    value={workshopMilestones[activeWorkshopStepIdx]?.instructions || ""}
+                                                                    onChange={(val) => {
+                                                                        const updated = [...workshopMilestones];
+                                                                        updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], instructions: val || "" };
+                                                                        setWorkshopMilestones(updated);
+                                                                    }}
+                                                                    height={220}
+                                                                    preview="edit"
+                                                                    className="border-none"
+                                                                />
+                                                            </div>
                                                         </div>
 
                                                         {/* Código Inicial y Solución Esperada para WORKSHOP_CODE */}
@@ -5206,291 +6382,675 @@ function ActivityFormDialog({
                                                         )}
 
                                                         {/* Archivo Objetivo y Comandos Git para WORKSHOP_GITHUB (Tutorial GitHub) */}
-                                                        {selectedType === "WORKSHOP_GITHUB" && (
-                                                            <div className="space-y-4 pt-1">
-                                                                {/* Archivo Objetivo en el Repositorio */}
-                                                                <div className="p-3.5 rounded-xl border border-orange-500/20 bg-orange-500/[0.03] space-y-3">
-                                                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                                                        <div className="flex items-center gap-2">
-                                                                            <FolderGit2 className="h-4 w-4 text-orange-500" />
-                                                                            <div>
-                                                                                <Label className="text-xs font-bold text-foreground">
-                                                                                    Archivo a Crear o Modificar en el Repositorio
-                                                                                </Label>
-                                                                                <p className="text-[10px] text-muted-foreground">
-                                                                                    Ruta relativa dentro del repositorio (ej: src/App.jsx, README.md, package.json).
-                                                                                </p>
+                                                        {selectedType === "WORKSHOP_GITHUB" && (() => {
+                                                            const currentMilestone = workshopMilestones[activeWorkshopStepIdx];
+                                                            const stepRequiresFile = currentMilestone?.requiresFile !== undefined
+                                                                ? currentMilestone.requiresFile
+                                                                : Boolean(currentMilestone?.targetFilePath && currentMilestone.targetFilePath.trim().length > 0);
+                                                            const stepRequiresGit = currentMilestone?.requiresGitCommands !== undefined
+                                                                ? currentMilestone.requiresGitCommands
+                                                                : Boolean(currentMilestone?.gitCommands && currentMilestone.gitCommands.length > 0);
+
+                                                            return (
+                                                                <div className="space-y-4 pt-1">
+                                                                    {/* Archivo Objetivo en el Repositorio */}
+                                                                    <div className={cn(
+                                                                        "p-3.5 rounded-xl border transition-all space-y-3",
+                                                                        stepRequiresFile ? "border-orange-500/20 bg-orange-500/[0.03]" : "border-border/60 bg-muted/10 opacity-90"
+                                                                    )}>
+                                                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                                                                            <div className="flex items-center gap-2">
+                                                                                <FolderGit2 className={cn("h-4 w-4 shrink-0", stepRequiresFile ? "text-orange-500" : "text-muted-foreground")} />
+                                                                                <div>
+                                                                                    <Label className="text-xs font-bold text-foreground">
+                                                                                        Archivo en el Repositorio (Código Fuente)
+                                                                                    </Label>
+                                                                                    <p className="text-[10px] text-muted-foreground">
+                                                                                        {stepRequiresFile 
+                                                                                            ? "Ruta y código del archivo que el estudiante debe crear o modificar en este paso." 
+                                                                                            : "Apagado: Este paso es solo instructivo y no requiere ningún archivo ni código."}
+                                                                                    </p>
+                                                                                </div>
                                                                             </div>
-                                                                        </div>
-                                                                        <Input
-                                                                            value={workshopMilestones[activeWorkshopStepIdx].targetFilePath || ""}
-                                                                            onChange={(e) => {
-                                                                                const updated = [...workshopMilestones];
-                                                                                updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], targetFilePath: e.target.value };
-                                                                                setWorkshopMilestones(updated);
-                                                                            }}
-                                                                            placeholder="src/index.js (o README.md)"
-                                                                            className="h-8 text-xs font-mono bg-background w-full sm:w-64"
-                                                                        />
-                                                                    </div>
 
-                                                                    {/* Contenido / Plantilla del Archivo */}
-                                                                    <div className="space-y-1.5">
-                                                                        <div className="flex items-center justify-between">
-                                                                            <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                                                                                <Code2 className="h-3.5 w-3.5 text-orange-500" />
-                                                                                <span>Contenido o Código Fuente Sugerido para el Archivo</span>
-                                                                            </Label>
-                                                                            <Button
-                                                                                type="button"
-                                                                                size="sm"
-                                                                                variant="ghost"
-                                                                                onClick={() => setIsAiSingleStepOpen(true)}
-                                                                                className="h-6 text-[11px] text-orange-600 dark:text-orange-400 gap-1 cursor-pointer"
-                                                                            >
-                                                                                <Sparkles className="h-3 w-3" />
-                                                                                <span>Generar con IA</span>
-                                                                            </Button>
-                                                                        </div>
-                                                                        <Textarea
-                                                                            rows={7}
-                                                                            value={workshopMilestones[activeWorkshopStepIdx].targetFileContent || ""}
-                                                                            onChange={(e) => {
-                                                                                const updated = [...workshopMilestones];
-                                                                                updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], targetFileContent: e.target.value };
-                                                                                setWorkshopMilestones(updated);
-                                                                            }}
-                                                                            placeholder="// Código o contenido completo que el estudiante debe crear en este archivo..."
-                                                                            className="text-xs font-mono bg-background resize-y leading-relaxed"
-                                                                        />
-                                                                    </div>
-                                                                </div>
-
-                                                                {/* Comandos Git Guiados con Explicación Pedagógica */}
-                                                                <div className="p-3.5 rounded-xl border border-blue-500/20 bg-blue-500/[0.03] space-y-3">
-                                                                    <div className="flex items-center justify-between">
-                                                                        <div className="flex items-center gap-2">
-                                                                            <Terminal className="h-4 w-4 text-blue-500" />
-                                                                            <div>
-                                                                                <Label className="text-xs font-bold text-foreground">
-                                                                                    Comandos Git del Paso (con Explicación Pedagógica)
-                                                                                </Label>
-                                                                                <p className="text-[10px] text-muted-foreground">
-                                                                                    Indica al alumno los comandos a ejecutar en su terminal y qué hace cada uno.
-                                                                                </p>
-                                                                            </div>
-                                                                        </div>
-                                                                        <div className="flex items-center gap-1.5">
-                                                                            <Button
-                                                                                type="button"
-                                                                                size="sm"
-                                                                                variant="outline"
-                                                                                onClick={() => {
-                                                                                    const updated = [...workshopMilestones];
-                                                                                    const currentTarget = updated[activeWorkshopStepIdx].targetFilePath || "archivo";
-                                                                                    updated[activeWorkshopStepIdx] = {
-                                                                                        ...updated[activeWorkshopStepIdx],
-                                                                                        gitCommands: [
-                                                                                            { command: `git add ${currentTarget}`, explanation: `Prepara el archivo ${currentTarget} para ser registrado en el commit.` },
-                                                                                            { command: `git commit -m "feat: implementar ${updated[activeWorkshopStepIdx].title || "paso"}"`, explanation: "Confirma los cambios en el historial local con un mensaje claro." },
-                                                                                            { command: "git push origin main", explanation: "Envía los commits locales al repositorio remoto en GitHub." }
-                                                                                        ]
-                                                                                    };
-                                                                                    setWorkshopMilestones(updated);
-                                                                                    toast.success("Comandos Git estándar insertados.");
-                                                                                }}
-                                                                                className="h-7 text-[11px] px-2.5 text-blue-600 dark:text-blue-400 border-blue-500/30 hover:bg-blue-500/10 gap-1 cursor-pointer"
-                                                                            >
-                                                                                <Sparkles className="h-3 w-3" />
-                                                                                <span>Flujo Estándar</span>
-                                                                            </Button>
-                                                                            <Button
-                                                                                type="button"
-                                                                                size="sm"
-                                                                                variant="ghost"
-                                                                                onClick={() => {
-                                                                                    const updated = [...workshopMilestones];
-                                                                                    const currentCmds = updated[activeWorkshopStepIdx].gitCommands || [];
-                                                                                    updated[activeWorkshopStepIdx] = {
-                                                                                        ...updated[activeWorkshopStepIdx],
-                                                                                        gitCommands: [
-                                                                                            ...currentCmds,
-                                                                                            { command: "git status", explanation: "Muestra el estado actual del árbol de trabajo y archivos modificados." }
-                                                                                        ]
-                                                                                    };
-                                                                                    setWorkshopMilestones(updated);
-                                                                                }}
-                                                                                className="h-7 text-[11px] px-2 text-primary hover:text-primary gap-1 cursor-pointer"
-                                                                            >
-                                                                                <Plus className="h-3 w-3" />
-                                                                                <span>Añadir Comando</span>
-                                                                            </Button>
-                                                                        </div>
-                                                                    </div>
-
-                                                                    <div className="space-y-2">
-                                                                        {(workshopMilestones[activeWorkshopStepIdx].gitCommands || []).map((cmdObj, cIdx) => (
-                                                                            <div key={cIdx} className="p-2.5 rounded-lg border border-border/70 bg-background space-y-1.5 shadow-2xs">
-                                                                                <div className="flex items-center gap-2">
-                                                                                    <span className="text-[10px] font-mono font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                                                                                        #{cIdx + 1}
+                                                                            <div className="flex items-center gap-2.5 self-start sm:self-auto flex-wrap">
+                                                                                <div className="flex items-center gap-2 bg-background/90 px-2.5 py-1 rounded-lg border border-border/70 shadow-2xs">
+                                                                                    <span className={cn("text-[11px] font-semibold select-none", stepRequiresFile ? "text-orange-600 dark:text-orange-400" : "text-muted-foreground")}>
+                                                                                        {stepRequiresFile ? "Requiere Archivo" : "Sin Archivo"}
                                                                                     </span>
-                                                                                    <div className="flex-1 relative">
-                                                                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-mono text-muted-foreground">$</span>
-                                                                                        <Input
-                                                                                            value={cmdObj.command}
-                                                                                            onChange={(e) => {
-                                                                                                const updated = [...workshopMilestones];
-                                                                                                const cmds = [...(updated[activeWorkshopStepIdx].gitCommands || [])];
-                                                                                                cmds[cIdx] = { ...cmds[cIdx], command: e.target.value };
-                                                                                                updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], gitCommands: cmds };
-                                                                                                setWorkshopMilestones(updated);
-                                                                                            }}
-                                                                                            placeholder="git add ."
-                                                                                            className="h-7 text-xs font-mono pl-6 bg-muted/20"
-                                                                                        />
-                                                                                    </div>
-                                                                                    <Button
-                                                                                        type="button"
-                                                                                        size="icon"
-                                                                                        variant="ghost"
-                                                                                        onClick={() => {
+                                                                                    <Switch
+                                                                                        checked={stepRequiresFile}
+                                                                                        onCheckedChange={(checked) => {
                                                                                             const updated = [...workshopMilestones];
-                                                                                            const cmds = (updated[activeWorkshopStepIdx].gitCommands || []).filter((_, i) => i !== cIdx);
-                                                                                            updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], gitCommands: cmds };
+                                                                                            updated[activeWorkshopStepIdx] = {
+                                                                                                ...updated[activeWorkshopStepIdx],
+                                                                                                requiresFile: checked,
+                                                                                                targetFilePath: checked ? (updated[activeWorkshopStepIdx].targetFilePath || getDefaultWorkshopStepPath(activeWorkshopStepIdx + 1, workshopLanguage, statementContext.detectedStack)) : "",
+                                                                                            };
                                                                                             setWorkshopMilestones(updated);
                                                                                         }}
-                                                                                        className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0 cursor-pointer"
-                                                                                        title="Eliminar comando"
-                                                                                    >
-                                                                                        <Trash2 className="h-3 w-3" />
-                                                                                    </Button>
+                                                                                    />
                                                                                 </div>
-                                                                                <div className="pl-6">
+                                                                                {stepRequiresFile && (
                                                                                     <Input
-                                                                                        value={cmdObj.explanation}
+                                                                                        value={workshopMilestones[activeWorkshopStepIdx].targetFilePath || ""}
                                                                                         onChange={(e) => {
                                                                                             const updated = [...workshopMilestones];
-                                                                                            const cmds = [...(updated[activeWorkshopStepIdx].gitCommands || [])];
-                                                                                            cmds[cIdx] = { ...cmds[cIdx], explanation: e.target.value };
-                                                                                            updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], gitCommands: cmds };
+                                                                                            updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], targetFilePath: e.target.value };
                                                                                             setWorkshopMilestones(updated);
                                                                                         }}
-                                                                                        placeholder="¿Qué hace este comando? (Explicación pedagógica para el alumno)"
-                                                                                        className="h-6 text-[11px] text-muted-foreground bg-transparent border-dashed"
+                                                                                        placeholder="src/index.js (o README.md)"
+                                                                                        className="h-8 text-xs font-mono bg-background w-full sm:w-56"
+                                                                                    />
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {stepRequiresFile ? (
+                                                                            /* Contenido / Plantilla del Archivo */
+                                                                            <div className="space-y-1.5 pt-1">
+                                                                                <div className="flex items-center justify-between">
+                                                                                    <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                                                                                        <Code2 className="h-3.5 w-3.5 text-orange-500" />
+                                                                                        <span>Contenido o Código Fuente Sugerido para el Archivo</span>
+                                                                                    </Label>
+                                                                                    <div className="flex items-center gap-1.5">
+                                                                                        <Button
+                                                                                            type="button"
+                                                                                            size="sm"
+                                                                                            variant="outline"
+                                                                                            onClick={handleFormatCurrentStepCode}
+                                                                                            className="h-6 text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 border-blue-200 dark:border-blue-800/40 gap-1 cursor-pointer"
+                                                                                            title="Formatea y embellece el código fuente con sangrías e indentación estándar"
+                                                                                        >
+                                                                                            <Sparkles className="h-3 w-3 text-blue-500" />
+                                                                                            <span>Dar Formato</span>
+                                                                                        </Button>
+                                                                                        <Button
+                                                                                            type="button"
+                                                                                            size="sm"
+                                                                                            variant="ghost"
+                                                                                            disabled={isGeneratingStepCode}
+                                                                                            onClick={handleGenerateStepCodeWithAI}
+                                                                                            className="h-6 text-[11px] font-bold text-orange-600 dark:text-orange-400 hover:bg-orange-500/10 gap-1.5 cursor-pointer"
+                                                                                            title="Genera el código fuente completo y funcional para este archivo sin alterar las instrucciones"
+                                                                                        >
+                                                                                            {isGeneratingStepCode ? (
+                                                                                                <>
+                                                                                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                                                                                    <span>Generando Código...</span>
+                                                                                                </>
+                                                                                            ) : (
+                                                                                                <>
+                                                                                                    <Code2 className="h-3 w-3" />
+                                                                                                    <span>Generar Código con IA</span>
+                                                                                                </>
+                                                                                            )}
+                                                                                        </Button>
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div className="rounded-xl border border-border/80 overflow-hidden bg-background">
+                                                                                    <div className="px-3 py-1 bg-muted/40 border-b border-border/60 flex items-center justify-between text-[10px] text-muted-foreground font-mono">
+                                                                                        <span className="truncate max-w-[240px] sm:max-w-none text-foreground font-medium">
+                                                                                            {workshopMilestones[activeWorkshopStepIdx]?.targetFilePath || "src/index.js"}
+                                                                                        </span>
+                                                                                        <span className="uppercase text-orange-600 dark:text-orange-400 font-bold">
+                                                                                            {(() => {
+                                                                                                const p = workshopMilestones[activeWorkshopStepIdx]?.targetFilePath || "";
+                                                                                                const ext = p.split(".").pop()?.toLowerCase();
+                                                                                                if (ext === "java") return "JAVA";
+                                                                                                if (ext === "ts" || ext === "tsx") return "TYPESCRIPT";
+                                                                                                if (ext === "js" || ext === "jsx") return "JAVASCRIPT";
+                                                                                                if (ext === "py") return "PYTHON";
+                                                                                                if (ext === "html") return "HTML";
+                                                                                                if (ext === "css") return "CSS";
+                                                                                                if (ext === "json") return "JSON";
+                                                                                                if (ext === "sql") return "SQL";
+                                                                                                if (ext === "sh") return "SHELL";
+                                                                                                if (ext === "yml" || ext === "yaml") return "YAML";
+                                                                                                if (ext === "xml") return "XML";
+                                                                                                return ext?.toUpperCase() || "CODE";
+                                                                                            })()}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                    <Editor
+                                                                                        key={`workshop_step_code_${activeWorkshopStepIdx}_${workshopMilestones[activeWorkshopStepIdx]?.targetFilePath || 'default'}`}
+                                                                                        height="220px"
+                                                                                        language={(() => {
+                                                                                            const p = workshopMilestones[activeWorkshopStepIdx]?.targetFilePath || "";
+                                                                                            const ext = p.split(".").pop()?.toLowerCase();
+                                                                                            if (ext === "java") return "java";
+                                                                                            if (ext === "ts" || ext === "tsx") return "typescript";
+                                                                                            if (ext === "js" || ext === "jsx") return "javascript";
+                                                                                            if (ext === "py") return "python";
+                                                                                            if (ext === "html") return "html";
+                                                                                            if (ext === "css") return "css";
+                                                                                            if (ext === "json") return "json";
+                                                                                            if (ext === "sql") return "sql";
+                                                                                            if (ext === "sh") return "shell";
+                                                                                            if (ext === "yml" || ext === "yaml") return "yaml";
+                                                                                            if (ext === "xml") return "xml";
+                                                                                            return "javascript";
+                                                                                        })()}
+                                                                                        theme={monacoTheme}
+                                                                                        value={workshopMilestones[activeWorkshopStepIdx]?.targetFileContent || ""}
+                                                                                        onChange={(val) => {
+                                                                                            const updated = [...workshopMilestones];
+                                                                                            updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], targetFileContent: val || "" };
+                                                                                            setWorkshopMilestones(updated);
+                                                                                        }}
+                                                                                        options={{
+                                                                                            minimap: { enabled: false },
+                                                                                            fontSize: 12,
+                                                                                            lineNumbers: "on",
+                                                                                            scrollBeyondLastLine: false,
+                                                                                            automaticLayout: true,
+                                                                                            wordWrap: "on",
+                                                                                            tabSize: 4,
+                                                                                        }}
+                                                                                    />
+                                                                                </div>
+
+                                                                                {/* 📘 Explicación y Desglose Didáctico del Código */}
+                                                                                <div className="space-y-1.5 pt-2 border-t border-border/40">
+                                                                                    <div className="flex items-center justify-between flex-wrap gap-2">
+                                                                                        <div>
+                                                                                            <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                                                                                                <BookOpen className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                                                                                <span>📘 Explicación y Desglose Didáctico del Código (Markdown)</span>
+                                                                                            </Label>
+                                                                                            <p className="text-[10px] text-muted-foreground">
+                                                                                                Explica al alumno cómo funciona este archivo, anotaciones, imports y lógica clave para que comprenda la arquitectura.
+                                                                                            </p>
+                                                                                        </div>
+                                                                                        <Button
+                                                                                            type="button"
+                                                                                            size="sm"
+                                                                                            variant="ghost"
+                                                                                            disabled={isGeneratingStepCodeExplanation}
+                                                                                            onClick={handleGenerateStepCodeExplanationWithAI}
+                                                                                            className="h-6 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 gap-1.5 cursor-pointer"
+                                                                                            title="Analiza el código del editor y genera automáticamente un desglose pedagógico estructurado"
+                                                                                        >
+                                                                                            {isGeneratingStepCodeExplanation ? (
+                                                                                                <>
+                                                                                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                                                                                    <span>Generando Explicación...</span>
+                                                                                                </>
+                                                                                            ) : (
+                                                                                                <>
+                                                                                                    <Sparkles className="h-3 w-3" />
+                                                                                                    <span>Generar Explicación con IA</span>
+                                                                                                </>
+                                                                                            )}
+                                                                                        </Button>
+                                                                                    </div>
+                                                                                    <div className="border border-border/70 rounded-xl overflow-hidden shadow-2xs bg-background" data-color-mode={mode}>
+                                                                                        <MDEditor
+                                                                                            value={workshopMilestones[activeWorkshopStepIdx]?.codeExplanation || ""}
+                                                                                            onChange={(val) => {
+                                                                                                const updated = [...workshopMilestones];
+                                                                                                updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], codeExplanation: val || "" };
+                                                                                                setWorkshopMilestones(updated);
+                                                                                            }}
+                                                                                            height={160}
+                                                                                            preview="edit"
+                                                                                            className="border-none"
+                                                                                        />
+                                                                                    </div>
+                                                                                </div>
+
+                                                                                {/* 🧪 Verificación Local y Resultado Esperado */}
+                                                                                <div className="space-y-1.5 pt-2 border-t border-border/40">
+                                                                                    <div>
+                                                                                        <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                                                                                            <CheckCircle2 className="h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" />
+                                                                                            <span>🧪 Verificación Local y Resultado Esperado (Antes de Git)</span>
+                                                                                        </Label>
+                                                                                        <p className="text-[10px] text-muted-foreground">
+                                                                                            Instrucciones para que el estudiante compruebe en su máquina local que este paso funciona (ej: comando de consola, curl, o salida esperada en terminal).
+                                                                                        </p>
+                                                                                    </div>
+                                                                                    <Textarea
+                                                                                        rows={2}
+                                                                                        value={workshopMilestones[activeWorkshopStepIdx]?.localVerification || ""}
+                                                                                        onChange={(e) => {
+                                                                                            const updated = [...workshopMilestones];
+                                                                                            updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], localVerification: e.target.value };
+                                                                                            setWorkshopMilestones(updated);
+                                                                                        }}
+                                                                                        placeholder="Ej: Ejecuta 'npm run dev' y abre http://localhost:3000. Deberías ver la respuesta JSON esperada en el navegador o terminal."
+                                                                                        className="text-xs bg-background resize-none leading-relaxed"
                                                                                     />
                                                                                 </div>
                                                                             </div>
-                                                                        ))}
-
-                                                                        {(!workshopMilestones[activeWorkshopStepIdx].gitCommands || workshopMilestones[activeWorkshopStepIdx].gitCommands?.length === 0) && (
-                                                                            <div className="p-3 border border-dashed rounded-lg text-center text-xs text-muted-foreground">
-                                                                                No hay comandos configurados para este paso. Haz clic en "Flujo Estándar" o "Añadir Comando".
+                                                                        ) : (
+                                                                            <div className="py-2.5 px-3 rounded-lg border border-dashed border-border/80 bg-background/50 text-[11px] text-muted-foreground flex items-center justify-between">
+                                                                                <span className="flex items-center gap-1.5">
+                                                                                    <span>📄</span>
+                                                                                    <span>Este paso no exige la entrega ni modificación de ningún archivo en el repositorio.</span>
+                                                                                </span>
+                                                                                <Button
+                                                                                    type="button"
+                                                                                    variant="ghost"
+                                                                                    size="sm"
+                                                                                    onClick={() => {
+                                                                                        const updated = [...workshopMilestones];
+                                                                                        updated[activeWorkshopStepIdx] = {
+                                                                                            ...updated[activeWorkshopStepIdx],
+                                                                                            requiresFile: true,
+                                                                                            targetFilePath: updated[activeWorkshopStepIdx].targetFilePath || getDefaultWorkshopStepPath(activeWorkshopStepIdx + 1, workshopLanguage, statementContext.detectedStack)
+                                                                                        };
+                                                                                        setWorkshopMilestones(updated);
+                                                                                    }}
+                                                                                    className="h-6 text-[10px] text-orange-600 dark:text-orange-400 font-semibold cursor-pointer"
+                                                                                >
+                                                                                    + Activar Archivo
+                                                                                </Button>
                                                                             </div>
                                                                         )}
                                                                     </div>
+
+                                                                    {/* Comandos Git Guiados con Explicación Pedagógica */}
+                                                                    <div className={cn(
+                                                                        "p-3.5 rounded-xl border transition-all space-y-3",
+                                                                        stepRequiresGit ? "border-blue-500/20 bg-blue-500/[0.03]" : "border-border/60 bg-muted/10 opacity-90"
+                                                                    )}>
+                                                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                                                                            <div className="flex items-center gap-2">
+                                                                                <Terminal className={cn("h-4 w-4 shrink-0", stepRequiresGit ? "text-blue-500" : "text-muted-foreground")} />
+                                                                                <div>
+                                                                                    <Label className="text-xs font-bold text-foreground">
+                                                                                        Comandos Git del Paso
+                                                                                    </Label>
+                                                                                    <p className="text-[10px] text-muted-foreground">
+                                                                                        {stepRequiresGit 
+                                                                                            ? "Indica al alumno los comandos a ejecutar en su terminal y qué hace cada uno." 
+                                                                                            : "Apagado: El estudiante no necesita ejecutar comandos Git para este paso."}
+                                                                                    </p>
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                                <div className="flex items-center gap-2 bg-background/90 px-2.5 py-1 rounded-lg border border-border/70 shadow-2xs">
+                                                                                    <span className={cn("text-[11px] font-semibold select-none", stepRequiresGit ? "text-blue-600 dark:text-blue-400" : "text-muted-foreground")}>
+                                                                                        {stepRequiresGit ? "Requiere Git" : "Sin Comandos Git"}
+                                                                                    </span>
+                                                                                    <Switch
+                                                                                        checked={stepRequiresGit}
+                                                                                        onCheckedChange={(checked) => {
+                                                                                            const updated = [...workshopMilestones];
+                                                                                            const currentTarget = updated[activeWorkshopStepIdx].targetFilePath || "archivo";
+                                                                                            updated[activeWorkshopStepIdx] = {
+                                                                                                ...updated[activeWorkshopStepIdx],
+                                                                                                requiresGitCommands: checked,
+                                                                                                gitCommands: checked
+                                                                                                    ? (updated[activeWorkshopStepIdx].gitCommands && updated[activeWorkshopStepIdx].gitCommands.length > 0
+                                                                                                        ? updated[activeWorkshopStepIdx].gitCommands
+                                                                                                        : [
+                                                                                                            { command: `git add ${currentTarget}`, explanation: "Prepara los cambios para el commit." },
+                                                                                                            { command: `git commit -m "feat: completar paso ${activeWorkshopStepIdx + 1}"`, explanation: "Confirma los cambios localmente." },
+                                                                                                            { command: "git push origin main", explanation: "Sube los cambios a GitHub." }
+                                                                                                        ])
+                                                                                                    : []
+                                                                                            };
+                                                                                            setWorkshopMilestones(updated);
+                                                                                        }}
+                                                                                    />
+                                                                                </div>
+
+                                                                                {stepRequiresGit && (
+                                                                                    <div className="flex items-center gap-1.5">
+                                                                                        <Button
+                                                                                            type="button"
+                                                                                            size="sm"
+                                                                                            variant="outline"
+                                                                                            disabled={isGeneratingStepGit}
+                                                                                            onClick={handleSuggestGitCommandsWithAI}
+                                                                                            className="h-7 text-[11px] px-2.5 text-blue-600 dark:text-blue-400 border-blue-500/30 hover:bg-blue-500/10 gap-1 cursor-pointer font-semibold"
+                                                                                            title="Sugiere los comandos Git ideales con explicaciones pedagógicas según este paso y archivo"
+                                                                                        >
+                                                                                            {isGeneratingStepGit ? (
+                                                                                                <>
+                                                                                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                                                                                    <span>Sugiriendo...</span>
+                                                                                            </>
+                                                                                            ) : (
+                                                                                                <>
+                                                                                                    <Sparkles className="h-3 w-3" />
+                                                                                                    <span>Sugerir con IA</span>
+                                                                                                </>
+                                                                                            )}
+                                                                                        </Button>
+                                                                                        <Button
+                                                                                            type="button"
+                                                                                            size="sm"
+                                                                                            variant="outline"
+                                                                                            onClick={() => {
+                                                                                                const updated = [...workshopMilestones];
+                                                                                                const currentTarget = updated[activeWorkshopStepIdx].targetFilePath || "archivo";
+                                                                                                updated[activeWorkshopStepIdx] = {
+                                                                                                    ...updated[activeWorkshopStepIdx],
+                                                                                                    gitCommands: [
+                                                                                                        { command: `git add ${currentTarget}`, explanation: `Prepara el archivo ${currentTarget} para ser registrado en el commit.` },
+                                                                                                        { command: `git commit -m "feat: implementar ${updated[activeWorkshopStepIdx].title || "paso"}"`, explanation: "Confirma los cambios en el historial local con un mensaje claro." },
+                                                                                                        { command: "git push origin main", explanation: "Envía los commits locales al repositorio remoto en GitHub." }
+                                                                                                    ]
+                                                                                                };
+                                                                                                setWorkshopMilestones(updated);
+                                                                                                toast.success("Comandos Git estándar insertados.");
+                                                                                            }}
+                                                                                            className="h-7 text-[11px] px-2 text-muted-foreground hover:text-foreground border-border gap-1 cursor-pointer"
+                                                                                            title="Inserta el flujo git add, commit y push estándar"
+                                                                                        >
+                                                                                            <span>Flujo Estándar</span>
+                                                                                        </Button>
+                                                                                        <Button
+                                                                                            type="button"
+                                                                                            size="sm"
+                                                                                            variant="ghost"
+                                                                                            onClick={() => {
+                                                                                                const updated = [...workshopMilestones];
+                                                                                                const currentCmds = updated[activeWorkshopStepIdx].gitCommands || [];
+                                                                                                updated[activeWorkshopStepIdx] = {
+                                                                                                    ...updated[activeWorkshopStepIdx],
+                                                                                                    gitCommands: [
+                                                                                                        ...currentCmds,
+                                                                                                        { command: "git status", explanation: "Muestra el estado actual del árbol de trabajo y archivos modificados." }
+                                                                                                    ]
+                                                                                                };
+                                                                                                setWorkshopMilestones(updated);
+                                                                                            }}
+                                                                                            className="h-7 text-[11px] px-2 text-primary hover:text-primary gap-1 cursor-pointer"
+                                                                                        >
+                                                                                            <Plus className="h-3 w-3" />
+                                                                                            <span>Añadir</span>
+                                                                                        </Button>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {stepRequiresGit ? (
+                                                                            <div className="space-y-2">
+                                                                                {(workshopMilestones[activeWorkshopStepIdx].gitCommands || []).map((cmdObj, cIdx) => (
+                                                                                    <div key={cIdx} className="p-2.5 rounded-lg border border-border/70 bg-background space-y-1.5 shadow-2xs">
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <span className="text-[10px] font-mono font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                                                                                                #{cIdx + 1}
+                                                                                            </span>
+                                                                                            <div className="flex-1 relative">
+                                                                                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-mono text-muted-foreground">$</span>
+                                                                                                <Input
+                                                                                                    value={cmdObj.command || ""}
+                                                                                                    onChange={(e) => {
+                                                                                                        const updated = [...workshopMilestones];
+                                                                                                        const cmds = [...(updated[activeWorkshopStepIdx].gitCommands || [])];
+                                                                                                        cmds[cIdx] = { ...cmds[cIdx], command: e.target.value };
+                                                                                                        updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], gitCommands: cmds };
+                                                                                                        setWorkshopMilestones(updated);
+                                                                                                    }}
+                                                                                                    placeholder="git add ."
+                                                                                                    className="h-7 text-xs font-mono pl-6 bg-muted/20"
+                                                                                                />
+                                                                                            </div>
+                                                                                            <Button
+                                                                                                type="button"
+                                                                                                size="icon"
+                                                                                                variant="ghost"
+                                                                                                onClick={() => {
+                                                                                                    const updated = [...workshopMilestones];
+                                                                                                    const cmds = (updated[activeWorkshopStepIdx].gitCommands || []).filter((_, i) => i !== cIdx);
+                                                                                                    updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], gitCommands: cmds };
+                                                                                                    setWorkshopMilestones(updated);
+                                                                                                }}
+                                                                                                className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0 cursor-pointer"
+                                                                                                title="Eliminar comando"
+                                                                                            >
+                                                                                                <Trash2 className="h-3 w-3" />
+                                                                                            </Button>
+                                                                                        </div>
+                                                                                        <div className="pl-6">
+                                                                                            <Input
+                                                                                                value={cmdObj.explanation || ""}
+                                                                                                onChange={(e) => {
+                                                                                                    const updated = [...workshopMilestones];
+                                                                                                    const cmds = [...(updated[activeWorkshopStepIdx].gitCommands || [])];
+                                                                                                    cmds[cIdx] = { ...cmds[cIdx], explanation: e.target.value };
+                                                                                                    updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], gitCommands: cmds };
+                                                                                                    setWorkshopMilestones(updated);
+                                                                                                }}
+                                                                                                placeholder="¿Qué hace este comando? (Explicación pedagógica para el alumno)"
+                                                                                                className="h-6 text-[11px] text-muted-foreground bg-transparent border-dashed"
+                                                                                            />
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ))}
+
+                                                                                {(!workshopMilestones[activeWorkshopStepIdx].gitCommands || workshopMilestones[activeWorkshopStepIdx].gitCommands?.length === 0) && (
+                                                                                    <div className="p-3 border border-dashed rounded-lg text-center text-xs text-muted-foreground">
+                                                                                        No hay comandos configurados para este paso. Haz clic en "Flujo Estándar" o "Añadir".
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        ) : (
+                                                                            <div className="py-2.5 px-3 rounded-lg border border-dashed border-border/80 bg-background/50 text-[11px] text-muted-foreground flex items-center justify-between">
+                                                                                <span className="flex items-center gap-1.5">
+                                                                                    <span>⚡</span>
+                                                                                    <span>Este paso no exige la ejecución de comandos Git en la terminal del estudiante.</span>
+                                                                                </span>
+                                                                                <Button
+                                                                                    type="button"
+                                                                                    variant="ghost"
+                                                                                    size="sm"
+                                                                                    onClick={() => {
+                                                                                        const updated = [...workshopMilestones];
+                                                                                        const currentTarget = updated[activeWorkshopStepIdx].targetFilePath || "archivo";
+                                                                                        updated[activeWorkshopStepIdx] = {
+                                                                                            ...updated[activeWorkshopStepIdx],
+                                                                                            requiresGitCommands: true,
+                                                                                            gitCommands: [
+                                                                                                { command: `git add ${currentTarget}`, explanation: "Prepara los cambios para el commit." },
+                                                                                                { command: `git commit -m "feat: completar paso ${activeWorkshopStepIdx + 1}"`, explanation: "Confirma los cambios localmente." },
+                                                                                                { command: "git push origin main", explanation: "Sube los cambios a GitHub." }
+                                                                                            ]
+                                                                                        };
+                                                                                        setWorkshopMilestones(updated);
+                                                                                    }}
+                                                                                    className="h-6 text-[10px] text-blue-600 dark:text-blue-400 font-semibold cursor-pointer"
+                                                                                >
+                                                                                    + Activar Git
+                                                                                </Button>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+
+                                                                    {/* Criterio de Validación Automática en GitHub */}
+                                                                    {(stepRequiresFile || stepRequiresGit) ? (
+                                                                        <div className="p-3 rounded-xl border border-border/70 bg-card space-y-1.5">
+                                                                            <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                                                                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                                                                                <span>Criterio de Validación Automática en GitHub</span>
+                                                                            </Label>
+                                                                            <Input
+                                                                                value={workshopMilestones[activeWorkshopStepIdx].validationRule || ""}
+                                                                                onChange={(e) => {
+                                                                                    const updated = [...workshopMilestones];
+                                                                                    updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], validationRule: e.target.value };
+                                                                                    setWorkshopMilestones(updated);
+                                                                                }}
+                                                                                placeholder="ej: El archivo debe existir en la rama y no estar vacío (o 'contener: express, router')"
+                                                                                className="h-8 text-xs bg-background"
+                                                                            />
+                                                                            <p className="text-[10px] text-muted-foreground">
+                                                                                El sistema comprobará mediante la API de GitHub que el estudiante haya hecho push de los cambios requeridos.
+                                                                            </p>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div className="p-3 rounded-xl border border-purple-500/20 bg-purple-500/5 text-xs text-muted-foreground flex items-center gap-2">
+                                                                            <CheckCircle2 className="h-4 w-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                                                                            <span className="text-[11px]">
+                                                                                <strong>Paso de lectura/instrucción:</strong> No requiere validación automática en GitHub. El alumno lo marcará directamente como completado tras leer las indicaciones.
+                                                                            </span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })()}
+
+                                                        {/* Pistas Pedagógicas (solo para Codelab) */}
+                                                        {selectedType === "WORKSHOP_CODE" && (
+                                                            <div className="space-y-2 pt-2 border-t border-border/60">
+                                                                <div className="flex items-center justify-between">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <HelpCircle className="h-3.5 w-3.5 text-amber-500" />
+                                                                        <Label className="text-xs font-semibold text-foreground">
+                                                                            Pistas y Orientaciones ({workshopMilestones[activeWorkshopStepIdx].hints?.length || 0})
+                                                                        </Label>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <Button
+                                                                            type="button"
+                                                                            size="sm"
+                                                                            variant="outline"
+                                                                            disabled={isGeneratingHints}
+                                                                            onClick={() => handleGenerateHintsForStep(activeWorkshopStepIdx)}
+                                                                            className="h-7 text-xs px-2.5 text-amber-700 dark:text-amber-300 border-amber-500/40 hover:bg-amber-500/10 gap-1 cursor-pointer"
+                                                                        >
+                                                                            {isGeneratingHints ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3 text-amber-500" />}
+                                                                            <span>Sugerir Pistas con IA</span>
+                                                                        </Button>
+                                                                        <Button
+                                                                            type="button"
+                                                                            size="sm"
+                                                                            variant="ghost"
+                                                                            onClick={() => {
+                                                                                const updated = [...workshopMilestones];
+                                                                                const currentHints = updated[activeWorkshopStepIdx].hints || [];
+                                                                                updated[activeWorkshopStepIdx] = {
+                                                                                    ...updated[activeWorkshopStepIdx],
+                                                                                    hints: [...currentHints, `Pista ${currentHints.length + 1}`]
+                                                                                };
+                                                                                setWorkshopMilestones(updated);
+                                                                            }}
+                                                                            className="h-7 text-xs px-2 text-primary hover:text-primary"
+                                                                        >
+                                                                            + Agregar Pista
+                                                                        </Button>
+                                                                    </div>
                                                                 </div>
 
-                                                                {/* Criterio de Validación Automática en GitHub */}
-                                                                <div className="p-3 rounded-xl border border-border/70 bg-card space-y-1.5">
-                                                                    <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                                                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                                                                        <span>Criterio de Validación Automática en GitHub</span>
-                                                                    </Label>
-                                                                    <Input
-                                                                        value={workshopMilestones[activeWorkshopStepIdx].validationRule || ""}
-                                                                        onChange={(e) => {
-                                                                            const updated = [...workshopMilestones];
-                                                                            updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], validationRule: e.target.value };
-                                                                            setWorkshopMilestones(updated);
-                                                                        }}
-                                                                        placeholder="ej: El archivo debe existir en la rama y no estar vacío (o 'contener: express, router')"
-                                                                        className="h-8 text-xs bg-background"
-                                                                    />
-                                                                    <p className="text-[10px] text-muted-foreground">
-                                                                        El sistema comprobará mediante la API de GitHub que el estudiante haya hecho push del archivo antes de desbloquear el siguiente paso.
-                                                                    </p>
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {(workshopMilestones[activeWorkshopStepIdx].hints || []).map((hint, hIdx) => (
+                                                                        <div key={hIdx} className="flex items-center gap-1.5 bg-background border border-border rounded-lg px-2.5 py-1 text-xs shadow-2xs">
+                                                                            <span className="text-[10px]">💡</span>
+                                                                            <input
+                                                                                value={hint || ""}
+                                                                                onChange={(e) => {
+                                                                                    const updated = [...workshopMilestones];
+                                                                                    const newHints = [...(updated[activeWorkshopStepIdx].hints || [])];
+                                                                                    newHints[hIdx] = e.target.value;
+                                                                                    updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], hints: newHints };
+                                                                                    setWorkshopMilestones(updated);
+                                                                                }}
+                                                                                className="bg-transparent border-none outline-none text-xs w-60 text-foreground"
+                                                                            />
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    const updated = [...workshopMilestones];
+                                                                                    const newHints = (updated[activeWorkshopStepIdx].hints || []).filter((_, i) => i !== hIdx);
+                                                                                    updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], hints: newHints };
+                                                                                    setWorkshopMilestones(updated);
+                                                                                }}
+                                                                                className="text-muted-foreground hover:text-destructive text-sm ml-1 cursor-pointer"
+                                                                            >
+                                                                                ×
+                                                                            </button>
+                                                                        </div>
+                                                                    ))}
                                                                 </div>
                                                             </div>
                                                         )}
 
-                                                        {/* Pistas Pedagógicas */}
-                                                        <div className="space-y-2 pt-2 border-t border-border/60">
-                                                            <div className="flex items-center justify-between">
-                                                                <div className="flex items-center gap-2">
-                                                                    <HelpCircle className="h-3.5 w-3.5 text-amber-500" />
-                                                                    <Label className="text-xs font-semibold text-foreground">
-                                                                        Pistas y Orientaciones ({workshopMilestones[activeWorkshopStepIdx].hints?.length || 0})
-                                                                    </Label>
-                                                                </div>
-                                                                <div className="flex items-center gap-2">
-                                                                    <Button
-                                                                        type="button"
-                                                                        size="sm"
-                                                                        variant="outline"
-                                                                        disabled={isGeneratingHints}
-                                                                        onClick={() => handleGenerateHintsForStep(activeWorkshopStepIdx)}
-                                                                        className="h-7 text-xs px-2.5 text-amber-700 dark:text-amber-300 border-amber-500/40 hover:bg-amber-500/10 gap-1 cursor-pointer"
-                                                                    >
-                                                                        {isGeneratingHints ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3 text-amber-500" />}
-                                                                        <span>Sugerir Pistas con IA</span>
-                                                                    </Button>
-                                                                    <Button
-                                                                        type="button"
-                                                                        size="sm"
-                                                                        variant="ghost"
-                                                                        onClick={() => {
-                                                                            const updated = [...workshopMilestones];
-                                                                            const currentHints = updated[activeWorkshopStepIdx].hints || [];
-                                                                            updated[activeWorkshopStepIdx] = {
-                                                                                ...updated[activeWorkshopStepIdx],
-                                                                                hints: [...currentHints, `Pista ${currentHints.length + 1}`]
-                                                                            };
-                                                                            setWorkshopMilestones(updated);
-                                                                        }}
-                                                                        className="h-7 text-xs px-2 text-primary hover:text-primary"
-                                                                    >
-                                                                        + Agregar Pista
-                                                                    </Button>
-                                                                </div>
+                                                        {selectedType === "WORKSHOP_GITHUB" && (
+                                                            <div className="p-3 rounded-xl border border-blue-500/20 bg-blue-500/5 text-xs flex items-center gap-2.5 text-muted-foreground">
+                                                                <Info className="h-4 w-4 text-blue-500 shrink-0" />
+                                                                <span className="text-[11px] leading-relaxed">
+                                                                    <strong className="text-foreground">Tutorial Guiado Paso a Paso:</strong> En este tipo de actividad no se requieren pistas. Todas las indicaciones didácticas, el archivo a crear, el código completo y los comandos Git con sus explicaciones van provistos directamente en este paso.
+                                                                </span>
                                                             </div>
-
-                                                            <div className="flex flex-wrap gap-2">
-                                                                {(workshopMilestones[activeWorkshopStepIdx].hints || []).map((hint, hIdx) => (
-                                                                    <div key={hIdx} className="flex items-center gap-1.5 bg-background border border-border rounded-lg px-2.5 py-1 text-xs shadow-2xs">
-                                                                        <span className="text-[10px]">💡</span>
-                                                                        <input
-                                                                            value={hint}
-                                                                            onChange={(e) => {
-                                                                                const updated = [...workshopMilestones];
-                                                                                const newHints = [...(updated[activeWorkshopStepIdx].hints || [])];
-                                                                                newHints[hIdx] = e.target.value;
-                                                                                updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], hints: newHints };
-                                                                                setWorkshopMilestones(updated);
-                                                                            }}
-                                                                            className="bg-transparent border-none outline-none text-xs w-60 text-foreground"
-                                                                        />
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => {
-                                                                                const updated = [...workshopMilestones];
-                                                                                const newHints = (updated[activeWorkshopStepIdx].hints || []).filter((_, i) => i !== hIdx);
-                                                                                updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], hints: newHints };
-                                                                                setWorkshopMilestones(updated);
-                                                                            }}
-                                                                            className="text-muted-foreground hover:text-destructive text-sm ml-1 cursor-pointer"
-                                                                        >
-                                                                            ×
-                                                                        </button>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <div className="flex-1 flex flex-col items-center justify-center border border-dashed rounded-xl p-6 text-center text-muted-foreground text-xs">
-                                                    No hay pasos configurados. Haz clic en "Generar Todo con IA" o "Añadir Paso".
+                                                <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-border/80 rounded-xl p-8 text-center bg-card/40">
+                                                    <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-4 shadow-2xs">
+                                                        <Layers className="h-7 w-7 text-primary" />
+                                                    </div>
+                                                    <h4 className="text-sm font-bold text-foreground">
+                                                        {(!statement || statement.trim().length < 20)
+                                                            ? "Enunciado General Requerido"
+                                                            : (selectedType === "WORKSHOP_GITHUB" ? "Tutorial GitHub sin pasos aún" : "Taller sin pasos configurados")}
+                                                    </h4>
+                                                    <p className="text-xs text-muted-foreground max-w-md mt-1.5 mb-5 leading-relaxed">
+                                                        {(!statement || statement.trim().length < 20)
+                                                            ? "Para crear los pasos de este tutorial, primero debes redactar o generar el Enunciado General del proyecto. Todos los pasos se basarán en los requerimientos del enunciado."
+                                                            : (selectedType === "WORKSHOP_GITHUB"
+                                                                ? "Este tutorial no contiene pasos por defecto. Puedes planificar la estructura completa de commits y archivos usando la IA, o añadir el primer paso manualmente."
+                                                                : "No has definido etapas para este taller interactivo. Diseña la hoja de ruta con IA o comienza agregando los pasos manualmente.")}
+                                                    </p>
+                                                    <div className="flex flex-wrap items-center justify-center gap-2.5">
+                                                        {(!statement || statement.trim().length < 20) ? (
+                                                            <>
+                                                                <Button
+                                                                    type="button"
+                                                                    size="sm"
+                                                                    onClick={() => {
+                                                                        setWorkshopContentView("statement");
+                                                                        setAiInitialContent(undefined);
+                                                                        setIsAIGeneratorOpen(true);
+                                                                    }}
+                                                                    className="h-8 text-xs font-bold gap-1.5 bg-gradient-to-r from-primary to-primary/85 hover:from-primary/95 hover:to-primary text-primary-foreground shadow-xs cursor-pointer"
+                                                                >
+                                                                    <Sparkles className="h-3.5 w-3.5" />
+                                                                    <span>Generar Enunciado con IA</span>
+                                                                </Button>
+                                                                <Button
+                                                                    type="button"
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    onClick={() => setWorkshopContentView("statement")}
+                                                                    className="h-8 text-xs font-semibold gap-1.5 cursor-pointer"
+                                                                >
+                                                                    <FileText className="h-3.5 w-3.5" />
+                                                                    <span>Redactar Enunciado Manualmente</span>
+                                                                </Button>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Button
+                                                                    type="button"
+                                                                    size="sm"
+                                                                    onClick={() => setIsAiAllStepsOpen(true)}
+                                                                    className="h-8 text-xs font-bold gap-1.5 bg-gradient-to-r from-primary to-primary/85 hover:from-primary/95 hover:to-primary text-primary-foreground shadow-xs cursor-pointer"
+                                                                >
+                                                                    <Sparkles className="h-3.5 w-3.5" />
+                                                                    <span>Planificar Pasos con IA</span>
+                                                                </Button>
+                                                                <Button
+                                                                    type="button"
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    onClick={handleAddNewWorkshopStep}
+                                                                    className="h-8 text-xs font-semibold gap-1.5 cursor-pointer"
+                                                                >
+                                                                    <Plus className="h-3.5 w-3.5" />
+                                                                    <span>Añadir Primer Paso</span>
+                                                                </Button>
+                                                            </>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
@@ -5748,7 +7308,7 @@ function ActivityFormDialog({
                                                                     #{idx + 1}
                                                                 </Badge>
                                                                 <Input
-                                                                    value={crit.name}
+                                                                    value={crit.name || ""}
                                                                     onChange={(e) => handleUpdateCriterion(idx, "name", e.target.value)}
                                                                     placeholder="Concepto o Criterio a evaluar (ej: Dominio de POO y Herencia)"
                                                                     className="h-8 font-bold text-xs flex-1 bg-background"
@@ -5763,7 +7323,7 @@ function ActivityFormDialog({
                                                                             type="number"
                                                                             min="1"
                                                                             max="100"
-                                                                            value={crit.percentage}
+                                                                            value={crit.percentage ?? 0}
                                                                             onChange={(e) => handleUpdateCriterion(idx, "percentage", parseInt(e.target.value, 10) || 0)}
                                                                             className="h-8 pr-6 text-xs font-mono font-bold text-right bg-background"
                                                                         />
@@ -5880,7 +7440,7 @@ function ActivityFormDialog({
                                                                 Aspectos técnicos a verificar en el código / repositorio:
                                                             </Label>
                                                             <Textarea
-                                                                value={crit.description}
+                                                                value={crit.description || ""}
                                                                 onChange={(e) => handleUpdateCriterion(idx, "description", e.target.value)}
                                                                 placeholder="Descripción de los archivos, clases o componentes de código que sustentan este criterio..."
                                                                 rows={2}
@@ -5914,7 +7474,7 @@ function ActivityFormDialog({
                     </Tabs>
                 </form>
 
-                {/* Modal para Generar Enunciado con IA */}
+                {/* Modal para Generar Enunciado o Modificar con Chat IA */}
                 <AIGenerateDialog
                     isOpen={isAIGeneratorOpen}
                     onClose={() => {
@@ -5924,7 +7484,30 @@ function ActivityFormDialog({
                     type="statement"
                     activityType={selectedType}
                     initialContent={aiInitialContent}
+                    customTitle={
+                        aiGeneratorTarget === "step_instructions"
+                            ? `Modificar Instrucciones del Paso ${activeWorkshopStepIdx + 1} con Chat IA`
+                            : undefined
+                    }
+                    customDescription={
+                        aiGeneratorTarget === "step_instructions"
+                            ? `He cargado las instrucciones del Paso ${activeWorkshopStepIdx + 1}. Puedes pedirme cambios para detallar pasos, simplificar explicaciones, agregar casos prácticos o adaptar las indicaciones didácticas.`
+                            : undefined
+                    }
                     onUseContent={(content) => {
+                        if (aiGeneratorTarget === "step_instructions") {
+                            const updated = [...workshopMilestones];
+                            if (updated[activeWorkshopStepIdx]) {
+                                updated[activeWorkshopStepIdx] = {
+                                    ...updated[activeWorkshopStepIdx],
+                                    instructions: content
+                                };
+                                setWorkshopMilestones(updated);
+                                toast.success(`¡Instrucciones del Paso ${activeWorkshopStepIdx + 1} actualizadas con Chat IA!`);
+                            }
+                            return;
+                        }
+
                         setStatement(content);
 
                         // Si el título está vacío, sugerir título extraído del enunciado
@@ -5959,6 +7542,10 @@ function ActivityFormDialog({
                                 toast.success("Enunciado generado e insertado. Criterios sincronizados con la Lista de Chequeo.");
                             }
                         }
+
+                        if (selectedType === "WORKSHOP_GITHUB" || selectedType === "WORKSHOP_CODE") {
+                            toast.success("¡Enunciado general generado con éxito! Ahora puedes pasar a configurar o planificar los pasos del proyecto.");
+                        }
                     }}
                 />
             </DialogContent>
@@ -5988,90 +7575,220 @@ function ActivityFormDialog({
                 </DialogContent>
             </Dialog>
         )}
-        {/* Modal: Generar Todos los Pasos con IA */}
+        {/* Modal: Modificar Estructura de Pasos con Chat IA */}
+        <AIModifyStepsDialog
+            isOpen={isAiModifyStepsOpen}
+            onClose={() => setIsAiModifyStepsOpen(false)}
+            steps={workshopMilestones}
+            statement={statement}
+            workshopType={selectedType === "WORKSHOP_CODE" ? "WORKSHOP_CODE" : "WORKSHOP_GITHUB"}
+            techStack={statementContext.detectedStack || workshopLanguage}
+            onApply={(updatedSteps) => {
+                setWorkshopMilestones(updatedSteps);
+                setActiveWorkshopStepIdx(0);
+                setIsAiModifyStepsOpen(false);
+                toast.success(`¡Estructura de pasos actualizada (${updatedSteps.length} pasos)!`);
+            }}
+        />
+
+        {/* Modal: Planificar Pasos del Tutorial con IA */}
         <Dialog open={isAiAllStepsOpen} onOpenChange={setIsAiAllStepsOpen}>
-            <DialogContent className="max-w-md p-5 rounded-2xl border-border/80 shadow-2xl">
-                <DialogHeader className="space-y-1">
-                    <DialogTitle className="text-sm font-black flex items-center gap-2">
-                        <Sparkles className="h-4 w-4 text-primary" />
-                        <span>Generar Secuencia de Pasos con IA</span>
-                    </DialogTitle>
-                    <DialogDescription className="text-xs text-muted-foreground">
-                        Define el reto formativo y la IA creará todos los pasos secuenciales con consignas, código y pistas.
-                    </DialogDescription>
+            <DialogContent className="sm:max-w-2xl md:max-w-3xl lg:max-w-4xl p-6 sm:p-7 rounded-2xl border-border/80 shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+                <DialogHeader className="space-y-1.5 pb-2 border-b border-border/60">
+                    <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                            <Sparkles className="h-4 w-4 text-primary" />
+                        </div>
+                        <div>
+                            <DialogTitle className="text-base sm:text-lg font-black tracking-tight">
+                                Planificar Pasos del Tutorial con IA
+                            </DialogTitle>
+                            <DialogDescription className="text-xs sm:text-sm text-muted-foreground">
+                                Escribe lo que deseas construir en tu proyecto. La IA deducirá automáticamente el stack tecnológico y estructurará la secuencia de pasos con sus archivos en GitHub.
+                            </DialogDescription>
+                        </div>
+                    </div>
                 </DialogHeader>
 
-                <div className="space-y-3.5 py-2">
-                    <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold">Temática o Reto del Taller</Label>
+                <div className="flex-1 overflow-y-auto space-y-4 py-3 pr-1 custom-scrollbar">
+                    {/* Contexto del Enunciado General */}
+                    {statement && statement.trim().length >= 20 ? (
+                        <div className="p-3 rounded-xl border border-primary/30 bg-primary/5 space-y-2">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-primary flex items-center gap-1.5">
+                                    <FileText className="h-3.5 w-3.5" />
+                                    <span>Basado en el Enunciado General del Proyecto</span>
+                                </span>
+                                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/20">
+                                    Contexto Activo
+                                </span>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">
+                                {statement.replace(/^[#*\s-]+/gm, "").trim().slice(0, 240)}...
+                            </p>
+                            {(statementContext.detectedStack || statementContext.detectedArchitecture) && (
+                                <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-primary/10 text-[10px]">
+                                    {statementContext.detectedStack && (
+                                        <span className="px-2 py-0.5 rounded-md bg-background/80 border border-primary/20 text-foreground font-medium">
+                                            📦 Stack: <strong className="text-primary">{statementContext.detectedStack}</strong>
+                                        </span>
+                                    )}
+                                    {statementContext.detectedArchitecture && (
+                                        <span className="px-2 py-0.5 rounded-md bg-background/80 border border-primary/20 text-muted-foreground">
+                                            🏛️ {statementContext.detectedArchitecture}
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 flex items-center justify-between gap-2 text-xs">
+                            <div className="flex items-center gap-2 text-amber-800 dark:text-amber-200">
+                                <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                                <span className="text-[11px]">No has definido el Enunciado General. Se recomienda crearlo primero para que todas las opciones y pasos se deriven estrictamente de tu proyecto.</span>
+                            </div>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                    setIsAiAllStepsOpen(false);
+                                    setWorkshopContentView("statement");
+                                }}
+                                className="h-6 text-[10px] px-2 border-amber-500/40 text-amber-900 dark:text-amber-200 cursor-pointer shrink-0"
+                            >
+                                Ir al Enunciado
+                            </Button>
+                        </div>
+                    )}
+
+                    {/* Prompt Principal del Proyecto */}
+                    <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                            <Label className="text-xs sm:text-sm font-bold flex items-center gap-1.5 text-foreground">
+                                <MessageSquare className="h-3.5 w-3.5 text-primary" />
+                                <span>{statement && statement.trim().length >= 20 ? "Indicaciones o Enfoque Adicional para los Pasos (Opcional)" : "Prompt / Indicaciones del Tutorial o Proyecto"}</span>
+                            </Label>
+                            <span className="text-[11px] text-muted-foreground">
+                                {statement && statement.trim().length >= 20 ? "Si está vacío, se basa 100% en tu enunciado" : "Escribe los requerimientos del proyecto"}
+                            </span>
+                        </div>
                         <Textarea
-                            rows={3}
+                            rows={4}
                             value={aiAllStepsTopic}
                             onChange={(e) => setAiAllStepsTopic(e.target.value)}
-                            placeholder="Ej: Gestión de Inventarios con POO en Java, herencia, interfaces, colecciones y excepciones..."
-                            className="text-xs resize-none"
+                            placeholder={statement && statement.trim().length >= 20 
+                                ? "Opcional: Si lo dejas vacío, la IA generará la secuencia basándose estrictamente en las secciones, modelos y requerimientos de tu Enunciado General. O selecciona una de las opciones sugeridas abajo..." 
+                                : "Describe el proyecto paso a paso..."}
+                            className="text-xs sm:text-sm resize-none rounded-xl p-3 bg-muted/20 border-border/70 focus-visible:ring-primary/40 leading-relaxed font-sans"
                         />
+                        {/* Opciones sugeridas estrictamente basadas en el enunciado */}
+                        {statement && statement.trim().length >= 20 && statementContext.focusOptions.length > 0 ? (
+                            <div className="space-y-1.5 pt-0.5">
+                                <span className="text-[10px] font-bold uppercase text-primary/80 tracking-wider flex items-center gap-1">
+                                    <Sparkles className="h-3 w-3" />
+                                    Opciones basadas en tu Enunciado:
+                                </span>
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    {statementContext.focusOptions.map((opt) => (
+                                        <button
+                                            key={opt.label}
+                                            type="button"
+                                            onClick={() => setAiAllStepsTopic(opt.promptText)}
+                                            className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all cursor-pointer border text-left ${
+                                                aiAllStepsTopic === opt.promptText
+                                                    ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                                                    : "bg-muted/50 hover:bg-primary/10 hover:text-primary hover:border-primary/40 text-muted-foreground border-border/60"
+                                            }`}
+                                        >
+                                            {opt.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : null}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold">Cantidad de Pasos</Label>
-                            <Select value={String(aiAllStepsCount)} onValueChange={(val) => setAiAllStepsCount(Number(val))}>
-                                <SelectTrigger className="h-8 text-xs">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="3">3 Pasos (Corto)</SelectItem>
-                                    <SelectItem value="4">4 Pasos (Estándar)</SelectItem>
-                                    <SelectItem value="5">5 Pasos (Completo)</SelectItem>
-                                    <SelectItem value="6">6 Pasos (Avanzado)</SelectItem>
-                                </SelectContent>
-                            </Select>
+                    {/* Controles de Configuración: Modo de Planificación */}
+                    <div className="p-4 rounded-xl border border-border/70 bg-muted/15 flex flex-col space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                            <div className="space-y-0.5">
+                                <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                                    <Sparkles className="h-3.5 w-3.5 text-primary" />
+                                    <span>Modo de Planificación</span>
+                                </Label>
+                                <p className="text-[11px] text-muted-foreground leading-tight">
+                                    Elige si planificar la hoja de ruta inicial o generar todo el código de cada paso.
+                                </p>
+                            </div>
+                            <span className="text-[11px] text-muted-foreground bg-background/90 border border-border/70 px-2.5 py-1 rounded-md self-start sm:self-auto flex items-center gap-1.5 shadow-2xs">
+                                <span>🧠</span>
+                                <span>La <strong>IA calcula la cantidad óptima de pasos</strong> según el enunciado</span>
+                            </span>
                         </div>
 
-                        <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold">Nivel Académico</Label>
-                            <Select value={aiAllStepsLevel} onValueChange={setAiAllStepsLevel}>
-                                <SelectTrigger className="h-8 text-xs">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="principiante">Principiante</SelectItem>
-                                    <SelectItem value="intermedio">Intermedio</SelectItem>
-                                    <SelectItem value="avanzado">Avanzado</SelectItem>
-                                </SelectContent>
-                            </Select>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            <button
+                                type="button"
+                                onClick={() => setAiAllStepsMode("structure_only")}
+                                className={cn(
+                                    "p-3.5 rounded-xl border text-left transition-all text-xs flex flex-col gap-1 cursor-pointer",
+                                    aiAllStepsMode === "structure_only"
+                                        ? "border-primary bg-primary/10 text-primary font-bold shadow-2xs ring-1 ring-primary/40"
+                                        : "border-border/70 bg-background/80 hover:bg-muted/40 text-muted-foreground"
+                                )}
+                            >
+                                <span className="flex items-center gap-1.5 font-bold">🟢 Solo Hoja de Ruta</span>
+                                <span className="text-[11px] font-normal opacity-85 leading-snug">
+                                    Crea los títulos, archivos del repo e instrucciones. El código se genera paso a paso.
+                                </span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setAiAllStepsMode("full_tutorial")}
+                                className={cn(
+                                    "p-3.5 rounded-xl border text-left transition-all text-xs flex flex-col gap-1 cursor-pointer",
+                                    aiAllStepsMode === "full_tutorial"
+                                        ? "border-primary bg-primary/10 text-primary font-bold shadow-2xs ring-1 ring-primary/40"
+                                        : "border-border/70 bg-background/80 hover:bg-muted/40 text-muted-foreground"
+                                )}
+                            >
+                                <span className="flex items-center gap-1.5 font-bold">🚀 Tutorial Completo</span>
+                                <span className="text-[11px] font-normal opacity-85 leading-snug">
+                                    Genera la estructura, consignas y el código 100% funcional de cada paso de una sola vez.
+                                </span>
+                            </button>
                         </div>
                     </div>
                 </div>
 
-                <DialogFooter className="gap-2 sm:gap-0 pt-2">
+                <DialogFooter className="gap-2 sm:gap-0 pt-3 border-t border-border/60">
                     <Button
                         type="button"
                         variant="outline"
                         size="sm"
                         disabled={isGeneratingAllSteps}
                         onClick={() => setIsAiAllStepsOpen(false)}
-                        className="text-xs"
+                        className="text-xs cursor-pointer"
                     >
                         Cancelar
                     </Button>
                     <Button
                         type="button"
                         size="sm"
-                        disabled={isGeneratingAllSteps}
+                        disabled={isGeneratingAllSteps || (!aiAllStepsTopic.trim() && (!statement || statement.trim().length < 20))}
                         onClick={handleGenerateAllStepsWithAI}
-                        className="text-xs font-bold gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground"
+                        className="text-xs font-bold gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground cursor-pointer shadow-xs"
                     >
                         {isGeneratingAllSteps ? (
                             <>
                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                <span>Generando Pasos...</span>
+                                <span>{aiAllStepsMode === "full_tutorial" ? "Generando Proyecto Completo..." : "Planificando Pasos..."}</span>
                             </>
                         ) : (
                             <>
                                 <Sparkles className="h-3.5 w-3.5" />
-                                <span>Generar con IA</span>
+                                <span>{aiAllStepsMode === "full_tutorial" ? "Generar Tutorial Completo con IA" : "Planificar Pasos con IA"}</span>
                             </>
                         )}
                     </Button>
@@ -6088,7 +7805,9 @@ function ActivityFormDialog({
                         <span>Asistente IA para el Paso {activeWorkshopStepIdx + 1}</span>
                     </DialogTitle>
                     <DialogDescription className="text-xs text-muted-foreground">
-                        Describe qué deseas que el alumno realice en este paso. La IA redactará las consignas y el código base necesario.
+                        {selectedType === "WORKSHOP_GITHUB"
+                            ? `Genera el contenido exhaustivo para "${workshopMilestones[activeWorkshopStepIdx]?.title || `Paso ${activeWorkshopStepIdx + 1}`}", incluyendo explicaciones didácticas paso a paso, el código fuente 100% funcional y los comandos Git explicados.`
+                            : "Describe qué deseas que el alumno realice en este paso. La IA redactará las consignas y el código necesario."}
                     </DialogDescription>
                 </DialogHeader>
 

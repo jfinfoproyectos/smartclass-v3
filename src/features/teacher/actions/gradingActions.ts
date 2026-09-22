@@ -549,7 +549,9 @@ export async function gradeAudioDefenseAction(
         requiredTopics?: string[];
         keyQuestions?: string[];
     },
-    gradingMode: "normal" | "moderate" | "strict" = "moderate"
+    gradingMode: "normal" | "moderate" | "strict" = "moderate",
+    activityTitle?: string,
+    knownParticipants?: string[]
 ) {
     const session = await getSession();
     if (!session || session.user.role !== "teacher") throw new Error("Unauthorized");
@@ -559,7 +561,9 @@ export async function gradeAudioDefenseAction(
         audioUrl,
         studentNotes,
         statement,
+        activityTitle,
         audioConfig,
+        knownParticipants,
         gradingMode,
         teacherId: session.user.id,
     });
@@ -656,6 +660,51 @@ export async function gradeDbModelingAction(
         dbConfig,
         gradingMode,
         teacherId: session.user.id,
+    });
+
+    return result;
+}
+
+export async function gradeWorkshopGithubAction(params: {
+    activityId: string;
+    studentUserId: string;
+    repoUrl: string;
+    branch?: string;
+    courseId: string;
+    gradingMode?: "normal" | "moderate" | "strict";
+}) {
+    const session = await getSession();
+    if (!session || session.user.role !== "teacher") throw new Error("Unauthorized");
+
+    const activity = await prisma.activity.findUnique({
+        where: { id: params.activityId },
+        select: { title: true, description: true, statement: true }
+    });
+
+    if (!activity) throw new Error("Actividad no encontrada");
+
+    let milestones = [];
+    try {
+        const parsed = JSON.parse(activity.description || "{}");
+        milestones = parsed.workshopConfig?.milestones || [];
+    } catch {
+        milestones = [];
+    }
+
+    if (milestones.length === 0) {
+        throw new Error("No hay pasos configurados en este tutorial para evaluar.");
+    }
+
+    const { gradeWorkshopGithubSubmission } = await import("../services/ai/workshopGithubGradingService");
+    const result = await gradeWorkshopGithubSubmission({
+        activityId: params.activityId,
+        activityTitle: activity.title,
+        repoUrl: params.repoUrl,
+        branch: params.branch,
+        milestones,
+        teacherId: session.user.id,
+        gradingMode: params.gradingMode || "moderate",
+        statement: activity.statement || undefined
     });
 
     return result;

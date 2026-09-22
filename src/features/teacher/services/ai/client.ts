@@ -144,7 +144,7 @@ export async function getAIModel(userId?: string, customModel?: string): Promise
     const google = createGoogleGenerativeAI({
         apiKey: googleKey
     });
-    const effectiveModel = activeModel || "gemini-2.5-flash";
+    const effectiveModel = activeModel || "gemini-2.0-flash";
     return google(effectiveModel);
 }
 
@@ -153,42 +153,67 @@ export async function getAIModel(userId?: string, customModel?: string): Promise
  * Handles cases where JSON is wrapped in markdown code blocks or has extra text
  */
 export function extractJSON<T = any>(text: string): T {
-    const firstOpenBrace = text.indexOf('{');
-    const lastCloseBrace = text.lastIndexOf('}');
-
-    let jsonStr = text;
-    if (firstOpenBrace !== -1 && lastCloseBrace !== -1) {
-        jsonStr = text.substring(firstOpenBrace, lastCloseBrace + 1);
+    if (!text || typeof text !== "string") {
+        throw new Error("No hay texto de respuesta de IA para analizar como JSON.");
     }
 
-    // Sanitize common LLM JSON errors:
-    // 1. Literal control characters (like raw newlines, tabs) inside string values
-    // This regex finds content between double quotes and replaces literal newlines/tabs with escapes
-    const sanitize = (str: string) => {
-        return str.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/g, (match, content) => {
-            // Replace raw control characters (0-31) with their escaped versions
-            const escaped = content
-                .replace(/\n/g, '\\n')
-                .replace(/\r/g, '\\r')
-                .replace(/\t/g, '\\t')
-                .replace(/[\x00-\x1f]/g, (ch: string) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`);
-            return `"${escaped}"`;
-        });
-    };
+    // 1. Extraer el bloque JSON objetivo (priorizando bloques markdown ```json ... ```)
+    let jsonStr = text.trim();
+    const markdownMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (markdownMatch?.[1]) {
+        jsonStr = markdownMatch[1].trim();
+    } else {
+        const firstOpenBrace = text.indexOf('{');
+        const lastCloseBrace = text.lastIndexOf('}');
+        if (firstOpenBrace !== -1 && lastCloseBrace !== -1 && lastCloseBrace > firstOpenBrace) {
+            jsonStr = text.substring(firstOpenBrace, lastCloseBrace + 1);
+        }
+    }
+
+    // Intento directo
+    try {
+        return JSON.parse(jsonStr);
+    } catch {
+        // Proceder a sanitización profunda
+    }
+
+    // 2. Limpieza de comas colgantes (trailing commas: ,} o ,])
+    let sanitized = jsonStr.replace(/,\s*([\}\]])/g, '$1');
+
+    // 3. Reemplazar caracteres de control literales dentro de cadenas
+    sanitized = sanitized.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/g, (match, content) => {
+        const escaped = content
+            .replace(/\n/g, '\\n')
+            .replace(/\r/g, '\\r')
+            .replace(/\t/g, '\\t')
+            .replace(/[\x00-\x1f]/g, (ch: string) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`);
+        return `"${escaped}"`;
+    });
 
     try {
-        return JSON.parse(sanitize(jsonStr));
-    } catch (primaryError) {
-        // Fallback: try to extract JSON from a markdown code block (```json ... ```)
-        const markdownMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-        if (markdownMatch?.[1]) {
+        return JSON.parse(sanitized);
+    } catch {
+        // Proceder a saneamiento de escapes inválidos
+    }
+
+    // 4. Reparar secuencias de escape inválidas (ej: \d, \s, \w, rutas Windows \Users)
+    sanitized = sanitized.replace(/\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})/g, '\\\\');
+
+    try {
+        return JSON.parse(sanitized);
+    } catch (err: any) {
+        // Último intento: regex para extraer al menos el primer objeto balanceado
+        const objectMatch = text.match(/\{[\s\S]*\}/);
+        if (objectMatch && objectMatch[0] !== jsonStr) {
             try {
-                return JSON.parse(sanitize(markdownMatch[1]));
+                let secondTry = objectMatch[0].replace(/,\s*([\}\]])/g, '$1');
+                secondTry = secondTry.replace(/\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})/g, '\\\\');
+                return JSON.parse(secondTry);
             } catch {
-                // Ignore fallback error, throw the original
+                // Ignore
             }
         }
-        throw primaryError;
+        throw err;
     }
 }
 
@@ -201,9 +226,12 @@ export function repairFeedbackText(text: string): string {
     // 1. Fix standard escaped characters
     let repaired = text.replace(/\\n/g, '\n').replace(/\\"/g, '"');
     
-    // 2. Fix AI SDK / Gemini artifacts where `\n` is corrupted to `n` in markdown
     // Table row separators `|n|` -> `|\n|`
     repaired = repaired.replace(/\|n\|/g, '|\n|');
+    // Ensure table delimiter followed by first row is on a new line
+    repaired = repaired.replace(/(\|[-:]{3,}\|)[ \t]*\|[ \t]*/g, '$1\n| ');
+    // Ensure table rows separated by `| |` are split into `|\n|`
+    repaired = repaired.replace(/\|[ \t]*\|[ \t]*(?=[A-Za-z0-9\*\#\_\✅\⚠️\❌\🎙️\[])/g, '|\n| ');
     
     // Double newlines (paragraphs) typically appear as `nn` at the start of headings or paragraphs
     // e.g. `correctamente.nn## Resumen` -> `correctamente.\n\n## Resumen`

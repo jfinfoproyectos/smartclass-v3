@@ -8,7 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import {
     Sparkles, CheckCircle2, ChevronLeft, ChevronRight, ChevronDown,
     Mic, FileText, Loader2, Bot,
-    AlertCircle, XCircle, ExternalLink, UserCheck, Award
+    AlertCircle, XCircle, ExternalLink, UserCheck, Award, Users
 } from "lucide-react";
 import {
     DropdownMenu,
@@ -54,9 +54,21 @@ interface AudioDefenseInspectorProps {
     onReject: (studentId: string, feedback?: string) => Promise<void>;
 }
 
-function getAudioEmbed(rawUrl: string): { embedUrl: string | null; type: "audio" | "youtube" | "loom" | "drive" | "link" } {
+function getAudioEmbed(rawUrl: string): { embedUrl: string | null; type: "audio" | "youtube" | "loom" | "drive" | "vocaroo" | "spotify" | "link" } {
     if (!rawUrl) return { embedUrl: null, type: "link" };
     const url = rawUrl.trim();
+
+    // Vocaroo
+    const vocarooMatch = url.match(/(?:vocaroo\.com\/|voca\.ro\/)([a-zA-Z0-9]+)/);
+    if (vocarooMatch && vocarooMatch[1]) {
+        return { embedUrl: `https://vocaroo.com/embed/${vocarooMatch[1]}?autoplay=0`, type: "vocaroo" };
+    }
+
+    // Spotify
+    const spotifyMatch = url.match(/open\.spotify\.com\/(?:intl-[a-z]+\/)?(episode|track)\/([a-zA-Z0-9]+)/);
+    if (spotifyMatch && spotifyMatch[2]) {
+        return { embedUrl: `https://open.spotify.com/embed/${spotifyMatch[1]}/${spotifyMatch[2]}`, type: "spotify" };
+    }
 
     const ytMatch = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
     if (ytMatch && ytMatch[1]) {
@@ -65,7 +77,7 @@ function getAudioEmbed(rawUrl: string): { embedUrl: string | null; type: "audio"
 
     const loomMatch = url.match(/loom\.com\/(?:share|embed)\/([a-zA-Z0-9]+)/);
     if (loomMatch && loomMatch[1]) {
-        return { embedUrl: `https://www.loom.com/embed/${loomMatch[1]}`, type: "loom" };
+        return { embedUrl: `https://loom.com/embed/${loomMatch[1]}`, type: "loom" };
     }
 
     const driveMatch = url.match(/(?:drive\.google\.com\/file\/d\/|drive\.google\.com\/open\?id=)([-\w]+)/);
@@ -73,7 +85,7 @@ function getAudioEmbed(rawUrl: string): { embedUrl: string | null; type: "audio"
         return { embedUrl: `https://drive.google.com/file/d/${driveMatch[1]}/preview`, type: "drive" };
     }
 
-    if (/\.(mp3|wav|ogg|m4a|aac)($|\?)/i.test(url)) {
+    if (/\.(mp3|wav|ogg|m4a|aac|flac)($|\?)/i.test(url)) {
         return { embedUrl: url, type: "audio" };
     }
 
@@ -119,6 +131,7 @@ export function AudioDefenseInspector({
     student,
     submission,
     activity,
+    evalItem,
     onClose,
     studentsList,
     onSelectStudent,
@@ -127,6 +140,22 @@ export function AudioDefenseInspector({
 }: AudioDefenseInspectorProps) {
     const { resolvedTheme } = useTheme();
     const mode = resolvedTheme === "dark" ? "dark" : "light";
+
+    const knownParticipants = useMemo(() => {
+        const names: string[] = [];
+        const group = evalItem?.group;
+        if (group?.members && Array.isArray(group.members)) {
+            group.members.forEach((m: any) => {
+                const name = m.user ? formatName(m.user.name, m.user.profile) : (m.name || "");
+                if (name && !names.includes(name)) names.push(name);
+            });
+        }
+        if (student) {
+            const studentName = formatName(student.name, student.profile);
+            if (studentName && !names.includes(studentName)) names.push(studentName);
+        }
+        return names;
+    }, [evalItem, student]);
 
     const audioConfig = useMemo(() => {
         if (!activity?.description) return null;
@@ -262,7 +291,9 @@ export function AudioDefenseInspector({
                 activity.courseId,
                 studentNotes,
                 audioConfig || undefined,
-                gradingMode
+                gradingMode,
+                activity.title,
+                knownParticipants
             );
 
             setAiResult(result);
@@ -514,6 +545,24 @@ export function AudioDefenseInspector({
                                     {audioEmbed.embedUrl ? (
                                         audioEmbed.type === "audio" ? (
                                             <audio src={audioEmbed.embedUrl} controls className="w-full" />
+                                        ) : audioEmbed.type === "vocaroo" ? (
+                                            <div className="w-full rounded-xl overflow-hidden border bg-background/50 p-2 flex justify-center">
+                                                <iframe
+                                                    src={audioEmbed.embedUrl}
+                                                    title="Vocaroo Audio"
+                                                    className="w-full h-16 border-0"
+                                                />
+                                            </div>
+                                        ) : audioEmbed.type === "spotify" ? (
+                                            <div className="w-full rounded-xl overflow-hidden border">
+                                                <iframe
+                                                    src={audioEmbed.embedUrl}
+                                                    title="Spotify Episode"
+                                                    height="152"
+                                                    className="w-full border-0"
+                                                    allow="encrypted-media"
+                                                />
+                                            </div>
                                         ) : (
                                             <div className="relative aspect-video w-full rounded-xl overflow-hidden border">
                                                 <iframe
@@ -616,44 +665,181 @@ export function AudioDefenseInspector({
                                     </div>
 
                                     {aiResult && (
-                                        <div className="grid grid-cols-3 gap-2">
-                                            <div className="p-2 rounded-xl border bg-violet-500/5 border-violet-500/20 text-center space-y-0.5">
-                                                <span className="text-[9px] text-muted-foreground block font-semibold">Argumentación</span>
-                                                <span className="text-sm font-extrabold font-mono text-violet-600 dark:text-violet-400">
-                                                    {aiResult.argumentationScore?.toFixed(1)} / 5.0
-                                                </span>
-                                            </div>
-                                            <div className="p-2 rounded-xl border bg-blue-500/5 border-blue-500/20 text-center space-y-0.5">
-                                                <span className="text-[9px] text-muted-foreground block font-semibold">Profundidad</span>
-                                                <span className="text-sm font-extrabold font-mono text-blue-600 dark:text-blue-400">
-                                                    {aiResult.technicalDepthScore?.toFixed(1)} / 5.0
-                                                </span>
-                                            </div>
-                                            <div className="p-2 rounded-xl border bg-emerald-500/5 border-emerald-500/20 text-center space-y-0.5">
-                                                <span className="text-[9px] text-muted-foreground block font-semibold">Cobertura</span>
-                                                <span className="text-sm font-extrabold font-mono text-emerald-600 dark:text-emerald-400">
-                                                    {aiResult.coveragePercentage}%
-                                                </span>
+                                        <div className="space-y-3">
+                                            {aiResult.analysisMode && (
+                                                <div className="flex items-center gap-1.5">
+                                                    <Badge
+                                                        variant="outline"
+                                                        className={cn(
+                                                            "text-[10px] font-semibold gap-1 py-0.5",
+                                                            aiResult.analysisMode === "multimodal_audio"
+                                                                ? "bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-300"
+                                                                : "bg-muted text-muted-foreground"
+                                                        )}
+                                                    >
+                                                        <Mic className="h-3 w-3" />
+                                                        {aiResult.analysisMode === "multimodal_audio"
+                                                            ? "Audio analizado directamente con IA Multimodal"
+                                                            : "Evaluado mediante notas, minuta y metadatos"}
+                                                    </Badge>
+                                                </div>
+                                            )}
+
+                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                                <div className="p-2 rounded-xl border bg-violet-500/5 border-violet-500/20 text-center space-y-0.5">
+                                                    <span className="text-[9px] text-muted-foreground block font-semibold">Argumentación</span>
+                                                    <span className="text-sm font-extrabold font-mono text-violet-600 dark:text-violet-400">
+                                                        {aiResult.argumentationScore?.toFixed(1)} / 5.0
+                                                    </span>
+                                                </div>
+                                                <div className="p-2 rounded-xl border bg-blue-500/5 border-blue-500/20 text-center space-y-0.5">
+                                                    <span className="text-[9px] text-muted-foreground block font-semibold">Profundidad</span>
+                                                    <span className="text-sm font-extrabold font-mono text-blue-600 dark:text-blue-400">
+                                                        {aiResult.technicalDepthScore?.toFixed(1)} / 5.0
+                                                    </span>
+                                                </div>
+                                                <div className="p-2 rounded-xl border bg-purple-500/5 border-purple-500/20 text-center space-y-0.5">
+                                                    <span className="text-[9px] text-muted-foreground block font-semibold">Enunciado</span>
+                                                    <span className="text-sm font-extrabold font-mono text-purple-600 dark:text-purple-400">
+                                                        {(aiResult.enunciadoComplianceScore ?? aiResult.structureScore)?.toFixed(1)} / 5.0
+                                                    </span>
+                                                </div>
+                                                <div className="p-2 rounded-xl border bg-emerald-500/5 border-emerald-500/20 text-center space-y-0.5">
+                                                    <span className="text-[9px] text-muted-foreground block font-semibold">Cobertura</span>
+                                                    <span className="text-sm font-extrabold font-mono text-emerald-600 dark:text-emerald-400">
+                                                        {aiResult.coveragePercentage}%
+                                                    </span>
+                                                </div>
                                             </div>
                                         </div>
                                     )}
 
                                     {Array.isArray(aiResult?.topicsCoverage) && aiResult.topicsCoverage.length > 0 && (
-                                        <div className="p-3 bg-muted/20 rounded-xl border space-y-2">
-                                            <span className="text-xs font-bold text-foreground block">
-                                                Verificación de Temas Solicitados:
-                                            </span>
-                                            <div className="space-y-1.5">
-                                                {aiResult.topicsCoverage.map((tc: any, idx: number) => (
-                                                    <div key={idx} className="flex items-start gap-2 text-xs">
-                                                        {tc.covered ? (
-                                                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                                                        ) : (
-                                                            <XCircle className="h-3.5 w-3.5 text-rose-600 shrink-0 mt-0.5" />
+                                        <div className="p-3 bg-muted/20 rounded-xl border space-y-2.5">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-xs font-bold text-foreground block">
+                                                    Requerimientos del Enunciado vs. Audio:
+                                                </span>
+                                                <Badge variant="outline" className="text-[9px] font-mono">
+                                                    {aiResult.topicsCoverage.filter((t: any) => t.covered).length}/{aiResult.topicsCoverage.length} Abordados
+                                                </Badge>
+                                            </div>
+                                            <div className="space-y-2">
+                                                {aiResult.topicsCoverage.map((tc: any, idx: number) => {
+                                                    const isCompleted = tc.status === "COMPLETED" || (tc.covered && !tc.status);
+                                                    const isPartial = tc.status === "PARTIAL";
+                                                    return (
+                                                        <div key={idx} className="p-2 rounded-lg bg-background border space-y-1 text-xs">
+                                                            <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                                                                <div className="flex items-center gap-1.5 min-w-0">
+                                                                    {isCompleted ? (
+                                                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                                                                    ) : isPartial ? (
+                                                                        <AlertCircle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                                                                    ) : (
+                                                                        <XCircle className="h-3.5 w-3.5 text-rose-600 shrink-0" />
+                                                                    )}
+                                                                    <span className="font-semibold text-foreground text-[11px] truncate">
+                                                                        {tc.topic}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="flex items-center gap-1 shrink-0">
+                                                                    <Badge
+                                                                        variant="outline"
+                                                                        className={cn(
+                                                                            "text-[9px] px-1 py-0 h-4 font-semibold",
+                                                                            isCompleted
+                                                                                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-300"
+                                                                                : isPartial
+                                                                                ? "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-300"
+                                                                                : "bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-300"
+                                                                        )}
+                                                                    >
+                                                                        {isCompleted ? "Cumplido" : isPartial ? "Parcial" : "Omitido"}
+                                                                    </Badge>
+                                                                    {tc.score !== undefined && (
+                                                                        <span className="text-[10px] font-mono font-bold text-muted-foreground ml-1">
+                                                                            {Number(tc.score).toFixed(1)} / 5.0
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <p className="text-[10px] text-muted-foreground leading-relaxed pl-5">
+                                                                {tc.comment}
+                                                            </p>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {Array.isArray(aiResult?.participants) && aiResult.participants.length > 0 && (
+                                        <div className="p-3 bg-violet-500/5 rounded-xl border border-violet-500/20 space-y-2.5">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                                                    <Users className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+                                                    Participantes y Reseñas Individuales:
+                                                </span>
+                                                <Badge variant="outline" className="text-[9px] font-mono bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-300">
+                                                    {aiResult.participants.length} {aiResult.participants.length === 1 ? "participante" : "participantes"}
+                                                </Badge>
+                                            </div>
+
+                                            <div className="space-y-2.5">
+                                                {aiResult.participants.map((p: any, idx: number) => (
+                                                    <div key={idx} className="p-2.5 rounded-lg bg-background border space-y-2 text-xs shadow-2xs">
+                                                        <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                                <div className="h-5 w-5 rounded-full bg-violet-500/10 text-violet-600 flex items-center justify-center font-bold text-[10px] shrink-0">
+                                                                    {idx + 1}
+                                                                </div>
+                                                                <span className="font-bold text-foreground text-xs truncate">
+                                                                    {p.name}
+                                                                </span>
+                                                                <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4">
+                                                                    {p.role}
+                                                                </Badge>
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                                {p.segmentOrTimestamps && (
+                                                                    <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 font-mono text-muted-foreground">
+                                                                        {p.segmentOrTimestamps}
+                                                                    </Badge>
+                                                                )}
+                                                                <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 font-mono font-bold bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-300">
+                                                                    {Number(p.score).toFixed(1)} / 5.0
+                                                                </Badge>
+                                                            </div>
+                                                        </div>
+
+                                                        {p.topicsCovered && p.topicsCovered.length > 0 && (
+                                                            <div className="flex items-center gap-1 flex-wrap">
+                                                                <span className="text-[10px] text-muted-foreground font-semibold">Temas:</span>
+                                                                {p.topicsCovered.map((t: string, tidx: number) => (
+                                                                    <Badge key={tidx} variant="outline" className="text-[9px] px-1 py-0 text-muted-foreground">
+                                                                        {t}
+                                                                    </Badge>
+                                                                ))}
+                                                            </div>
                                                         )}
-                                                        <div className="space-y-0.5">
-                                                            <span className="font-semibold text-foreground text-[11px]">{tc.topic}</span>
-                                                            <p className="text-[10px] text-muted-foreground leading-tight">{tc.comment}</p>
+
+                                                        <div className="text-[11px] text-muted-foreground space-y-1 bg-muted/20 p-2 rounded-md">
+                                                            <p className="leading-relaxed">
+                                                                <strong className="text-foreground">Reseña: </strong>
+                                                                {p.reviewSummary}
+                                                            </p>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[10px]">
+                                                            <div className="p-1.5 rounded bg-emerald-500/5 border border-emerald-500/20 text-emerald-800 dark:text-emerald-300">
+                                                                <span className="font-bold block">Expresión oral:</span>
+                                                                <span className="leading-tight">{p.oralPerformance}</span>
+                                                            </div>
+                                                            <div className="p-1.5 rounded bg-blue-500/5 border border-blue-500/20 text-blue-800 dark:text-blue-300">
+                                                                <span className="font-bold block">Dominio técnico:</span>
+                                                                <span className="leading-tight">{p.technicalMastery}</span>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 ))}

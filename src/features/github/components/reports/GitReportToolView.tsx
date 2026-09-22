@@ -286,6 +286,7 @@ export function GitReportToolView({
     const [reportMode, setReportMode] = useState<GitReportMode>("pedagogical");
     const [includeAuthors, setIncludeAuthors] = useState(true);
     const [includeCommitHashes, setIncludeCommitHashes] = useState(true);
+    const [includeCommitDates, setIncludeCommitDates] = useState(true);
 
     // Estado de carga y datos
     const [isLoadingRepo, setIsLoadingRepo] = useState(false);
@@ -677,7 +678,8 @@ export function GitReportToolView({
                 contributors: activeContributors.length > 0 ? activeContributors : reportData.contributors,
                 reportMode: modeToUse,
                 includeAuthors,
-                includeCommitHashes
+                includeCommitHashes,
+                includeCommitDates
             });
 
             setAiReport(result);
@@ -728,6 +730,7 @@ export function GitReportToolView({
                     aiReport={aiReport}
                     includeAuthors={includeAuthors}
                     includeCommitHashes={includeCommitHashes}
+                    includeCommitDates={includeCommitDates}
                     reportMode={reportMode}
                 />
             );
@@ -1516,6 +1519,24 @@ export function GitReportToolView({
                                                     <span>Hashes</span>
                                                 </label>
                                             </div>
+
+                                            <div className="h-3 w-px bg-border/80" />
+
+                                            <div className="flex items-center gap-1.5">
+                                                <Switch
+                                                    id="toggle-dates"
+                                                    checked={includeCommitDates}
+                                                    onCheckedChange={setIncludeCommitDates}
+                                                />
+                                                <label 
+                                                    htmlFor="toggle-dates" 
+                                                    className="text-[11px] font-semibold text-foreground flex items-center gap-1 cursor-pointer select-none"
+                                                    title="Muestra u oculta las fechas y horas de los commits en el informe y PDF"
+                                                >
+                                                    <Calendar className="h-3 w-3 text-emerald-500" />
+                                                    <span>Fechas</span>
+                                                </label>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -1768,6 +1789,11 @@ export function GitReportToolView({
                                                                     {includeAuthors && (
                                                                         <span className="text-[10px] text-muted-foreground font-mono">
                                                                             Por {task.author}
+                                                                        </span>
+                                                                    )}
+                                                                    {includeCommitDates && task.date && (
+                                                                        <span className="text-[10px] text-muted-foreground font-mono">
+                                                                            • {task.date}
                                                                         </span>
                                                                     )}
                                                                 </div>
@@ -2049,6 +2075,12 @@ export function GitReportToolView({
                                                                         </span>
                                                                     </div>
                                                                 )}
+                                                                {includeCommitDates && task.date && (
+                                                                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                                        <Clock className="h-3 w-3 text-muted-foreground" />
+                                                                        <span>{task.date}</span>
+                                                                    </div>
+                                                                )}
                                                             </div>
 
                                                             <div>
@@ -2302,7 +2334,7 @@ export function GitReportToolView({
                                                         title="Seleccionar / Deseleccionar todos los visibles"
                                                     />
                                                 </th>
-                                                <th className="py-2.5 px-3">Fecha y Hora</th>
+                                                {includeCommitDates && <th className="py-2.5 px-3">Fecha y Hora</th>}
                                                 {includeAuthors && <th className="py-2.5 px-3">Autor</th>}
                                                 <th className="py-2.5 px-3">Ramas</th>
                                                 <th className="py-2.5 px-3">Commit</th>
@@ -2314,7 +2346,7 @@ export function GitReportToolView({
                                         <tbody className="divide-y divide-border/60">
                                             {filteredCommits.length === 0 ? (
                                                 <tr>
-                                                    <td colSpan={1 + 2 + (includeAuthors ? 1 : 0) + 1 + 1} className="py-8 text-center text-muted-foreground text-xs">
+                                                    <td colSpan={1 + (includeCommitDates ? 1 : 0) + (includeAuthors ? 1 : 0) + 3} className="py-8 text-center text-muted-foreground text-xs">
                                                         No se encontraron commits coincidentes con los filtros.
                                                     </td>
                                                 </tr>
@@ -2343,9 +2375,11 @@ export function GitReportToolView({
                                                                 title={selectedCommitShas.has(cm.sha) ? "Deseleccionar commit" : "Seleccionar commit para informe"}
                                                             />
                                                         </td>
-                                                        <td className="py-2.5 px-3 whitespace-nowrap text-muted-foreground font-mono text-[11px]">
-                                                            {cm.regionalDate} {cm.regionalTime}
-                                                        </td>
+                                                        {includeCommitDates && (
+                                                            <td className="py-2.5 px-3 whitespace-nowrap text-muted-foreground font-mono text-[11px]">
+                                                                {cm.regionalDate} {cm.regionalTime}
+                                                            </td>
+                                                        )}
                                                         {includeAuthors && (
                                                             <td className="py-2.5 px-3 whitespace-nowrap">
                                                                 <div className="flex items-center gap-2">

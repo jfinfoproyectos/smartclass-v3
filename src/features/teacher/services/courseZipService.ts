@@ -114,6 +114,8 @@ export const courseZipService = {
                 order: a.order,
                 openDate: a.openDate,
                 allowLinkSubmission: a.allowLinkSubmission,
+                isGroupActivity: a.isGroupActivity,
+                groupScope: a.groupScope,
                 submissions: a.submissions.map(s => ({
                     studentEmail: s.user.email,
                     url: s.url,
@@ -295,6 +297,8 @@ export const courseZipService = {
                             order: act.order,
                             openDate: act.openDate ? new Date(act.openDate) : null,
                             allowLinkSubmission: act.allowLinkSubmission ?? false,
+                            isGroupActivity: act.isGroupActivity ?? false,
+                            groupScope: act.groupScope || "COURSE",
                             courseId: newCourse.id
                         }
                     });

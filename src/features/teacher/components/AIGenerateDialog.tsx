@@ -59,6 +59,8 @@ interface AIGenerateDialogProps {
     activityType: string;
     initialPrompt?: string;
     initialContent?: string;
+    customTitle?: string;
+    customDescription?: string;
 }
 
 interface ChatMessage {
@@ -182,6 +184,17 @@ const QUICK_SUGGESTIONS: Record<string, string[]> = {
         "Taller práctico de diseño de software: Diagramas de casos de uso y diagramas de secuencia para un sistema de reservas.",
         "Laboratorio de pruebas de software: Matriz de casos de prueba manuales, caja negra y escenarios de prueba de integración.",
         "Guía de ejercicios prácticos sobre estructuras de datos lineales y análisis de complejidad Big O."
+    ],
+    WORKSHOP_GITHUB: [
+        "API REST modular con Node.js, Express y TypeScript: controladores, rutas, validaciones de esquemas y commits semánticos por módulo.",
+        "Aplicación Frontend con React y Tailwind: componentes atómicos, estado global, consumo de API y ramas de trabajo ordenadas.",
+        "Microservicio en Python con FastAPI: modelos Pydantic, endpoints asíncronos, pruebas unitarias y Dockerfile.",
+        "Backend empresarial con Java y Spring Boot: entidades JPA, repositorios, servicios y flujo Git profesional."
+    ],
+    WORKSHOP_CODE: [
+        "Codelab interactivo de algoritmos de ordenamiento y búsqueda con Monaco Editor y pistas adaptativas.",
+        "Laboratorio guiado de programación asíncrona: Promesas, Async/Await y manejo de errores paso a paso.",
+        "Taller de estructuras de datos: Implementación guiada de Pilas, Colas y Árboles Binarios con validaciones."
     ]
 };
 
@@ -212,7 +225,9 @@ export function AIGenerateDialog({
     type,
     activityType,
     initialPrompt = "",
-    initialContent = ""
+    initialContent = "",
+    customTitle,
+    customDescription
 }: AIGenerateDialogProps) {
     const { resolvedTheme } = useTheme();
     const mode = resolvedTheme === "dark" ? "dark" : "light";
@@ -255,9 +270,11 @@ export function AIGenerateDialog({
                     {
                         id: "initial-loaded-msg",
                         role: "assistant",
-                        text: activityType === "DOCUMENTATION"
-                            ? "He cargado el contenido actual de tu lección. Puedes usar este chat para pedirme cualquier cambio: por ejemplo, explicar conceptos paso a paso, añadir ejemplos de código prácticos y comentados, resumir, crear tablas o agregar diagramas."
-                            : "He cargado el enunciado actual de tu actividad. Puedes usar este chat para pedirme cualquier cambio: por ejemplo, simplificar la actividad, resumir, cambiar requerimientos, agregar casos borde o ajustar los porcentajes de la rúbrica.",
+                        text: customDescription 
+                            ? `He cargado el contenido actual. Puedes usar este chat para pedirme cualquier cambio: por ejemplo, detallar pasos, simplificar explicaciones, agregar casos prácticos o adaptar las indicaciones didácticas.`
+                            : (activityType === "DOCUMENTATION"
+                                ? "He cargado el contenido actual de tu lección. Puedes usar este chat para pedirme cualquier cambio: por ejemplo, explicar conceptos paso a paso, añadir ejemplos de código prácticos y comentados, resumir, crear tablas o agregar diagramas."
+                                : "He cargado el enunciado actual de tu actividad. Puedes usar este chat para pedirme cualquier cambio: por ejemplo, simplificar la actividad, resumir, cambiar requerimientos, agregar casos borde o ajustar los porcentajes de la rúbrica."),
                         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                     }
                 ]);
@@ -441,20 +458,20 @@ export function AIGenerateDialog({
                             </div>
                             <div>
                                 <DialogTitle className="text-base sm:text-lg font-bold flex items-center gap-2">
-                                    {activityType === "DOCUMENTATION"
+                                    {customTitle || (activityType === "DOCUMENTATION"
                                         ? (initialContent ? "Modificar Lección con Chat IA" : "Generar Contenido de Lección con IA")
                                         : (initialContent ? "Modificar Enunciado con Chat IA" : "Generar Enunciado y Rúbrica con IA")
-                                    }
+                                    )}
                                 </DialogTitle>
                                 <DialogDescription className="text-xs text-muted-foreground">
-                                    {activityType === "DOCUMENTATION"
+                                    {customDescription || (activityType === "DOCUMENTATION"
                                         ? (generatedContent
                                             ? "Adapta y perfecciona el contenido de la lección conversando con la IA."
                                             : "Crea explicaciones detalladas, guías pedagógicas y ejemplos prácticos para tu documento.")
                                         : (generatedContent
                                             ? "Adapta y perfecciona el resultado de forma interactiva conversando con la IA."
                                             : "Crea objetivos, requerimientos técnicos y criterios con ponderación al 100%.")
-                                    }
+                                    )}
                                 </DialogDescription>
                             </div>
                         </div>

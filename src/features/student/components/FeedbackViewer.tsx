@@ -59,13 +59,27 @@ export function FeedbackViewer({ feedback, repoUrl, configuredPaths, preventCopy
             .replace(/\*\((?:Calificado por IA - )?Peticiones (?:a la API de Gemini|API):?\s*\d+\)\*/gi, '');
 
         formattedFeedback = formattedFeedback
-            // Fix double pipes between table rows: `| |` or `||` -> `|\n|`
+            // 1. Heal severed table headers (e.g. `|\n\n# | Requerimiento` or `|\n\n| Requerimiento`)
+            .replace(
+                /\|\s*\n+\s*#?\s*\|\s*(Requerimiento del Enunciado|Requerimiento|Criterio|Dimensión Evaluada|Participante)/gi,
+                '| N° | $1'
+            )
+            // 2. Heal 5-col delimiter if header has 6 cols (e.g. legacy delimiter):
+            .replace(
+                /\|[-: ]{3,}\|[-: ]{3,}\|[-: ]{3,}\|[-: ]{3,}\|[-: ]{3,}\|(?=[ \t\n]*\| (?:[0-9]+|\*\*[0-9]+\*\*))/g,
+                '|:---:|:---|:---:|:---:|:---|:---|'
+            )
+            // 3. Fix glued delimiter and first row: `|---|:---:|... | 1 |` -> `|---|\n| 1 |`
+            .replace(/(\|[-:]{3,}\|)[ \t]*\|[ \t]*/g, '$1\n| ')
+            // 4. Fix glued table rows `| ... | | ... |` -> `| ... |\n| ... |`
+            .replace(/\|[ \t]*\|[ \t]*(?=[A-Za-z0-9\*\#\_\✅\⚠️\❌\🎙️\[])/g, '|\n| ')
+            // 5. Fix double pipes between table rows: `| |` or `||` -> `|\n|`
             .replace(/\|[ \t]*\|/g, '|\n|')
             // Fix glued pipe table rows without newlines: `| ... | [File]` -> `| ... |\n| [File]`
             .replace(/(\|\s*(?:Aprobado|Requiere mejoras|Rechazado|[0-5]\.[0-9]|-\s*))\s+(\|\s*\[)/gi, '$1\n$2')
-            // Fix headers attached to table ends
-            .replace(/\|\s*(#{1,4}\s)/g, '|\n\n$1')
-            .replace(/Evaluado\s+\|\s*(#{1,4}\s)/g, 'Evaluado |\n\n$1')
+            // Fix headers attached to table ends: only match real headings (##, ###), NEVER single table column `#`
+            .replace(/\|\s*(#{2,4}\s+[^\r\n|]+)$/gm, '|\n\n$1')
+            .replace(/Evaluado\s+\|\s*(#{2,4}\s+[^\r\n|]+)$/gm, 'Evaluado |\n\n$1')
             // Fix inline headers
             .replace(/([^\n])\s+(#{2,4}\s)/g, '$1\n\n$2')
             // Separate keywords from the headers so they aren't fully bolded
@@ -198,6 +212,11 @@ export function FeedbackViewer({ feedback, repoUrl, configuredPaths, preventCopy
                     margin-top: 1rem !important;
                     margin-bottom: 1rem !important;
                     font-size: 0.825rem !important;
+                    border-radius: 0.5rem !important;
+                    overflow: hidden !important;
+                }
+                .wmde-markdown table tr:nth-child(even) {
+                    background-color: rgba(120, 120, 120, 0.04) !important;
                 }
                 .wmde-markdown table thead {
                     display: table-header-group !important;
