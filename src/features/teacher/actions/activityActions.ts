@@ -222,7 +222,8 @@ export async function verifyCriterionRelationAction(
         expectedAnswer?: string;
         description?: string;
     },
-    aiModelName?: string
+    aiModelName?: string,
+    activityType?: string
 ) {
     const session = await getSession();
     if (!session || session.user.role !== "teacher") {
@@ -230,7 +231,7 @@ export async function verifyCriterionRelationAction(
     }
 
     const { verifyCriterionRelation } = await import("../services/ai/activityContentService");
-    return await verifyCriterionRelation(statement, criterion, session.user.id, aiModelName);
+    return await verifyCriterionRelation(statement, criterion, session.user.id, aiModelName, activityType);
 }
 
 export async function balanceCriteriaPercentagesAction(

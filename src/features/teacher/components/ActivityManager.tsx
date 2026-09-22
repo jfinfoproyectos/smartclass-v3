@@ -2290,36 +2290,46 @@ function ActivityFormDialog({
         }
     };
 
-    // Verificar si un criterio/pregunta individual tiene relación directa con el enunciado usando IA
+    // Autocompletar todo el criterio y corregir redacción de la pregunta con IA
     const handleVerifyCriterion = async (idx: number) => {
         const crit = criteria[idx];
         if (!crit) return;
 
-        if (!statement || statement.trim().length < 20) {
-            toast.error("El enunciado de la actividad está vacío para verificar la relación de la pregunta.");
+        const hasQuestion = Boolean(crit.question && crit.question.trim().length > 0);
+        const hasName = Boolean(crit.name && crit.name.trim().length > 0 && !crit.name.toLowerCase().startsWith("criterio"));
+        const hasDescription = Boolean(crit.description && crit.description.trim().length > 0);
+        const hasStatement = Boolean(statement && statement.trim().length >= 10);
+
+        if (!hasQuestion && !hasName && !hasDescription && !hasStatement) {
+            toast.error("Escribe al menos una pregunta o tema para que la IA complete el criterio.");
             return;
         }
 
         setVerifyingCriterionIndex(idx);
         try {
-            const result = await verifyCriterionRelationAction(statement, crit);
+            const result = await verifyCriterionRelationAction(statement || "", crit, undefined, selectedType);
             if (result) {
-                if (result.suggestedName) handleUpdateCriterion(idx, "name", result.suggestedName);
-                if (result.suggestedQuestion) handleUpdateCriterion(idx, "question", result.suggestedQuestion);
-                if (result.suggestedExpectedAnswer) handleUpdateCriterion(idx, "expectedAnswer", result.suggestedExpectedAnswer);
-                if (result.suggestedDescription) handleUpdateCriterion(idx, "description", result.suggestedDescription);
+                // Actualización atómica de todos los campos en un solo paso
+                setCriteria(prev => {
+                    const next = [...prev];
+                    if (next[idx]) {
+                        next[idx] = {
+                            ...next[idx],
+                            name: result.suggestedName || next[idx].name,
+                            question: result.suggestedQuestion || next[idx].question,
+                            expectedAnswer: result.suggestedExpectedAnswer || next[idx].expectedAnswer,
+                            description: result.suggestedDescription || next[idx].description,
+                        };
+                    }
+                    return next;
+                });
 
                 setVerifiedMap(prev => ({ ...prev, [crit.id || idx]: true }));
-
-                if (result.isRelated) {
-                    toast.success(`✓ Pregunta verificada con IA: ${result.feedback}`);
-                } else {
-                    toast.info(`Pregunta adaptada con IA para relacionarse al enunciado: ${result.feedback}`);
-                }
+                toast.success("✓ Pregunta corregida y criterio completado con IA");
             }
         } catch (e: any) {
-            console.error("Error verificando criterio con IA:", e);
-            toast.error(`Error al verificar criterio: ${e.message || "Error de conexión con IA"}`);
+            console.error("Error completando criterio con IA:", e);
+            toast.error(`Error al autocompletar con IA: ${e.message || "Error de conexión con IA"}`);
         } finally {
             setVerifyingCriterionIndex(null);
         }
@@ -2401,9 +2411,13 @@ function ActivityFormDialog({
     };
 
     const handleUpdateCriterion = (index: number, field: keyof EvaluationCriterion, val: any) => {
-        const copy = [...criteria];
-        copy[index] = { ...copy[index], [field]: val };
-        setCriteria(copy);
+        setCriteria(prev => {
+            const copy = [...prev];
+            if (copy[index]) {
+                copy[index] = { ...copy[index], [field]: val };
+            }
+            return copy;
+        });
     };
 
     const handleRemoveCriterion = (index: number) => {
@@ -7367,7 +7381,7 @@ function ActivityFormDialog({
                                                                     >
                                                                         <ChevronDown className="h-3.5 w-3.5" />
                                                                     </Button>
-                                                                    {/* Botón tipo icono al lado de eliminar para verificar relación con el enunciado con IA */}
+                                                                    {/* Botón tipo icono al lado de eliminar para verificar y autocompletar todo con IA */}
                                                                     <Button
                                                                         type="button"
                                                                         variant="ghost"
@@ -7379,7 +7393,7 @@ function ActivityFormDialog({
                                                                                 ? "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20"
                                                                                 : "text-purple-600 dark:text-purple-400 hover:text-purple-700 hover:bg-purple-500/10"
                                                                         }`}
-                                                                        title="Verificar si esta pregunta tiene relación con el enunciado usando IA"
+                                                                        title="Autocompletar todo con IA a partir de la pregunta y corregir su redacción"
                                                                     >
                                                                         {verifyingCriterionIndex === idx ? (
                                                                             <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-600" />
@@ -7406,9 +7420,27 @@ function ActivityFormDialog({
                                                         {/* Bloque de Preguntas de Sustentación para el Docente */}
                                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                                                             <div className="space-y-1.5 p-3 rounded-xl bg-primary/[0.03] border border-primary/15">
-                                                                <div className="flex items-center gap-1.5 text-xs font-bold text-primary">
-                                                                    <HelpCircle className="h-3.5 w-3.5" />
-                                                                    <span>Preguntas de Sustentación (para interrogar al estudiante)</span>
+                                                                <div className="flex items-center justify-between text-xs font-bold text-primary">
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        <HelpCircle className="h-3.5 w-3.5" />
+                                                                        <span>Preguntas de Sustentación (para interrogar al estudiante)</span>
+                                                                    </div>
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        disabled={verifyingCriterionIndex !== null}
+                                                                        onClick={() => handleVerifyCriterion(idx)}
+                                                                        className="h-6 px-2 text-[10px] font-semibold text-purple-600 dark:text-purple-400 hover:bg-purple-500/10 gap-1 rounded-md transition-all"
+                                                                        title="Llenar todo basado en la pregunta y corregir su redacción con IA"
+                                                                    >
+                                                                        {verifyingCriterionIndex === idx ? (
+                                                                            <Loader2 className="h-3 w-3 animate-spin text-purple-600" />
+                                                                        ) : (
+                                                                            <Sparkles className="h-3 w-3 text-purple-600 dark:text-purple-400" />
+                                                                        )}
+                                                                        <span>Completar con IA</span>
+                                                                    </Button>
                                                                 </div>
                                                                 <Textarea
                                                                     value={crit.question || ""}

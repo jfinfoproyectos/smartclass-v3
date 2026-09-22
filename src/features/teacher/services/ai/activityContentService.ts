@@ -575,47 +575,68 @@ export async function verifyCriterionRelation(
         description?: string;
     },
     userId: string,
-    aiModelName?: string
+    aiModelName?: string,
+    activityType?: string
 ): Promise<VerifyCriterionResult> {
     const model = await getAIModel(userId, aiModelName);
 
-    const systemPrompt = `Eres un auditor académico y docente experto en ingeniería de software.
-Tu misión es VERIFICAR PREGUNTA POR PREGUNTA que el siguiente criterio de sustentación TENGA RELACIÓN DIRECTA, REAL Y EXACTA con el contenido y requerimientos del ENUNCIADO de la actividad.
+    const questionInput = (criterion.question || "").trim();
+    const nameInput = (criterion.name || "").trim();
+    const descInput = (criterion.description || "").trim();
+    const answerInput = (criterion.expectedAnswer || "").trim();
 
-OBJETIVO OBLIGATORIO:
-Comprobar si la pregunta y su concepto tienen relación real, directa y explícita con los temas, requisitos, tecnologías, clases, entidades o estándares del enunciado.
+    const systemPrompt = `Eres un docente universitario experto y metodólogo pedagógico en ciencias de la computación, desarrollo de software e ingeniería de sistemas.
+Tu misión es ASISTIR AL PROFESOR autocompletando y perfeccionando TODOS los campos de este criterio de sustentación evaluativo A PARTIR DE LA PREGUNTA O BORRADOR que el docente ingresó, INCLUYENDO CORREGIR Y REFORMULAR LA REDACCIÓN DE LA PREGUNTA.
 
-ENUNCIADO DE LA ACTIVIDAD:
+DATOS INGRESADOS POR EL DOCENTE:
+- Pregunta o tema redactado por el docente: "${questionInput || nameInput || descInput}"
+- Título actual del criterio: "${nameInput}"
+- Respuesta esperada actual: "${answerInput}"
+- Aspectos técnicos actuales: "${descInput}"
+${activityType ? `- Modalidad de la actividad: ${activityType}` : ""}
+
+${statement && statement.trim().length >= 15 ? `ENUNCIADO / GUÍA DE LA ACTIVIDAD:
 """
 ${statement}
 """
+(Alinea los términos técnicos, clases, archivos o tecnologías con el enunciado si aplican al tema de la pregunta).` : `(No se proporcionó un enunciado largo. Basa todo el contenido directamente en la pregunta y tema ingresado por el docente).`}
 
-CRITERIO Y PREGUNTA A VERIFICAR:
-- Criterio / Tema: "${criterion.name}"
-- Pregunta de sustentación: "${criterion.question || ''}"
-- Respuesta esperada: "${criterion.expectedAnswer || ''}"
-- Descripción técnica: "${criterion.description || ''}"
+INSTRUCCIONES OBLIGATORIAS:
 
-INSTRUCCIONES DE AUDITORÍA Y VERIFICACIÓN:
-1. Revisa minuciosamente el enunciado para ver si este tema o pregunta corresponde a algo solicitado o relevante en la actividad.
-2. Si tiene relación directa:
-   - isRelated = true
-   - feedback: Indica con qué sección, tecnología o requisito puntual del enunciado se relaciona.
-   - Pule si es necesario la pregunta y respuesta esperada para citar textualmente los términos y requisitos exactos del enunciado.
-3. Si NO tiene relación directa o es genérica/desconectada del enunciado:
-   - isRelated = false
-   - feedback: Explica brevemente el motivo de la desconexión.
-   - Reformular suggestedName, suggestedQuestion, suggestedExpectedAnswer y suggestedDescription para que queden 100% basados en un requerimiento real y puntual que sí esté en el enunciado.`;
+1. CORRECCIÓN Y REFORMULACIÓN DE LA PREGUNTA (suggestedQuestion):
+   - Revisa el texto que escribió el docente: "${questionInput || nameInput || descInput}".
+   - SI EL DOCENTE ESCRIBIÓ UN TEMA, FRASE O BORRADOR SIN FORMATO INTERROGATIVO (por ejemplo: "Presentación del Equipo y Roles Identificación de los integrantes, rol asumido por cada uno..."), TRANSFÓRMALO OBLIGATORIAMENTE en una pregunta de sustentación oral formal, directa e interrogativa, iniciando con "¿" y finalizando con "?".
+   - Si ya es una pregunta, corrige su ortografía, coherencia, redacción y estilo para que sea una pregunta pedagógica retadora y de alto nivel académico.
+   - La pregunta debe estar diseñada para que el profesor interrogue oralmente al estudiante y verifique si realmente comprende el porqué de sus decisiones técnicas y no se limitó a copiar código.
+   - NUNCA desvíes el tema central que el docente quiere evaluar; tu rol es pulir, corregir y dar formato interrogativo impecable a su inquietud.
+
+2. NOMBRE DEL CRITERIO (suggestedName):
+   - Genera un nombre conciso, profesional y descriptivo para el criterio (entre 3 y 6 palabras).
+   - Debe representar fielmente el tema de la pregunta corregida (por ejemplo: "Roles del Equipo y Contribución en GitHub", "Patrón Factory y Desacoplamiento", "Consultas Agregadas y Optimización").
+   - NUNCA devuelvas "Criterio de Sustentación 1" ni títulos genéricos sin significado.
+
+3. RESPUESTA ESPERADA / CONCEPTOS CLAVE A DEMOSTRAR (suggestedExpectedAnswer):
+   - Redacta de forma detallada, clara y pedagógicamente sólida qué debe responder o argumentar el estudiante ante esta pregunta para obtener la nota máxima.
+   - Describe los conceptos teóricos, explicaciones técnicas y justificaciones que evidencian dominio genuino del tema.
+   - ESTE CAMPO ES OBLIGATORIO Y NUNCA DEBE QUEDAR VACÍO NI CON TEXTO PLACEHOLDER.
+
+4. ASPECTOS TÉCNICOS A VERIFICAR EN EL CÓDIGO O REPOSITORIO (suggestedDescription):
+   - Redacta detalladamente qué debe revisar el docente en los archivos de código, repositorio de GitHub, commits, clases, scripts o entregables para contrastar y validar la respuesta oral del estudiante.
+   - ESTE CAMPO ES OBLIGATORIO Y NUNCA DEBE QUEDAR VACÍO NI CON TEXTO PLACEHOLDER.
+
+5. FEEDBACK Y VALIDACIÓN:
+   - isRelated: true
+   - feedback: "Pregunta reformulada en formato interrogativo y rúbrica completada exitosamente con respuesta esperada y verificación técnica."`;
 
     const { object } = await generateObject({
         model,
         schema: z.object({
-            isRelated: z.boolean().describe("Indica si el criterio y pregunta tienen relación directa con el enunciado"),
-            feedback: z.string().describe("Retroalimentación sobre la relación con el enunciado"),
-            suggestedName: z.string().describe("Nombre del criterio verificado o alineado al enunciado"),
-            suggestedQuestion: z.string().describe("Pregunta de sustentación verificada o alineada al enunciado"),
-            suggestedExpectedAnswer: z.string().describe("Respuesta conceptual esperada y alineada"),
-            suggestedDescription: z.string().describe("Aspectos técnicos puntuales a verificar en el código"),
+            isRelated: z.boolean().describe("Indica si el criterio y pregunta tienen relación pedagógica y directa"),
+            feedback: z.string().describe("Mensaje descriptivo sobre la corrección y autocompletado"),
+            suggestedName: z.string().describe("Nombre profesional y descriptivo del criterio"),
+            suggestedQuestion: z.string().describe("Pregunta de sustentación corregida y formateada en forma interrogativa con signos ¿?"),
+            suggestedExpectedAnswer: z.string().describe("Respuesta conceptual esperada y conceptos clave detallados"),
+            suggestedDescription: z.string().describe("Aspectos técnicos puntuales a verificar en el código o repositorio"),
         }),
         prompt: systemPrompt
     });
