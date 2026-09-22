@@ -87,8 +87,11 @@ export function ManualActivityInspector({
     const [copiedLink, setCopiedLink] = useState(false);
     const [activeTab, setActiveTab] = useState<"statement" | "details">("statement");
 
+    const [savedGrade, setSavedGrade] = useState<number | null>(null);
+
     // Sincronizar estado al cambiar de estudiante
     useEffect(() => {
+        setSavedGrade(null);
         const meta = extractEvaluationMetadata(submission?.feedback);
         const rawFeedback = submission?.feedback
             ? submission.feedback.replace("[ENTREGA RECHAZADA]\n", "").replace("[ENTREGA RECHAZADA]", "")
@@ -197,6 +200,7 @@ export function ManualActivityInspector({
                 fullFeedback = embedEvaluationMetadata(fullFeedback, metadata);
             }
             await onGradeManual(gradeInput, fullFeedback, student.id, activity.id);
+            setSavedGrade(numericGrade);
             toast.success("Calificación guardada correctamente");
             if (andNext && currentIndex < totalStudents - 1 && onSelectStudent) {
                 onSelectStudent(studentsList[currentIndex + 1].student.id);
@@ -222,7 +226,9 @@ export function ManualActivityInspector({
         }
     };
 
-    const currentGrade = submission?.grade !== null && submission?.grade !== undefined ? Number(submission.grade) : null;
+    const currentGrade = savedGrade !== null
+        ? savedGrade
+        : (submission?.grade !== null && submission?.grade !== undefined ? Number(submission.grade) : null);
     const isRejected = submission && submission.grade === null && submission.feedback && submission.feedback.includes("[ENTREGA RECHAZADA]");
     const group = evalItem?.group;
     const isLeader = evalItem?.isLeader;

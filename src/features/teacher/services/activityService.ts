@@ -220,7 +220,7 @@ export const activityService = {
 
             // Manual activities accept any URL (Google Drive, OneDrive, etc.)
             // Basic URL validation is handled by the client-side form
-            if (!data.url || data.url.trim() === "") {
+            if (!isTeacherGrading && (!data.url || data.url.trim() === "")) {
                 throw new Error("Se requiere un enlace para la entrega");
             }
         }
@@ -275,6 +275,8 @@ export const activityService = {
         const isReevaluationRequest = !isTeacherGrading && existingSubmission?.grade !== null && existingSubmission?.grade !== undefined;
         const reevaluationRequestedValue = isTeacherGrading ? false : (isReevaluationRequest ? true : (existingSubmission?.reevaluationRequested ?? false));
 
+        const effectiveUrl = data.url || existingSubmission?.url || "MANUAL";
+
         const submission = await prisma.submission.upsert({
             where: {
                 userId_activityId: {
@@ -283,7 +285,7 @@ export const activityService = {
                 }
             },
             update: {
-                url: data.url,
+                url: effectiveUrl,
                 grade: finalGrade,
                 feedback: finalFeedback,
                 attemptCount: attemptUpdate,
@@ -291,7 +293,7 @@ export const activityService = {
                 lastSubmittedAt: new Date(),
             },
             create: {
-                url: data.url,
+                url: effectiveUrl,
                 activityId: data.activityId,
                 userId: data.userId,
                 grade: grade,

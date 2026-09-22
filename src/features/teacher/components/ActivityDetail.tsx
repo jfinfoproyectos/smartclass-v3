@@ -84,7 +84,7 @@ import MDEditor from '@uiw/react-md-editor';
 import '@uiw/react-md-editor/markdown-editor.css';
 import '@uiw/react-markdown-preview/markdown.css';
 import { useTheme } from "next-themes";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 
 export function ActivityDetail({
     activity,
@@ -95,6 +95,7 @@ export function ActivityDetail({
     students: any[],
     studentGroups?: any[]
 }) {
+    const router = useRouter();
     const params = useParams();
     const activityIdFromUrl = params.activityId as string;
     
@@ -227,7 +228,13 @@ export function ActivityDetail({
             const hasSubmitted = Boolean(submission);
 
             // Solo se permite calificar si hay entrega. En actividades grupales únicamente desde el líder del equipo.
-            const canEvaluate = hasSubmitted && (!activity.isGroupActivity || isLeader);
+            // Para actividades de tipo MANUAL: el docente siempre debe poder calificar directamente a cualquier estudiante (o al líder en grupos), incluso sin entrega previa.
+            const isManualActivity = activity.type === "MANUAL";
+            const hasLeaderInGroup = group ? Boolean(group.leaderId || group.members?.some((m: any) => m.isLeader)) : false;
+            const canEvaluateGroupMember = isLeader || !hasLeaderInGroup;
+            const canEvaluate = isManualActivity
+                ? (!activity.isGroupActivity || canEvaluateGroupMember || !group)
+                : (hasSubmitted && (!activity.isGroupActivity || isLeader));
 
             return {
                 student,
@@ -618,6 +625,7 @@ export function ActivityDetail({
 
             await gradeManualActivityAction(formData);
             toast.success("Calificación guardada");
+            router.refresh();
         } catch (error: any) {
             toast.error("Error al guardar nota", { description: error.message });
         }
@@ -1178,10 +1186,12 @@ export function ActivityDetail({
                                         <TableCell className="text-right">
                                             <div className="flex items-center justify-end gap-1.5 w-full">
                                                 {(() => {
-                                                    const evaluationTooltip = !hasSubmitted
-                                                        ? (activity.isGroupActivity ? "El equipo aún no ha realizado la entrega" : "El estudiante aún no ha realizado la entrega")
-                                                        : !canEvaluate
-                                                            ? (group ? `Actividad grupal: La evaluación se realiza únicamente desde el líder del equipo (${leaderName})` : "Actividad grupal: estudiante sin líder asignado")
+                                                    const evaluationTooltip = !canEvaluate
+                                                        ? (group ? `Actividad grupal: La evaluación se realiza únicamente desde el líder del equipo (${leaderName})` : "Actividad grupal: estudiante sin líder asignado")
+                                                        : !hasSubmitted
+                                                            ? (activity.type === "MANUAL"
+                                                                ? "Calificar directamente (Actividad Manual)"
+                                                                : (activity.isGroupActivity ? "El equipo aún no ha realizado la entrega" : "El estudiante aún no ha realizado la entrega"))
                                                             : (submission?.grade !== null && submission?.grade !== undefined ? "Reevaluar entrega" : "Calificar entrega");
 
                                                     return (
@@ -1415,27 +1425,27 @@ export function ActivityDetail({
 
                                 {/* Action button to open dedicated Evaluation Modal */}
                                 <div className="pt-2 flex justify-end">
-                                    <div title={!submission ? "El estudiante aún no ha realizado la entrega" : undefined} className="w-full">
+                                    <div title={(!submission && activity.type !== "MANUAL") ? "El estudiante aún no ha realizado la entrega" : undefined} className="w-full">
                                         <Button
                                             type="button"
                                             onClick={() => {
-                                                if (!submission) return;
+                                                if (!submission && activity.type !== "MANUAL") return;
                                                 setSelectedStudentIndex(null);
                                                 setEvaluatingStudentId(student.id);
                                             }}
-                                            disabled={!submission}
-                                            variant={submission ? "default" : "outline"}
+                                            disabled={!submission && activity.type !== "MANUAL"}
+                                            variant={(submission || activity.type === "MANUAL") ? "default" : "outline"}
                                             className={cn(
                                                 "w-full font-bold gap-2 py-5 shadow-sm",
-                                                !submission && "opacity-40 cursor-not-allowed bg-muted text-muted-foreground hover:bg-muted"
+                                                (!submission && activity.type !== "MANUAL") && "opacity-40 cursor-not-allowed bg-muted text-muted-foreground hover:bg-muted"
                                             )}
                                         >
                                             <Sparkles className="h-4 w-4" />
                                             {!submission 
-                                                ? "Sin Entrega para Evaluar"
+                                                ? (activity.type === "MANUAL" ? "Calificar Actividad Manual" : "Sin Entrega para Evaluar")
                                                 : (submission?.grade !== null && submission?.grade !== undefined 
                                                     ? "Reevaluar / Modificar Calificación" 
-                                                    : "Abrir Evaluador de Código")}
+                                                    : (activity.type === "MANUAL" ? "Calificar Actividad Manual" : "Abrir Evaluador"))}
                                         </Button>
                                     </div>
                                 </div>
@@ -2397,13 +2407,18 @@ export function ActivityDetail({
             {(() => {
                 if (!evaluatingStudentId) return null;
                 const evalItem = studentStatus.find(s => s.student.id === evaluatingStudentId);
-                if (!evalItem || !evalItem.submission) return null;
+                if (!evalItem) return null;
+                if (activity.type !== "MANUAL" && !evalItem.submission) return null;
                 const { student: evalStudent, submission: evalSubmission } = evalItem;
 
-                // Si la actividad es grupal, la navegación de evaluación es exclusiva para los líderes de grupo con entrega
-                const evaluatableStudents = activity.isGroupActivity
-                    ? studentStatus.filter(s => s.isLeader && s.submission)
-                    : studentStatus.filter(s => Boolean(s.submission));
+                // Si la actividad es grupal, la navegación de evaluación es exclusiva para los líderes de grupo con entrega (o miembros evaluables en manual)
+                const evaluatableStudents = activity.type === "MANUAL"
+                    ? (activity.isGroupActivity
+                        ? studentStatus.filter(s => s.isLeader || !s.group)
+                        : studentStatus)
+                    : (activity.isGroupActivity
+                        ? studentStatus.filter(s => s.isLeader && s.submission)
+                        : studentStatus.filter(s => Boolean(s.submission)));
 
                 return (
                     <Dialog open={!!evaluatingStudentId} onOpenChange={open => !open && setEvaluatingStudentId(null)}>
