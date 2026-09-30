@@ -94,6 +94,7 @@ export function PDFPreviewPane({
       toast.error("El PDF aún se está generando...");
       return;
     }
+    
 
     const cleanName = (metadata.title || "Documento_Corporativo")
       .toLowerCase()
