@@ -5,7 +5,6 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { PublicHeader } from "./PublicHeader";
 import { PublicSidebar } from "./PublicSidebar";
 import RightSidebar from "./RightSidebar";
-import { TopicsHeader } from "./TopicsHeader";
 import { NavItem } from "../../services/public-docs";
 import { ThemeInfo } from "@/app/actions/themes";
 import { recordProjectVisitAction } from "../../actions/progressActions";
@@ -246,28 +245,16 @@ export function PublicDocsShell({
     return () => clearTimeout(timer);
   }, [pathname, projectName, children]);
 
-  // Logic to determine active topic and filtered sidebar tree
-  const { topics, activeTopic, sidebarNav } = useMemo(() => {
-    // 1. Get all top-level topics (folders at level 0)
+  // Active topic from URL (for tracking and page metadata)
+  const { topics, activeTopic } = useMemo(() => {
     const allTopics = navTree.filter(item => item.type === "folder");
-    
-    // 2. Identify active topic from URL
-    // URL: /docs/[projectId]/[topicSlug]/...
     const pathParts = pathname.split('/').filter(Boolean);
-    // pathParts[0] = "docs", pathParts[1] = projectId, pathParts[2] = topicSlug
     const topicSlugFromUrl = pathParts[2] || null;
-    
     const active = allTopics.find(t => t.slug === topicSlugFromUrl) || null;
-    
-    // 3. Determine what to show in sidebar
-    // If we have an active topic, show its children (categories)
-    // If not, and there are topics, we might be at the root index
-    const sidebar = active?.children || (topicSlugFromUrl ? [] : navTree);
 
     return {
       topics: allTopics,
-      activeTopic: active,
-      sidebarNav: sidebar
+      activeTopic: active
     };
   }, [navTree, pathname]);
 
@@ -280,7 +267,7 @@ export function PublicDocsShell({
           projectId={projectId} 
           currentCodeTheme={currentCodeTheme} 
           themes={themes}
-          navTree={sidebarNav}
+          navTree={navTree}
           courseSettings={courseSettings}
           isTocOpen={isTocOpen}
           toggleToc={toggleToc}
@@ -308,7 +295,7 @@ export function PublicDocsShell({
           >
             <div style={{ width: 288 }} className="h-full">
               <PublicSidebar 
-                navTree={sidebarNav} 
+                navTree={navTree} 
                 projectId={projectId} 
                 className="h-full border-r border-border bg-muted/40 dark:bg-muted/30" 
               />

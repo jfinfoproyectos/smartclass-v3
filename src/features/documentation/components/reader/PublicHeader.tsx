@@ -7,17 +7,9 @@ import { cn } from "@/lib/utils";
 import { ConfigControls } from "./ConfigControls";
 import { ThemeInfo } from "@/app/actions/themes";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { Menu, ChevronDown, AlignRight, ArrowLeft } from "lucide-react";
+import { Menu, AlignRight, ArrowLeft } from "lucide-react";
 import { NavItem } from "../../services/public-docs";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-  DropdownMenuLabel,
-} from "@/components/ui/dropdown-menu";
 import { PublicSidebar } from "./PublicSidebar";
 import RightSidebar from "./RightSidebar";
 
@@ -57,8 +49,8 @@ export function PublicHeader({
   toggleToc: () => void;
   isSidebarOpen: boolean;
   toggleSidebar: () => void;
-  topics: NavItem[];
-  activeTopicSlug: string | null;
+  topics?: NavItem[];
+  activeTopicSlug?: string | null;
   backUrl?: string;
   rawContent?: string;
   pageTitle?: string;
@@ -79,16 +71,10 @@ export function PublicHeader({
     setIsMobileTocOpen(false);
   }, [pathname]);
 
-  const filteredTopics = topics.filter(
-    t => t.slug.toLowerCase() !== "inicio" && t.slug !== "" && t.title.toLowerCase() !== "inicio"
-  );
-  const activeTopic = topics.find(t => t.slug === activeTopicSlug);
-  const activeTitle = activeTopic ? activeTopic.title : "Inicio";
-
   return (
     <header className="flex-none border-b border-border/80 bg-background/80 backdrop-blur-xl z-50 sticky top-0 w-full flex flex-col shadow-none">
       <div className="h-12 w-full flex items-center justify-between px-3 sm:px-5 gap-3">
-        <div className="flex items-center gap-2 flex-1 min-w-0">
+        <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
           {/* Back to app button */}
           {mounted && (
             <Button
@@ -130,99 +116,19 @@ export function PublicHeader({
             )}
           </div>
 
-          {/* Mobile/Tablet Topics Dropdown */}
-          {mounted && (
-            <div className="lg:hidden flex items-center shrink-0 min-w-0">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-8 gap-1.5 px-2.5 bg-muted/50 border border-slate-200/80 dark:border-slate-800 rounded-xl text-[10px] font-bold uppercase tracking-wider text-primary cursor-pointer max-w-[110px] sm:max-w-[200px] truncate"
-                  >
-                    <span className="truncate">{activeTitle}</span>
-                    <ChevronDown className="w-3.5 h-3.5 opacity-60 shrink-0" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-52 p-1 z-[100] rounded-xl border border-slate-200/80 dark:border-slate-800">
-                  <DropdownMenuLabel className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground px-2.5 py-1.5">
-                    Seleccionar Tema
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator className="my-1" />
-                  
-                  <DropdownMenuItem asChild>
-                    <Link
-                      href={`/docs/${projectId}`}
-                      className={cn(
-                        "w-full text-left px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg cursor-pointer block truncate",
-                        !activeTopicSlug 
-                          ? "text-primary bg-primary/10 font-black" 
-                          : "text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      Inicio
-                    </Link>
-                  </DropdownMenuItem>
-
-                  {filteredTopics.map((topic) => {
-                    const isActive = activeTopicSlug === topic.slug;
-                    return (
-                      <DropdownMenuItem key={topic.id} asChild>
-                        <Link
-                          href={`/docs/${projectId}/${topic.slug}`}
-                          className={cn(
-                            "w-full text-left px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg cursor-pointer block truncate",
-                            isActive 
-                              ? "text-primary bg-primary/10 font-black" 
-                              : "text-muted-foreground hover:text-foreground"
-                          )}
-                        >
-                          {topic.title}
-                        </Link>
-                      </DropdownMenuItem>
-                    );
-                  })}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          )}
-
-          {/* Desktop Topics Tabs */}
-          {mounted && (
-            <div className="hidden lg:flex items-center h-9 gap-1 bg-muted/50 p-1 rounded-xl border border-slate-200/80 dark:border-slate-800/80 overflow-x-auto no-scrollbar shrink-0">
-              <Link
-                href={`/docs/${projectId}`}
-                className={cn(
-                  "px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all whitespace-nowrap",
-                  !activeTopicSlug 
-                    ? "bg-background text-primary border border-primary/30 shadow-xs font-extrabold" 
-                    : "text-muted-foreground hover:text-foreground hover:bg-background/50"
-                )}
-              >
-                Inicio
-              </Link>
-              {filteredTopics.map((topic) => {
-                const isActive = activeTopicSlug === topic.slug;
-                return (
-                  <Link
-                    key={topic.id}
-                    href={`/docs/${projectId}/${topic.slug}`}
-                    className={cn(
-                      "px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all whitespace-nowrap",
-                      isActive 
-                        ? "bg-background text-primary border border-primary/30 shadow-xs font-extrabold" 
-                        : "text-muted-foreground hover:text-foreground hover:bg-background/50"
-                    )}
-                  >
-                    {topic.title}
-                  </Link>
-                );
-              })}
-            </div>
-          )}
+          {/* Project Title */}
+          <Link
+            href={`/docs/${projectId}`}
+            className="flex items-center gap-2 px-2.5 py-1 rounded-xl hover:bg-muted/80 text-foreground transition-all duration-200 shrink-0 group border border-transparent hover:border-slate-200 dark:hover:border-slate-800"
+            title={`Documentación: ${projectName}`}
+          >
+            <span className="text-xs font-black uppercase tracking-wider text-foreground group-hover:text-primary transition-colors truncate max-w-[150px] sm:max-w-[220px] md:max-w-[300px]">
+              {projectName}
+            </span>
+          </Link>
 
           {/* Search Area */}
-          <div className="flex items-center flex-1 max-w-[120px] sm:max-w-[220px] lg:max-w-xs min-w-0">
+          <div className="flex items-center flex-1 max-w-[180px] sm:max-w-xs md:max-w-sm min-w-0 ml-auto sm:ml-2">
             {mounted && <Search projectId={projectId} />}
           </div>
         </div>
