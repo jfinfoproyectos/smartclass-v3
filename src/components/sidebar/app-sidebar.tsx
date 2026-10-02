@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { BookOpen, Settings2, Calendar, CalendarClock, BarChart, Users, FileText, Activity, ScrollText, Home, Wrench, ClipboardList, FileCheck, Terminal } from "lucide-react"
+import { BookOpen, Settings2, Calendar, CalendarClock, BarChart, Users, FileText, Activity, ScrollText, Home, Wrench, ClipboardList, FileCheck, Terminal, ShieldAlert } from "lucide-react"
 
 import { NavMain } from "@/components/sidebar/nav-main"
 import { NavUser } from "@/components/sidebar/nav-user"
@@ -77,8 +77,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           icon: BookOpen,
           isActive: false,
         },
-
-
+        {
+          title: "Seguridad IP",
+          url: "/dashboard/admin/security",
+          icon: ShieldAlert,
+          isActive: false,
+        },
         {
           title: "Documentación",
           url: "/dashboard/admin/docs",

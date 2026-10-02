@@ -769,3 +769,71 @@ model InspectorQuestion {
   @@index([userId, scope, category])
   @@map("inspector_question")
 }
+
+// ==========================================
+// MODELOS PARA SISTEMA DE SEGURIDAD DE IPs
+// ==========================================
+
+model BlockedIp {
+  id          String    @id @default(cuid())
+  ip          String    @unique
+  reason      String    @db.Text
+  severity    String    @default("HIGH") // LOW, MEDIUM, HIGH, CRITICAL
+  attackCount Int       @default(1)
+  isPermanent Boolean   @default(false)
+  expiresAt   DateTime?
+  blockedBy   String    @default("SISTEMA_FIREWALL")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([ip])
+  @@index([expiresAt])
+  @@index([createdAt])
+  @@map("blocked_ip")
+}
+
+model WhitelistedIp {
+  id          String   @id @default(cuid())
+  ip          String   @unique
+  description String?
+  addedBy     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([ip])
+  @@map("whitelisted_ip")
+}
+
+model SecurityAttackLog {
+  id          String   @id @default(cuid())
+  ip          String
+  attackType  String   // BRUTE_FORCE, RATE_LIMIT_EXCEEDED, PATH_TRAVERSAL, SQL_INJECTION_PROBE, MALICIOUS_SCANNER, ADMIN_UNAUTHORIZED, BLOCKED_IP_ATTEMPT
+  severity    String   @default("HIGH") // LOW, MEDIUM, HIGH, CRITICAL
+  endpoint    String
+  method      String   @default("GET")
+  userAgent   String?  @db.Text
+  payload     String?  @db.Text
+  blocked     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([ip])
+  @@index([attackType])
+  @@index([severity])
+  @@index([createdAt])
+  @@map("security_attack_log")
+}
+
+model SecurityPolicy {
+  id                     String   @id @default("security_policy")
+  enabled                Boolean  @default(true)
+  rateLimitMaxRequests   Int      @default(100) // Peticiones máximas por minuto
+  rateLimitWindowSeconds Int      @default(60)  // Ventana en segundos
+  authMaxAttempts        Int      @default(5)   // Intentos fallidos de autenticación permitidos
+  autoBanDurationMinutes Int      @default(60)  // Minutos de baneo automático
+  strictAdminWhitelist   Boolean  @default(false) // Solo IPs en lista blanca pueden entrar al panel admin
+  blockMaliciousScanners Boolean  @default(true) // Bloqueo automático ante escaneo malicioso
+  updatedAt              DateTime @updatedAt
+
+  @@map("security_policy")
+}
+

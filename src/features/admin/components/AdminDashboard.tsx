@@ -16,6 +16,7 @@ import {
     UserPlus,
     FileText,
     Shield,
+    ShieldAlert,
     FileSpreadsheet,
     Loader2
 } from "lucide-react";
@@ -229,6 +230,12 @@ export function AdminDashboard({ stats, recentActivity }: AdminDashboardProps) {
                         >
                             {isExportingPDF ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />}
                             <span>Balance PDF</span>
+                        </Button>
+                        <Button variant="outline" size="sm" className="text-xs rounded-xl border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10 font-medium" asChild>
+                            <Link href="/dashboard/admin/security">
+                                <ShieldAlert className="h-4 w-4 mr-1.5" />
+                                Seguridad IP
+                            </Link>
                         </Button>
                         <Button variant="outline" size="sm" className="text-xs rounded-xl" asChild>
                             <Link href="/dashboard/admin/settings">
