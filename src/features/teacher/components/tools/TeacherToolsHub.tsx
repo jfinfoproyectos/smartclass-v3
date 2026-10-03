@@ -15,12 +15,10 @@ import {
     GraduationCap,
     BookOpen,
     Bot,
-    Github,
     Trash2,
     FileText,
+    Calendar,
     Search,
-    Layers,
-    SlidersHorizontal,
     X
 } from "lucide-react";
 import { DashboardContainer } from "@/components/ui/dashboard-container";
@@ -30,7 +28,7 @@ interface TeacherToolsHubProps {
     courses: CourseWithStudents[];
 }
 
-type ToolCategory = "all" | "classroom" | "git-ai" | "docs";
+type ToolCategory = "all" | "classroom" | "schedule" | "git-ai" | "docs";
 
 interface ToolItem {
     id: string;
@@ -212,6 +210,28 @@ export function TeacherToolsHub({ courses }: TeacherToolsHubProps) {
             ],
             btnText: "Abrir Conversor Markdown PDF",
             route: "/dashboard/teacher/tools/markdown-pdf"
+        },
+        {
+            id: "weekly-schedule",
+            title: "Organizador de Horarios Semanales",
+            description: "Organiza tu agenda semanal consolidando clases de múltiples instituciones (SENA, Universidades, Institutos) con detección de cruces, JSON y PDF.",
+            badge: "Multi-Institución",
+            category: "schedule",
+            icon: Calendar,
+            colorClasses: {
+                iconBg: "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20",
+                iconText: "text-sky-600 dark:text-sky-400",
+                borderHover: "hover:border-sky-500/50",
+                btnHover: "group-hover:bg-sky-600 group-hover:text-white",
+                badge: "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20",
+            },
+            bullets: [
+                "Calendario semanal interactivo y cálculo dinámico de horas",
+                "Gestión independiente multi-entidad con alerta de colisiones",
+                "Exportación / Importación a JSON y generación de PDF oficial"
+            ],
+            btnText: "Abrir Horarios Semanales",
+            route: "/dashboard/teacher/tools/weekly-schedule"
         }
     ], []);
 
@@ -280,6 +300,7 @@ export function TeacherToolsHub({ courses }: TeacherToolsHubProps) {
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
                 {[
                     { id: "all", label: "Todas las Herramientas", count: tools.length },
+                    { id: "schedule", label: "Horarios & Agenda", count: tools.filter(t => t.category === "schedule").length },
                     { id: "classroom", label: "Dinámica de Clase", count: tools.filter(t => t.category === "classroom").length },
                     { id: "git-ai", label: "IA & Repositorios Git", count: tools.filter(t => t.category === "git-ai").length },
                     { id: "docs", label: "Documentación & PDF", count: tools.filter(t => t.category === "docs").length },
@@ -369,7 +390,7 @@ export function TeacherToolsHub({ courses }: TeacherToolsHubProps) {
                     <div>
                         <h3 className="text-sm font-bold text-foreground">No se encontraron herramientas</h3>
                         <p className="text-xs text-muted-foreground mt-1">
-                            No hay resultados para "{searchQuery}" en la categoría seleccionada.
+                            No hay resultados para &quot;{searchQuery}&quot; en la categoría seleccionada.
                         </p>
                     </div>
                     <Button
