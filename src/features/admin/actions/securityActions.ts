@@ -17,6 +17,8 @@ import {
     updateSecurityPolicySettings,
     extractClientIp,
     logSecurityAttack,
+    getLockedAccountsList,
+    unlockAccount,
     SecuritySeverity,
     AttackType,
 } from "../services/ipSecurityService";
@@ -192,6 +194,24 @@ export async function simulateAttackAction(attackType: AttackType, testIp: strin
         blocked: true,
     });
 
+    revalidatePath("/dashboard/admin/security");
+    return { success: true };
+}
+
+/**
+ * Obtiene lista de cuentas de usuario actualmente bloqueadas por seguridad
+ */
+export async function getLockedAccountsAction() {
+    await assertAdmin();
+    return getLockedAccountsList();
+}
+
+/**
+ * Desbloquea manualmente una cuenta de usuario protegida por fuerza bruta
+ */
+export async function unlockAccountAction(email: string) {
+    await assertAdmin();
+    await unlockAccount(email);
     revalidatePath("/dashboard/admin/security");
     return { success: true };
 }

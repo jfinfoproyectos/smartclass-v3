@@ -18,6 +18,9 @@ import {
     Sliders,
     Trash2,
     UserCheck,
+    UserX,
+    Users,
+    KeyRound,
     Plus,
     Activity,
     FileSpreadsheet,
@@ -79,6 +82,8 @@ import {
     getSecurityOverviewAction,
     getBlockedIpsAction,
     getWhitelistedIpsAction,
+    getLockedAccountsAction,
+    unlockAccountAction,
 } from "../actions/securityActions";
 import { AttackType, SecuritySeverity } from "../services/ipSecurityService";
 
@@ -92,6 +97,7 @@ interface SecurityPanelProps {
 
 const ATTACK_TYPE_LABELS: Record<string, { label: string; badge: string }> = {
     BRUTE_FORCE: { label: "Fuerza Bruta (Login)", badge: "border-amber-500/30 text-amber-500 bg-amber-500/10" },
+    ACCOUNT_LOCKOUT: { label: "Cuenta Bloqueada (Fuerza Bruta)", badge: "border-pink-500/30 text-pink-400 bg-pink-500/10" },
     RATE_LIMIT_EXCEEDED: { label: "Exceso de Peticiones (DDoS)", badge: "border-orange-500/30 text-orange-500 bg-orange-500/10" },
     MALICIOUS_SCANNER: { label: "Escaneo Sospechoso (.env / web)", badge: "border-rose-500/30 text-rose-500 bg-rose-500/10" },
     SQL_INJECTION_PROBE: { label: "Intento Inyección SQL", badge: "border-red-600/40 text-red-500 bg-red-600/15" },
@@ -122,10 +128,12 @@ export function SecurityPanel({
     const [blockedIps, setBlockedIps] = useState(initialBlockedIps);
     const [whitelistedIps, setWhitelistedIps] = useState(initialWhitelistedIps);
     const [attackLogsData, setAttackLogsData] = useState(initialAttackLogs);
+    const [lockedAccounts, setLockedAccounts] = useState<any[]>(initialOverview?.lockedAccounts || []);
 
     // Filtros de búsqueda
     const [blockedSearch, setBlockedSearch] = useState("");
     const [whitelistSearch, setWhitelistSearch] = useState("");
+    const [accountSearch, setAccountSearch] = useState("");
     const [logSearchIp, setLogSearchIp] = useState("");
     const [logFilterType, setLogFilterType] = useState("ALL");
     const [logFilterSeverity, setLogFilterSeverity] = useState("ALL");
@@ -159,7 +167,7 @@ export function SecurityPanel({
     const refreshAll = () => {
         startTransition(async () => {
             try {
-                const [newOv, newBlocked, newWhite, newLogs] = await Promise.all([
+                const [newOv, newBlocked, newWhite, newLogs, newAccounts] = await Promise.all([
                     getSecurityOverviewAction(),
                     getBlockedIpsAction(),
                     getWhitelistedIpsAction(),
@@ -170,15 +178,35 @@ export function SecurityPanel({
                         severity: logFilterSeverity,
                         searchIp: logSearchIp,
                     }),
+                    getLockedAccountsAction(),
                 ]);
                 setOverview(newOv);
                 setBlockedIps(newBlocked);
                 setWhitelistedIps(newWhite);
                 setAttackLogsData(newLogs);
+                setLockedAccounts(newAccounts);
                 if (newOv.policy) setPolicyForm(newOv.policy);
                 toast.success("Panel de seguridad actualizado");
             } catch (err: any) {
                 toast.error("Error al refrescar datos: " + err.message);
+            }
+        });
+    };
+
+    // Desbloquear cuenta de usuario
+    const handleUnlockAccount = (email: string) => {
+        startTransition(async () => {
+            try {
+                await unlockAccountAction(email);
+                toast.success(`Cuenta ${email} desbloqueada`);
+                const [newAccounts, ov] = await Promise.all([
+                    getLockedAccountsAction(),
+                    getSecurityOverviewAction(),
+                ]);
+                setLockedAccounts(newAccounts);
+                setOverview(ov);
+            } catch (err: any) {
+                toast.error("Error al desbloquear cuenta: " + err.message);
             }
         });
     };
@@ -380,6 +408,12 @@ export function SecurityPanel({
         (w.description && w.description.toLowerCase().includes(whitelistSearch.toLowerCase()))
     );
 
+    const filteredAccounts = lockedAccounts.filter((a: any) =>
+        a.email.toLowerCase().includes(accountSearch.toLowerCase()) ||
+        (a.reason && a.reason.toLowerCase().includes(accountSearch.toLowerCase())) ||
+        (a.lastIp && a.lastIp.toLowerCase().includes(accountSearch.toLowerCase()))
+    );
+
     const isCurrentAdminWhitelisted = whitelistedIps.some((w: any) => w.ip === currentAdminIp);
 
     return (
@@ -389,15 +423,21 @@ export function SecurityPanel({
                 <div className="pointer-events-none absolute -top-32 right-1/4 w-96 h-96 rounded-full bg-gradient-to-br from-red-500/20 via-orange-500/10 to-transparent blur-3xl opacity-60" />
                 <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div className="space-y-1.5">
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-red-500/10 text-red-500 border border-red-500/20 backdrop-blur-md">
-                            <ShieldAlert className="w-3.5 h-3.5 animate-pulse" />
-                            <span>Defensa Perimetral & Anti-DDoS</span>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-red-500/10 text-red-500 border border-red-500/20 backdrop-blur-md">
+                                <ShieldAlert className="w-3.5 h-3.5 animate-pulse" />
+                                <span>Defensa Perimetral & Anti-DDoS</span>
+                            </div>
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 border border-emerald-500/20 backdrop-blur-md">
+                                <Users className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
+                                <span>Modo Aulas & NAT: Cuenta + IP</span>
+                            </div>
                         </div>
                         <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground flex items-center gap-2.5">
                             Seguridad de Red & Firewall de IPs
                         </h1>
                         <p className="text-xs sm:text-sm text-muted-foreground max-w-2xl">
-                            Monitoreo en tiempo real de ataques, mitigación de fuerza bruta, rate limiting adaptativo y control de listas de acceso para proteger el sistema institucional.
+                            Monitoreo en tiempo real de ataques, mitigación inteligente por cuenta de usuario y por IP (diseñado para aulas donde decenas de estudiantes ingresan a la vez), rate limiting adaptativo y control institucional.
                         </p>
                     </div>
 
@@ -550,7 +590,7 @@ export function SecurityPanel({
             </div>
 
             {/* KPI Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
                 <AICanvasCard
                     title="IPs Bloqueadas Activas"
                     description={`${overview.stats.totalBlocked} registradas en total`}
@@ -564,6 +604,22 @@ export function SecurityPanel({
                 >
                     <div className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
                         {overview.stats.activeBlockedCount}
+                    </div>
+                </AICanvasCard>
+
+                <AICanvasCard
+                    title="Cuentas Bloqueadas"
+                    description="Aislamiento fuerza bruta"
+                    icon={UserX}
+                    badge="Cuentas"
+                    badgeColor="bg-pink-500/10 text-pink-500 border-pink-500/20"
+                    accentColor="from-pink-500/30 via-pink-500/15 to-transparent"
+                    iconBgColor="bg-pink-500/10"
+                    iconTextColor="text-pink-500"
+                    compact={true}
+                >
+                    <div className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
+                        {lockedAccounts.length}
                     </div>
                 </AICanvasCard>
 
@@ -628,9 +684,13 @@ export function SecurityPanel({
                             <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
                             <span>Lista Blanca ({overview.stats.whitelistedCount})</span>
                         </TabsTrigger>
+                        <TabsTrigger value="accounts" className="rounded-xl text-xs gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                            <UserX className="w-3.5 h-3.5 text-pink-500" />
+                            <span>Cuentas Bloqueadas ({lockedAccounts.length})</span>
+                        </TabsTrigger>
                         <TabsTrigger value="logs" className="rounded-xl text-xs gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                             <Terminal className="w-3.5 h-3.5 text-blue-500" />
-                            <span>Registro Forense de Ataques ({attackLogsData.total})</span>
+                            <span>Registro Forense ({attackLogsData.total})</span>
                         </TabsTrigger>
                         <TabsTrigger value="settings" className="rounded-xl text-xs gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                             <Sliders className="w-3.5 h-3.5 text-amber-500" />
@@ -928,7 +988,109 @@ export function SecurityPanel({
                     </Card>
                 </TabsContent>
 
-                {/* TAB 3: REGISTROS FORENSES DE ATAQUES */}
+                {/* TAB 3: CUENTAS BLOQUEADAS (AISLAMIENTO POR CUENTA + IP) */}
+                <TabsContent value="accounts" className="space-y-4">
+                    <Card className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+                        <CardHeader className="pb-3 border-b border-border/50">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                                <div>
+                                    <CardTitle className="text-base font-bold flex items-center gap-2">
+                                        <UserX className="h-4 w-4 text-pink-500" />
+                                        Cuentas de Usuario Bloqueadas (Aislamiento Cuenta + IP)
+                                    </CardTitle>
+                                    <CardDescription className="text-xs">
+                                        Cuentas protegidas tras superar el límite de intentos fallidos. La IP pública del aula o salón permanece 100% activa para los demás estudiantes.
+                                    </CardDescription>
+                                </div>
+                                <div className="flex items-center gap-2 w-full sm:w-auto">
+                                    <div className="relative flex-1 sm:w-64">
+                                        <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                                        <Input
+                                            placeholder="Buscar cuenta o IP..."
+                                            value={accountSearch}
+                                            onChange={(e) => setAccountSearch(e.target.value)}
+                                            className="h-8 pl-8 text-xs rounded-xl"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            <div className="overflow-x-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow className="text-xs bg-muted/30">
+                                            <TableHead className="font-bold">Cuenta de Usuario (Email)</TableHead>
+                                            <TableHead className="font-bold">Motivo del Bloqueo</TableHead>
+                                            <TableHead className="font-bold text-center">Fallos</TableHead>
+                                            <TableHead className="font-bold">Última IP Detectada</TableHead>
+                                            <TableHead className="font-bold">Tiempo de Bloqueo</TableHead>
+                                            <TableHead className="font-bold text-right">Acción</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {filteredAccounts.length === 0 ? (
+                                            <TableRow>
+                                                <TableCell colSpan={6} className="text-center py-12 text-muted-foreground text-xs">
+                                                    <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2 opacity-80" />
+                                                    No hay cuentas de estudiantes o docentes bloqueadas en este momento. Todos los accesos se encuentran habilitados.
+                                                </TableCell>
+                                            </TableRow>
+                                        ) : (
+                                            filteredAccounts.map((acc: any) => {
+                                                const isExpired = acc.expiresAt && new Date(acc.expiresAt).getTime() <= Date.now();
+                                                return (
+                                                    <TableRow key={acc.email} className="text-xs hover:bg-muted/40">
+                                                        <TableCell className="font-mono font-bold text-foreground flex items-center gap-2">
+                                                            <UserX className="w-3.5 h-3.5 text-pink-500" />
+                                                            {acc.email}
+                                                        </TableCell>
+                                                        <TableCell className="max-w-xs truncate text-muted-foreground" title={acc.reason}>
+                                                            {acc.reason}
+                                                        </TableCell>
+                                                        <TableCell className="text-center font-semibold">
+                                                            <span className="px-2 py-0.5 rounded-full bg-pink-500/10 text-pink-500 font-mono text-[11px]">
+                                                                {acc.failedAttempts}
+                                                            </span>
+                                                        </TableCell>
+                                                        <TableCell className="font-mono text-muted-foreground text-[11px]">
+                                                            {acc.lastIp || "Red compartida (NAT)"}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {isExpired ? (
+                                                                <Badge variant="outline" className="text-[10px] text-muted-foreground border-dashed">
+                                                                    Expirado
+                                                                </Badge>
+                                                            ) : (
+                                                                <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                                                                    <Clock className="w-3 h-3 text-amber-500" />
+                                                                    <span>Expira {formatDistanceToNow(new Date(acc.expiresAt), { addSuffix: true, locale: es })}</span>
+                                                                </div>
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell className="text-right">
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => handleUnlockAccount(acc.email)}
+                                                                disabled={isPending}
+                                                                className="h-7 text-[11px] rounded-lg border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 font-medium"
+                                                            >
+                                                                Desbloquear Cuenta
+                                                            </Button>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                );
+                                            })
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* TAB 4: REGISTROS FORENSES DE ATAQUES */}
                 <TabsContent value="logs" className="space-y-4">
                     <Card className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
                         <CardHeader className="pb-3 border-b border-border/50">
@@ -1128,6 +1290,21 @@ export function SecurityPanel({
                                         checked={policyForm.blockMaliciousScanners}
                                         onCheckedChange={(checked) => setPolicyForm({ ...policyForm, blockMaliciousScanners: checked })}
                                     />
+                                </div>
+
+                                <div className="flex items-center justify-between p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5 md:col-span-2">
+                                    <div className="space-y-0.5">
+                                        <Label className="text-sm font-bold flex items-center gap-1.5 text-emerald-500 dark:text-emerald-400">
+                                            <Users className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
+                                            Defensa Híbrida: Modo Aulas Escolares & Redes NAT (Cuenta + IP)
+                                        </Label>
+                                        <p className="text-xs text-muted-foreground">
+                                            Aislamiento inteligente por cuenta de usuario y por IP. Si decenas de estudiantes ingresan al mismo tiempo desde un mismo salón o red Wi-Fi institucional, los errores de contraseña aíslan únicamente la cuenta que falló, garantizando que el resto del aula continúe con acceso ininterrumpido sin bloqueos masivos de la IP escolar.
+                                        </p>
+                                    </div>
+                                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 border-emerald-500/30 text-xs px-2.5 py-1 shrink-0">
+                                        Activo & Protegido
+                                    </Badge>
                                 </div>
 
                                 <div className="flex items-center justify-between p-4 rounded-xl border border-border/70 bg-muted/20 md:col-span-2">

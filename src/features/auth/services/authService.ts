@@ -33,6 +33,17 @@ export async function signInEmail(payload: { email: string; password: string }):
   if (res?.error) {
     const rawMsg = res.error.message || "";
     const lower = rawMsg.toLowerCase();
+
+    // Si la cuenta individual fue bloqueada por seguridad / fuerza bruta
+    if (
+      lower.includes("bloqueada") ||
+      lower.includes("account_locked") ||
+      lower.includes("temporalmente bloqueada") ||
+      lower.includes("intentos fallidos")
+    ) {
+      throw new Error(rawMsg || "Esta cuenta se encuentra temporalmente bloqueada por reiterados intentos fallidos. Consulta a tu profesor o administrador.");
+    }
+
     if (
       lower.includes("invalid email or password") ||
       lower.includes("unauthorized") ||

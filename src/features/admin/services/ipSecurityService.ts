@@ -11,7 +11,8 @@ export type AttackType =
     | "MALICIOUS_SCANNER"
     | "ADMIN_UNAUTHORIZED"
     | "BLOCKED_IP_ATTEMPT"
-    | "MANUAL_BLOCK";
+    | "MANUAL_BLOCK"
+    | "ACCOUNT_LOCKOUT";
 
 export type SecuritySeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
@@ -28,26 +29,73 @@ export interface SecurityInspectionResult {
     };
 }
 
+export interface AccountLockStatus {
+    isLocked: boolean;
+    reason?: string;
+    retryAfterSeconds?: number;
+    lockedUntil?: Date;
+    remainingMinutes?: number;
+}
+
+export interface LockedAccountInfo {
+    email: string;
+    reason: string;
+    expiresAt: Date | null;
+    failedAttempts: number;
+    lastIp?: string;
+}
+
 // -------------------------------------------------------------
-// En memoria: Rate Limiting & Caché de Alto Rendimiento
+// En memoria: Rate Limiting & Defensa Híbrida Cuenta + IP
 // -------------------------------------------------------------
 interface RateBucket {
     count: number;
     windowStart: number;
-    failedLogins: number;
     violationsCount: number;
 }
 
+interface AccountSecurityRecord {
+    failedAttempts: number;
+    lockedUntil: number | null; // Timestamp en ms
+    lastAttempt: number;
+    lastIp: string;
+    lockReason?: string;
+}
+
+interface IpClassroomTracker {
+    failedAccounts: Set<string>;
+    totalFailures: number;
+    windowStart: number;
+    anonymousFailures: number;
+}
+
 const rateLimitMap = new Map<string, RateBucket>();
+const accountSecurityMap = new Map<string, AccountSecurityRecord>();
+const ipClassroomMap = new Map<string, IpClassroomTracker>();
 const CLEANUP_INTERVAL = 5 * 60 * 1000; // 5 minutos
 
 // Limpieza periódica de memoria
 if (typeof setInterval !== "undefined") {
     setInterval(() => {
         const now = Date.now();
-        for (const [ip, bucket] of rateLimitMap.entries()) {
+        // 1. Limpieza de rate limiter
+        for (const [key, bucket] of rateLimitMap.entries()) {
             if (now - bucket.windowStart > 10 * 60 * 1000) {
-                rateLimitMap.delete(ip);
+                rateLimitMap.delete(key);
+            }
+        }
+        // 2. Limpieza de cuentas con bloqueo expirado o inactivas
+        for (const [email, record] of accountSecurityMap.entries()) {
+            if (record.lockedUntil && record.lockedUntil <= now && (now - record.lastAttempt > 30 * 60 * 1000)) {
+                accountSecurityMap.delete(email);
+            } else if (!record.lockedUntil && (now - record.lastAttempt > 15 * 60 * 1000)) {
+                accountSecurityMap.delete(email);
+            }
+        }
+        // 3. Limpieza de rastreador de aulas/IP
+        for (const [ip, tracker] of ipClassroomMap.entries()) {
+            if (now - tracker.windowStart > 15 * 60 * 1000) {
+                ipClassroomMap.delete(ip);
             }
         }
     }, CLEANUP_INTERVAL);
@@ -397,37 +445,43 @@ export async function inspectIncomingRequest(options: {
         };
     }
 
-    // 6. Rate Limiting por IP (Ventana Deslizante)
+    // 6. Rate Limiting Inteligente Adaptado para Aulas / Redes NAT Compartidas
     const now = Date.now();
-    let bucket = rateLimitMap.get(ip);
+    const cleanIp = normalizeIp(ip);
     const windowMs = policy.rateLimitWindowSeconds * 1000;
 
+    let bucket = rateLimitMap.get(cleanIp);
     if (!bucket || (now - bucket.windowStart) > windowMs) {
         bucket = {
             count: 1,
             windowStart: now,
-            failedLogins: bucket ? bucket.failedLogins : 0,
             violationsCount: bucket ? bucket.violationsCount : 0,
         };
-        rateLimitMap.set(ip, bucket);
+        rateLimitMap.set(cleanIp, bucket);
     } else {
         bucket.count++;
     }
 
-    // Umbral más restrictivo para endpoints sensibles de autenticación
-    const isAuthEndpoint = pathname.includes("/signin") || pathname.includes("/signup") || pathname.includes("/api/auth");
-    const maxAllowedRequests = isAuthEndpoint
-        ? Math.min(20, Math.floor(policy.rateLimitMaxRequests / 3))
-        : policy.rateLimitMaxRequests;
+    // NOTA CLAVE PARA SALONES DE CLASE / REDES ESCOLARES (NAT):
+    // Cuando 30 a 50 estudiantes en un aula ingresan al tiempo, comparten la misma IP pública.
+    // Peticiones GET (cargar /signin, /dashboard, navegación web) NO deben tener un límite restrictivo de 20 reqs!
+    // Se aplica una tolerancia institucional para permitir que todo el salón navegue al unísono.
+    const isPostAuth = method === "POST" && pathname.startsWith("/api/auth/sign-in");
+
+    // Para navegación web general (GET) en salones/aulas: permitir hasta 3x el límite base (mínimo 300 reqs/min por IP compartida)
+    // Para peticiones POST de autenticación: permitir un umbral adecuado para el salón completo (mínimo 60 reqs/min por IP)
+    const maxAllowedRequests = isPostAuth
+        ? Math.max(60, policy.rateLimitMaxRequests)
+        : Math.max(policy.rateLimitMaxRequests * 3, 300);
 
     if (bucket.count > maxAllowedRequests) {
         bucket.violationsCount++;
 
-        // Si sobrepasa reiteradamente (3 o más infracciones consecutivas), auto-banear IP
+        // Si sobrepasa reiteradamente (3 o más infracciones consecutivas), auto-banear IP por Flood/DDoS
         if (bucket.violationsCount >= 3) {
             await autoBanIp({
-                ip,
-                reason: `Exceso sostenido de peticiones: ${bucket.count} reqs/${policy.rateLimitWindowSeconds}s (Ataque DDoS / Flood)`,
+                ip: cleanIp,
+                reason: `Exceso masivo sostenido de peticiones: ${bucket.count} reqs/${policy.rateLimitWindowSeconds}s (Ataque DDoS / Flood de red)`,
                 severity: "HIGH",
                 durationMinutes: policy.autoBanDurationMinutes,
                 attackType: "RATE_LIMIT_EXCEEDED",
@@ -441,15 +495,15 @@ export async function inspectIncomingRequest(options: {
                 reason: "IP_BLOCKED_RATE_LIMIT",
                 statusCode: 403,
                 details: {
-                    ip,
+                    ip: cleanIp,
                     reason: "IP bloqueada temporalmente por exceso masivo de solicitudes (Protección contra DDoS)",
                 },
             };
         }
 
-        // Registrar ataque de rate limit
+        // Registrar evento de rate limit
         logSecurityAttack({
-            ip,
+            ip: cleanIp,
             attackType: "RATE_LIMIT_EXCEEDED",
             severity: "MEDIUM",
             endpoint: pathname,
@@ -465,9 +519,9 @@ export async function inspectIncomingRequest(options: {
             reason: "RATE_LIMIT_EXCEEDED",
             statusCode: 429,
             details: {
-                ip,
+                ip: cleanIp,
                 retryAfter: retryAfterSeconds,
-                reason: `Demasiadas solicitudes. Límite de ${maxAllowedRequests} peticiones por minuto alcanzado.`,
+                reason: `Demasiadas solicitudes simultáneas desde esta red. Por favor espera un momento.`,
             },
         };
     }
@@ -476,47 +530,228 @@ export async function inspectIncomingRequest(options: {
 }
 
 // -------------------------------------------------------------
-// Registro y Detección de Intentos Fallidos de Login (Fuerza Bruta)
+// Verificación del Estado de Bloqueo de una Cuenta de Usuario
+// -------------------------------------------------------------
+export async function checkAccountLockStatus(email: string, ip?: string): Promise<AccountLockStatus> {
+    if (!email) return { isLocked: false };
+    const cleanEmail = email.trim().toLowerCase();
+    const now = Date.now();
+
+    // 1. Verificación rápida en memoria
+    const memRecord = accountSecurityMap.get(cleanEmail);
+    if (memRecord && memRecord.lockedUntil && memRecord.lockedUntil > now) {
+        const remainingSeconds = Math.max(1, Math.ceil((memRecord.lockedUntil - now) / 1000));
+        const remainingMinutes = Math.ceil(remainingSeconds / 60);
+        return {
+            isLocked: true,
+            reason: memRecord.lockReason || `La cuenta (${cleanEmail}) se encuentra temporalmente bloqueada por seguridad debido a reiterados intentos fallidos de contraseña. Tiempo restante: ${remainingMinutes} min. Las demás cuentas de tu red o aula no han sido afectadas.`,
+            retryAfterSeconds: remainingSeconds,
+            lockedUntil: new Date(memRecord.lockedUntil),
+            remainingMinutes,
+        };
+    }
+
+    // 2. Si el bloqueo expiró en memoria, limpiar
+    if (memRecord && memRecord.lockedUntil && memRecord.lockedUntil <= now) {
+        memRecord.lockedUntil = null;
+        memRecord.failedAttempts = 0;
+    }
+
+    // 3. Verificación en base de datos (por si hubo reinicio del servidor o baneo persistente)
+    try {
+        const dbUser = await prisma.user.findFirst({
+            where: { email: cleanEmail },
+            select: { banned: true, banReason: true, banExpires: true },
+        });
+
+        if (dbUser?.banned && dbUser.banExpires && dbUser.banExpires.getTime() > now) {
+            const remainingSeconds = Math.max(1, Math.ceil((dbUser.banExpires.getTime() - now) / 1000));
+            const remainingMinutes = Math.ceil(remainingSeconds / 60);
+
+            // Sincronizar en memoria
+            accountSecurityMap.set(cleanEmail, {
+                failedAttempts: 5,
+                lockedUntil: dbUser.banExpires.getTime(),
+                lastAttempt: now,
+                lastIp: ip || "desconocida",
+                lockReason: dbUser.banReason || undefined,
+            });
+
+            return {
+                isLocked: true,
+                reason: dbUser.banReason || `La cuenta (${cleanEmail}) se encuentra temporalmente bloqueada por seguridad. Tiempo restante: ${remainingMinutes} min.`,
+                retryAfterSeconds: remainingSeconds,
+                lockedUntil: dbUser.banExpires,
+                remainingMinutes,
+            };
+        } else if (dbUser?.banned && dbUser.banExpires && dbUser.banExpires.getTime() <= now) {
+            // Ya expiró en BD: restablecer automáticamente
+            await prisma.user.updateMany({
+                where: { email: cleanEmail },
+                data: { banned: false, banReason: null, banExpires: null },
+            }).catch(() => {});
+        }
+    } catch (e) {
+        console.error("[IpSecurityService] Error checking DB account lock status:", e);
+    }
+
+    return { isLocked: false };
+}
+
+// -------------------------------------------------------------
+// Registro y Detección de Intentos Fallidos de Login (Cuenta + IP)
 // -------------------------------------------------------------
 export async function registerFailedLoginAttempt(ip: string, email?: string, userAgent?: string) {
     const cache = await ensureSecurityCache();
     const policy = cache.policy;
     if (!policy || !policy.enabled) return;
 
-    // Si la IP está en whitelist, no banear
-    if (cache.whitelistedIps.has(ip)) return;
+    const cleanIp = normalizeIp(ip);
+    // Si la IP está en whitelist, inmunidad
+    if (cache.whitelistedIps.has(cleanIp)) return;
 
-    let bucket = rateLimitMap.get(ip);
     const now = Date.now();
-    if (!bucket) {
-        bucket = {
-            count: 1,
-            windowStart: now,
-            failedLogins: 1,
-            violationsCount: 0,
-        };
-        rateLimitMap.set(ip, bucket);
-    } else {
-        bucket.failedLogins++;
+    const cleanEmail = email && typeof email === "string" && email.trim() ? email.trim().toLowerCase() : undefined;
+
+    // -------------------------------------------------------------
+    // CASO A: Se conoce la cuenta de usuario (Defensa Híbrida Cuenta + IP)
+    // -------------------------------------------------------------
+    if (cleanEmail) {
+        let accountRecord = accountSecurityMap.get(cleanEmail);
+        if (!accountRecord) {
+            accountRecord = {
+                failedAttempts: 1,
+                lockedUntil: null,
+                lastAttempt: now,
+                lastIp: cleanIp,
+            };
+            accountSecurityMap.set(cleanEmail, accountRecord);
+        } else {
+            accountRecord.failedAttempts++;
+            accountRecord.lastAttempt = now;
+            accountRecord.lastIp = cleanIp;
+        }
+
+        // Rastrear en el monitor de aula / red compartida de esta IP
+        let ipTracker = ipClassroomMap.get(cleanIp);
+        const trackerWindowMs = 5 * 60 * 1000; // Ventana de 5 minutos
+        if (!ipTracker || (now - ipTracker.windowStart) > trackerWindowMs) {
+            ipTracker = {
+                failedAccounts: new Set([cleanEmail]),
+                totalFailures: 1,
+                windowStart: now,
+                anonymousFailures: 0,
+            };
+            ipClassroomMap.set(cleanIp, ipTracker);
+        } else {
+            ipTracker.failedAccounts.add(cleanEmail);
+            ipTracker.totalFailures++;
+        }
+
+        const isAccountThresholdReached = accountRecord.failedAttempts >= policy.authMaxAttempts;
+
+        // Registrar evento forense detallado
+        await logSecurityAttack({
+            ip: cleanIp,
+            attackType: "BRUTE_FORCE",
+            severity: isAccountThresholdReached ? "CRITICAL" : "LOW",
+            endpoint: "/api/auth/sign-in/email",
+            method: "POST",
+            userAgent,
+            payload: `Intento de acceso fallido #${accountRecord.failedAttempts} para cuenta: "${cleanEmail}" desde IP: ${cleanIp}. [Modo Aulas Activo: Bloqueo aislado por cuenta + IP]`,
+            blocked: isAccountThresholdReached,
+        });
+
+        // Si la cuenta alcanzó el umbral de intentos fallidos:
+        // BLOQUEAR SOLAMENTE LA CUENTA (NO LA IP DEL AULA O COLEGIO)
+        if (isAccountThresholdReached) {
+            const lockDurationMs = policy.autoBanDurationMinutes * 60 * 1000;
+            const expiresAt = new Date(now + lockDurationMs);
+            const lockReason = `Bloqueo temporal de seguridad: ${accountRecord.failedAttempts} intentos fallidos de contraseña desde IP ${cleanIp}. (Las demás cuentas de la red/aula no son afectadas)`;
+
+            accountRecord.lockedUntil = now + lockDurationMs;
+            accountRecord.lockReason = lockReason;
+
+            // Bloquear a nivel de base de datos para persistencia
+            try {
+                await prisma.user.updateMany({
+                    where: { email: cleanEmail },
+                    data: {
+                        banned: true,
+                        banReason: lockReason,
+                        banExpires: expiresAt,
+                    },
+                });
+            } catch (err) {
+                console.error("[IpSecurityService] Error banning user in DB:", err);
+            }
+
+            // Registrar ataque forense de bloqueo de cuenta
+            await logSecurityAttack({
+                ip: cleanIp,
+                attackType: "ACCOUNT_LOCKOUT",
+                severity: "HIGH",
+                endpoint: "/api/auth/sign-in/email",
+                method: "POST",
+                userAgent,
+                payload: `[CUENTA AISLADA]: La cuenta "${cleanEmail}" ha sido bloqueada temporalmente por ${policy.autoBanDurationMinutes} min tras ${accountRecord.failedAttempts} intentos fallidos desde IP ${cleanIp}. Las demás cuentas y estudiantes en este salón/red escolar conservan acceso total.`,
+                blocked: true,
+            });
+        }
+
+        // ¿Cuándo se bloquearía la IP completa en caso de fuerza bruta?
+        // ÚNICAMENTE si una misma IP ataca masivamente 10 o más cuentas DIFERENTES en 5 minutos
+        // (Ataque real de diccionario o credential stuffing distribuido por bot, no un aula de clase).
+        const DICTIONARY_ATTACK_DISTINCT_ACCOUNTS = 10;
+        if (ipTracker.failedAccounts.size >= DICTIONARY_ATTACK_DISTINCT_ACCOUNTS) {
+            await autoBanIp({
+                ip: cleanIp,
+                reason: `Ataque masivo de diccionario/fuerza bruta: ${ipTracker.failedAccounts.size} cuentas atacadas en 5 minutos desde esta IP`,
+                severity: "CRITICAL",
+                durationMinutes: policy.autoBanDurationMinutes,
+                attackType: "BRUTE_FORCE",
+                endpoint: "/api/auth/sign-in/email",
+                method: "POST",
+                userAgent,
+            });
+        }
+
+        return;
     }
 
-    // Registrar en logs de ataques
+    // -------------------------------------------------------------
+    // CASO B: Petición anónima (Bot o script sin especificar email)
+    // -------------------------------------------------------------
+    let ipTracker = ipClassroomMap.get(cleanIp);
+    if (!ipTracker) {
+        ipTracker = {
+            failedAccounts: new Set(),
+            totalFailures: 1,
+            windowStart: now,
+            anonymousFailures: 1,
+        };
+        ipClassroomMap.set(cleanIp, ipTracker);
+    } else {
+        ipTracker.totalFailures++;
+        ipTracker.anonymousFailures++;
+    }
+
     await logSecurityAttack({
-        ip,
+        ip: cleanIp,
         attackType: "BRUTE_FORCE",
-        severity: bucket.failedLogins >= policy.authMaxAttempts ? "CRITICAL" : "MEDIUM",
+        severity: "MEDIUM",
         endpoint: "/api/auth/sign-in/email",
         method: "POST",
         userAgent,
-        payload: `Intento de acceso fallido #${bucket.failedLogins} para cuenta: ${email || "anónimo"}`,
+        payload: `Intento de acceso anónimo fallido #${ipTracker.anonymousFailures} desde IP: ${cleanIp}`,
         blocked: false,
     });
 
-    // Si supera el límite de intentos fallidos -> Autobloqueo
-    if (bucket.failedLogins >= policy.authMaxAttempts) {
+    // Para peticiones anónimas sin cuenta, solo auto-banear si superan un umbral amplio
+    if (ipTracker.anonymousFailures >= policy.authMaxAttempts * 3) {
         await autoBanIp({
-            ip,
-            reason: `Fuerza bruta: ${bucket.failedLogins} intentos fallidos de autenticación en poco tiempo`,
+            ip: cleanIp,
+            reason: `Fuerza bruta anónima: ${ipTracker.anonymousFailures} intentos fallidos sin credenciales válidas`,
             severity: "HIGH",
             durationMinutes: policy.autoBanDurationMinutes,
             attackType: "BRUTE_FORCE",
@@ -524,16 +759,116 @@ export async function registerFailedLoginAttempt(ip: string, email?: string, use
             method: "POST",
             userAgent,
         });
-        bucket.failedLogins = 0; // Reset counter after ban
+        ipTracker.anonymousFailures = 0;
     }
 }
 
 // Reset de login fallido tras login exitoso
-export function resetFailedLogins(ip: string) {
-    const bucket = rateLimitMap.get(ip);
-    if (bucket) {
-        bucket.failedLogins = 0;
+export async function resetFailedLogins(ip: string, email?: string) {
+    if (email && typeof email === "string" && email.trim()) {
+        const cleanEmail = email.trim().toLowerCase();
+        accountSecurityMap.delete(cleanEmail);
+
+        // Desbloquear en base de datos si estaba bloqueado por seguridad
+        try {
+            await prisma.user.updateMany({
+                where: {
+                    email: cleanEmail,
+                    banReason: { contains: "Bloqueo temporal de seguridad" },
+                },
+                data: {
+                    banned: false,
+                    banReason: null,
+                    banExpires: null,
+                },
+            });
+        } catch (e) {
+            console.error("[IpSecurityService] Error resetting user ban in DB:", e);
+        }
     }
+
+    const cleanIp = normalizeIp(ip);
+    const tracker = ipClassroomMap.get(cleanIp);
+    if (tracker) {
+        tracker.anonymousFailures = 0;
+    }
+}
+
+// Desbloquear una cuenta de usuario manualmente (para profesores/administradores)
+export async function unlockAccount(email: string) {
+    const cleanEmail = email.trim().toLowerCase();
+    accountSecurityMap.delete(cleanEmail);
+
+    await prisma.user.updateMany({
+        where: { email: cleanEmail },
+        data: {
+            banned: false,
+            banReason: null,
+            banExpires: null,
+        },
+    });
+
+    await logSecurityAttack({
+        ip: "127.0.0.1",
+        attackType: "MANUAL_BLOCK",
+        severity: "LOW",
+        endpoint: "/dashboard/admin/security",
+        method: "POST",
+        payload: `Cuenta desbloqueada manualmente por el Administrador: ${cleanEmail}`,
+        blocked: false,
+    });
+}
+
+// Obtener lista de cuentas bloqueadas activamente
+export async function getLockedAccountsList(): Promise<LockedAccountInfo[]> {
+    const now = new Date();
+    const list: LockedAccountInfo[] = [];
+    const seenEmails = new Set<string>();
+
+    // 1. Cuentas en memoria
+    for (const [email, record] of accountSecurityMap.entries()) {
+        if (record.lockedUntil && record.lockedUntil > now.getTime()) {
+            seenEmails.add(email);
+            list.push({
+                email,
+                reason: record.lockReason || "Bloqueada por múltiples intentos fallidos de contraseña",
+                expiresAt: new Date(record.lockedUntil),
+                failedAttempts: record.failedAttempts,
+                lastIp: record.lastIp,
+            });
+        }
+    }
+
+    // 2. Cuentas en base de datos
+    try {
+        const dbUsers = await prisma.user.findMany({
+            where: {
+                banned: true,
+                banExpires: { gt: now },
+            },
+            select: {
+                email: true,
+                banReason: true,
+                banExpires: true,
+            },
+        });
+
+        for (const u of dbUsers) {
+            if (!seenEmails.has(u.email)) {
+                seenEmails.add(u.email);
+                list.push({
+                    email: u.email,
+                    reason: u.banReason || "Bloqueo de seguridad",
+                    expiresAt: u.banExpires,
+                    failedAttempts: 5,
+                });
+            }
+        }
+    } catch (e) {
+        console.error("[IpSecurityService] Error listing locked accounts:", e);
+    }
+
+    return list;
 }
 
 // -------------------------------------------------------------
@@ -645,6 +980,7 @@ export async function getSecurityOverview() {
         attacksLast24h,
         attacksByType,
         attacksBySeverity,
+        lockedAccounts,
     ] = await Promise.all([
         prisma.blockedIp.count(),
         prisma.blockedIp.count({
@@ -670,14 +1006,17 @@ export async function getSecurityOverview() {
             by: ["severity"],
             _count: { id: true },
         }),
+        getLockedAccountsList(),
     ]);
 
     return {
         policy: cache.policy,
+        lockedAccounts,
         stats: {
             totalBlocked,
             activeBlockedCount,
             whitelistedCount,
+            lockedAccountsCount: lockedAccounts.length,
             totalAttacks,
             attacksLast24h,
             attacksByType: attacksByType.map(t => ({ type: t.attackType, count: t._count.id })),
