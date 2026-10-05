@@ -3,8 +3,9 @@
 import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { NavItem } from "../../services/public-docs";
-import { ChevronDown, FileText, LayoutGrid, UnfoldVertical, FoldVertical } from "lucide-react";
+import type { NavItem } from "../../services/public-docs";
+import { formatScheduledDisplayDate } from "../../utils/doc-dates";
+import { ChevronDown, FileText, LayoutGrid, UnfoldVertical, FoldVertical, CalendarClock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -58,6 +59,11 @@ function NavNode({ node, projectId, activeSlug, expandToken }: {
   
   if (node.type === "folder") {
     const hasPage = !node.id.startsWith("folder-");
+    const now = new Date();
+    const folderPublishDate = node.publishDate ? new Date(node.publishDate) : null;
+    const isFolderScheduled = folderPublishDate && folderPublishDate > now;
+    const formattedFolderDate = folderPublishDate ? formatScheduledDisplayDate(folderPublishDate) : null;
+
     return (
       <div className="flex flex-col mb-1.5">
         <div className="flex items-center group w-full pr-2">
@@ -80,19 +86,46 @@ function NavNode({ node, projectId, activeSlug, expandToken }: {
             <Link 
               href={`/docs/${projectId}/${node.slug}`}
               className={cn(
-                "flex-1 flex items-start gap-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.15em] transition-all whitespace-normal break-words leading-tight",
-                isActive ? "text-primary font-extrabold" : "text-muted-foreground hover:text-primary"
+                "flex-1 flex items-start gap-2 py-1.5 transition-all",
+                isActive ? "text-primary font-extrabold" : "text-muted-foreground hover:text-primary",
+                isFolderScheduled && "opacity-85"
               )}
             >
               {node.icon && <DynamicIcon icon={node.icon} className="w-3.5 h-3.5 mt-0.5 shrink-0" />}
-              <span className="flex-1 text-left whitespace-normal break-words leading-tight">{node.title}</span>
+              <div className="flex-1 min-w-0 flex flex-col items-start gap-1">
+                <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-left whitespace-normal break-words leading-tight">
+                  {node.title}
+                </span>
+                {isFolderScheduled && (
+                  <span 
+                    title={`Se publicará el ${formattedFolderDate}`} 
+                    className="inline-flex items-center gap-1 text-[8px] font-bold tracking-wide px-1.5 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 normal-case"
+                  >
+                    <CalendarClock className="w-2.5 h-2.5 shrink-0" />
+                    <span>Se publicará el {formattedFolderDate}</span>
+                  </span>
+                )}
+              </div>
             </Link>
           ) : (
             <button 
               onClick={() => setIsOpen(!isOpen)}
-              className="flex-1 flex items-start gap-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/80 hover:text-primary transition-all text-left whitespace-normal break-words leading-tight cursor-pointer"
+              className="flex-1 flex items-start gap-2 py-1.5 text-muted-foreground/80 hover:text-primary transition-all text-left cursor-pointer"
             >
-              <span className="flex-1 text-left whitespace-normal break-words leading-tight">{node.title}</span>
+              <div className="flex-1 min-w-0 flex flex-col items-start gap-1">
+                <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-left whitespace-normal break-words leading-tight">
+                  {node.title}
+                </span>
+                {isFolderScheduled && (
+                  <span 
+                    title={`Se publicará el ${formattedFolderDate}`} 
+                    className="inline-flex items-center gap-1 text-[8px] font-bold tracking-wide px-1.5 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 normal-case"
+                  >
+                    <CalendarClock className="w-2.5 h-2.5 shrink-0" />
+                    <span>Se publicará el {formattedFolderDate}</span>
+                  </span>
+                )}
+              </div>
             </button>
           )}
         </div>
@@ -121,21 +154,18 @@ function NavNode({ node, projectId, activeSlug, expandToken }: {
   const publishDate = node.publishDate ? new Date(node.publishDate) : null;
   const isScheduled = publishDate && publishDate > now;
   const isPublished = publishDate && publishDate <= now;
-  const formattedDate = publishDate ? publishDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : null;
+  const formattedDate = publishDate ? formatScheduledDisplayDate(publishDate) : null;
 
   return (
     <div className="px-0.5">
       <Link 
-        href={isScheduled ? "#" : `/docs/${projectId}/${node.slug === "index" ? "" : node.slug}`}
-        onClick={(e) => {
-          if (isScheduled) e.preventDefault();
-        }}
+        href={`/docs/${projectId}/${node.slug === "index" ? "" : node.slug}`}
         className={cn(
           "flex items-start gap-2.5 px-3 py-2 w-full rounded-xl text-[13px] transition-all duration-300 group mb-1 relative overflow-hidden",
           isActive 
             ? "text-primary font-extrabold bg-primary/10 border border-primary/30 shadow-sm" 
             : "text-muted-foreground hover:text-primary hover:bg-primary/5 hover:translate-x-1 font-medium",
-          isScheduled && "cursor-not-allowed opacity-60 grayscale"
+          isScheduled && "opacity-85"
         )}
       >
         {isActive && (
@@ -152,19 +182,27 @@ function NavNode({ node, projectId, activeSlug, expandToken }: {
           <FileText className={cn("w-4 h-4 mt-0.5 transition-transform duration-300 group-hover:scale-110 shrink-0", isActive ? "text-primary" : "opacity-50 group-hover:opacity-100 group-hover:text-primary")} />
         )}
         
-        <span className="flex-1 tracking-tight text-left whitespace-normal break-words leading-snug">{node.title}</span>
-        
-        {isScheduled && (
-          <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-500 border border-amber-500/20 whitespace-nowrap shrink-0 mt-0.5">
-            {formattedDate}
+        <div className="flex-1 min-w-0 flex flex-col items-start gap-1">
+          <span className="tracking-tight text-left whitespace-normal break-words leading-snug w-full">
+            {node.title}
           </span>
-        )}
+          
+          {isScheduled && (
+            <span 
+              title={`Se publicará el ${formattedDate}`} 
+              className="inline-flex items-center gap-1 text-[9px] font-semibold tracking-wide px-1.5 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 normal-case"
+            >
+              <CalendarClock className="w-2.5 h-2.5 shrink-0" />
+              <span>Se publicará el {formattedDate}</span>
+            </span>
+          )}
 
-        {isPublished && (
-          <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5">
-            {formattedDate}
-          </span>
-        )}
+          {isPublished && (
+            <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 opacity-0 group-hover:opacity-100 transition-opacity">
+              {formattedDate}
+            </span>
+          )}
+        </div>
       </Link>
     </div>
   );

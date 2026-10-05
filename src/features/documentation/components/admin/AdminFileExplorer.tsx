@@ -82,6 +82,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import DynamicIcon from "../DynamicIcon";
+import { formatScheduledDisplayDate } from "@/features/documentation/utils/doc-dates";
 
 interface AdminFileExplorerProps {
   projectId: string;
@@ -102,6 +103,16 @@ const findNodeByPath = (nodes: FileNode[], path: string): FileNode | null => {
     }
   }
   return null;
+};
+
+const toLocalDateOnly = (date: string | Date | null | undefined) => {
+  if (!date) return "";
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return "";
+  const year = d.getUTCFullYear();
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 export function AdminFileExplorer({ 
@@ -125,6 +136,7 @@ export function AdminFileExplorer({
   const [dialogData, setDialogData] = useState({
     isSettingsOpen: false,
     draft: false,
+    isScheduled: false,
     date: "",
     icon: ""
   });
@@ -232,21 +244,6 @@ export function AdminFileExplorer({
   );
 
 
-  const toLocalISO = (date: string | Date | null | undefined) => {
-    if (!date) return "";
-    const d = new Date(date);
-    if (isNaN(d.getTime())) return "";
-    const offset = d.getTimezoneOffset() * 60000;
-    return new Date(d.getTime() - offset).toISOString().slice(0, 16);
-  };
-
-  const toUTCISO = (dateStr: string) => {
-    if (!dateStr) return "";
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return "";
-    return d.toISOString();
-  };
-
   const handleOpenDialog = (type: DialogType, parentPath: string, nodeType?: 'file' | 'folder', currentName?: string, sha?: string, extraData?: any) => {
     if (type === 'folder' && parentPath !== projectId) {
       toast.error("No se pueden crear carpetas dentro de otras carpetas.");
@@ -263,11 +260,14 @@ export function AdminFileExplorer({
       setInputPrefix(nextNum.toString().padStart(2, '0'));
       setInputValue("");
     } else if (type === 'settings') {
+      const hasScheduled = !!extraData?.publishDate;
+      const initialDate = hasScheduled ? toLocalDateOnly(extraData.publishDate) : "";
       setInputValue(extraData?.title || currentName || "");
       setDialogData({
-        ...dialogData,
+        isSettingsOpen: true,
         draft: extraData?.draft || false,
-        date: toLocalISO(extraData?.publishDate),
+        isScheduled: hasScheduled,
+        date: initialDate,
         icon: extraData?.icon || ""
       });
     } else {
@@ -311,18 +311,23 @@ export function AdminFileExplorer({
         await deleteItemAction(projectId, dialogState.parentPath, dialogState.itemSha || "");
         toast.success("Elemento eliminado.");
       } else if (dialogState.type === 'settings') {
+        const finalDate = (dialogData.isScheduled && dialogData.date) ? dialogData.date : "";
         await updatePageMetadataAction(projectId, dialogState.parentPath, { 
           title: inputValue,
           draft: dialogData.draft,
-          date: toUTCISO(dialogData.date),
+          date: finalDate,
           icon: dialogData.icon
         });
         toast.success(
           dialogState.nodeType === 'folder'
             ? (dialogData.draft 
                 ? "Tópico y todos sus archivos colocados en borrador." 
-                : "Tópico y archivos publicados con éxito.")
-            : "Configuración actualizada."
+                : (dialogData.isScheduled && dialogData.date 
+                    ? `Tópico programado para el ${dialogData.date}.` 
+                    : "Configuración del tópico actualizada."))
+            : (dialogData.isScheduled && dialogData.date 
+                ? `Página programada para el ${dialogData.date}.` 
+                : "Configuración actualizada.")
         );
       }
       
@@ -632,7 +637,7 @@ export function AdminFileExplorer({
                       <div className="flex items-center gap-2">
                         <Label className="text-xs font-medium text-foreground">Modo Borrador</Label>
                         {dialogData.draft && (
-                          <span className="text-[10px] uppercase font-bold tracking-wider text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                          <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border">
                             Borrador
                           </span>
                         )}
@@ -648,15 +653,48 @@ export function AdminFileExplorer({
                       onCheckedChange={(checked) => setDialogData(prev => ({ ...prev, draft: checked }))}
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs font-semibold text-foreground/80">Fecha de Publicación</Label>
-                    <Input 
-                      type="datetime-local"
-                      value={dialogData.date} 
-                      onChange={(e) => setDialogData(prev => ({ ...prev, date: e.target.value }))} 
-                      className="h-10 bg-muted/20 border-border rounded-xl text-xs"
+                  <div className="flex items-center justify-between p-3.5 rounded-xl bg-muted/20 border border-border/50">
+                    <div className="space-y-0.5 pr-2">
+                      <div className="flex items-center gap-2">
+                        <Label className="text-xs font-medium text-foreground">Programar por Fecha</Label>
+                        {dialogData.isScheduled && (
+                          <span className="text-[10px] uppercase font-bold tracking-wider text-primary bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20">
+                            Programado
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground leading-tight">
+                        {dialogState.nodeType === 'folder'
+                          ? "Permitir publicar este tópico automáticamente en la fecha seleccionada"
+                          : "Permitir publicar esta página automáticamente en la fecha seleccionada"}
+                      </p>
+                    </div>
+                    <Switch 
+                      checked={dialogData.isScheduled}
+                      onCheckedChange={(checked) => {
+                        setDialogData(prev => ({ 
+                          ...prev, 
+                          isScheduled: checked,
+                          date: checked ? (prev.date || toLocalDateOnly(new Date())) : ""
+                        }));
+                      }}
                     />
                   </div>
+
+                  {dialogData.isScheduled && (
+                    <div className="space-y-2 p-3.5 rounded-xl bg-muted/15 border border-border/50 animate-in fade-in slide-in-from-top-1 duration-200">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs font-semibold text-foreground/80">Fecha de Publicación</Label>
+                        <span className="text-[10px] text-muted-foreground font-medium">Solo fecha (sin hora)</span>
+                      </div>
+                      <Input 
+                        type="date"
+                        value={dialogData.date} 
+                        onChange={(e) => setDialogData(prev => ({ ...prev, date: e.target.value }))} 
+                        className="h-10 bg-muted/20 border-border rounded-xl text-xs"
+                      />
+                    </div>
+                  )}
                 </>
               ) : (dialogState.type === 'file' || dialogState.type === 'folder') ? (
                 <div className="space-y-4">
@@ -928,7 +966,7 @@ function FileTreeNode({
             ) : node.publishDate ? (
               new Date(node.publishDate) > new Date() ? (
                 <span title={`Programado: ${new Date(node.publishDate).toLocaleString()}`} className="shrink-0 mt-0.5">
-                  <CalendarClock className="w-3.5 h-3.5 text-amber-500" />
+                  <CalendarClock className="w-3.5 h-3.5 text-primary" />
                 </span>
               ) : (
                 <span title={`Publicado el: ${new Date(node.publishDate).toLocaleString()}`} className="shrink-0 mt-0.5">
@@ -952,29 +990,49 @@ function FileTreeNode({
              )
           ) : null}
 
-          <span className={cn(
-            "text-xs transition-all whitespace-normal break-words leading-snug flex-1 select-none",
-            level === 0 ? "font-semibold text-foreground tracking-tight" : (isFolder ? "font-medium text-foreground/90" : "font-normal"),
-            isSelected ? "text-primary font-semibold" : "text-muted-foreground group-hover:text-foreground"
-          )}>
-            {node?.title || node?.name?.replace(/^\d+-/, '').split(/[ \-_]/).map(w => w ? (w.charAt(0).toUpperCase() + w.slice(1)) : '').join(' ') || "Sin nombre"}
-          </span>
+          <div className="flex-1 min-w-0 flex flex-col items-start gap-1">
+            <span className={cn(
+              "text-xs transition-all whitespace-normal break-words leading-snug w-full select-none",
+              level === 0 ? "font-semibold text-foreground tracking-tight" : (isFolder ? "font-medium text-foreground/90" : "font-normal"),
+              isSelected ? "text-primary font-semibold" : "text-muted-foreground group-hover:text-foreground"
+            )}>
+              {node?.title || node?.name?.replace(/^\d+-/, '').split(/[ \-_]/).map(w => w ? (w.charAt(0).toUpperCase() + w.slice(1)) : '').join(' ') || "Sin nombre"}
+            </span>
 
-          {node.draft && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span 
-                  className="inline-flex items-center gap-1 text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-md bg-muted/80 text-muted-foreground/80 border border-border/50 shrink-0 select-none cursor-help"
-                >
-                  <EyeOff className="w-2.5 h-2.5 text-amber-500/80" />
-                  Borrador
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                <p>{isFolder ? "Tópico en borrador (archivos internos ocultos)" : "Archivo en borrador"}</p>
-              </TooltipContent>
-            </Tooltip>
-          )}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {node.draft && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span 
+                      className="inline-flex items-center gap-1 text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-md bg-muted/80 text-muted-foreground/80 border border-border/50 shrink-0 select-none cursor-help"
+                    >
+                      <EyeOff className="w-2.5 h-2.5 text-muted-foreground" />
+                      Borrador
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    <p>{isFolder ? "Tópico en borrador (archivos internos ocultos)" : "Archivo en borrador"}</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+
+              {node.publishDate && new Date(node.publishDate) > new Date() && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span 
+                      className="inline-flex items-center gap-1 text-[9px] font-semibold tracking-wide px-1.5 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 shrink-0 select-none cursor-help normal-case"
+                    >
+                      <CalendarClock className="w-2.5 h-2.5 text-primary" />
+                      <span>Se publicará el {formatScheduledDisplayDate(node.publishDate)}</span>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    <p>{isFolder ? "Tópico programado para el " : "Página programada para el "}{formatScheduledDisplayDate(node.publishDate)}</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className={cn(

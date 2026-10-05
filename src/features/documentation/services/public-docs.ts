@@ -60,6 +60,8 @@ export async function getPublicDocProject(projectId: string, includePages = fals
   }
 }
 
+export * from "../utils/doc-dates";
+
 export async function getPublicDocPage(projectId: string, pageSlug: string, includeDrafts = false) {
   try {
     const project = await prisma.docProject.findFirst({
@@ -76,12 +78,7 @@ export async function getPublicDocPage(projectId: string, pageSlug: string, incl
 
     let targetSlug = pageSlug ? pageSlug : "index";
     
-    const visibilityFilter: any = {
-      OR: [
-        { publishDate: null },
-        { publishDate: { lte: new Date() } }
-      ]
-    };
+    const visibilityFilter: any = {};
 
     if (!includeDrafts) {
       visibilityFilter.draft = false;
@@ -119,10 +116,7 @@ export async function getPublicDocPage(projectId: string, pageSlug: string, incl
     const cacheKey = `${project.id}:${targetSlug}:${includeDrafts}`;
     const cached = pageCache.get(cacheKey);
     if (cached && cached.updatedAt === check.updatedAt.getTime()) {
-      if (!includeDrafts) {
-        if (cached.data.draft) return null;
-        if (cached.data.publishDate && new Date(cached.data.publishDate) > new Date()) return null;
-      }
+      if (!includeDrafts && cached.data.draft) return null;
       return { ...cached.data, _source: "cache" };
     }
 
@@ -156,10 +150,7 @@ export async function getPublicDocPage(projectId: string, pageSlug: string, incl
     // Search in cache by slug if DB fails
     for (const [key, value] of pageCache.entries()) {
       if (key.includes(targetSlug) || (pageSlug && key.includes(`${pageSlug}/index`))) {
-        if (!includeDrafts) {
-          if (value.data.draft) return null;
-          if (value.data.publishDate && new Date(value.data.publishDate) > new Date()) return null;
-        }
+        if (!includeDrafts && value.data.draft) return null;
         return { ...value.data, _source: "cache" };
       }
     }
@@ -194,104 +185,90 @@ export async function getProjectNavigationTree(projectId: string, includeDrafts 
 
     if (!project) return [];
 
-    const now = new Date();
-    const pages = project.pages
-      .filter(page => {
-        if (!includeDrafts) {
-          if (page.draft) return false;
-          if (page.publishDate && new Date(page.publishDate) > now) return false;
+    const root: NavItem[] = [];
+    const map: Record<string, NavItem & { draft?: boolean }> = {};
+
+    project.pages.forEach(page => {
+      if (!includeDrafts && page.draft) return;
+
+      const parts = page.slug.split('/');
+      let currentPath = "";
+
+      parts.forEach((part, index) => {
+        const isLast = index === parts.length - 1;
+        const parentPath = currentPath;
+        currentPath = currentPath ? `${currentPath}/${part}` : part;
+
+        if (!map[currentPath]) {
+          const node: NavItem & { draft?: boolean } = {
+            id: isLast ? page.id : `folder-${currentPath}`,
+            title: isLast ? (page.title || part) : part,
+            slug: currentPath,
+            type: isLast ? 'file' : 'folder',
+            order: isLast ? page.order : (page.categoryOrder || 0),
+            draft: isLast ? page.draft : false,
+            publishDate: isLast ? page.publishDate : null,
+            createdAt: page.createdAt,
+            icon: isLast ? (page.icon || undefined) : undefined,
+            children: isLast ? undefined : []
+          };
+          map[currentPath] = node;
+
+          if (!parentPath) {
+            root.push(node);
+          } else {
+            const parent = map[parentPath];
+            if (parent && parent.children) {
+              parent.children.push(node);
+            }
+          }
+        }
+
+        if (isLast && part === 'index' && parentPath && map[parentPath]) {
+          map[parentPath].id = page.id;
+          map[parentPath].title = page.title || map[parentPath].title;
+          map[parentPath].icon = page.icon || undefined;
+          map[parentPath].order = page.categoryOrder || 0;
+          map[parentPath].draft = page.draft;
+          map[parentPath].publishDate = page.publishDate;
+          map[parentPath].createdAt = page.createdAt;
+          
+          const parent = map[parentPath];
+          if (parent.children) {
+            parent.children = parent.children.filter(c => c.slug !== `${parentPath}/index` && !c.slug.endsWith('/index'));
+          }
+          delete map[currentPath];
+          return; 
+        }
+      });
+    });
+
+    const filterDrafts = (nodes: NavItem[]): NavItem[] => {
+      return nodes.filter(n => {
+        if (!includeDrafts && (n as any).draft) return false;
+        if (n.children) {
+          n.children = filterDrafts(n.children);
         }
         return true;
-      })
-      .sort((a, b) => {
-        if (a.categoryOrder !== b.categoryOrder) return (a.categoryOrder || 0) - (b.categoryOrder || 0);
-        if (a.order !== b.order) return (a.order || 0) - (b.order || 0);
-        return a.createdAt.getTime() - b.createdAt.getTime();
       });
-
-    const tree: NavItem[] = [];
-    const folderMap = new Map<string, NavItem>();
-
-    const getOrCreateFolder = (slugPath: string, title: string, order: number): NavItem => {
-      if (folderMap.has(slugPath)) return folderMap.get(slugPath)!;
-      
-      const parts = slugPath.split('/');
-      const navItem: NavItem = {
-        id: `folder-${slugPath}`,
-        title: title || parts[parts.length - 1],
-        slug: slugPath,
-        type: 'folder',
-        order: order,
-        createdAt: new Date(), // Fallback
-        children: []
-      };
-      
-      folderMap.set(slugPath, navItem);
-      
-      if (parts.length === 1) {
-        tree.push(navItem);
-      } else {
-        const parentPath = parts.slice(0, -1).join('/');
-        const parent = getOrCreateFolder(parentPath, parts[parts.length - 2], order);
-        parent.children?.push(navItem);
-      }
-      
-      return navItem;
     };
+    const cleanTree = filterDrafts(root);
 
-    for (const page of pages) {
-      const parts = page.slug.split('/');
-      const isIndex = parts[parts.length - 1] === 'index';
-      
-      if (isIndex && parts.length > 1) {
-        const folderPath = parts.slice(0, -1).join('/');
-        const folder = getOrCreateFolder(folderPath, page.title || parts[parts.length - 2], page.categoryOrder || 0);
-        folder.id = page.id;
-        folder.title = page.title || folder.title;
-        folder.order = page.categoryOrder || folder.order;
-        folder.publishDate = page.publishDate;
-        folder.createdAt = page.createdAt;
-        folder.icon = page.icon || undefined;
-      } else if (page.slug === 'index') {
-         // skip
-      } else {
-        const navItem: NavItem = {
-          id: page.id,
-          title: page.title || parts[parts.length - 1].split(/[ \-_]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
-          slug: page.slug,
-          type: 'file',
-          order: page.order || 0,
-          publishDate: page.publishDate,
-          createdAt: page.createdAt,
-          icon: page.icon || undefined,
-        };
-        
-        if (parts.length === 1) {
-          tree.push(navItem);
-        } else {
-          const parentPath = parts.slice(0, -1).join('/');
-          const parent = getOrCreateFolder(parentPath, parts[parts.length - 2], 0);
-          parent.children?.push(navItem);
-        }
-      }
-    }
-
-    const sortRecursive = (items: NavItem[]) => {
-      items.sort((a, b) => {
-        if (a.order !== b.order) return a.order - b.order;
+    const sortNodes = (nodes: NavItem[]) => {
+      nodes.sort((a, b) => {
+        if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
+        if (a.order !== b.order) return (a.order || 0) - (b.order || 0);
         return (a.createdAt?.getTime() || 0) - (b.createdAt?.getTime() || 0);
       });
-      items.forEach(item => {
-        if (item.children) sortRecursive(item.children);
-      });
+      nodes.forEach(n => n.children && sortNodes(n.children));
     };
-    sortRecursive(tree);
 
-    navTreeCache.set(cacheKey, { data: tree, updatedAt: check.updatedAt.getTime() });
-    return tree;
+    sortNodes(cleanTree);
+
+    navTreeCache.set(cacheKey, { data: cleanTree, updatedAt: check.updatedAt.getTime() });
+    return cleanTree;
   } catch (error) {
     console.error("Error in getProjectNavigationTree, attempting cache fallback:", error);
-    // Search in cache by projectId if DB fails
     for (const [key, value] of navTreeCache.entries()) {
       if (key.startsWith(projectId)) {
         return value.data;

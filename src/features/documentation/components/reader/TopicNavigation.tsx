@@ -1,6 +1,7 @@
-import { NavItem } from "../../services/public-docs";
+import type { NavItem } from "../../services/public-docs";
+import { formatScheduledDisplayDate } from "../../utils/doc-dates";
 import Link from "next/link";
-import { ArrowUpRight, FileText, Folder, BookOpen, Layers } from "lucide-react";
+import { ArrowUpRight, FileText, Folder, BookOpen, Layers, CalendarClock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import DynamicIcon from "../DynamicIcon";
 
@@ -15,6 +16,8 @@ export function TopicNavigation({ items, projectId }: TopicNavigationProps) {
   );
 
   if (!filteredItems || filteredItems.length === 0) return null;
+
+  const now = new Date();
 
   return (
     <div className="mt-12 animate-in fade-in slide-in-from-bottom-4 duration-700 w-full space-y-6">
@@ -32,22 +35,45 @@ export function TopicNavigation({ items, projectId }: TopicNavigationProps) {
         {filteredItems.map((item) => {
           const isFolder = item.type === "folder";
           const itemCount = item.children?.length || 0;
+          const publishDate = item.publishDate ? new Date(item.publishDate) : null;
+          const isScheduled = publishDate && publishDate > now;
+          const formattedDate = publishDate ? formatScheduledDisplayDate(publishDate) : null;
 
           return (
             <Link
               key={item.id}
               href={`/docs/${projectId}/${item.slug === "index" ? "" : item.slug}`}
-              className="group relative p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-card/60 hover:bg-card/90 dark:bg-slate-900/40 dark:hover:bg-slate-900/80 backdrop-blur-md shadow-sm hover:shadow-xl hover:shadow-primary/5 hover:border-primary/40 hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between overflow-hidden"
+              className={cn(
+                "group relative p-5 rounded-2xl border bg-card/60 hover:bg-card/90 dark:bg-slate-900/40 dark:hover:bg-slate-900/80 backdrop-blur-md shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between overflow-hidden",
+                isScheduled 
+                  ? "border-primary/30 hover:border-primary/60 hover:shadow-primary/5" 
+                  : "border-slate-200/80 dark:border-slate-800 hover:shadow-primary/5 hover:border-primary/40"
+              )}
             >
               {/* Top Accent Gradient Bar on Hover */}
-              <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-primary via-primary/80 to-primary/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              <div className={cn(
+                "absolute top-0 inset-x-0 h-1 transition-opacity duration-300",
+                isScheduled 
+                  ? "bg-gradient-to-r from-primary via-primary/80 to-primary/40 opacity-80 group-hover:opacity-100" 
+                  : "bg-gradient-to-r from-primary via-primary/80 to-primary/40 opacity-0 group-hover:opacity-100"
+              )} />
               
               {/* Ambient radial background glow on hover */}
-              <div className="absolute -inset-px bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl pointer-events-none" />
+              <div className={cn(
+                "absolute -inset-px transition-opacity duration-500 rounded-2xl pointer-events-none",
+                isScheduled
+                  ? "bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-50 group-hover:opacity-100"
+                  : "bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-0 group-hover:opacity-100"
+              )} />
 
               <div className="relative z-10 flex items-start gap-3.5">
                 {/* Icon Badge */}
-                <div className="p-3 rounded-xl transition-all duration-300 shrink-0 shadow-sm border bg-primary/10 text-primary border-primary/20 group-hover:bg-primary group-hover:text-primary-foreground group-hover:border-primary">
+                <div className={cn(
+                  "p-3 rounded-xl transition-all duration-300 shrink-0 shadow-sm border",
+                  isScheduled
+                    ? "bg-primary/15 text-primary border-primary/30 group-hover:bg-primary group-hover:text-primary-foreground"
+                    : "bg-primary/10 text-primary border-primary/20 group-hover:bg-primary group-hover:text-primary-foreground group-hover:border-primary"
+                )}>
                    {item.icon ? (
                      <DynamicIcon icon={item.icon} className="w-5 h-5 transition-transform duration-300 group-hover:scale-110" />
                    ) : (
@@ -57,10 +83,18 @@ export function TopicNavigation({ items, projectId }: TopicNavigationProps) {
 
                 {/* Content Details */}
                 <div className="flex-1 min-w-0 space-y-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border leading-none bg-primary/10 text-primary border-primary/20">
-                      {isFolder ? 'Sección' : 'Tema'}
-                    </span>
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border leading-none bg-primary/10 text-primary border-primary/20">
+                        {isFolder ? 'Sección' : 'Tema'}
+                      </span>
+                      {isScheduled && (
+                        <span className="inline-flex items-center gap-1 text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                          <CalendarClock className="w-2.5 h-2.5" />
+                          <span>Se publicará el {formattedDate}</span>
+                        </span>
+                      )}
+                    </div>
 
                     <div className="h-6 w-6 rounded-full flex items-center justify-center bg-muted/60 text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-all duration-300 shrink-0">
                       <ArrowUpRight className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
@@ -80,9 +114,16 @@ export function TopicNavigation({ items, projectId }: TopicNavigationProps) {
                   {isFolder ? (itemCount > 0 ? `${itemCount} subtemas` : "Ver carpeta") : "Guía de lectura"}
                 </span>
 
-                <span className="font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity">
-                  Explorar →
-                </span>
+                {isScheduled ? (
+                  <span className="font-bold text-primary flex items-center gap-1">
+                    <CalendarClock className="w-3 h-3" />
+                    <span>Disponible: {formattedDate}</span>
+                  </span>
+                ) : (
+                  <span className="font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                    Explorar →
+                  </span>
+                )}
               </div>
             </Link>
           );

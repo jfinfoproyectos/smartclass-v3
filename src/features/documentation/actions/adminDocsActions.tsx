@@ -290,6 +290,17 @@ export async function moveItemAction(projectId: string, oldPath: string, newPare
   return { success: true };
 }
 
+function parsePublicationDate(dateStr?: string | null): Date | null {
+  if (!dateStr || dateStr.trim() === "") return null;
+  const trimmed = dateStr.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const [y, m, d] = trimmed.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
+  }
+  const d = new Date(trimmed);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 export async function updatePageMetadataAction(
   projectId: string, 
   path: string, 
@@ -341,7 +352,7 @@ export async function updatePageMetadataAction(
           category: metadata.category || metadata.title || path,
           content: `# ${metadata.title || path}\n\nDocumentación del tópico.`,
           draft: metadata.draft ?? false,
-          publishDate: (metadata.date && metadata.date.trim() !== "") ? new Date(metadata.date) : null,
+          publishDate: parsePublicationDate(metadata.date),
           icon: metadata.icon
         }
       });
@@ -360,7 +371,7 @@ export async function updatePageMetadataAction(
       categoryOrder: metadata.categoryOrder,
       draft: metadata.draft,
       icon: metadata.icon,
-      publishDate: (metadata.date && metadata.date.trim() !== "") ? new Date(metadata.date) : null,
+      publishDate: parsePublicationDate(metadata.date),
     }
   });
 
