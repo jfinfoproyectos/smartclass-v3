@@ -19,7 +19,8 @@ import {
     FileText,
     Calendar,
     Search,
-    X
+    X,
+    Video
 } from "lucide-react";
 import { DashboardContainer } from "@/components/ui/dashboard-container";
 import type { CourseWithStudents } from "@/features/teacher/components/TeacherToolsView";
@@ -28,7 +29,7 @@ interface TeacherToolsHubProps {
     courses: CourseWithStudents[];
 }
 
-type ToolCategory = "all" | "classroom" | "schedule" | "git-ai" | "docs";
+type ToolCategory = "all" | "classroom" | "schedule" | "git-ai" | "docs" | "media";
 
 interface ToolItem {
     id: string;
@@ -232,6 +233,28 @@ export function TeacherToolsHub({ courses }: TeacherToolsHubProps) {
             ],
             btnText: "Abrir Horarios Semanales",
             route: "/dashboard/teacher/tools/weekly-schedule"
+        },
+        {
+            id: "loom-recorder",
+            title: "Grabador de Pantalla y Cámara",
+            description: "Graba explicaciones de pantalla con cámara web flotante en tiempo real, zoom automático de cursor, audio nítido y descarga directa en alta definición.",
+            badge: "Estudio de Video",
+            category: "media",
+            icon: Video,
+            colorClasses: {
+                iconBg: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20",
+                iconText: "text-orange-600 dark:text-orange-400",
+                borderHover: "hover:border-orange-500/50",
+                btnHover: "group-hover:bg-orange-600 group-hover:text-white",
+                badge: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20",
+            },
+            bullets: [
+                "Burbuja circular de cámara sobre pantalla y zoom de cursor",
+                "Controles flotantes (pausar, detener, reiniciar, zoom)",
+                "Descarga directa en 1 clic sin almacenar videos en servidores"
+            ],
+            btnText: "Abrir Grabador de Pantalla",
+            route: "/dashboard/teacher/tools/loom-recorder"
         }
     ], []);
 
@@ -300,6 +323,7 @@ export function TeacherToolsHub({ courses }: TeacherToolsHubProps) {
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
                 {[
                     { id: "all", label: "Todas las Herramientas", count: tools.length },
+                    { id: "media", label: "Video & Loom", count: tools.filter(t => t.category === "media").length },
                     { id: "schedule", label: "Horarios & Agenda", count: tools.filter(t => t.category === "schedule").length },
                     { id: "classroom", label: "Dinámica de Clase", count: tools.filter(t => t.category === "classroom").length },
                     { id: "git-ai", label: "IA & Repositorios Git", count: tools.filter(t => t.category === "git-ai").length },

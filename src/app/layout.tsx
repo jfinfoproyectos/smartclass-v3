@@ -10,7 +10,6 @@ import { getAvailableThemes } from "@/app/actions/themes";
 import { getVisualSettingsAction } from "@/app/actions/settings";
 import { NetworkStatus } from "@/components/NetworkStatus";
 
-
 export const metadata: Metadata = {
   title: "SmartClass",
   description: "Plataforma educativa inteligente",
