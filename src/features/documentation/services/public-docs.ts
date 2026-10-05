@@ -256,7 +256,7 @@ export async function getProjectNavigationTree(projectId: string, includeDrafts 
 
     const sortNodes = (nodes: NavItem[]) => {
       nodes.sort((a, b) => {
-        if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
+        if (a.type !== b.type) return a.type === 'file' ? -1 : 1;
         if (a.order !== b.order) return (a.order || 0) - (b.order || 0);
         return (a.createdAt?.getTime() || 0) - (b.createdAt?.getTime() || 0);
       });

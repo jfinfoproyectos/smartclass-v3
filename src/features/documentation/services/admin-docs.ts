@@ -148,7 +148,7 @@ export async function getProjectFileTree(projectId: string): Promise<FileNode[]>
 
   const sortNodes = (nodes: FileNode[]) => {
     nodes.sort((a, b) => {
-      if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
+      if (a.type !== b.type) return a.type === 'file' ? -1 : 1;
       if (a.order !== b.order) return a.order - b.order;
       return (a.createdAt?.getTime() || 0) - (b.createdAt?.getTime() || 0);
     });
