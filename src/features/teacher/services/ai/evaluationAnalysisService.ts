@@ -1,5 +1,5 @@
 import { getAIModel } from "./client";
-import { generateObject } from "ai";
+import { generateObject, generateText } from "ai";
 import { z } from "zod";
 
 export interface AIAnswerEvaluation {
@@ -259,5 +259,49 @@ export async function getGroupAIInsights(
             throw new Error("Has excedido la cuota gratuita de peticiones a la IA.");
         }
         throw new Error(`No se pudieron generar los insights: ${error.message}`);
+    }
+}
+
+/**
+ * Generate a personalized pedagogical feedback message for a completed evaluation based on the final score.
+ */
+export async function generateSubmissionFeedback(
+    evaluationTitle: string,
+    score: number,
+    expulsions: number = 0,
+    teacherId?: string
+): Promise<string> {
+    try {
+        const model = await getAIModel(teacherId);
+        const prompt = `
+Actúa como un profesor universitario cercano, pedagógico y constructivo.
+Un estudiante ha completado y entregado su evaluación académica:
+- Título del examen: "${evaluationTitle}"
+- Calificación obtenida: ${score.toFixed(1)} / 5.0 (escala de 0.0 a 5.0, donde 3.0 es la nota mínima aprobatoria)
+${expulsions > 0 ? `- Expulsiones registradas por pérdida de foco: ${expulsions}` : ''}
+
+Tu tarea es redactar un mensaje de retroalimentación constructivo, humano y motivador de máximo 2 a 3 oraciones (entre 30 y 55 palabras), hablándole directamente al estudiante ("tú").
+Criterios pedagógicos según la nota:
+- Si la nota es sobresaliente (4.5 a 5.0): Felicítalo por su excelente dominio conceptual y técnico, e incítalo a seguir asumiendo retos avanzados.
+- Si la nota es aprobatoria (3.0 a 4.4): Felicítalo por alcanzar los objetivos de la prueba, reconoce su esfuerzo y anímalo a repasar los conceptos donde tuvo dudas.
+- Si la nota es no aprobatoria (< 3.0): Sé empático, motivador pero honesto. Explícale que este resultado es una oportunidad para aprender, e indícale que revise los materiales del curso o consulte con el docente.
+${expulsions > 0 ? `- Menciona con tacto que tuvo ${expulsions} expulsión(es) por pérdida de foco y que cuide su concentración y entorno en próximos exámenes.` : ''}
+
+IMPORTANTE: Responde ÚNICAMENTE con el mensaje de retroalimentación, sin títulos, introducciones ni comillas.
+`;
+        const { text } = await generateText({
+            model,
+            prompt,
+        });
+        return text.trim();
+    } catch (e) {
+        console.error("Error generating LLM submission feedback:", e);
+        if (score >= 4.5) {
+            return `¡Excelente desempeño! Demostraste un dominio sobresaliente de los conceptos de "${evaluationTitle}". Sigue manteniendo este alto nivel de compromiso y profundización.`;
+        } else if (score >= 3.0) {
+            return `¡Buen trabajo! Has alcanzado los objetivos esenciales de "${evaluationTitle}". Te recomendamos reforzar aquellos puntos donde tuviste dudas para consolidar tu aprendizaje.`;
+        } else {
+            return `Has concluido "${evaluationTitle}". Tu calificación fue de ${score.toFixed(1)} / 5.0. No te desanimes: aprovecha los recursos del curso y solicita asesoría para fortalecer los temas clave.`;
+        }
     }
 }

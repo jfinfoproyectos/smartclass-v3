@@ -5,7 +5,7 @@ import {
     MessageSquare, Users, ClipboardCheck, Clock, BookOpen, GraduationCap, 
     FileText, AlertCircle, ArrowLeft, Calendar, ArrowRight, LayoutGrid, List,
     Sparkles, FolderGit2, Code2, Terminal, Video, Headphones, MessageSquareQuote, Database, Target, CheckCircle2,
-    Layers, GitBranch
+    Layers, GitBranch, ShieldAlert
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import { StudentAttendanceSummary } from "@/features/attendance/components/Stude
 import { SharedContentList } from './SharedContentList';
 import { StudentRemarks } from "./StudentRemarks";
 import { StudentGradesView } from './StudentGradesView';
+import { EvaluationStudentCard } from "./EvaluationStudentCard";
 import { formatName, cn } from "@/lib/utils";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { ModeToggle } from "@/components/theme/ModeToggle";
@@ -789,107 +790,14 @@ export function MyEnrollments({
 
                                         {enrollment.course.evaluationAttempts?.length > 0 ? (
                                             evaluationsViewMode === "grid" ? (
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5 pb-20">
-                                                    {enrollment.course.evaluationAttempts.map((attempt: any, index: number) => {
-                                                        const submission = attempt.submissions?.[0];
-                                                        const isSubmitted = !!submission?.submittedAt;
-                                                        const now = new Date();
-                                                        const startTime = new Date(attempt.startTime);
-                                                        const endTime = new Date(attempt.endTime);
-                                                        const isOpen = now >= startTime && now <= endTime;
-                                                        const isUpcoming = now < startTime;
-                                                        const isExpired = now > endTime && !isSubmitted;
-
-                                                        return (
-                                                            <div
-                                                                key={attempt.id}
-                                                                className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-border/80 bg-card p-4 shadow-2xs hover:shadow-md hover:border-primary/40 transition-all duration-200"
-                                                            >
-                                                                {/* Barra superior de acento */}
-                                                                <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-primary/40 via-primary/20 to-transparent opacity-60 group-hover:opacity-100 transition-opacity" />
-
-                                                                {/* Header de la tarjeta */}
-                                                                <div className="flex items-center justify-between gap-2 mb-2.5">
-                                                                    <div className="flex items-center gap-2 min-w-0">
-                                                                        <div className="w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs shadow-2xs shrink-0 bg-primary/10 text-primary">
-                                                                            <FileText className="h-3.5 w-3.5" />
-                                                                        </div>
-                                                                        <span className="font-mono text-xs font-bold text-muted-foreground shrink-0">
-                                                                            #{index + 1}
-                                                                        </span>
-                                                                    </div>
-
-                                                                    <div className="flex items-center gap-1.5 flex-wrap justify-end shrink-0">
-                                                                        {isSubmitted ? (
-                                                                            <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-[10px] font-semibold px-2 py-0">Completado</Badge>
-                                                                        ) : isExpired ? (
-                                                                            <Badge variant="destructive" className="text-[10px] font-semibold px-2 py-0">Expirado</Badge>
-                                                                        ) : isUpcoming ? (
-                                                                            <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[10px] font-semibold px-2 py-0">Próximamente</Badge>
-                                                                        ) : isOpen ? (
-                                                                            <Badge className="bg-primary/15 text-primary border border-primary/30 animate-pulse text-[10px] font-semibold px-2 py-0">Abierto</Badge>
-                                                                        ) : null}
-                                                                    </div>
-                                                                </div>
-
-                                                                {/* Contenido */}
-                                                                <div className="flex-1 min-w-0 space-y-2 py-0.5">
-                                                                    {isOpen || isSubmitted ? (
-                                                                        <Link href={`/evaluations/${attempt.id}`} className="block group/link">
-                                                                            <h4 className="font-bold text-sm text-foreground line-clamp-2 leading-snug group-hover/link:text-primary transition-colors cursor-pointer" title={attempt.evaluation.title}>
-                                                                                {attempt.evaluation.title}
-                                                                            </h4>
-                                                                        </Link>
-                                                                    ) : (
-                                                                        <h4 className="font-bold text-sm text-muted-foreground line-clamp-2 leading-snug" title={attempt.evaluation.title}>
-                                                                            {attempt.evaluation.title}
-                                                                        </h4>
-                                                                    )}
-
-                                                                    <div className="flex items-center gap-1 text-[11px] text-muted-foreground pt-1">
-                                                                        <Calendar className="h-3 w-3 text-muted-foreground/70 shrink-0" />
-                                                                        <span>Inicio: {format(startTime, "dd MMM, p", { locale: es })}</span>
-                                                                    </div>
-                                                                </div>
-
-                                                                {/* Footer */}
-                                                                <div className="flex items-center justify-between pt-2.5 mt-2.5 border-t border-border/50">
-                                                                    <div className="flex items-center gap-1.5 text-xs">
-                                                                        <span className="text-muted-foreground text-[11px] font-medium">Nota:</span>
-                                                                        {isSubmitted && submission?.score !== null ? (
-                                                                            <span className={cn(
-                                                                                "px-1.5 py-0.5 rounded font-bold font-mono text-xs border",
-                                                                                submission.score >= 3.0 
-                                                                                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25" 
-                                                                                    : "bg-destructive/10 text-destructive border-destructive/25"
-                                                                            )}>
-                                                                                {submission.score.toFixed(1)}
-                                                                            </span>
-                                                                        ) : (
-                                                                            <span className="font-mono text-xs text-muted-foreground">-</span>
-                                                                        )}
-                                                                    </div>
-
-                                                                    <Button 
-                                                                        size="sm" 
-                                                                        className="h-7 px-3 text-xs font-semibold rounded-lg gap-1.5 cursor-pointer shadow-2xs"
-                                                                        variant={isSubmitted ? "secondary" : isOpen ? "default" : "ghost"}
-                                                                        disabled={!isOpen && !isSubmitted}
-                                                                        asChild={isOpen || isSubmitted}
-                                                                    >
-                                                                        {isOpen || isSubmitted ? (
-                                                                            <Link href={`/evaluations/${attempt.id}`}>
-                                                                                <span>{isSubmitted ? "Resultados" : "Iniciar"}</span>
-                                                                                <ArrowRight className="h-3 w-3" />
-                                                                            </Link>
-                                                                        ) : (
-                                                                            <span>Bloqueado</span>
-                                                                        )}
-                                                                    </Button>
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
+                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pb-20">
+                                                    {enrollment.course.evaluationAttempts.map((attempt: any, index: number) => (
+                                                        <EvaluationStudentCard
+                                                            key={attempt.id}
+                                                            attempt={attempt}
+                                                            index={index}
+                                                        />
+                                                    ))}
                                                 </div>
                                             ) : (
                                                 <div className="rounded-xl border border-border/50 overflow-x-auto shadow-2xs text-foreground mb-20">
@@ -899,6 +807,7 @@ export function MyEnrollments({
                                                                 <TableHead className="w-[50px] pl-4 font-bold uppercase tracking-wider text-xs">#</TableHead>
                                                                 <TableHead className="font-bold uppercase tracking-wider text-xs">Evaluación</TableHead>
                                                                 <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Estado</TableHead>
+                                                                <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Expulsiones</TableHead>
                                                                 <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden sm:table-cell">Nota</TableHead>
                                                                 <TableHead className="font-bold uppercase tracking-wider text-xs text-center hidden md:table-cell">Fecha Inicio</TableHead>
                                                                 <TableHead className="font-bold uppercase tracking-wider text-xs text-center">Acción</TableHead>
@@ -938,6 +847,21 @@ export function MyEnrollments({
                                                                             ) : isOpen ? (
                                                                                 <Badge className="bg-primary/15 text-primary border border-primary/30 animate-pulse text-[10px]">Abierto</Badge>
                                                                             ) : null}
+                                                                        </TableCell>
+                                                                        <TableCell className="text-center">
+                                                                            {attempt.enableSurveillance !== false && attempt.blockTabSwitch !== false ? (
+                                                                                <Badge variant="outline" className={cn(
+                                                                                    "text-[10px] font-bold gap-1 px-2 py-0.5",
+                                                                                    (submission?.expulsions || 0) > 0
+                                                                                        ? "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 font-bold"
+                                                                                        : "bg-muted/40 text-muted-foreground border-border/40"
+                                                                                )}>
+                                                                                    <ShieldAlert className="h-3 w-3 text-red-500 shrink-0" />
+                                                                                    <span>{submission?.expulsions || 0}</span>
+                                                                                </Badge>
+                                                                            ) : (
+                                                                                <span className="text-muted-foreground text-xs font-mono">-</span>
+                                                                            )}
                                                                         </TableCell>
                                                                         <TableCell className="text-center font-bold text-primary hidden sm:table-cell">
                                                                             {isSubmitted && submission?.score !== null ? (

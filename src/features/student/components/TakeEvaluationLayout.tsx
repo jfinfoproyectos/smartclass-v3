@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format, differenceInSeconds } from "date-fns";
 import { es } from "date-fns/locale";
 import MDEditor from "@uiw/react-md-editor";
 import "@uiw/react-md-editor/markdown-editor.css";
@@ -15,7 +15,8 @@ import Editor, { loader } from "@monaco-editor/react";
 // Configurar Monaco para usar CDN de Cloudflare para autocompletado y workers
 loader.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' } });
 import { useTheme } from "next-themes";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import {
     Dialog,
@@ -42,12 +43,18 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { CheckCircle, Clock, AlertTriangle, MessageSquare, Loader2, Sparkles, BookOpen, LogOut, ShieldAlert, ShieldCheck, Lightbulb, RotateCcw, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, ListChecks, Send, BarChart3, CheckCircle2, ArrowRight } from "lucide-react";
+import { 
+    CheckCircle, Clock, AlertTriangle, MessageSquare, Loader2, Sparkles, BookOpen, 
+    LogOut, ShieldAlert, ShieldCheck, Lightbulb, RotateCcw, ZoomIn, ZoomOut, 
+    ChevronLeft, ChevronRight, ListChecks, Send, BarChart3, CheckCircle2, ArrowRight,
+    ArrowLeft, BellOff, Monitor, Laptop, Maximize2, CopySlash, Keyboard, SlidersHorizontal,
+    HelpCircle, Info, ExternalLink, FileText, Calendar, Check, X, Shield, Lock, BellRing,
+    AlertCircle, Zap
+} from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { submitEvaluationAction, saveAnswerAction, evaluateAnswerWithAIAction, registerExpulsionAction, useAiHintAction } from "@/features/student/actions/evaluationActions";
-import { differenceInSeconds } from "date-fns";
 import { ModeToggle } from "@/components/theme/ModeToggle";
 import { ThemeSelector } from "@/components/theme/ThemeSelector";
 import { CodeThemeSelector } from "@/components/theme/CodeThemeSelector";
@@ -86,9 +93,21 @@ export function TakeEvaluationLayout({
     const [hasStarted, setHasStarted] = useState(false);
     const [isMaximized, setIsMaximized] = useState(false);
     const [expulsionsCount, setExpulsionsCount] = useState<number>(submission.expulsions || 0);
+    const expulsionsCountRef = useRef(submission.expulsions || 0);
     const isExpellingRef = useRef(false);
+    const lastViolationTimeRef = useRef(0);
+    const isProcessingViolationRef = useRef(false);
     const [isMobile, setIsMobile] = useState(false);
     const [hasMultipleScreens, setHasMultipleScreens] = useState(false);
+
+    // Refs para acceder a las respuestas y pregunta activa en eventos asíncronos y expulsiones
+    const answersRef = useRef<Record<string, string>>({});
+    const currentQuestionRef = useRef<any>(null);
+
+    // Keep ref in sync with state
+    useEffect(() => {
+        expulsionsCountRef.current = expulsionsCount;
+    }, [expulsionsCount]);
 
     // Surveillance and restriction configuration from attempt
     const surveillanceEnabled = attempt.enableSurveillance !== false;
@@ -114,6 +133,50 @@ export function TakeEvaluationLayout({
     useEffect(() => { isHelpModeRef.current = isHelpMode; }, [isHelpMode]);
     const effectiveHelpUrl = attempt.helpUrl || attempt.evaluation.helpUrl;
     const hasHelpUrl = !!effectiveHelpUrl;
+
+    const handleExpulsion = async (reason: string, details: string) => {
+        if (!surveillanceEnabled) return;
+        if (isExpellingRef.current) return;
+
+        isExpellingRef.current = true;
+
+        // Guardar inmediatamente la respuesta actual (código o texto) antes de ser expulsado
+        try {
+            const currentQ = currentQuestionRef.current;
+            if (currentQ?.id) {
+                const currentAns = answersRef.current[currentQ.id];
+                if (currentAns !== undefined) {
+                    await saveAnswerAction(submission.id, currentQ.id, currentAns || "");
+                }
+            }
+        } catch (saveErr) {
+            console.error("Error guardando borrador previo a la expulsión:", saveErr);
+        }
+
+        try {
+            const currentWarnings = expulsionsCountRef.current;
+            const result = await registerExpulsionAction(submission.id);
+            const newCount = result?.expulsions ?? (currentWarnings + 1);
+
+            expulsionsCountRef.current = newCount;
+            setExpulsionsCount(newCount);
+        } catch (e) {
+            console.error("Failed to register expulsion / exit violation:", e);
+        }
+
+        toast.error(`🚫 Has sido expulsado de la evaluación`, {
+            description: `${reason}: ${details} Has perdido el foco o salido de la evaluación y la prueba se ha cerrado definitivamente.`,
+            duration: 8000,
+        });
+
+        // Redirigir de inmediato al dashboard del estudiante indicando la expulsión
+        router.push(`/dashboard/student?courseId=${attempt.courseId}&tab=evaluations&error=${encodeURIComponent(`Expulsado de la evaluación: ${reason}. ${details}`)}`);
+    };
+
+    const handleExpulsionRef = useRef(handleExpulsion);
+    useEffect(() => {
+        handleExpulsionRef.current = handleExpulsion;
+    });
 
     useEffect(() => {
         setMounted(true);
@@ -180,28 +243,28 @@ export function TakeEvaluationLayout({
             if (!requireFullscreen) return;
             const currentlyMaximized = checkMaximized();
             if (hasStarted && !currentlyMaximized) {
-                handleExpulsion("Cambio de tamaño de ventana", "Has reducido o modificado el tamaño de la ventana de la evaluación.");
+                handleExpulsionRef.current("Cambio de tamaño de ventana", "Has reducido o modificado el tamaño de la ventana de la evaluación.");
             }
         };
 
         const handleVisibilityChange = () => {
             if (!blockTabSwitch) return;
             if (hasStarted && document.visibilityState === 'hidden') {
-                handleExpulsion("Abandono de pestaña", "Has abandonado o cambiado la pestaña de la evaluación.");
+                handleExpulsionRef.current("Abandono de pestaña", "Has abandonado o cambiado la pestaña de la evaluación.");
             }
         };
 
         const handleBlur = () => {
             if (!blockTabSwitch) return;
             if (hasStarted && !isHelpModeRef.current) {
-                handleExpulsion("Pérdida de foco", "Has perdido el foco de la ventana de la evaluación al interactuar con otra aplicación.");
+                handleExpulsionRef.current("Pérdida de foco", "Has interactuado fuera de la aplicación o cambiado de ventana.");
             }
         };
 
         const handleScreenChange = () => {
             if (!blockMultipleDisplays) return;
             if (hasStarted && (window.screen as any).isExtended) {
-                handleExpulsion("Múltiples monitores detectados", "Has conectado un monitor adicional durante la evaluación.");
+                handleExpulsionRef.current("Múltiples monitores detectados", "Has conectado un monitor adicional durante la evaluación.");
             }
         };
 
@@ -229,59 +292,55 @@ export function TakeEvaluationLayout({
         const preventClipboard = (e: Event) => {
             e.preventDefault();
             toast.warning("Acción restringida", {
-                description: "Copiar, pegar y menú contextual están deshabilitados en esta evaluación.",
+                description: "Copiar y pegar están deshabilitados en esta evaluación.",
             });
+        };
+
+        const handleContextMenu = (e: MouseEvent) => {
+            // Permitir el menú contextual únicamente en campos editables (textarea / input)
+            // para que el estudiante pueda ver y seleccionar las correcciones ortográficas del navegador.
+            const target = e.target as HTMLElement | null;
+            const isEditable = target && (
+                target.tagName === "TEXTAREA" ||
+                target.tagName === "INPUT" ||
+                target.isContentEditable
+            );
+
+            if (isEditable && !target?.hasAttribute("readonly") && !(target as any)?.disabled) {
+                // Se permite el menú nativo del navegador para acceder al corrector ortográfico
+                return;
+            }
+
+            e.preventDefault();
+            toast.warning("Acción restringida", {
+                description: "El menú contextual está deshabilitado en esta evaluación.",
+            });
+        };
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Bloqueo estricto de atajos de teclado para copiar, pegar y cortar
+            if ((e.ctrlKey || e.metaKey) && ["c", "v", "x", "C", "V", "X"].includes(e.key)) {
+                e.preventDefault();
+                toast.warning("Acción restringida", {
+                    description: "Los atajos de teclado para copiar, cortar y pegar están deshabilitados.",
+                });
+            }
         };
 
         document.addEventListener("copy", preventClipboard);
         document.addEventListener("cut", preventClipboard);
         document.addEventListener("paste", preventClipboard);
-        document.addEventListener("contextmenu", preventClipboard);
+        document.addEventListener("contextmenu", handleContextMenu);
+        document.addEventListener("keydown", handleKeyDown);
 
         return () => {
             document.removeEventListener("copy", preventClipboard);
             document.removeEventListener("cut", preventClipboard);
             document.removeEventListener("paste", preventClipboard);
-            document.removeEventListener("contextmenu", preventClipboard);
+            document.removeEventListener("contextmenu", handleContextMenu);
+            document.removeEventListener("keydown", handleKeyDown);
         };
     }, [mounted, hasStarted, isSubmitted, blockClipboard]);
-
-    const handleExpulsion = async (reason: string, details: string) => {
-        if (!surveillanceEnabled) return;
-        if (isExpellingRef.current) return;
-
-        const currentWarnings = expulsionsCount || 0;
-        // Si hay límite de advertencias y aún le quedan faltas:
-        if (maxWarnings > 0 && currentWarnings + 1 < maxWarnings) {
-            try {
-                const result = await registerExpulsionAction(submission.id);
-                if (result?.expulsions !== undefined) {
-                    setExpulsionsCount(result.expulsions);
-                }
-            } catch (e) {
-                console.error("Failed to register warning:", e);
-            }
-            toast.error(`⚠️ Advertencia de Vigilancia (${currentWarnings + 1}/${maxWarnings})`, {
-                description: `${reason}: ${details} Al acumular ${maxWarnings} faltas serás expulsado de la prueba.`,
-                duration: 6000,
-            });
-            return;
-        }
-
-        // Si llegó al límite o maxWarnings es 0 (expulsión inmediata):
-        isExpellingRef.current = true;
-        try {
-            const result = await registerExpulsionAction(submission.id);
-            if (result?.expulsions !== undefined) {
-                setExpulsionsCount(result.expulsions);
-            }
-        } catch (e) {
-            console.error("Failed to register expulsion:", e);
-        }
-
-        // Redirect to dashboard with error message
-        router.push(`/dashboard/student?courseId=${attempt.courseId}&tab=evaluations&error=${encodeURIComponent(details)}`);
-    };
 
     // Initialize local state for answers based on what's already saved
     const [answers, setAnswers] = useState<Record<string, string>>(() => {
@@ -293,6 +352,30 @@ export function TakeEvaluationLayout({
         }
         return initialMap;
     });
+
+    // Mantener refs sincronizadas en todo momento para expulsiones y eventos
+    useEffect(() => {
+        answersRef.current = answers;
+    }, [answers]);
+
+    useEffect(() => {
+        currentQuestionRef.current = currentQuestion;
+    }, [currentQuestion]);
+
+    // Auto-guardado continuo en segundo plano (debounce 800ms) para código y texto
+    useEffect(() => {
+        if (!hasStarted || isSubmitted) return;
+        const currentQId = currentQuestion?.id;
+        if (!currentQId) return;
+        const currentAns = answers[currentQId];
+        if (currentAns === undefined) return;
+
+        const timer = setTimeout(() => {
+            saveAnswerAction(submission.id, currentQId, currentAns || "");
+        }, 800);
+
+        return () => clearTimeout(timer);
+    }, [answers, currentQuestion?.id, hasStarted, isSubmitted, submission.id]);
 
     const [isSaving, setIsSaving] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -496,197 +579,489 @@ export function TakeEvaluationLayout({
         );
     }
 
-    // Modal de inicio bloqueante antes de habilitar los contenidos
+    // Pantalla completa de inicio y validación de requisitos antes de comenzar
     if (!hasStarted && !isSubmitted && mounted) {
-        if (!surveillanceEnabled) {
-            return (
-                <div className="flex h-screen items-center justify-center bg-background/80 backdrop-blur-md z-50 fixed inset-0 p-4">
-                    <div className="w-full max-w-xl bg-card border rounded-2xl shadow-2xl overflow-hidden flex flex-col">
-                        <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-5 text-white">
-                            <div className="flex items-center gap-3 mb-1">
-                                <ShieldCheck className="h-6 w-6 shrink-0" />
-                                <h2 className="text-lg font-bold tracking-tight">Detalles de la Evaluación</h2>
-                            </div>
-                            <p className="text-sm text-white/80 ml-9">{attempt.evaluation.title}</p>
-                            <div className="flex flex-wrap gap-2 mt-3 ml-9 text-xs">
-                                <span className="px-2.5 py-0.5 rounded-full bg-white/20 font-semibold">{questions.length} preguntas</span>
-                                <span className="px-2.5 py-0.5 rounded-full bg-white/20 font-semibold">Modo Libre (Sin restricciones de vigilancia)</span>
-                            </div>
-                        </div>
-
-                        <div className="p-6 space-y-4">
-                            <div className="rounded-xl border bg-muted/30 p-4 text-xs space-y-2">
-                                <p className="font-semibold text-foreground">Información importante:</p>
-                                <ul className="list-disc pl-4 space-y-1.5 text-muted-foreground">
-                                    <li>Esta evaluación ha sido asignada <strong>sin restricciones de pantalla o cambio de pestaña</strong>.</li>
-                                    <li>Tus respuestas se guardan automáticamente a medida que vas respondiendo cada pregunta.</li>
-                                    <li>Gestiona tu tiempo con calma antes de la hora límite de cierre.</li>
-                                </ul>
-                            </div>
-                        </div>
-
-                        <div className="px-6 py-4 border-t bg-muted/20 flex items-center justify-end">
-                            <Button
-                                className="w-full sm:w-auto font-semibold shadow-xs cursor-pointer"
-                                onClick={() => setHasStarted(true)}
-                            >
-                                Comenzar Evaluación
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-
-        const canStart = !isMobile && (!blockMultipleDisplays || !hasMultipleScreens) && (!requireFullscreen || isMaximized);
-
-        const RuleItem = ({ icon, text, variant = "neutral" }: { icon: React.ReactNode; text: React.ReactNode; variant?: "neutral" | "warn" | "info" }) => {
-            const colors = {
-                neutral: "bg-muted/60 border-border/60 text-foreground/80",
-                warn: "bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-900/20 dark:border-amber-700 dark:text-amber-300",
-                info: "bg-blue-50 border-blue-200 text-blue-900 dark:bg-blue-900/20 dark:border-blue-700 dark:text-blue-300",
-            };
-            return (
-                <div className={`flex items-start gap-2.5 px-3 py-2 rounded-lg border text-sm ${colors[variant]}`}>
-                    <span className="shrink-0 mt-0.5">{icon}</span>
-                    <span>{text}</span>
-                </div>
-            );
-        };
-
-        const CheckItem = ({ ok, label, blocking = false }: { ok: boolean; label: string; blocking?: boolean }) => (
-            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${ok
-                ? "bg-green-50 border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-700 dark:text-green-300"
-                : blocking
-                    ? "bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-700 dark:text-red-300"
-                    : "bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-900/20 dark:border-amber-700 dark:text-amber-300"
-                }`}>
-                {ok ? <CheckCircle className="h-4 w-4 shrink-0" /> : blocking ? <AlertTriangle className="h-4 w-4 shrink-0" /> : <Loader2 className="h-4 w-4 shrink-0 animate-spin" />}
-                <span>{label}</span>
-            </div>
-        );
+        const canStart = !surveillanceEnabled || (!isMobile && (!blockMultipleDisplays || !hasMultipleScreens) && (!requireFullscreen || isMaximized));
+        const startTime = attempt.startTime ? new Date(attempt.startTime) : null;
+        const endTime = attempt.endTime ? new Date(attempt.endTime) : null;
 
         return (
-            <div className="flex h-screen items-center justify-center bg-background/80 backdrop-blur-md z-50 fixed inset-0 p-4">
-                <div className="w-full max-w-4xl bg-card border rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="fixed inset-0 z-50 bg-background overflow-y-auto flex flex-col min-h-screen text-foreground">
+                {/* Header Superior Coherente con SmartClass */}
+                <header className="border-b border-border/60 bg-card/70 backdrop-blur sticky top-0 z-30 px-4 sm:px-8 py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="gap-2 text-xs font-semibold h-8 cursor-pointer text-muted-foreground hover:text-foreground"
+                            onClick={() => router.push(`/dashboard/student?courseId=${attempt.courseId}&tab=evaluations`)}
+                        >
+                            <ArrowLeft className="w-4 h-4" />
+                            <span>Volver al Curso</span>
+                        </Button>
+                        <div className="h-4 w-px bg-border/60 hidden sm:block" />
+                        <span className="text-xs font-medium text-muted-foreground hidden sm:inline">
+                            SmartClass • Módulo de Evaluaciones
+                        </span>
+                    </div>
 
-                    {/* Header */}
-                    <div className="bg-gradient-to-r from-red-600 to-orange-500 px-6 py-5 text-white">
-                        <div className="flex items-center gap-3 mb-1">
-                            <ShieldAlert className="h-6 w-6 shrink-0" />
-                            <h2 className="text-lg font-bold tracking-tight">Normas de Seguridad y Vigilancia</h2>
+                    <div className="flex items-center gap-2">
+                        <ThemeSelector themes={themes} />
+                        <ModeToggle />
+                    </div>
+                </header>
+
+                {/* Contenedor Principal que ocupa todo el espacio */}
+                <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col gap-6">
+
+                    {/* Banner Hero Principal */}
+                    <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-gradient-to-br from-card via-card to-primary/5 p-6 sm:p-8 shadow-xs space-y-4">
+                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                            <div className="space-y-2.5 max-w-4xl">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    {surveillanceEnabled ? (
+                                        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/25 text-xs font-bold gap-1 px-2.5 py-0.5">
+                                            <ShieldAlert className="w-3.5 h-3.5" />
+                                            Vigilancia Activa
+                                        </Badge>
+                                    ) : (
+                                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25 text-xs font-bold gap-1 px-2.5 py-0.5">
+                                            <ShieldCheck className="w-3.5 h-3.5" />
+                                            Modo Libre
+                                        </Badge>
+                                    )}
+
+                                    {blockTabSwitch && (
+                                        <Badge variant="destructive" className="text-xs font-bold gap-1 px-2.5 py-0.5 shadow-2xs">
+                                            <Zap className="w-3 h-3" />
+                                            Expulsión Inmediata por Pérdida de Foco
+                                        </Badge>
+                                    )}
+
+                                    {blockTabSwitch && (
+                                        <Badge variant="outline" className={cn(
+                                            "text-xs font-bold font-mono gap-1 px-2.5 py-0.5",
+                                            expulsionsCount > 0 
+                                                ? "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30" 
+                                                : "bg-muted text-muted-foreground border-border/50"
+                                        )}>
+                                            <AlertCircle className="w-3.5 h-3.5 text-red-500" />
+                                            <span>{expulsionsCount} {expulsionsCount === 1 ? 'Expulsión acumulada' : 'Expulsiones acumuladas'}</span>
+                                        </Badge>
+                                    )}
+
+                                    <Badge variant="secondary" className="text-xs font-semibold px-2.5 py-0.5">
+                                        {questions.length} {questions.length === 1 ? 'Pregunta' : 'Preguntas'}
+                                    </Badge>
+                                </div>
+
+                                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-foreground">
+                                    {attempt.evaluation.title}
+                                </h1>
+
+                                {attempt.evaluation.description && (
+                                    <div
+                                        className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground leading-relaxed [&_p]:text-muted-foreground [&_strong]:text-foreground [&_p]:my-1"
+                                        data-color-mode={mounted && theme === "dark" ? "dark" : "light"}
+                                    >
+                                        <MDEditor.Markdown
+                                            source={attempt.evaluation.description}
+                                            style={{ backgroundColor: 'transparent', fontSize: 'inherit' }}
+                                        />
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                        <p className="text-sm text-white/80 ml-9">{attempt.evaluation.title}</p>
-                        <div className="flex flex-wrap gap-2 mt-3 ml-9 text-xs">
-                            <span className="px-2 py-0.5 rounded-full bg-white/20 font-medium">{questions.length} preguntas</span>
-                            {maxWarnings > 0 && (
-                                <span className="px-2 py-0.5 rounded-full bg-white/20 font-medium">
-                                    Tolerancia: {maxWarnings} faltas
+
+                        {/* Tiempos de Entrega */}
+                        <div className="flex flex-wrap items-center gap-4 sm:gap-6 pt-2 border-t border-border/50 text-xs text-muted-foreground">
+                            {startTime && (
+                                <div className="flex items-center gap-1.5">
+                                    <Calendar className="w-3.5 h-3.5 text-primary" />
+                                    <span>Inicio: <strong className="text-foreground">{format(startTime, "d 'de' MMMM, p", { locale: es })}</strong></span>
+                                </div>
+                            )}
+                            {endTime && (
+                                <div className="flex items-center gap-1.5">
+                                    <Clock className="w-3.5 h-3.5 text-amber-500" />
+                                    <span>Cierre: <strong className="text-foreground">{format(endTime, "d 'de' MMMM, p", { locale: es })}</strong></span>
+                                </div>
+                            )}
+                            <div className="flex items-center gap-1.5">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                                <span>Guardado: <strong className="text-foreground">Automático en la nube</strong></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Banner Destacado si tiene expulsiones previas por pérdida de foco */}
+                    {blockTabSwitch && expulsionsCount > 0 && (
+                        <div className="p-4 sm:p-5 rounded-2xl border border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400 flex items-start gap-4 shadow-2xs">
+                            <ShieldAlert className="w-6 h-6 shrink-0 text-red-500 mt-0.5" />
+                            <div className="flex-1 space-y-1.5">
+                                <div className="flex items-center justify-between flex-wrap gap-2">
+                                    <h3 className="font-bold text-sm sm:text-base">
+                                        Registro de Seguridad: Has sido expulsado {expulsionsCount} {expulsionsCount === 1 ? 'vez' : 'veces'} de esta evaluación
+                                    </h3>
+                                    <Badge variant="outline" className="font-mono text-xs font-black bg-red-500/20 text-red-600 dark:text-red-300 border-red-500/30">
+                                        {expulsionsCount} {expulsionsCount === 1 ? 'expulsión previa' : 'expulsiones previas'}
+                                    </Badge>
+                                </div>
+                                <p className="text-xs leading-relaxed opacity-95">
+                                    La restricción de pérdida de foco está activa. Cada vez que cambias de pestaña, sales de la ventana del navegador o una aplicación en segundo plano toma el foco, la prueba se cierra de inmediato y se suma una nueva falta ante tu profesor. Lee atentamente la guía de recomendaciones para evitar expulsiones involuntarias.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Cuadrícula Principal de 3 Columnas utilizando todo el ancho */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+                        {/* Columna 1: Configuración de la Evaluación (4 cols) */}
+                        <div className="lg:col-span-4 flex flex-col gap-4">
+                            <Card className="flex-1 border-border/80 shadow-xs flex flex-col">
+                                <CardHeader className="pb-3 border-b border-border/50">
+                                    <div className="flex items-center gap-2">
+                                        <SlidersHorizontal className="w-4 h-4 text-primary" />
+                                        <CardTitle className="text-sm font-bold">Parámetros de la Evaluación</CardTitle>
+                                    </div>
+                                    <CardDescription className="text-xs">
+                                        Reglas configuradas para esta prueba
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent className="pt-4 space-y-3 flex-1 text-xs">
+                                    {/* Pérdida de foco */}
+                                    <div className={cn(
+                                        "p-3 rounded-xl border flex items-start gap-3",
+                                        blockTabSwitch ? "bg-red-500/5 border-red-500/25" : "bg-muted/40 border-border/60"
+                                    )}>
+                                        <ShieldAlert className={cn("w-4 h-4 shrink-0 mt-0.5", blockTabSwitch ? "text-red-500" : "text-muted-foreground")} />
+                                        <div className="space-y-0.5">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="font-bold text-foreground">Control de Foco</span>
+                                                <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0 font-bold", blockTabSwitch ? "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30" : "bg-muted text-muted-foreground")}>
+                                                    {blockTabSwitch ? "Estricto" : "Libre"}
+                                                </Badge>
+                                            </div>
+                                            <p className="text-muted-foreground text-[11px] leading-relaxed">
+                                                {blockTabSwitch
+                                                    ? "Prohibido cambiar de pestaña o ventana. Provoca expulsión inmediata sin advertencias."
+                                                    : "Puedes cambiar de pestaña sin que se cierre tu prueba."}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Tamaño de ventana */}
+                                    <div className={cn(
+                                        "p-3 rounded-xl border flex items-start gap-3",
+                                        requireFullscreen ? "bg-amber-500/5 border-amber-500/25" : "bg-muted/40 border-border/60"
+                                    )}>
+                                        <Maximize2 className={cn("w-4 h-4 shrink-0 mt-0.5", requireFullscreen ? "text-amber-500" : "text-muted-foreground")} />
+                                        <div className="space-y-0.5">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="font-bold text-foreground">Ventana Maximizada</span>
+                                                <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0 font-bold", requireFullscreen ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30" : "bg-muted text-muted-foreground")}>
+                                                    {requireFullscreen ? "Obligatorio" : "Flexible"}
+                                                </Badge>
+                                            </div>
+                                            <p className="text-muted-foreground text-[11px] leading-relaxed">
+                                                {requireFullscreen
+                                                    ? "La ventana debe permanecer maximizada durante todo el examen."
+                                                    : "Puedes ajustar las dimensiones del navegador según tu preferencia."}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Múltiples monitores */}
+                                    <div className={cn(
+                                        "p-3 rounded-xl border flex items-start gap-3",
+                                        blockMultipleDisplays ? "bg-blue-500/5 border-blue-500/25" : "bg-muted/40 border-border/60"
+                                    )}>
+                                        <Monitor className={cn("w-4 h-4 shrink-0 mt-0.5", blockMultipleDisplays ? "text-blue-500" : "text-muted-foreground")} />
+                                        <div className="space-y-0.5">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="font-bold text-foreground">Pantallas Conectadas</span>
+                                                <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0 font-bold", blockMultipleDisplays ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30" : "bg-muted text-muted-foreground")}>
+                                                    {blockMultipleDisplays ? "1 Monitor" : "Múltiples"}
+                                                </Badge>
+                                            </div>
+                                            <p className="text-muted-foreground text-[11px] leading-relaxed">
+                                                {blockMultipleDisplays
+                                                    ? "Solo se permite una pantalla conectada al equipo."
+                                                    : "Puedes usar pantallas secundarias o externas."}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Portapapeles */}
+                                    <div className="p-3 rounded-xl border bg-muted/40 border-border/60 flex items-start gap-3">
+                                        <CopySlash className="w-4 h-4 shrink-0 mt-0.5 text-muted-foreground" />
+                                        <div className="space-y-0.5">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="font-bold text-foreground">Portapapeles</span>
+                                                <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0 font-bold", blockClipboard ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30" : "bg-muted text-muted-foreground")}>
+                                                    {blockClipboard ? "Bloqueado" : "Habilitado"}
+                                                </Badge>
+                                            </div>
+                                            <p className="text-muted-foreground text-[11px] leading-relaxed">
+                                                {blockClipboard
+                                                    ? "Copiar, pegar, cortar y menú contextual deshabilitados."
+                                                    : "Acceso libre al portapapeles."}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Material de ayuda y comodines */}
+                                    {hasHelpUrl && (
+                                        <div className="p-3 rounded-xl border bg-primary/5 border-primary/25 flex items-start gap-3">
+                                            <BookOpen className="w-4 h-4 shrink-0 mt-0.5 text-primary" />
+                                            <div className="space-y-0.5">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span className="font-bold text-foreground">Material de Consulta</span>
+                                                    <Badge className="bg-primary/15 text-primary text-[10px] px-1.5 py-0">Permitido</Badge>
+                                                </div>
+                                                <p className="text-muted-foreground text-[11px] leading-relaxed">
+                                                    El profesor habilitó material de apoyo. Puedes consultarlo dentro del examen sin penalización.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {maxAiHints > 0 && (
+                                        <div className="p-3 rounded-xl border bg-amber-500/5 border-amber-500/25 flex items-start gap-3">
+                                            <Lightbulb className="w-4 h-4 shrink-0 mt-0.5 text-amber-500" />
+                                            <div className="space-y-0.5">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span className="font-bold text-foreground">Pistas con IA</span>
+                                                    <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] px-1.5 py-0 font-bold">{maxAiHints} Pistas</Badge>
+                                                </div>
+                                                <p className="text-muted-foreground text-[11px] leading-relaxed">
+                                                    Dispones de {maxAiHints} consultas conceptuales asistidas por IA para desbloquearte.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        {/* Columna 2: Sugerencias Cruciales Anti-Interrupción (5 cols) */}
+                        <div className="lg:col-span-5 flex flex-col gap-4">
+                            <Card className="flex-1 border-border/80 shadow-xs flex flex-col">
+                                <CardHeader className="pb-3 border-b border-border/50">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2">
+                                            <BellOff className="w-4 h-4 text-red-500" />
+                                            <CardTitle className="text-sm font-bold">Guía Anti-Interrupciones</CardTitle>
+                                        </div>
+                                        <Badge variant="outline" className="text-[10px] font-bold text-red-600 dark:text-red-400 border-red-500/30 bg-red-500/10">
+                                            Importante
+                                        </Badge>
+                                    </div>
+                                    <CardDescription className="text-xs">
+                                        Evita que notificaciones del sistema o aplicaciones externas provoquen tu expulsión
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent className="pt-4 space-y-3.5 flex-1 text-xs">
+                                    {/* Sugerencia 1: Notificaciones del Sistema Operativo */}
+                                    <div className="p-3.5 rounded-xl border border-border/80 bg-muted/30 space-y-1.5">
+                                        <div className="flex items-center gap-2 font-bold text-foreground">
+                                            <BellRing className="w-4 h-4 text-amber-500 shrink-0" />
+                                            <span>1. Desactiva las Notificaciones del Sistema Operativo</span>
+                                        </div>
+                                        <p className="text-muted-foreground text-[11px] leading-relaxed">
+                                            Un cartel emergente de correo, calendario o antivirus roba el foco de la ventana activa del navegador.
+                                        </p>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 font-mono text-[10px]">
+                                            <div className="p-2 rounded-lg bg-background border border-border/60">
+                                                <span className="font-bold text-primary block mb-0.5">En Windows:</span>
+                                                <span className="text-muted-foreground">Presiona <strong>Win + N</strong> y activa el modo <strong>No molestar</strong> o Asistente de concentración.</span>
+                                            </div>
+                                            <div className="p-2 rounded-lg bg-background border border-border/60">
+                                                <span className="font-bold text-primary block mb-0.5">En macOS:</span>
+                                                <span className="text-muted-foreground">Abre el <strong>Centro de Control</strong> arriba a la derecha y activa <strong>No molestar (Focus)</strong>.</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Sugerencia 2: Apps en segundo plano */}
+                                    <div className="p-3.5 rounded-xl border border-border/80 bg-muted/30 space-y-1.5">
+                                        <div className="flex items-center gap-2 font-bold text-foreground">
+                                            <MessageSquare className="w-4 h-4 text-blue-500 shrink-0" />
+                                            <span>2. Cierra Mensajería y Apps en Segundo Plano</span>
+                                        </div>
+                                        <p className="text-muted-foreground text-[11px] leading-relaxed">
+                                            Cierra completamente <strong>WhatsApp, Telegram, Discord, Teams, Slack, Outlook o Skype</strong>. Una llamada entrante o mensaje con notificación flotante desenfoca el navegador y genera expulsión inmediata.
+                                        </p>
+                                    </div>
+
+                                    {/* Sugerencia 3: Atajos de teclado */}
+                                    <div className="p-3.5 rounded-xl border border-border/80 bg-muted/30 space-y-1.5">
+                                        <div className="flex items-center gap-2 font-bold text-foreground">
+                                            <Keyboard className="w-4 h-4 text-purple-500 shrink-0" />
+                                            <span>3. Evita Atajos de Teclado del Sistema</span>
+                                        </div>
+                                        <p className="text-muted-foreground text-[11px] leading-relaxed">
+                                            No presiones <strong>Alt + Tab</strong>, la tecla <strong>Windows / Command</strong>, ni combinaciones como <strong>Ctrl + Esc</strong> o <strong>Win + D</strong> que abran el menú de inicio o la barra de tareas.
+                                        </p>
+                                    </div>
+
+                                    {/* Sugerencia 4: Gestos del touchpad */}
+                                    <div className="p-3.5 rounded-xl border border-border/80 bg-muted/30 space-y-1.5">
+                                        <div className="flex items-center gap-2 font-bold text-foreground">
+                                            <Laptop className="w-4 h-4 text-emerald-500 shrink-0" />
+                                            <span>4. Cuidado con Gestos en Computadores Portátiles</span>
+                                        </div>
+                                        <p className="text-muted-foreground text-[11px] leading-relaxed">
+                                            Si usas laptop, evita deslizar con 3 o 4 dedos en el touchpad para no alternar de escritorio virtual ni minimizar la pantalla sin querer.
+                                        </p>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        {/* Columna 3: Estado de tus Requisitos (3 cols) */}
+                        <div className="lg:col-span-3 flex flex-col gap-4">
+                            <Card className="flex-1 border-border/80 shadow-xs flex flex-col">
+                                <CardHeader className="pb-3 border-b border-border/50">
+                                    <div className="flex items-center gap-2">
+                                        <CheckCircle className="w-4 h-4 text-emerald-500" />
+                                        <CardTitle className="text-sm font-bold">Verificación en Vivo</CardTitle>
+                                    </div>
+                                    <CardDescription className="text-xs">
+                                        Estado de tu equipo y navegador
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent className="pt-4 space-y-3 flex-1 text-xs">
+                                    {/* Dispositivo compatible */}
+                                    <div className={cn(
+                                        "p-2.5 rounded-xl border flex items-center justify-between gap-2",
+                                        !isMobile ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-700 dark:text-emerald-300" : "bg-red-500/10 border-red-500/25 text-red-700 dark:text-red-300"
+                                    )}>
+                                        <div className="flex items-center gap-2">
+                                            <Laptop className="w-4 h-4 shrink-0" />
+                                            <span className="font-semibold">Dispositivo</span>
+                                        </div>
+                                        <span className="font-bold text-[11px]">
+                                            {!isMobile ? "Compatible ✓" : "Móvil detectado ✕"}
+                                        </span>
+                                    </div>
+
+                                    {/* Pantalla única */}
+                                    {blockMultipleDisplays && (
+                                        <div className={cn(
+                                            "p-2.5 rounded-xl border flex items-center justify-between gap-2",
+                                            !hasMultipleScreens ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-700 dark:text-emerald-300" : "bg-red-500/10 border-red-500/25 text-red-700 dark:text-red-300"
+                                        )}>
+                                            <div className="flex items-center gap-2">
+                                                <Monitor className="w-4 h-4 shrink-0" />
+                                                <span className="font-semibold">Monitores</span>
+                                            </div>
+                                            <span className="font-bold text-[11px]">
+                                                {!hasMultipleScreens ? "1 Monitor ✓" : "Desconecta el 2do ✕"}
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    {/* Ventana maximizada */}
+                                    {requireFullscreen && (
+                                        <div className={cn(
+                                            "p-2.5 rounded-xl border flex items-center justify-between gap-2",
+                                            isMaximized ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/10 border-amber-500/25 text-amber-700 dark:text-amber-300"
+                                        )}>
+                                            <div className="flex items-center gap-2">
+                                                <Maximize2 className="w-4 h-4 shrink-0" />
+                                                <span className="font-semibold">Ventana</span>
+                                            </div>
+                                            <span className="font-bold text-[11px]">
+                                                {isMaximized ? "Maximizada ✓" : "Maximizar ⚠️"}
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    {/* Conexión */}
+                                    <div className="p-2.5 rounded-xl border bg-emerald-500/10 border-emerald-500/25 text-emerald-700 dark:text-emerald-300 flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2">
+                                            <CheckCircle2 className="w-4 h-4 shrink-0" />
+                                            <span className="font-semibold">Conexión</span>
+                                        </div>
+                                        <span className="font-bold text-[11px]">En línea ✓</span>
+                                    </div>
+
+                                    {/* Estado global */}
+                                    <div className={cn(
+                                        "p-3 rounded-xl border mt-2 text-center",
+                                        canStart 
+                                            ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-800 dark:text-emerald-300" 
+                                            : "bg-amber-500/15 border-amber-500/30 text-amber-800 dark:text-amber-300"
+                                    )}>
+                                        <p className="font-bold text-xs">
+                                            {canStart ? "Entorno Validado ✓" : "Requisitos Incompletos"}
+                                        </p>
+                                        <p className="text-[10px] opacity-80 mt-0.5">
+                                            {canStart ? "Puedes comenzar la evaluación" : "Ajusta tu entorno para continuar"}
+                                        </p>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                    </div>
+
+                </main>
+
+                {/* Footer Barra de Acción Pegajosa Inferior */}
+                <footer className="border-t border-border/70 bg-card/95 backdrop-blur sticky bottom-0 z-30 p-4 px-4 sm:px-8 shadow-lg">
+                    <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <div className="flex items-center gap-2 text-xs">
+                            {canStart ? (
+                                <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold">
+                                    <CheckCircle2 className="w-4 h-4" />
+                                    Todos los requisitos cumplidos. Estás listo para comenzar.
+                                </span>
+                            ) : (
+                                <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-bold">
+                                    <AlertTriangle className="w-4 h-4" />
+                                    Por favor cumple los requisitos de la columna de verificación para poder comenzar.
                                 </span>
                             )}
                         </div>
-                    </div>
 
-                    <div className="px-6 py-4 grid grid-cols-1 md:grid-cols-2 gap-6 overflow-y-auto max-h-[65vh]">
-
-                        {/* Columna izquierda */}
-                        <div className="flex flex-col gap-5">
-
-                            {/* Reglas de Entorno */}
-                            <div>
-                                <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">Entorno Requerido</h3>
-                                <div className="flex flex-col gap-1.5">
-                                    <RuleItem variant="neutral" icon={<span>🖥️</span>} text={<>Solo se permite desde un <strong>computador de escritorio o portátil</strong>.</>} />
-                                    {requireFullscreen && (
-                                        <RuleItem variant="neutral" icon={<span>🖱️</span>} text={<>La ventana debe estar <strong>maximizada</strong> antes de comenzar.</>} />
-                                    )}
-                                    {blockMultipleDisplays && (
-                                        <RuleItem variant="neutral" icon={<span>📺</span>} text={<>Solo está permitido <strong>un monitor</strong> conectado al sistema.</>} />
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Restricciones durante la prueba */}
-                            <div>
-                                <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">Restricciones Activas</h3>
-                                <div className="flex flex-col gap-1.5">
-                                    {blockClipboard && (
-                                        <RuleItem variant="info" icon={<span>📋</span>} text="Copiar, cortar, pegar y menú contextual están deshabilitados." />
-                                    )}
-                                    {hasHelpUrl && (
-                                        <RuleItem variant="info" icon={<span>📖</span>} text="Puedes usar el Material de Ayuda del profesor. Interactuar con él no genera falta." />
-                                    )}
-                                    {maxWarnings > 0 ? (
-                                        <RuleItem variant="warn" icon={<AlertTriangle className="h-3.5 w-3.5" />} text={<>Cuentas con hasta <strong>{maxWarnings} advertencias</strong> antes de ser expulsado definitivamente.</>} />
-                                    ) : (
-                                        <RuleItem variant="warn" icon={<AlertTriangle className="h-3.5 w-3.5" />} text="Cualquier infracción generará expulsión inmediata sin advertencias previas." />
-                                    )}
-                                </div>
-                            </div>
-
-                        </div>
-
-                        {/* Columna derecha */}
-                        <div className="flex flex-col gap-5">
-
-                            {/* Causas de Infracción / Expulsión */}
-                            <div>
-                                <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">Causas de Falta o Sanción</h3>
-                                <div className="flex flex-col gap-1.5">
-                                    {requireFullscreen && (
-                                        <RuleItem variant="warn" icon={<AlertTriangle className="h-3.5 w-3.5" />} text="Cambiar o minimizar el tamaño de la ventana del navegador." />
-                                    )}
-                                    {blockTabSwitch && (
-                                        <>
-                                            <RuleItem variant="warn" icon={<AlertTriangle className="h-3.5 w-3.5" />} text="Cambiar de pestaña del navegador durante la prueba." />
-                                            <RuleItem variant="warn" icon={<AlertTriangle className="h-3.5 w-3.5" />} text="Perder el foco de la ventana al interactuar con otra aplicación." />
-                                        </>
-                                    )}
-                                    {blockMultipleDisplays && (
-                                        <RuleItem variant="warn" icon={<AlertTriangle className="h-3.5 w-3.5" />} text="Conectar un monitor adicional durante la evaluación." />
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Estado de los requisitos */}
-                            <div>
-                                <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">Estado de tus Requisitos</h3>
-                                <div className="flex flex-col gap-1.5">
-                                    <CheckItem ok={!isMobile} blocking={true} label={isMobile ? "Dispositivo móvil detectado — usa un computador" : "Dispositivo compatible ✓"} />
-                                    {blockMultipleDisplays && (
-                                        <CheckItem ok={!hasMultipleScreens} blocking={true} label={hasMultipleScreens ? "Múltiples monitores — desconecta el adicional" : "Un solo monitor detectado ✓"} />
-                                    )}
-                                    {requireFullscreen && (
-                                        <CheckItem ok={isMaximized} blocking={false} label={isMaximized ? "Ventana maximizada ✓" : "Maximiza la ventana para continuar..."} />
-                                    )}
-                                </div>
-                            </div>
-
+                        <div className="flex items-center gap-3 w-full sm:w-auto">
+                            <Button
+                                variant="outline"
+                                className="flex-1 sm:flex-none text-xs font-semibold h-10 cursor-pointer"
+                                onClick={() => router.push(`/dashboard/student?courseId=${attempt.courseId}&tab=evaluations`)}
+                            >
+                                Volver al Curso
+                            </Button>
+                            <Button
+                                size="lg"
+                                className="flex-1 sm:flex-none font-bold text-sm h-10 cursor-pointer gap-2 shadow-sm"
+                                disabled={!canStart}
+                                onClick={() => setHasStarted(true)}
+                            >
+                                {canStart ? (
+                                    <>
+                                        <span>Acepto las normas — Comenzar Evaluación</span>
+                                        <ArrowRight className="w-4 h-4" />
+                                    </>
+                                ) : (
+                                    <span>Requisitos pendientes para iniciar</span>
+                                )}
+                            </Button>
                         </div>
                     </div>
-
-                    {/* Footer */}
-                    <div className="px-6 py-4 border-t bg-muted/30 flex flex-col gap-2">
-                        {canStart && (
-                            <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400 font-medium">
-                                <CheckCircle className="h-4 w-4 shrink-0" />
-                                Todos los requisitos cumplidos. Puedes comenzar.
-                            </div>
-                        )}
-                        <Button
-                            className="w-full h-10 font-semibold text-sm cursor-pointer"
-                            disabled={!canStart}
-                            onClick={() => setHasStarted(true)}
-                        >
-                            {canStart ? "Acepto las normas — Comenzar Evaluación" : "Debes cumplir los requisitos para continuar"}
-                        </Button>
-                    </div>
-                </div>
+                </footer>
             </div>
         );
     }
 
     const handleQuestionSelect = (idx: number) => {
+        // Guardar la respuesta actual (código o texto) antes de navegar
+        if (currentQuestion?.id && answers[currentQuestion.id] !== undefined) {
+            saveAnswerAction(submission.id, currentQuestion.id, answers[currentQuestion.id] || "");
+        }
         setActiveQuestionIdx(idx);
         setActiveTab("answer"); // Reset tab
     };
@@ -864,6 +1239,45 @@ export function TakeEvaluationLayout({
                         </TooltipTrigger>
                         <TooltipContent>Calificación actual: {accumulatedScore.toFixed(1)} / 5.0 (clic para ver panorámica)</TooltipContent>
                     </Tooltip>
+
+                    {/* Indicador de Vigilancia Estricta y Expulsiones */}
+                    {surveillanceEnabled && !isSubmitted && (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className={cn(
+                                    "flex items-center gap-1.5 px-2.5 h-8 rounded-lg border text-xs font-bold transition-all shadow-2xs",
+                                    expulsionsCount > 0 
+                                        ? "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30" 
+                                        : "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20"
+                                )}>
+                                    <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+                                    <span className="text-[10px] uppercase font-bold hidden sm:inline">Vigilancia Estricta</span>
+                                    {blockTabSwitch && (
+                                        <span className="flex items-center gap-1 ml-1 pl-1.5 border-l border-red-500/30 text-[11px] font-mono font-bold">
+                                            <span className="text-[10px] uppercase font-semibold opacity-80 hidden md:inline">Expulsiones:</span>
+                                            <span className={cn(
+                                                "px-1.5 py-0.2 rounded font-black",
+                                                expulsionsCount > 0 ? "bg-red-600 text-white" : "text-foreground"
+                                            )}>{expulsionsCount}</span>
+                                        </span>
+                                    )}
+                                </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                {blockTabSwitch 
+                                    ? `Vigilancia de foco activa. Veces expulsado: ${expulsionsCount}. Salir o perder el foco provocará expulsión inmediata.`
+                                    : "Vigilancia estricta activa: salir de la pantalla, cambiar de ventana o perder el foco provocará tu expulsión inmediata del examen."}
+                            </TooltipContent>
+                        </Tooltip>
+                    )}
+
+                    {blockTabSwitch && isSubmitted && (
+                        <div className="flex items-center gap-1.5 px-2.5 h-8 rounded-lg border text-xs font-bold bg-muted/50 border-border/50 text-muted-foreground">
+                            <ShieldAlert className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                            <span className="text-[10px] uppercase">Expulsiones:</span>
+                            <span className="font-mono font-black text-foreground">{expulsionsCount}</span>
+                        </div>
+                    )}
 
                     {/* Wildcard Buttons */}
                     {!isSubmitted && maxAiHints > 0 && (
@@ -1231,9 +1645,34 @@ export function TakeEvaluationLayout({
                                         onBlur={handleSaveCurrent}
                                         disabled={isSubmitted}
                                         readOnly={isSubmitted}
-                                        onCopy={(e) => { if (!isSubmitted) e.preventDefault(); }}
-                                        onCut={(e) => { if (!isSubmitted) e.preventDefault(); }}
-                                        onPaste={(e) => { if (!isSubmitted) e.preventDefault(); }}
+                                        spellCheck={true}
+                                        lang="es"
+                                        autoComplete="on"
+                                        autoCorrect="on"
+                                        onCopy={(e) => { 
+                                            if (!isSubmitted) {
+                                                e.preventDefault();
+                                                toast.warning("Acción restringida", { description: "Copiar texto está deshabilitado." });
+                                            }
+                                        }}
+                                        onCut={(e) => { 
+                                            if (!isSubmitted) {
+                                                e.preventDefault();
+                                                toast.warning("Acción restringida", { description: "Cortar texto está deshabilitado." });
+                                            }
+                                        }}
+                                        onPaste={(e) => { 
+                                            if (!isSubmitted) {
+                                                e.preventDefault();
+                                                toast.warning("Acción restringida", { description: "Pegar texto está deshabilitado." });
+                                            }
+                                        }}
+                                        onDrop={(e) => {
+                                            if (!isSubmitted) {
+                                                e.preventDefault();
+                                                toast.warning("Acción restringida", { description: "Arrastrar y soltar contenido está deshabilitado." });
+                                            }
+                                        }}
                                     />
                                 ) : (
                                     <Editor
@@ -1296,6 +1735,15 @@ export function TakeEvaluationLayout({
                                                 if ((e.ctrlKey || e.metaKey) && e.keyCode === monaco.KeyCode.KeyV) {
                                                     e.preventDefault();
                                                     e.stopPropagation();
+                                                }
+                                            });
+
+                                            // 4. Guardar borrador de código cuando Monaco pierde el foco
+                                            editor.onDidBlurEditorText(() => {
+                                                const val = editor.getValue();
+                                                const currentQ = currentQuestionRef.current;
+                                                if (val !== undefined && currentQ?.id) {
+                                                    saveAnswerAction(submission.id, currentQ.id, val);
                                                 }
                                             });
 
@@ -1475,35 +1923,37 @@ export function TakeEvaluationLayout({
                             <Send className="w-5 h-5 text-primary" />
                             <span>¿Terminar y Enviar Evaluación?</span>
                         </AlertDialogTitle>
-                        <AlertDialogDescription className="flex flex-col gap-3">
-                            {!allAnswered && pendingCount > 0 ? (
-                                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 text-xs flex items-start gap-2.5">
-                                    <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                                    <div className="leading-relaxed">
-                                        <strong className="block font-bold mb-0.5">Preguntas pendientes:</strong>
-                                        Tienes <strong>{pendingCount} de {questions.length}</strong> preguntas sin responder. Si decides terminar ahora, esas preguntas quedarán con nota 0.0.
+                        <AlertDialogDescription asChild>
+                            <div className="flex flex-col gap-3 text-sm text-muted-foreground">
+                                {!allAnswered && pendingCount > 0 ? (
+                                    <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 text-xs flex items-start gap-2.5">
+                                        <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                                        <div className="leading-relaxed">
+                                            <strong className="block font-bold mb-0.5">Preguntas pendientes:</strong>
+                                            Tienes <strong>{pendingCount} de {questions.length}</strong> preguntas sin responder. Si decides terminar ahora, esas preguntas quedarán con nota 0.0.
+                                        </div>
                                     </div>
-                                </div>
-                            ) : (
-                                <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-200 text-xs flex items-center gap-2.5">
-                                    <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
-                                    <span>Has respondido todas las preguntas ({questions.length}/{questions.length}).</span>
-                                </div>
-                            )}
-                            <span className="text-xs text-muted-foreground">
-                                Una vez enviada, la evaluación finalizará formalmente y no podrás modificar ninguna respuesta.
-                            </span>
-                            <div className="pt-1">
-                                <span className="text-xs text-foreground font-semibold block mb-1.5">
-                                    Para confirmar, escribe la palabra <strong>ENVIAR</strong> en mayúsculas:
+                                ) : (
+                                    <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-200 text-xs flex items-center gap-2.5">
+                                        <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
+                                        <span>Has respondido todas las preguntas ({questions.length}/{questions.length}).</span>
+                                    </div>
+                                )}
+                                <span className="text-xs text-muted-foreground">
+                                    Una vez enviada, la evaluación finalizará formalmente y no podrás modificar ninguna respuesta.
                                 </span>
-                                <Input
-                                    value={finishConfirmText}
-                                    onChange={(e) => setFinishConfirmText(e.target.value)}
-                                    placeholder="Escribe ENVIAR"
-                                    autoComplete="off"
-                                    className="font-mono text-center tracking-widest uppercase font-bold"
-                                />
+                                <div className="pt-1">
+                                    <span className="text-xs text-foreground font-semibold block mb-1.5">
+                                        Para confirmar, escribe la palabra <strong>ENVIAR</strong> en mayúsculas:
+                                    </span>
+                                    <Input
+                                        value={finishConfirmText}
+                                        onChange={(e) => setFinishConfirmText(e.target.value)}
+                                        placeholder="Escribe ENVIAR"
+                                        autoComplete="off"
+                                        className="font-mono text-center tracking-widest uppercase font-bold"
+                                    />
+                                </div>
                             </div>
                         </AlertDialogDescription>
                     </AlertDialogHeader>
@@ -1554,7 +2004,7 @@ export function TakeEvaluationLayout({
 
             {/* Modal Panorámica de la Evaluación */}
             <Dialog open={showOverviewModal} onOpenChange={setShowOverviewModal}>
-                <DialogContent className="sm:max-w-[760px] md:max-w-[860px] max-h-[90vh] flex flex-col p-0 overflow-hidden bg-card text-card-foreground border-border shadow-2xl">
+                <DialogContent showCloseButton={false} className="sm:max-w-[760px] md:max-w-[860px] max-h-[90vh] flex flex-col p-0 overflow-hidden bg-card text-card-foreground border-border shadow-2xl">
                     <DialogHeader className="p-5 pb-3 border-b border-border/80 bg-muted/20 shrink-0">
                         <div className="flex items-center justify-between gap-4">
                             <div className="flex items-center gap-2.5">
@@ -1570,13 +2020,25 @@ export function TakeEvaluationLayout({
                                     </DialogDescription>
                                 </div>
                             </div>
-                            <div className="text-right shrink-0">
-                                <span className="text-[10px] uppercase font-bold text-muted-foreground block">
-                                    Tiempo Restante
-                                </span>
-                                <span className="text-sm font-mono font-black text-foreground">
-                                    {timeLeftStr || "..."}
-                                </span>
+                            <div className="flex items-center gap-3 shrink-0">
+                                <div className="text-right">
+                                    <span className="text-[10px] uppercase font-bold text-muted-foreground block">
+                                        Tiempo Restante
+                                    </span>
+                                    <span className="text-sm font-mono font-black text-foreground">
+                                        {timeLeftStr || "..."}
+                                    </span>
+                                </div>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setShowOverviewModal(false)}
+                                    className="h-8 px-3 text-xs font-semibold gap-1.5 rounded-lg border-border/80 hover:bg-muted cursor-pointer"
+                                    title="Cerrar modal"
+                                >
+                                    <X className="w-3.5 h-3.5" />
+                                    <span>Cerrar</span>
+                                </Button>
                             </div>
                         </div>
                     </DialogHeader>
@@ -1584,7 +2046,10 @@ export function TakeEvaluationLayout({
                     {/* Contenido scrolleable */}
                     <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
                         {/* Fila de Tarjetas KPI Resumen */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div className={cn(
+                            "grid gap-3",
+                            blockTabSwitch ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-5" : "grid-cols-2 sm:grid-cols-4"
+                        )}>
                             {/* Nota Actual */}
                             <div className="p-3 rounded-xl border border-primary/30 bg-primary/10 flex flex-col justify-between">
                                 <span className="text-[10px] uppercase font-bold text-primary/80">Nota Actual</span>
@@ -1634,6 +2099,28 @@ export function TakeEvaluationLayout({
                                     {draftedQuestionsCount > 0 ? `${draftedQuestionsCount} en borrador` : "Al día"}
                                 </span>
                             </div>
+
+                            {/* Expulsiones por Pérdida de Foco */}
+                            {blockTabSwitch && (
+                                <div className={cn(
+                                    "p-3 rounded-xl border flex flex-col justify-between",
+                                    expulsionsCount > 0 
+                                        ? "bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400" 
+                                        : "bg-muted/30 border-border/80 text-muted-foreground"
+                                )}>
+                                    <span className="text-[10px] uppercase font-bold">Expulsiones</span>
+                                    <div className="flex items-baseline gap-1 my-1">
+                                        <span className={cn("text-2xl font-black", expulsionsCount > 0 ? "text-red-600 dark:text-red-400" : "text-foreground")}>
+                                            {expulsionsCount}
+                                        </span>
+                                        <span className="text-xs text-muted-foreground">{expulsionsCount === 1 ? 'vez' : 'veces'}</span>
+                                    </div>
+                                    <span className="text-[10px] font-semibold flex items-center gap-1">
+                                        <ShieldAlert className="w-3 h-3 text-red-500 shrink-0" />
+                                        <span>Pérdida de foco</span>
+                                    </span>
+                                </div>
+                            )}
                         </div>
 
                         {/* Cuadrícula Panorámica de Preguntas */}

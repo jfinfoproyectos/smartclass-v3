@@ -95,6 +95,26 @@ const styles = StyleSheet.create({
         padding: 8,
         backgroundColor: "#f8fafc",
     },
+    penaltyBox: {
+        marginTop: -6,
+        marginBottom: 10,
+        padding: 6,
+        backgroundColor: "#fffbeb",
+        borderWidth: 1,
+        borderColor: "#fde68a",
+        borderStyle: "solid",
+        borderRadius: 4,
+    },
+    penaltyTitle: {
+        fontFamily: "Helvetica-Bold",
+        color: "#92400e",
+        fontSize: 8,
+    },
+    penaltyText: {
+        fontSize: 7.5,
+        color: "#78350f",
+        marginTop: 2,
+    },
     infoItem: {
         width: "50%",
         marginBottom: 4,
@@ -459,6 +479,9 @@ export interface SubmissionPDFProps {
     totalQuestions: number;
     answeredQuestions: number;
     expulsions: number;
+    penalty?: number;
+    penaltyComment?: string;
+    baseScore?: number;
     questions: Array<{
         id: string;
         text: string;
@@ -487,6 +510,9 @@ export function SubmissionPDF({
     totalQuestions,
     answeredQuestions,
     expulsions,
+    penalty,
+    penaltyComment,
+    baseScore,
     questions,
 }: SubmissionPDFProps) {
     const passed = score !== null && score >= 3.0;
@@ -545,6 +571,20 @@ export function SubmissionPDF({
                         </View>
                     )}
                 </View>
+
+                {/* Sanción / Descuento si aplica */}
+                {penalty !== undefined && penalty > 0 && (
+                    <View style={styles.penaltyBox} wrap={false}>
+                        <Text style={styles.penaltyTitle}>
+                            AJUSTE / SANCIÓN DISCIPLINARIA: -{penalty.toFixed(1)} PUNTOS {baseScore !== undefined ? `(Nota Base: ${baseScore.toFixed(2)})` : ""}
+                        </Text>
+                        {penaltyComment ? (
+                            <Text style={styles.penaltyText}>
+                                Motivo: "{penaltyComment}"
+                            </Text>
+                        ) : null}
+                    </View>
+                )}
 
                 {/* Questions Section Title */}
                 <Text style={styles.sectionTitle} wrap={false}>Respuestas del Estudiante</Text>

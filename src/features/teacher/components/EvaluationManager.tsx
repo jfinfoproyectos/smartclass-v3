@@ -341,6 +341,59 @@ export function EvaluationManager({ evaluations }: { evaluations: any[] }) {
                                                         <p>Exportar evaluación</p>
                                                     </TooltipContent>
                                                 </Tooltip>
+
+                                                <Dialog>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <DialogTrigger asChild>
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="icon"
+                                                                    className="h-9 w-9 rounded-xl border-border/50 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 border-red-200/60 dark:border-red-800/40"
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </Button>
+                                                            </DialogTrigger>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>
+                                                            <p>Eliminar evaluación</p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+
+                                                    <DialogContent>
+                                                        <form
+                                                            action={async (formData) => {
+                                                                await deleteEvaluationAction(formData);
+                                                            }}
+                                                        >
+                                                            <input type="hidden" name="evaluationId" value={evaluation.id} />
+                                                            <DialogHeader>
+                                                                <DialogTitle>Confirmar eliminación</DialogTitle>
+                                                                <DialogDescription>
+                                                                    Escribe <strong>ELIMINAR</strong> para confirmar. Esto borrará la evaluación y todas sus preguntas e intentos asociados.
+                                                                </DialogDescription>
+                                                            </DialogHeader>
+                                                            <div className="grid grid-cols-4 items-center gap-4 py-4">
+                                                                <Label htmlFor={`card-confirm-${evaluation.id}`} className="text-right">
+                                                                    Confirmación
+                                                                </Label>
+                                                                <Input
+                                                                    id={`card-confirm-${evaluation.id}`}
+                                                                    name="confirmText"
+                                                                    placeholder="ELIMINAR"
+                                                                    pattern="^ELIMINAR$"
+                                                                    required
+                                                                    className="col-span-3"
+                                                                />
+                                                            </div>
+                                                            <DialogFooter>
+                                                                <Button type="submit" variant="destructive">
+                                                                    Confirmar eliminación
+                                                                </Button>
+                                                            </DialogFooter>
+                                                        </form>
+                                                    </DialogContent>
+                                                </Dialog>
                                             </div>
                                         </TooltipProvider>
 

@@ -22,7 +22,8 @@ import {
     TrendingUp,
     BarChart3,
     FileCheck,
-    ChevronDown
+    ChevronDown,
+    Gavel
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -64,6 +65,13 @@ import { deleteEvaluationSubmissionAction } from "@/features/teacher/actions/eva
 import { EvaluationStats } from "./EvaluationStats";
 import { EvaluationReportPDF } from "./EvaluationReportPDF";
 import { exportEvaluationSubmissionsToExcel } from "@/lib/export-utils";
+import { SubmissionPenaltyDialog } from "./SubmissionPenaltyDialog";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger
+} from "@/components/ui/tooltip";
 import { toast } from "sonner";
 
 interface SubmissionsManagerProps {
@@ -210,201 +218,244 @@ export function SubmissionsManager({
     const isExporting = isExportingPdf || isExportingExcel;
 
     return (
-        <div className="space-y-6">
-            {/* ─── 1. Header Ejecutivo y Barra de Acciones ─── */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-5 rounded-2xl bg-card border border-border/70 shadow-xs backdrop-blur-xs">
-                <div className="space-y-1.5 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-                        <span className="font-semibold text-primary">{courseName}</span>
-                        <span>•</span>
-                        <span>Docente: <strong className="text-foreground">{teacherName}</strong></span>
-                        <span>•</span>
-                        <span>{institutionName}</span>
+        <TooltipProvider delayDuration={150}>
+            <div className="space-y-6">
+                {/* ─── 1. Header Ejecutivo y Barra de Acciones ─── */}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-5 rounded-2xl bg-card border border-border/70 shadow-xs backdrop-blur-xs">
+                    <div className="space-y-1.5 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+                            <span className="font-semibold text-primary">{courseName}</span>
+                            <span>•</span>
+                            <span>Docente: <strong className="text-foreground">{teacherName}</strong></span>
+                            <span>•</span>
+                            <span>{institutionName}</span>
+                        </div>
+
+                        <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground truncate">
+                            {attempt.evaluation?.title}
+                        </h1>
+
+                        <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                            <Badge variant="outline" className="text-xs font-mono font-medium gap-1.5 py-0.5 px-2 bg-muted/40">
+                                <Clock className="h-3 w-3 text-muted-foreground" />
+                                <span>{formatDateTime(attempt.startTime)} – {formatDateTime(attempt.endTime)}</span>
+                            </Badge>
+
+                            {Array.isArray(attempt.assignedStudentIds) && attempt.assignedStudentIds.length > 0 ? (
+                                <Badge variant="outline" className="text-xs font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 gap-1.5 py-0.5 px-2">
+                                    <UserCheck className="h-3.5 w-3.5" />
+                                    <span>Asignada a {attempt.assignedStudentIds.length} {attempt.assignedStudentIds.length === 1 ? "estudiante" : "estudiantes"}</span>
+                                </Badge>
+                            ) : (
+                                <Badge variant="outline" className="text-xs font-semibold bg-primary/10 text-primary border-primary/30 gap-1.5 py-0.5 px-2">
+                                    <Users className="h-3.5 w-3.5" />
+                                    <span>Asignada a toda la ficha</span>
+                                </Badge>
+                            )}
+
+                            <Badge variant="secondary" className="text-xs font-mono py-0.5 px-2">
+                                {totalQuestions} {totalQuestions === 1 ? "pregunta" : "preguntas"}
+                            </Badge>
+                        </div>
                     </div>
 
-                    <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground truncate">
-                        {attempt.evaluation?.title}
-                    </h1>
+                    <div className="flex items-center gap-2.5 shrink-0 self-start lg:self-center">
+                        {/* Botón de Exportación Corporativa con Dropdown */}
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    disabled={isExporting}
+                                    className="h-9 px-3.5 gap-2 font-bold shadow-xs hover:border-primary/50 transition-all cursor-pointer"
+                                >
+                                    {isExporting ? (
+                                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                    ) : (
+                                        <Download className="h-4 w-4 text-primary" />
+                                    )}
+                                    <span>Exportar Reporte</span>
+                                    <ChevronDown className="h-3.5 w-3.5 opacity-60 ml-0.5" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56 p-1.5">
+                                <DropdownMenuLabel className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-2 py-1">
+                                    Reportes Oficiales
+                                </DropdownMenuLabel>
+                                <DropdownMenuItem 
+                                    onClick={handleExportPdf} 
+                                    disabled={isExportingPdf}
+                                    className="gap-2.5 py-2 cursor-pointer font-medium"
+                                >
+                                    <div className="p-1 rounded-md bg-red-500/10 text-red-600 dark:text-red-400">
+                                        <FileText className="h-4 w-4" />
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="text-xs font-semibold">Reporte en PDF (.pdf)</span>
+                                        <span className="text-[10px] text-muted-foreground">Informe ejecutivo de 3 páginas</span>
+                                    </div>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                    onClick={handleExportExcel} 
+                                    disabled={isExportingExcel}
+                                    className="gap-2.5 py-2 cursor-pointer font-medium"
+                                >
+                                    <div className="p-1 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                                        <FileSpreadsheet className="h-4 w-4" />
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="text-xs font-semibold">Consolidado en Excel (.xlsx)</span>
+                                        <span className="text-[10px] text-muted-foreground">Resultados y distribución</span>
+                                    </div>
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
 
-                    <div className="flex flex-wrap items-center gap-2 pt-0.5">
-                        <Badge variant="outline" className="text-xs font-mono font-medium gap-1.5 py-0.5 px-2 bg-muted/40">
-                            <Clock className="h-3 w-3 text-muted-foreground" />
-                            <span>{formatDateTime(attempt.startTime)} – {formatDateTime(attempt.endTime)}</span>
-                        </Badge>
-
-                        {Array.isArray(attempt.assignedStudentIds) && attempt.assignedStudentIds.length > 0 ? (
-                            <Badge variant="outline" className="text-xs font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 gap-1.5 py-0.5 px-2">
-                                <UserCheck className="h-3.5 w-3.5" />
-                                <span>Asignada a {attempt.assignedStudentIds.length} {attempt.assignedStudentIds.length === 1 ? "estudiante" : "estudiantes"}</span>
-                            </Badge>
-                        ) : (
-                            <Badge variant="outline" className="text-xs font-semibold bg-primary/10 text-primary border-primary/30 gap-1.5 py-0.5 px-2">
-                                <Users className="h-3.5 w-3.5" />
-                                <span>Asignada a toda la ficha</span>
-                            </Badge>
-                        )}
-
-                        <Badge variant="secondary" className="text-xs font-mono py-0.5 px-2">
-                            {totalQuestions} {totalQuestions === 1 ? "pregunta" : "preguntas"}
-                        </Badge>
+                        {/* Botón Volver a Evaluaciones con Tooltip */}
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button variant="default" size="sm" asChild className="h-9 px-3.5 gap-1.5 font-bold shadow-xs cursor-pointer">
+                                    <Link href={`/dashboard/teacher/courses/${courseId}?tab=evaluations`}>
+                                        <ArrowLeft className="h-4 w-4" />
+                                        <span>Volver a Evaluaciones</span>
+                                    </Link>
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom">
+                                <p>Regresar al listado general de evaluaciones del curso</p>
+                            </TooltipContent>
+                        </Tooltip>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2.5 shrink-0 self-start lg:self-center">
-                    {/* Botón de Exportación Corporativa con Dropdown */}
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button 
-                                variant="outline" 
-                                size="sm" 
-                                disabled={isExporting}
-                                className="h-9 px-3.5 gap-2 font-bold shadow-xs hover:border-primary/50 transition-all cursor-pointer"
-                            >
-                                {isExporting ? (
-                                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                                ) : (
-                                    <Download className="h-4 w-4 text-primary" />
-                                )}
-                                <span>Exportar Reporte</span>
-                                <ChevronDown className="h-3.5 w-3.5 opacity-60 ml-0.5" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-56 p-1.5">
-                            <DropdownMenuLabel className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-2 py-1">
-                                Reportes Oficiales
-                            </DropdownMenuLabel>
-                            <DropdownMenuItem 
-                                onClick={handleExportPdf} 
-                                disabled={isExportingPdf}
-                                className="gap-2.5 py-2 cursor-pointer font-medium"
-                            >
-                                <div className="p-1 rounded-md bg-red-500/10 text-red-600 dark:text-red-400">
-                                    <FileText className="h-4 w-4" />
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="text-xs font-semibold">Reporte en PDF (.pdf)</span>
-                                    <span className="text-[10px] text-muted-foreground">Informe ejecutivo de 3 páginas</span>
-                                </div>
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem 
-                                onClick={handleExportExcel} 
-                                disabled={isExportingExcel}
-                                className="gap-2.5 py-2 cursor-pointer font-medium"
-                            >
-                                <div className="p-1 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                                    <FileSpreadsheet className="h-4 w-4" />
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="text-xs font-semibold">Consolidado en Excel (.xlsx)</span>
-                                    <span className="text-[10px] text-muted-foreground">Resultados y distribución</span>
-                                </div>
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                {/* ─── 2. Franja Superior de Indicadores Clave (5 KPIs) con Tooltips ─── */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3.5">
+                    {/* Total Inscritos */}
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Card className="border-border/70 bg-card shadow-2xs hover:border-primary/40 transition-colors cursor-default">
+                                <CardContent className="p-4 flex items-center justify-between">
+                                    <div>
+                                        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Inscritos</p>
+                                        <p className="text-2xl font-black text-foreground mt-0.5">{totalStudents}</p>
+                                        <p className="text-[10px] text-muted-foreground mt-0.5">Estudiantes asignados</p>
+                                    </div>
+                                    <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                                        <Users className="h-5 w-5" />
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                            <p>Total de estudiantes matriculados o habilitados para presentar esta evaluación</p>
+                        </TooltipContent>
+                    </Tooltip>
 
-                    {/* Botón Volver a Evaluaciones */}
-                    <Button variant="default" size="sm" asChild className="h-9 px-3.5 gap-1.5 font-bold shadow-xs cursor-pointer">
-                        <Link href={`/dashboard/teacher/courses/${courseId}?tab=evaluations`}>
-                            <ArrowLeft className="h-4 w-4" />
-                            <span>Volver a Evaluaciones</span>
-                        </Link>
-                    </Button>
+                    {/* Entregas Recibidas */}
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Card className="border-border/70 bg-card shadow-2xs hover:border-emerald-500/40 transition-colors cursor-default">
+                                <CardContent className="p-4 flex items-center justify-between">
+                                    <div>
+                                        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Entregas</p>
+                                        <div className="flex items-baseline gap-1.5 mt-0.5">
+                                            <span className="text-2xl font-black text-foreground">{submittedCount}</span>
+                                            <span className="text-xs text-muted-foreground font-semibold">/ {totalStudents}</span>
+                                        </div>
+                                        <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">
+                                            {totalStudents > 0 ? ((submittedCount / totalStudents) * 100).toFixed(0) : 0}% participación
+                                        </p>
+                                    </div>
+                                    <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                                        <CheckCircle2 className="h-5 w-5" />
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                            <p>{submittedCount} de {totalStudents} convocados completaron su entrega ({totalStudents > 0 ? ((submittedCount / totalStudents) * 100).toFixed(1) : 0}%)</p>
+                        </TooltipContent>
+                    </Tooltip>
+
+                    {/* Nota Promedio */}
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Card className="border-border/70 bg-card shadow-2xs hover:border-primary/40 transition-colors cursor-default">
+                                <CardContent className="p-4 flex items-center justify-between">
+                                    <div>
+                                        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Nota Promedio</p>
+                                        <div className="flex items-baseline gap-1 mt-0.5">
+                                            <span className={`text-2xl font-black ${avgScore >= 3.0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>
+                                                {avgScore > 0 ? avgScore.toFixed(2) : "0.00"}
+                                            </span>
+                                            <span className="text-xs text-muted-foreground font-medium">/ 5.0</span>
+                                        </div>
+                                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                                            {submittedCount > 0 ? `${submittedCount} entregas calificadas` : "Sin entregas aún"}
+                                        </p>
+                                    </div>
+                                    <div className={`p-2.5 rounded-xl border ${avgScore >= 3.0 ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : "bg-red-500/10 text-red-500 border-red-500/20"}`}>
+                                        <Award className="h-5 w-5" />
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                            <p>Promedio ponderado de las notas obtenidas en esta evaluación</p>
+                        </TooltipContent>
+                    </Tooltip>
+
+                    {/* Tasa de Aprobación */}
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Card className="border-border/70 bg-card shadow-2xs hover:border-violet-500/40 transition-colors cursor-default">
+                                <CardContent className="p-4 flex items-center justify-between">
+                                    <div>
+                                        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Aprobación</p>
+                                        <p className="text-2xl font-black text-foreground mt-0.5">
+                                            {passRate.toFixed(1)}%
+                                        </p>
+                                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                                            <strong className="text-emerald-600 font-bold">{passCount}</strong> aprobados • <strong className="text-red-500 font-bold">{failCount}</strong> rep.
+                                        </p>
+                                    </div>
+                                    <div className="p-2.5 rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20">
+                                        <TrendingUp className="h-5 w-5" />
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                            <p>Porcentaje de estudiantes con nota igual o superior a 3.0 sobre el total evaluado</p>
+                        </TooltipContent>
+                    </Tooltip>
+
+                    {/* Incidentes / Expulsiones */}
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Card className="border-border/70 bg-card shadow-2xs col-span-2 sm:col-span-1 hover:border-red-500/40 transition-colors cursor-default">
+                                <CardContent className="p-4 flex items-center justify-between">
+                                    <div>
+                                        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Integridad</p>
+                                        <p className={`text-2xl font-black mt-0.5 ${totalExpulsions > 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                                            {totalExpulsions}
+                                        </p>
+                                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                                            {totalExpulsions > 0 ? `${totalExpulsions} salidas / faltas` : "Sin incidentes"}
+                                        </p>
+                                    </div>
+                                    <div className={`p-2.5 rounded-xl border ${totalExpulsions > 0 ? "bg-red-500/10 text-red-600 border-red-500/20" : "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"}`}>
+                                        <ShieldAlert className="h-5 w-5" />
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                            <p>{totalExpulsions > 0 ? `Total de salidas de pantalla, pérdida de foco o sospechas de fraude registradas` : "Sin incidentes de pérdida de foco registrados"}</p>
+                        </TooltipContent>
+                    </Tooltip>
                 </div>
-            </div>
-
-            {/* ─── 2. Franja Superior de Indicadores Clave (5 KPIs) ─── */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3.5">
-                {/* Total Inscritos */}
-                <Card className="border-border/70 bg-card shadow-2xs">
-                    <CardContent className="p-4 flex items-center justify-between">
-                        <div>
-                            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Inscritos</p>
-                            <p className="text-2xl font-black text-foreground mt-0.5">{totalStudents}</p>
-                            <p className="text-[10px] text-muted-foreground mt-0.5">Estudiantes asignados</p>
-                        </div>
-                        <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                            <Users className="h-5 w-5" />
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* Entregas Recibidas */}
-                <Card className="border-border/70 bg-card shadow-2xs">
-                    <CardContent className="p-4 flex items-center justify-between">
-                        <div>
-                            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Entregas</p>
-                            <div className="flex items-baseline gap-1.5 mt-0.5">
-                                <span className="text-2xl font-black text-foreground">{submittedCount}</span>
-                                <span className="text-xs text-muted-foreground font-semibold">/ {totalStudents}</span>
-                            </div>
-                            <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">
-                                {totalStudents > 0 ? ((submittedCount / totalStudents) * 100).toFixed(0) : 0}% participación
-                            </p>
-                        </div>
-                        <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                            <CheckCircle2 className="h-5 w-5" />
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* Nota Promedio */}
-                <Card className="border-border/70 bg-card shadow-2xs">
-                    <CardContent className="p-4 flex items-center justify-between">
-                        <div>
-                            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Nota Promedio</p>
-                            <div className="flex items-baseline gap-1 mt-0.5">
-                                <span className={`text-2xl font-black ${avgScore >= 3.0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>
-                                    {avgScore > 0 ? avgScore.toFixed(2) : "0.00"}
-                                </span>
-                                <span className="text-xs text-muted-foreground font-medium">/ 5.0</span>
-                            </div>
-                            <p className="text-[10px] text-muted-foreground mt-0.5">
-                                {submittedCount > 0 ? `${submittedCount} entregas calificadas` : "Sin entregas aún"}
-                            </p>
-                        </div>
-                        <div className={`p-2.5 rounded-xl border ${avgScore >= 3.0 ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : "bg-red-500/10 text-red-500 border-red-500/20"}`}>
-                            <Award className="h-5 w-5" />
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* Tasa de Aprobación */}
-                <Card className="border-border/70 bg-card shadow-2xs">
-                    <CardContent className="p-4 flex items-center justify-between">
-                        <div>
-                            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Aprobación</p>
-                            <p className="text-2xl font-black text-foreground mt-0.5">
-                                {passRate.toFixed(1)}%
-                            </p>
-                            <p className="text-[10px] text-muted-foreground mt-0.5">
-                                <strong className="text-emerald-600 font-bold">{passCount}</strong> aprobados • <strong className="text-red-500 font-bold">{failCount}</strong> rep.
-                            </p>
-                        </div>
-                        <div className="p-2.5 rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20">
-                            <TrendingUp className="h-5 w-5" />
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* Incidentes / Expulsiones */}
-                <Card className="border-border/70 bg-card shadow-2xs col-span-2 sm:col-span-1">
-                    <CardContent className="p-4 flex items-center justify-between">
-                        <div>
-                            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Integridad</p>
-                            <p className={`text-2xl font-black mt-0.5 ${totalExpulsions > 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
-                                {totalExpulsions}
-                            </p>
-                            <p className="text-[10px] text-muted-foreground mt-0.5">
-                                {totalExpulsions > 0 ? "Expulsiones registradas" : "Sin incidentes"}
-                            </p>
-                        </div>
-                        <div className={`p-2.5 rounded-xl border ${totalExpulsions > 0 ? "bg-red-500/10 text-red-600 border-red-500/20" : "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"}`}>
-                            <ShieldAlert className="h-5 w-5" />
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
 
             {/* ─── 3. Layout Principal de 2 Columnas (Aprovecha Espacio Lateral en xl+) ─── */}
             <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
@@ -437,66 +488,113 @@ export function SubmissionsManager({
                                 </div>
                             </div>
 
-                            {/* Filtros rápidos por estado */}
+                            {/* Filtros rápidos por estado con Tooltips */}
                             <div className="flex items-center gap-1.5 pt-3 overflow-x-auto scrollbar-none">
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant={statusFilter === "all" ? "default" : "outline"}
-                                    onClick={() => setStatusFilter("all")}
-                                    className="h-7 text-xs font-semibold px-2.5 cursor-pointer rounded-lg"
-                                >
-                                    Todos ({submissions.length})
-                                </Button>
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant={statusFilter === "submitted" ? "default" : "outline"}
-                                    onClick={() => setStatusFilter("submitted")}
-                                    className="h-7 text-xs font-semibold px-2.5 cursor-pointer rounded-lg gap-1"
-                                >
-                                    <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                                    <span>Enviados ({submittedCount})</span>
-                                </Button>
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant={statusFilter === "in_progress" ? "default" : "outline"}
-                                    onClick={() => setStatusFilter("in_progress")}
-                                    className="h-7 text-xs font-semibold px-2.5 cursor-pointer rounded-lg gap-1"
-                                >
-                                    <Clock className="h-3 w-3 text-amber-500" />
-                                    <span>En progreso ({inProgressCount})</span>
-                                </Button>
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant={statusFilter === "passed" ? "default" : "outline"}
-                                    onClick={() => setStatusFilter("passed")}
-                                    className="h-7 text-xs font-semibold px-2.5 cursor-pointer rounded-lg gap-1 text-emerald-600 dark:text-emerald-400"
-                                >
-                                    Aprobados ({passCount})
-                                </Button>
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant={statusFilter === "failed" ? "default" : "outline"}
-                                    onClick={() => setStatusFilter("failed")}
-                                    className="h-7 text-xs font-semibold px-2.5 cursor-pointer rounded-lg gap-1 text-red-500"
-                                >
-                                    Reprobados ({failCount})
-                                </Button>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant={statusFilter === "all" ? "default" : "outline"}
+                                            onClick={() => setStatusFilter("all")}
+                                            className="h-7 text-xs font-semibold px-2.5 cursor-pointer rounded-lg"
+                                        >
+                                            Todos ({submissions.length})
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top">
+                                        <p>Mostrar todas las entregas registradas</p>
+                                    </TooltipContent>
+                                </Tooltip>
+
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant={statusFilter === "submitted" ? "default" : "outline"}
+                                            onClick={() => setStatusFilter("submitted")}
+                                            className="h-7 text-xs font-semibold px-2.5 cursor-pointer rounded-lg gap-1"
+                                        >
+                                            <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                                            <span>Enviados ({submittedCount})</span>
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top">
+                                        <p>Filtrar únicamente evaluaciones que ya fueron enviadas</p>
+                                    </TooltipContent>
+                                </Tooltip>
+
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant={statusFilter === "in_progress" ? "default" : "outline"}
+                                            onClick={() => setStatusFilter("in_progress")}
+                                            className="h-7 text-xs font-semibold px-2.5 cursor-pointer rounded-lg gap-1"
+                                        >
+                                            <Clock className="h-3 w-3 text-amber-500" />
+                                            <span>En progreso ({inProgressCount})</span>
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top">
+                                        <p>Filtrar estudiantes que están presentando la prueba actualmente</p>
+                                    </TooltipContent>
+                                </Tooltip>
+
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant={statusFilter === "passed" ? "default" : "outline"}
+                                            onClick={() => setStatusFilter("passed")}
+                                            className="h-7 text-xs font-semibold px-2.5 cursor-pointer rounded-lg gap-1 text-emerald-600 dark:text-emerald-400"
+                                        >
+                                            Aprobados ({passCount})
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top">
+                                        <p>Filtrar estudiantes con nota mayor o igual a 3.0</p>
+                                    </TooltipContent>
+                                </Tooltip>
+
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant={statusFilter === "failed" ? "default" : "outline"}
+                                            onClick={() => setStatusFilter("failed")}
+                                            className="h-7 text-xs font-semibold px-2.5 cursor-pointer rounded-lg gap-1 text-red-500"
+                                        >
+                                            Reprobados ({failCount})
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top">
+                                        <p>Filtrar estudiantes con nota reprobatoria menor a 3.0</p>
+                                    </TooltipContent>
+                                </Tooltip>
+
                                 {totalExpulsions > 0 && (
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant={statusFilter === "expulsions" ? "destructive" : "outline"}
-                                        onClick={() => setStatusFilter("expulsions")}
-                                        className="h-7 text-xs font-semibold px-2.5 cursor-pointer rounded-lg gap-1"
-                                    >
-                                        <ShieldAlert className="h-3 w-3" />
-                                        <span>Con Expulsión</span>
-                                    </Button>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant={statusFilter === "expulsions" ? "destructive" : "outline"}
+                                                onClick={() => setStatusFilter("expulsions")}
+                                                className="h-7 text-xs font-semibold px-2.5 cursor-pointer rounded-lg gap-1"
+                                            >
+                                                <ShieldAlert className="h-3 w-3" />
+                                                <span>Con Salidas / Faltas</span>
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top">
+                                            <p>Filtrar pruebas con alertas de fraude o pérdidas de foco</p>
+                                        </TooltipContent>
+                                    </Tooltip>
                                 )}
                             </div>
                         </CardHeader>
@@ -510,7 +608,7 @@ export function SubmissionsManager({
                                             <TableHead className="font-bold text-xs uppercase tracking-wider text-muted-foreground">Estado</TableHead>
                                             <TableHead className="font-bold text-xs uppercase tracking-wider text-muted-foreground text-center">Respuestas</TableHead>
                                             <TableHead className="font-bold text-xs uppercase tracking-wider text-muted-foreground text-center">Nota / 5.0</TableHead>
-                                            <TableHead className="font-bold text-xs uppercase tracking-wider text-muted-foreground text-center">Expulsiones</TableHead>
+                                            <TableHead className="font-bold text-xs uppercase tracking-wider text-muted-foreground text-center">Salidas / Faltas</TableHead>
                                             <TableHead className="text-right font-bold text-xs uppercase tracking-wider text-muted-foreground pr-4 sm:pr-6">Acciones</TableHead>
                                         </TableRow>
                                     </TableHeader>
@@ -543,6 +641,11 @@ export function SubmissionsManager({
                                                 const answersCount = sub._count?.answersList || 0;
                                                 const expulsions = sub.expulsions || 0;
 
+                                                const wildcards = (sub.wildcardsUsed as any) || {};
+                                                const penalty = wildcards.penalty !== undefined ? Number(wildcards.penalty) : 0;
+                                                const baseScore = wildcards.baseScore !== undefined ? Number(wildcards.baseScore) : score;
+                                                const penaltyComment = wildcards.penaltyComment || "";
+
                                                 return (
                                                     <TableRow key={sub.id} className="hover:bg-muted/30 transition-colors">
                                                         {/* Estudiante con Avatar */}
@@ -561,47 +664,110 @@ export function SubmissionsManager({
                                                         {/* Estado de Entrega */}
                                                         <TableCell className="py-3">
                                                             {isSubmitted ? (
-                                                                <div className="flex flex-col">
-                                                                    <Badge variant="outline" className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/30 px-2 py-0.5 w-fit">
-                                                                        Enviado
-                                                                    </Badge>
-                                                                    <span className="text-[10px] text-muted-foreground font-mono mt-0.5">
-                                                                        {formatDateTime(sub.submittedAt, "dd/MM HH:mm")}
-                                                                    </span>
-                                                                </div>
+                                                                <Tooltip>
+                                                                    <TooltipTrigger asChild>
+                                                                        <div className="flex flex-col cursor-default w-fit">
+                                                                            <Badge variant="outline" className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/30 px-2 py-0.5 w-fit">
+                                                                                Enviado
+                                                                            </Badge>
+                                                                            <span className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                                                                                {formatDateTime(sub.submittedAt, "dd/MM HH:mm")}
+                                                                            </span>
+                                                                        </div>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent side="top">
+                                                                        <p>Prueba enviada el {formatDateTime(sub.submittedAt, "dd/MM/yyyy HH:mm:ss")}</p>
+                                                                    </TooltipContent>
+                                                                </Tooltip>
                                                             ) : (
-                                                                <Badge variant="outline" className="text-[10px] font-black uppercase text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/30 px-2 py-0.5 w-fit">
-                                                                    En progreso
-                                                                </Badge>
+                                                                <Tooltip>
+                                                                    <TooltipTrigger asChild>
+                                                                        <div className="cursor-default w-fit">
+                                                                            <Badge variant="outline" className="text-[10px] font-black uppercase text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/30 px-2 py-0.5 w-fit">
+                                                                                En progreso
+                                                                            </Badge>
+                                                                        </div>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent side="top">
+                                                                        <p>El estudiante inició la prueba pero aún no ha realizado la entrega definitiva</p>
+                                                                    </TooltipContent>
+                                                                </Tooltip>
                                                             )}
                                                         </TableCell>
 
                                                         {/* Respuestas contestadas */}
                                                         <TableCell className="text-center py-3">
-                                                            <div className="flex flex-col items-center">
-                                                                <span className="text-xs font-mono font-bold text-foreground">
-                                                                    {answersCount} / {totalQuestions}
-                                                                </span>
-                                                                <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden mt-1">
-                                                                    <div 
-                                                                        className="h-full bg-primary rounded-full" 
-                                                                        style={{ width: `${totalQuestions > 0 ? Math.min((answersCount / totalQuestions) * 100, 100) : 0}%` }}
-                                                                    />
-                                                                </div>
-                                                            </div>
+                                                            <Tooltip>
+                                                                <TooltipTrigger asChild>
+                                                                    <div className="flex flex-col items-center cursor-default">
+                                                                        <span className="text-xs font-mono font-bold text-foreground">
+                                                                            {answersCount} / {totalQuestions}
+                                                                        </span>
+                                                                        <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden mt-1">
+                                                                            <div 
+                                                                                className="h-full bg-primary rounded-full" 
+                                                                                style={{ width: `${totalQuestions > 0 ? Math.min((answersCount / totalQuestions) * 100, 100) : 0}%` }}
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                </TooltipTrigger>
+                                                                <TooltipContent side="top">
+                                                                    <p>{answersCount} de {totalQuestions} preguntas respondidas ({totalQuestions > 0 ? Math.round((answersCount / totalQuestions) * 100) : 0}%)</p>
+                                                                </TooltipContent>
+                                                            </Tooltip>
                                                         </TableCell>
 
                                                         {/* Nota Final */}
                                                         <TableCell className="text-center py-3">
                                                             {isSubmitted && score !== null ? (
-                                                                <div className="inline-flex flex-col items-center">
-                                                                    <span className={`text-sm font-black px-2.5 py-0.5 rounded-lg border ${
-                                                                        isPassing 
-                                                                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" 
-                                                                            : "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20"
-                                                                    }`}>
-                                                                        {score.toFixed(2)}
-                                                                    </span>
+                                                                <div className="inline-flex flex-col items-center gap-0.5">
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <span className={`text-sm font-black px-2.5 py-0.5 rounded-lg border cursor-default ${
+                                                                                isPassing 
+                                                                                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" 
+                                                                                    : "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20"
+                                                                            }`}>
+                                                                                {score.toFixed(2)}
+                                                                            </span>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent side="top">
+                                                                            <p className="font-semibold">{isPassing ? "Nota Aprobatoria (≥ 3.0)" : "Nota Reprobatoria (< 3.0)"}</p>
+                                                                            {penalty > 0 && (
+                                                                                <p className="text-[11px] text-muted-foreground mt-0.5">
+                                                                                    Nota final tras descuento: {baseScore?.toFixed(2)} - {penalty.toFixed(2)} = {score.toFixed(2)}
+                                                                                </p>
+                                                                            )}
+                                                                        </TooltipContent>
+                                                                    </Tooltip>
+
+                                                                    {penalty > 0 && (
+                                                                        <Tooltip>
+                                                                            <TooltipTrigger asChild>
+                                                                                <span 
+                                                                                    className="text-[10px] font-bold text-amber-600 dark:text-amber-400 flex items-center gap-0.5 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.2 rounded cursor-default"
+                                                                                >
+                                                                                    <Gavel className="w-2.5 h-2.5 shrink-0" />
+                                                                                    <span>-{penalty.toFixed(1)}</span>
+                                                                                </span>
+                                                                            </TooltipTrigger>
+                                                                            <TooltipContent side="top" className="max-w-xs space-y-1">
+                                                                                <p className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                                                                                    <Gavel className="w-3.5 h-3.5" />
+                                                                                    Descuento por Penalización
+                                                                                </p>
+                                                                                <div className="text-[11px] space-y-0.5">
+                                                                                    <p><span className="text-muted-foreground">Nota base obtenida:</span> <span className="font-mono font-bold">{baseScore?.toFixed(2)}</span></p>
+                                                                                    <p><span className="text-muted-foreground">Descuento aplicado:</span> <span className="font-mono font-bold text-red-500">-{penalty.toFixed(2)}</span></p>
+                                                                                    {penaltyComment && (
+                                                                                        <p className="pt-1 border-t border-border/50 text-muted-foreground italic">
+                                                                                            &quot;{penaltyComment}&quot;
+                                                                                        </p>
+                                                                                    )}
+                                                                                </div>
+                                                                            </TooltipContent>
+                                                                        </Tooltip>
+                                                                    )}
                                                                 </div>
                                                             ) : (
                                                                 <span className="text-xs text-muted-foreground font-mono">—</span>
@@ -611,12 +777,27 @@ export function SubmissionsManager({
                                                         {/* Expulsiones */}
                                                         <TableCell className="text-center py-3">
                                                             {expulsions > 0 ? (
-                                                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-black bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/30">
-                                                                    <ShieldAlert className="w-3.5 h-3.5" />
-                                                                    {expulsions}
-                                                                </span>
+                                                                <Tooltip>
+                                                                    <TooltipTrigger asChild>
+                                                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-black bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/30 cursor-default">
+                                                                            <ShieldAlert className="w-3.5 h-3.5" />
+                                                                            {expulsions}
+                                                                        </span>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent side="top">
+                                                                        <p className="font-semibold text-red-500">{expulsions} alertas de integridad registradas</p>
+                                                                        <p className="text-[11px] text-muted-foreground">Salidas de pantalla completa o pérdida de foco durante la prueba</p>
+                                                                    </TooltipContent>
+                                                                </Tooltip>
                                                             ) : (
-                                                                <span className="text-xs text-muted-foreground font-mono">0</span>
+                                                                <Tooltip>
+                                                                    <TooltipTrigger asChild>
+                                                                        <span className="text-xs text-muted-foreground font-mono cursor-default">0</span>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent side="top">
+                                                                        <p>Sin salidas de pantalla ni faltas de integridad registradas</p>
+                                                                    </TooltipContent>
+                                                                </Tooltip>
                                                             )}
                                                         </TableCell>
 
@@ -624,30 +805,50 @@ export function SubmissionsManager({
                                                         <TableCell className="text-right pr-4 sm:pr-6 py-3">
                                                             <div className="flex items-center justify-end gap-1">
                                                                 {isSubmitted && (
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        title="Ver Respuestas del Estudiante"
-                                                                        className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg cursor-pointer"
-                                                                        asChild
-                                                                    >
-                                                                        <Link href={`/dashboard/teacher/courses/${courseId}/evaluations/${attempt.id}/submissions/${sub.id}`}>
-                                                                            <Eye className="h-4 w-4" />
-                                                                        </Link>
-                                                                    </Button>
+                                                                    <>
+                                                                        <Tooltip>
+                                                                            <TooltipTrigger asChild>
+                                                                                <Button
+                                                                                    variant="ghost"
+                                                                                    size="icon"
+                                                                                    className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg cursor-pointer"
+                                                                                    asChild
+                                                                                >
+                                                                                    <Link href={`/dashboard/teacher/courses/${courseId}/evaluations/${attempt.id}/submissions/${sub.id}`}>
+                                                                                        <Eye className="h-4 w-4" />
+                                                                                    </Link>
+                                                                                </Button>
+                                                                            </TooltipTrigger>
+                                                                            <TooltipContent side="top">
+                                                                                <p>Ver respuestas detalladas y retroalimentación</p>
+                                                                            </TooltipContent>
+                                                                        </Tooltip>
+
+                                                                        <SubmissionPenaltyDialog
+                                                                            submission={sub}
+                                                                            courseId={courseId}
+                                                                            studentName={studentName}
+                                                                        />
+                                                                    </>
                                                                 )}
                                                                 
                                                                 <Dialog>
-                                                                    <DialogTrigger asChild>
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon"
-                                                                            className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg cursor-pointer"
-                                                                            title="Eliminar Entrega"
-                                                                        >
-                                                                            <Trash2 className="h-4 w-4" />
-                                                                        </Button>
-                                                                    </DialogTrigger>
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <DialogTrigger asChild>
+                                                                                <Button
+                                                                                    variant="ghost"
+                                                                                    size="icon"
+                                                                                    className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg cursor-pointer"
+                                                                                >
+                                                                                    <Trash2 className="h-4 w-4" />
+                                                                                </Button>
+                                                                            </DialogTrigger>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent side="top">
+                                                                            <p>Eliminar entrega</p>
+                                                                        </TooltipContent>
+                                                                    </Tooltip>
                                                                     <DialogContent>
                                                                         <form
                                                                             action={async () => {
@@ -872,5 +1073,6 @@ export function SubmissionsManager({
                 </div>
             </div>
         </div>
-    );
+    </TooltipProvider>
+);
 }

@@ -3,6 +3,11 @@
 import { useState } from "react";
 import { FileText, Printer, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { pdf } from "@react-pdf/renderer";
 import { SubmissionPDF } from "./SubmissionPDF";
 import { toast } from "sonner";
@@ -21,6 +26,9 @@ export interface DownloadSubmissionPDFProps {
     totalQuestions: number;
     answeredQuestions: number;
     expulsions: number;
+    penalty?: number;
+    penaltyComment?: string;
+    baseScore?: number;
     questions: Array<{
         id: string;
         text: string;
@@ -108,35 +116,49 @@ export function DownloadSubmissionPDF(props: DownloadSubmissionPDFProps) {
 
     return (
         <div className="flex items-center gap-2 print:hidden">
-            <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5 shadow-xs hover:bg-muted/80"
-                onClick={handlePrint}
-                disabled={actionState !== null}
-            >
-                {actionState === "print" ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                ) : (
-                    <Printer className="h-4 w-4 text-blue-600" />
-                )}
-                {actionState === "print" ? "Preparando..." : "Imprimir"}
-            </Button>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 shadow-xs hover:bg-muted/80 cursor-pointer"
+                        onClick={handlePrint}
+                        disabled={actionState !== null}
+                    >
+                        {actionState === "print" ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                        ) : (
+                            <Printer className="h-4 w-4 text-blue-600" />
+                        )}
+                        {actionState === "print" ? "Preparando..." : "Imprimir"}
+                    </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                    <p>Imprimir entrega o abrir vista previa de impresión</p>
+                </TooltipContent>
+            </Tooltip>
 
-            <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5 shadow-xs hover:bg-muted/80"
-                onClick={handleDownload}
-                disabled={actionState !== null}
-            >
-                {actionState === "download" ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                ) : (
-                    <FileText className="h-4 w-4 text-slate-700 dark:text-slate-200" />
-                )}
-                {actionState === "download" ? "Generando..." : "Descargar PDF"}
-            </Button>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 shadow-xs hover:bg-muted/80 cursor-pointer"
+                        onClick={handleDownload}
+                        disabled={actionState !== null}
+                    >
+                        {actionState === "download" ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        ) : (
+                            <FileText className="h-4 w-4 text-slate-700 dark:text-slate-200" />
+                        )}
+                        {actionState === "download" ? "Generando..." : "Descargar PDF"}
+                    </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                    <p>Descargar documento en PDF con respuestas y retroalimentación</p>
+                </TooltipContent>
+            </Tooltip>
         </div>
     );
 }

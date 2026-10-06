@@ -69,6 +69,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useTheme } from "next-themes";
 import Link from "next/link";
 import { createQuestionAction, deleteQuestionAction, updateQuestionAction, testQuestionWithAIAction, generateQuestionAction, generateAnswerAction, updateQuestionsOrderAction } from "@/features/teacher/actions/evaluationActions";
+import { GenerateFromDocsModal } from "./GenerateFromDocsModal";
+import { QuestionChatAdaptDialog } from "./QuestionChatAdaptDialog";
 
 // Text Editor
 import MDEditor from "@uiw/react-md-editor";
@@ -87,6 +89,8 @@ export function QuestionManager({ evaluation }: { evaluation: any }) {
 
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [isFormSheetOpen, setIsFormSheetOpen] = useState(false);
+    const [isDocModalOpen, setIsDocModalOpen] = useState(false);
+    const [isChatAdaptOpen, setIsChatAdaptOpen] = useState(false);
     const [errorModalOpen, setErrorModalOpen] = useState(false);
     const [errorModalMessage, setErrorModalMessage] = useState("");
 
@@ -96,6 +100,15 @@ export function QuestionManager({ evaluation }: { evaluation: any }) {
     const [text, setText] = useState("**Enunciado de la Pregunta**\n\nEscribe aquí...");
     const [codeValue, setCodeValue] = useState("// Escribe el código aquí...");
     const [referenceAnswer, setReferenceAnswer] = useState("");
+
+    const handleInsertQuestionIntoEditor = (q: { text: string; type: "Code" | "Text"; language?: string; referenceAnswer?: string }) => {
+        setType(q.type);
+        if (q.language) setLanguage(q.language);
+        setText(q.text);
+        if (q.referenceAnswer) setReferenceAnswer(q.referenceAnswer);
+        setIsFormSheetOpen(true);
+        toast.success("Pregunta cargada en el editor.");
+    };
 
     // AI Status
     const [testAnswer, setTestAnswer] = useState("");
@@ -467,6 +480,27 @@ export function QuestionManager({ evaluation }: { evaluation: any }) {
                                                 </div>
                                             </DialogContent>
                                         </Dialog>
+
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="ghost"
+                                            className="h-6 text-[10px] gap-1 px-2 text-primary hover:bg-primary/10 transition-all font-bold border border-primary/20"
+                                            onClick={() => setIsDocModalOpen(true)}
+                                        >
+                                            <BookOpen className="h-3 w-3" /> Desde Documentación
+                                        </Button>
+
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="ghost"
+                                            className="h-6 text-[10px] gap-1 px-2 text-violet-600 dark:text-violet-400 hover:bg-violet-500/10 transition-all font-bold border border-violet-500/20"
+                                            onClick={() => setIsChatAdaptOpen(true)}
+                                            title="Modificar y adaptar el enunciado conversando con la IA"
+                                        >
+                                            <MessageSquare className="h-3 w-3" /> Modificar con Chat IA
+                                        </Button>
                                     </div>
 
                                     <div className="flex items-center gap-3">
@@ -685,6 +719,13 @@ export function QuestionManager({ evaluation }: { evaluation: any }) {
                 </div>
 
                 <div className="flex items-center gap-2">
+                    <Button 
+                        onClick={() => setIsDocModalOpen(true)}
+                        className="bg-amber-600 hover:bg-amber-700 text-white font-bold gap-1.5 shadow-xs"
+                    >
+                        <Sparkles className="h-4 w-4" /> Generar con Documentación
+                    </Button>
+
                     <Button onClick={() => handleOpenForm()}>
                         <Plus className="mr-2 h-4 w-4" /> Nueva Pregunta
                     </Button>
@@ -767,6 +808,10 @@ export function QuestionManager({ evaluation }: { evaluation: any }) {
                                         question={question}
                                         index={index}
                                         onEdit={() => handleOpenForm(question, index)}
+                                        onOpenChat={() => {
+                                            handleOpenForm(question, index);
+                                            setIsChatAdaptOpen(true);
+                                        }}
                                         evaluationId={evaluation.id}
                                     />
                                 ))}
@@ -812,11 +857,32 @@ export function QuestionManager({ evaluation }: { evaluation: any }) {
                     </div>
                 </DialogContent>
             </Dialog>
+
+            <GenerateFromDocsModal
+                isOpen={isDocModalOpen}
+                onClose={() => setIsDocModalOpen(false)}
+                evaluationId={evaluation.id}
+                evaluationTitle={evaluation.title}
+                userModelName={modelName}
+                onInsertIntoEditor={handleInsertQuestionIntoEditor}
+            />
+
+            <QuestionChatAdaptDialog
+                isOpen={isChatAdaptOpen}
+                onClose={() => setIsChatAdaptOpen(false)}
+                initialContent={text}
+                type={type as "Text" | "Code"}
+                language={language}
+                modelName={modelName}
+                onUseContent={(newContent) => {
+                    setText(newContent);
+                }}
+            />
         </div>
     );
 }
 
-function SortableQuestionRow({ question, index, onEdit, evaluationId }: { question: any, index: number, onEdit: () => void, evaluationId: string }) {
+function SortableQuestionRow({ question, index, onEdit, onOpenChat, evaluationId }: { question: any, index: number, onEdit: () => void, onOpenChat: () => void, evaluationId: string }) {
     const {
         attributes,
         listeners,
@@ -839,6 +905,7 @@ function SortableQuestionRow({ question, index, onEdit, evaluationId }: { questi
             question={question}
             index={index}
             onEdit={onEdit}
+            onOpenChat={onOpenChat}
             evaluationId={evaluationId}
             attributes={attributes}
             listeners={listeners}
@@ -851,6 +918,7 @@ const QuestionRowUI = forwardRef<HTMLTableRowElement, any>(({
     question,
     index,
     onEdit,
+    onOpenChat,
     evaluationId,
     attributes,
     listeners,
@@ -897,7 +965,18 @@ const QuestionRowUI = forwardRef<HTMLTableRowElement, any>(({
             <TableCell className="text-right w-24">
                 {!isOverlay && (
                     <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onEdit}>
+                        {onOpenChat && (
+                            <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8 text-violet-600 dark:text-violet-400 hover:bg-violet-500/10" 
+                                title="Modificar con Chat IA" 
+                                onClick={onOpenChat}
+                            >
+                                <MessageSquare className="h-4 w-4" />
+                            </Button>
+                        )}
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onEdit} title="Editar pregunta">
                             <Edit className="h-4 w-4" />
                         </Button>
                         <Dialog>

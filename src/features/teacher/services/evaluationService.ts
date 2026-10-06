@@ -173,6 +173,159 @@ export const evaluationService = {
         );
     },
 
+    async createQuestionsBatch(evaluationId: string, authorId: string, questions: {
+        text: string;
+        type: string;
+        language?: string;
+        referenceAnswer?: string;
+    }[]) {
+        const evaluation = await prisma.evaluation.findUnique({
+            where: { id: evaluationId },
+            select: { authorId: true }
+        });
+
+        if (!evaluation || (evaluation.authorId !== authorId && authorId !== 'admin')) {
+            throw new Error("Unauthorized to add questions to this evaluation.");
+        }
+
+        const lastQuestion = await prisma.question.findFirst({
+            where: { evaluationId },
+            orderBy: { order: "desc" },
+            select: { order: true }
+        });
+
+        let currentOrder = (lastQuestion?.order ?? 0) + 1;
+        const created = [];
+        for (const q of questions) {
+            const item = await prisma.question.create({
+                data: {
+                    evaluationId,
+                    text: q.text,
+                    type: q.type,
+                    language: q.type === "Code" ? (q.language || "javascript") : undefined,
+                    referenceAnswer: q.referenceAnswer || null,
+                    order: currentOrder++
+                }
+            });
+            created.push(item);
+        }
+
+        return created;
+    },
+
+    async getEvaluationGroupDocProjects(evaluationId: string, authorId: string) {
+        // 1. Attempts for this evaluation
+        const attempts = await prisma.evaluationAttempt.findMany({
+            where: { evaluationId },
+            include: {
+                course: {
+                    include: {
+                        docLinks: {
+                            include: {
+                                docProject: {
+                                    include: {
+                                        pages: {
+                                            where: { draft: false },
+                                            select: {
+                                                id: true,
+                                                title: true,
+                                                slug: true,
+                                                category: true,
+                                                order: true,
+                                            },
+                                            orderBy: [
+                                                { categoryOrder: "asc" },
+                                                { order: "asc" }
+                                            ]
+                                        }
+                                    }
+                                }
+                            },
+                            orderBy: { order: "asc" }
+                        }
+                    }
+                }
+            }
+        });
+
+        // 2. Also find other courses of this teacher that have assigned docLinks
+        const teacherCourses = await prisma.course.findMany({
+            where: { teacherId: authorId },
+            include: {
+                docLinks: {
+                    include: {
+                        docProject: {
+                            include: {
+                                pages: {
+                                    where: { draft: false },
+                                    select: {
+                                        id: true,
+                                        title: true,
+                                        slug: true,
+                                        category: true,
+                                        order: true,
+                                    },
+                                    orderBy: [
+                                        { categoryOrder: "asc" },
+                                        { order: "asc" }
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    orderBy: { order: "asc" }
+                }
+            },
+            orderBy: { createdAt: "desc" }
+        });
+
+        const directCourseIds = new Set<string>();
+        const groups: Array<{
+            courseId: string;
+            courseTitle: string;
+            isDirectlyAssigned: boolean;
+            docProjects: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                icon: string | null;
+                description: string | null;
+                pages: Array<{
+                    id: string;
+                    title: string;
+                    slug: string;
+                    category: string | null;
+                    order: number;
+                }>;
+            }>;
+        }> = [];
+
+        for (const attempt of attempts) {
+            if (attempt.course && !directCourseIds.has(attempt.course.id)) {
+                directCourseIds.add(attempt.course.id);
+                groups.push({
+                    courseId: attempt.course.id,
+                    courseTitle: attempt.course.title,
+                    isDirectlyAssigned: true,
+                    docProjects: attempt.course.docLinks.map(dl => dl.docProject)
+                });
+            }
+        }
+
+        for (const c of teacherCourses) {
+            if (!directCourseIds.has(c.id)) {
+                groups.push({
+                    courseId: c.id,
+                    courseTitle: c.title,
+                    isDirectlyAssigned: false,
+                    docProjects: c.docLinks.map(dl => dl.docProject)
+                });
+            }
+        }
+
+        return groups;
+    },
+
     async deleteQuestion(id: string, evaluationId: string, authorId: string) {
         // Verify ownership of the parent evaluation before deleting
         const evaluation = await prisma.evaluation.findUnique({
@@ -212,6 +365,7 @@ export const evaluationService = {
                         userId: true,
                         submittedAt: true,
                         score: true,
+                        expulsions: true,
                     }
                 },
                 _count: {

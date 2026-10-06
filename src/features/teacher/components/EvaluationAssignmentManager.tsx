@@ -284,7 +284,7 @@ function AssignmentModal({
             formData.set("requireFullscreen", String(requireFullscreen));
             formData.set("blockMultipleDisplays", String(blockMultipleDisplays));
             formData.set("blockClipboard", String(blockClipboard));
-            formData.set("maxWarnings", String(maxWarnings));
+            formData.set("maxWarnings", "0");
             formData.set("helpUrl", helpUrl);
             formData.set("maxSupportAttempts", String(maxSupportAttempts));
             formData.set("aiSupportDelaySeconds", String(aiSupportDelaySeconds));
@@ -901,30 +901,16 @@ function AssignmentModal({
                                             />
                                         </div>
 
-                                        {/* 5. Límite de Advertencias antes de Expulsión */}
-                                        <div className="p-3.5 rounded-xl border border-border/70 bg-muted/20 space-y-2">
-                                            <div className="flex items-center justify-between">
-                                                <Label htmlFor="maxWarnings" className="text-xs font-bold flex items-center gap-1.5 cursor-pointer">
-                                                    <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-                                                    <span>Límite de Advertencias antes de Expulsión</span>
-                                                </Label>
-                                                <span className="font-mono text-xs font-bold bg-background px-2.5 py-0.5 rounded-md border border-border/80">
-                                                    {maxWarnings === 0 ? "Expulsión Inmediata (0)" : `${maxWarnings} faltas`}
+                                        {/* Régimen Estricto de Expulsión Inmediata */}
+                                        <div className="p-3.5 rounded-xl border border-red-500/30 bg-red-500/5 dark:bg-red-950/20 space-y-1.5">
+                                            <div className="flex items-center gap-2">
+                                                <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
+                                                <span className="text-xs font-bold text-red-600 dark:text-red-400">
+                                                    Régimen Estricto: Expulsión Inmediata por Pérdida de Foco
                                                 </span>
                                             </div>
-                                            <Input
-                                                id="maxWarnings"
-                                                type="number"
-                                                min="0"
-                                                max="10"
-                                                value={maxWarnings}
-                                                onChange={(e) => setMaxWarnings(Math.max(0, parseInt(e.target.value) || 0))}
-                                                className="h-9 bg-background font-semibold"
-                                            />
-                                            <p className="text-[11px] text-muted-foreground">
-                                                {maxWarnings === 0 
-                                                    ? "La primera falta cometida expulsará al estudiante inmediatamente del examen."
-                                                    : `El estudiante recibirá hasta ${maxWarnings} advertencias en pantalla antes de la expulsión definitiva.`}
+                                            <p className="text-[11px] text-muted-foreground pl-6">
+                                                Sin tolerancia ni advertencias acumulativas. Si el estudiante cambia de pestaña, minimiza la ventana o interactúa con otra aplicación, el sistema lo <strong>expulsará automáticamente</strong> de la evaluación.
                                             </p>
                                         </div>
                                     </div>
@@ -1186,6 +1172,23 @@ export function EvaluationAssignmentManager({
                                             {attempt._count?.submissions || 0} alumnos
                                         </span>
                                     </div>
+
+                                    <div className="flex items-center justify-between">
+                                        <span>Expulsiones:</span>
+                                        {(() => {
+                                            const totalExpulsions = attempt.submissions?.reduce((acc: number, s: any) => acc + (s.expulsions || 0), 0) || 0;
+                                            return totalExpulsions > 0 ? (
+                                                <span className="inline-flex items-center gap-1 font-mono font-bold px-2 py-0.5 rounded bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/30 text-xs">
+                                                    <ShieldAlert className="h-3 w-3" />
+                                                    <span>{totalExpulsions} {totalExpulsions === 1 ? "expulsado" : "expulsiones"}</span>
+                                                </span>
+                                            ) : (
+                                                <span className="font-mono text-muted-foreground px-2 py-0.5 rounded bg-muted border border-border/30 text-xs">
+                                                    0
+                                                </span>
+                                            );
+                                        })()}
+                                    </div>
                                 </div>
 
                                 <div className="pt-4 mt-auto border-t border-border/40 flex items-center justify-between gap-2">
@@ -1236,6 +1239,7 @@ export function EvaluationAssignmentManager({
                                 <TableHead className="font-bold text-xs uppercase tracking-wider text-center">Vigilancia</TableHead>
                                 <TableHead className="font-bold text-xs uppercase tracking-wider text-center">Estado</TableHead>
                                 <TableHead className="font-bold text-xs uppercase tracking-wider text-center">Entregas</TableHead>
+                                <TableHead className="font-bold text-xs uppercase tracking-wider text-center">Expulsiones</TableHead>
                                 <TableHead className="font-bold text-xs uppercase tracking-wider text-right pr-6">Acciones</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -1316,6 +1320,19 @@ export function EvaluationAssignmentManager({
                                         </TableCell>
                                         <TableCell className="text-center font-mono font-bold text-xs">
                                             {attempt._count?.submissions || 0}
+                                        </TableCell>
+                                        <TableCell className="text-center font-mono font-bold text-xs">
+                                            {(() => {
+                                                const totalExpulsions = attempt.submissions?.reduce((acc: number, s: any) => acc + (s.expulsions || 0), 0) || 0;
+                                                return totalExpulsions > 0 ? (
+                                                    <span className="inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/30">
+                                                        <ShieldAlert className="h-3 w-3" />
+                                                        {totalExpulsions}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-muted-foreground font-normal">0</span>
+                                                );
+                                            })()}
                                         </TableCell>
                                         <TableCell className="text-right pr-4">
                                             <div className="flex justify-end items-center gap-1.5">

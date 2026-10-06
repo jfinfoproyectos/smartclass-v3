@@ -1,5 +1,5 @@
 import { getAIModel } from "./client";
-import { generateObject } from "ai";
+import { generateObject, generateText } from "ai";
 import { z } from "zod";
 
 /**
@@ -17,7 +17,8 @@ export async function generateQuestion(
     bloomTaxonomy: "remember" | "understand" | "apply" | "analyze" | "evaluate" | "create" = "apply",
     includeBoilerplate: boolean = false,
     includeTestCases: boolean = false,
-    userId?: string
+    userId?: string,
+    docContext?: { docName: string; files: { title: string; slug: string; content: string }[] }
 ): Promise<string> {
     try {
         const model = await getAIModel(userId);
@@ -66,6 +67,20 @@ export async function generateQuestion(
             ? "DEBES incluir al menos 2-3 ejemplos de casos de prueba (entradas de ejemplo y sus salidas esperadas) para que el estudiante pueda validar su propia solución."
             : "No incluyas casos de prueba específicos en el enunciado.";
 
+        let docContextPrompt = "";
+        if (docContext && docContext.files.length > 0) {
+            const formattedFiles = docContext.files.map(f => {
+                const truncated = f.content.length > 8000 ? f.content.substring(0, 8000) + "\n..." : f.content;
+                return `--- Archivo: ${f.title} (${f.slug}) ---\n${truncated}`;
+            }).join("\n\n");
+            docContextPrompt = `
+        **DOCUMENTACIÓN BASE OBLIGATORIA (Fuente: ${docContext.docName})**:
+        """
+        ${formattedFiles}
+        """
+        La pregunta DEBE construirse y fundamentarse estrictamente a partir de los conceptos, arquitecturas o código contenidos en esta documentación.`;
+        }
+
         const prompt = `
         Actúa como un profesor universitario experto en pedagogía y evaluación.
         Tu tarea es generar el enunciado (en markdown) para una pregunta de examen.
@@ -79,6 +94,7 @@ export async function generateQuestion(
         **Taxonomía de Bloom**: ${bloomDesc}
         **Código Base (Boilerplate)**: ${boilerplateDesc}
         **Casos de Prueba**: ${testCasesDesc}
+        ${docContextPrompt}
         ${customPrompt ? `**Instrucciones/Estilo del Profesor**: ${customPrompt}` : ""}
         
         **INSTRUCCIONES DE GENERACIÓN**:
@@ -179,3 +195,235 @@ export async function generateSampleAnswer(
         throw new Error(`No se pudo generar la respuesta: ${error.message}`);
     }
 }
+
+export interface DocPageContent {
+    id: string;
+    title: string;
+    slug: string;
+    content: string;
+    category?: string | null;
+}
+
+export interface DocGenerationConfig {
+    type: "both" | "Code" | "Text";
+    codeCount?: number;
+    textCount?: number;
+    difficulty?: "easy" | "medium" | "hard" | "expert";
+    language?: string;
+    customPrompt?: string;
+    includeBoilerplate?: boolean;
+    includeTestCases?: boolean;
+}
+
+export interface GeneratedQuestionItem {
+    type: "Code" | "Text";
+    language?: string;
+    text: string;
+    referenceAnswer: string;
+}
+
+/**
+ * Genera preguntas (de código y/o texto) basadas rigurosamente en archivos de documentación seleccionados.
+ */
+export async function generateQuestionsFromDocumentation(
+    evaluationTitle: string,
+    docName: string,
+    files: DocPageContent[],
+    config: DocGenerationConfig,
+    userId?: string
+): Promise<GeneratedQuestionItem[]> {
+    try {
+        const model = await getAIModel(userId);
+
+        if (!files || files.length === 0) {
+            throw new Error("Debes seleccionar al menos un archivo de la documentación.");
+        }
+
+        const difficultyDesc = {
+            easy: "Nivel Inicial/Básico: conceptos esenciales y problemas directos.",
+            medium: "Nivel Intermedio: aplicación de conceptos con lógica estructurada y comprensión clara.",
+            hard: "Nivel Avanzado: análisis detallado, integración conceptual y manejo de casos complejos.",
+            expert: "Nivel Experto: arquitectura, patrones, optimización y casos de borde críticos."
+        }[config.difficulty || "medium"];
+
+        const targetLanguage = config.language || "java";
+
+        // Formatear archivos con límite de caracteres para evitar saturación de tokens
+        const MAX_CHARS_PER_FILE = 12000;
+        const formattedFiles = files.map(f => {
+            const truncatedContent = f.content.length > MAX_CHARS_PER_FILE
+                ? f.content.substring(0, MAX_CHARS_PER_FILE) + "\n...[Contenido truncado por longitud]..."
+                : f.content;
+            return `--- Archivo: ${f.title} (${f.slug}) ---\n${truncatedContent}`;
+        }).join("\n\n");
+
+        // Determinar requerimientos de distribución de preguntas
+        let distributionText = "";
+        const codeCount = config.codeCount ?? 1;
+        const textCount = config.textCount ?? 1;
+
+        if (config.type === "both") {
+            distributionText = `Debes generar EXACTAMENTE ${textCount} pregunta(s) de tipo 'Text' (teórica/conceptual) Y ${codeCount} pregunta(s) de tipo 'Code' (ejercicio práctico en ${targetLanguage}). En total DEBES generar ${textCount + codeCount} preguntas.`;
+        } else if (config.type === "Code") {
+            distributionText = `Debes generar EXACTAMENTE ${codeCount} pregunta(s) de tipo 'Code' (ejercicio práctico de programación en lenguaje ${targetLanguage}).`;
+        } else {
+            distributionText = `Debes generar EXACTAMENTE ${textCount} pregunta(s) de tipo 'Text' (teórica/conceptual o de razonamiento).`;
+        }
+
+        const boilerplateInstruction = config.includeBoilerplate
+            ? `Para las preguntas de tipo Code: DEBES incluir en el enunciado un bloque de código base o plantilla inicial (boilerplate) que el estudiante deba completar o corregir.`
+            : `Para las preguntas de tipo Code: Pide al estudiante que escriba la solución desde cero.`;
+
+        const testCasesInstruction = config.includeTestCases
+            ? `Para las preguntas de tipo Code: DEBES incluir en el enunciado ejemplos de entrada y salida esperada (casos de prueba).`
+            : `No incluyas casos de prueba extensos a menos que sea indispensable.`;
+
+        const prompt = `
+        Actúa como un profesor universitario experto en evaluación y pedagogía técnica.
+        Tu tarea es generar preguntas de examen de calidad profesional basadas ESTRICTAMENTE en el contenido de los archivos de documentación suministrados.
+
+        **CONTEXTO DE LA EVALUACIÓN**:
+        - Título de la evaluación: "${evaluationTitle}"
+        - Documentación fuente: "${docName}"
+        - Dificultad general: ${difficultyDesc}
+        - Lenguaje objetivo para preguntas de código: ${targetLanguage}
+        ${config.customPrompt ? `- Indicaciones específicas del profesor: "${config.customPrompt}"` : ""}
+
+        **DISTRIBUCIÓN Y CANTIDAD DE PREGUNTAS**:
+        ${distributionText}
+        ${boilerplateInstruction}
+        ${testCasesInstruction}
+
+        **CONTENIDO DE LA DOCUMENTACIÓN SELECCIONADA**:
+        """
+        ${formattedFiles}
+        """
+
+        **PAUTAS OBLIGATORIAS**:
+        1. **Fidelidad al contenido**: Todas las preguntas deben evaluar conocimientos, conceptos, sintaxis o ejemplos directamente explicados en los archivos de la documentación suministrados.
+        2. **Preguntas de Texto (Type: 'Text')**:
+           - Deben estar redactadas en Markdown enriquecido (títulos, negritas, listas ordenadas).
+           - Evalúan comprensión conceptual, comparación de enfoques, identificación de componentes o diseño.
+           - "referenceAnswer": Una respuesta modelo clara, completa y pedagógica que un profesor usaría para calificar.
+        3. **Preguntas de Código (Type: 'Code')**:
+           - 'language' debe ser '${targetLanguage}'.
+           - El enunciado debe plantear un problema o caso práctico realista directamente relacionado con lo expuesto en la documentación.
+           - "referenceAnswer": El código completo y correcto con indentación y saltos de línea claros.
+        4. No des la respuesta dentro del enunciado de la pregunta.
+        5. Devuelve la lista en el orden solicitado.
+        `;
+
+        const { object } = await generateObject({
+            model,
+            schema: z.object({
+                questions: z.array(z.object({
+                    type: z.enum(["Text", "Code"]),
+                    language: z.string().optional().describe("Lenguaje de programación en minúsculas (ej: java, javascript, python) si es Code"),
+                    text: z.string().describe("Enunciado de la pregunta en Markdown, completo y pedagógico"),
+                    referenceAnswer: z.string().describe("Respuesta ideal de referencia o solución en código"),
+                }))
+            }),
+            prompt,
+        });
+
+        if (!object || !object.questions || object.questions.length === 0) {
+            throw new Error("No se recibieron preguntas de la IA.");
+        }
+
+        // Normalizar tipos y lenguajes
+        return object.questions.map(q => ({
+            type: q.type,
+            language: q.type === "Code" ? (q.language || targetLanguage).toLowerCase() : undefined,
+            text: q.text,
+            referenceAnswer: q.referenceAnswer || ""
+        }));
+    } catch (error: any) {
+        console.error("Error generating questions from documentation:", error);
+        const errorString = typeof error === 'string' ? error : (error.message || JSON.stringify(error) || "");
+        if (
+            errorString.includes("429") ||
+            errorString.toLowerCase().includes("quota") ||
+            errorString.toLowerCase().includes("exhausted") ||
+            errorString.includes("RESOURCE_EXHAUSTED") ||
+            errorString.toLowerCase().includes("rate limit")
+        ) {
+            throw new Error("Has excedido la cuota de peticiones a la IA. Espera unos segundos o cambia de modelo o API Key.");
+        }
+        throw new Error(`No se pudo generar preguntas desde la documentación: ${error.message}`);
+    }
+}
+
+/**
+ * Modifica o adapta interactivamente el enunciado de una pregunta mediante chat con IA.
+ */
+export async function refineQuestionStatement(
+    currentStatement: string,
+    instruction: string,
+    type: "Text" | "Code" = "Text",
+    language?: string,
+    userId?: string
+): Promise<string> {
+    const model = await getAIModel(userId);
+
+    const typeDesc = type === "Code"
+        ? `de programación (Código) en lenguaje ${language || "el lenguaje indicado en la pregunta"}`
+        : "de Texto / razonamiento conceptual";
+
+    const systemPrompt = `Eres un docente universitario experto en pedagogía técnica, didáctica y diseño de evaluaciones académicas.
+Tu labor es modificar, adaptar, simplificar, profundizar o perfeccionar el enunciado de una PREGUNTA DE EXAMEN ${typeDesc} según las instrucciones específicas que te dé el profesor (por ejemplo: simplificar para principiantes, subir exigencia técnica, cambiar lenguaje, agregar o quitar requerimientos, incluir fragmentos de código, plantear casos de prueba, añadir casos límite, etc.).
+
+ENUNCIADO ACTUAL DE LA PREGUNTA:
+"""markdown
+${currentStatement}
+"""
+
+REGLAS CRÍTICAS Y ESTRICTAS:
+1. Aplica con máxima precisión los cambios solicitados por el profesor en la instrucción dada, preservando las partes que no solicitó cambiar.
+2. NO agregues rúbricas de calificación con porcentajes ni criterios de entrega grupal (se trata de una PREGUNTA DE EXAMEN individual, no un taller de entrega libre).
+3. Utiliza Markdown GFM limpio y profesional: títulos (#, ##, ###), negritas, listas ordenadas y bloques de código con sintaxis resaltada (\`\`\`${language || "lenguaje"}\`\`\`) cuando corresponda.
+4. NO des la respuesta o solución resuelta dentro del enunciado de la pregunta (el enunciado es lo que ve el estudiante antes de responder).
+5. Devuelve ÚNICAMENTE el enunciado Markdown completo actualizado. NO agregues saludos, explicaciones ("Aquí tienes tu pregunta:"), ni envuelvas todo el documento en bloques externos \`\`\`markdown ... \`\`\`. Empieza directamente con el contenido de la pregunta.`;
+
+    const userPrompt = `Instrucción del profesor para adaptar la pregunta:
+"${instruction}"
+
+Genera el enunciado Markdown completo actualizado aplicando los cambios solicitados.`;
+
+    try {
+        const result = await generateText({
+            model,
+            system: systemPrompt,
+            prompt: userPrompt,
+        });
+
+        let content = result.text.trim();
+
+        if (content.startsWith("```markdown")) {
+            content = content.replace(/^```markdown\s*/i, "");
+            content = content.replace(/\s*```$/i, "");
+        } else if (content.startsWith("```")) {
+            content = content.replace(/^```[a-z]*\s*/i, "");
+            content = content.replace(/\s*```$/i, "");
+        }
+
+        if (!content) {
+            throw new Error("El modelo de IA no devolvió contenido.");
+        }
+
+        return content;
+    } catch (error: any) {
+        console.error("Error refining question statement:", error);
+        const errorString = typeof error === 'string' ? error : (error.message || JSON.stringify(error) || "");
+        if (
+            errorString.includes("429") ||
+            errorString.toLowerCase().includes("quota") ||
+            errorString.toLowerCase().includes("exhausted") ||
+            errorString.includes("RESOURCE_EXHAUSTED") ||
+            errorString.toLowerCase().includes("rate limit")
+        ) {
+            throw new Error("Has excedido la cuota de peticiones a la IA. Espera unos segundos o cambia de modelo o API Key.");
+        }
+        throw new Error(`No se pudo adaptar la pregunta: ${error.message}`);
+    }
+}
+

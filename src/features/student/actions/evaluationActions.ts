@@ -19,11 +19,13 @@ export async function registerExpulsionAction(submissionId: string) {
         where: { id: submissionId },
         include: {
             attempt: {
-                include: {
-                    evaluation: { select: { expulsionPenalty: true, questions: { select: { id: true } } } }
+                select: {
+                    id: true,
+                    courseId: true,
+                    maxWarnings: true,
+                    enableSurveillance: true,
                 }
-            },
-            answersList: { select: { score: true } }
+            }
         }
     });
 
@@ -31,27 +33,51 @@ export async function registerExpulsionAction(submissionId: string) {
         throw new Error("Unauthorized or submission not found");
     }
 
-    const newExpulsions = (submission.expulsions || 0) + 1;
-
-    await prisma.evaluationSubmission.update({
+    // Incremento atómico para evitar condiciones de carrera entre blur y visibilitychange
+    const updated = await prisma.evaluationSubmission.update({
         where: { id: submissionId },
         data: {
-            expulsions: newExpulsions,
+            expulsions: {
+                increment: 1,
+            },
+        },
+        select: {
+            id: true,
+            expulsions: true,
+            attemptId: true,
+            attempt: {
+                select: {
+                    courseId: true,
+                }
+            }
         }
     });
 
+    const newExpulsions = updated.expulsions;
+
     // 🎯 AUDIT LOG
-    const { auditLogger } = await import("../../admin/services/auditLogger");
-    await auditLogger.log({
-        action: "UPDATE",
-        entity: "EVALUATION_SUBMISSION",
-        entityId: submissionId,
-        userId: session.user.id,
-        userName: session.user.name || "Estudiante",
-        userRole: session.user.role,
-        description: `Expulsión registrada (Total: ${newExpulsions}) en entrega ${submissionId}`,
-        success: true,
-    });
+    try {
+        const { auditLogger } = await import("../../admin/services/auditLogger");
+        await auditLogger.log({
+            action: "UPDATE",
+            entity: "EVALUATION_SUBMISSION",
+            entityId: submissionId,
+            userId: session.user.id,
+            userName: session.user.name || "Estudiante",
+            userRole: session.user.role,
+            description: `Salida de la aplicación registrada (Total faltas: ${newExpulsions}) en entrega ${submissionId}`,
+            success: true,
+        });
+    } catch (logErr) {
+        console.error("Audit log error in registerExpulsionAction:", logErr);
+    }
+
+    // Revalidar rutas para que docente y estudiante vean las faltas actualizadas en tiempo real
+    if (updated.attempt?.courseId) {
+        revalidatePath(`/dashboard/teacher/courses/${updated.attempt.courseId}/evaluations/${updated.attemptId}`);
+        revalidatePath(`/dashboard/teacher/courses/${updated.attempt.courseId}`);
+    }
+    revalidatePath(`/evaluations/${updated.attemptId}`);
 
     return { success: true, expulsions: newExpulsions };
 }
@@ -88,33 +114,153 @@ export async function submitEvaluationAction(submissionId: string) {
 
     const submission = await prisma.evaluationSubmission.findUnique({
         where: { id: submissionId },
-        include: { attempt: { select: { courseId: true } } }
+        include: { 
+            attempt: { 
+                include: { 
+                    evaluation: { 
+                        include: { questions: { select: { id: true } } } 
+                    } 
+                } 
+            },
+            answersList: true
+        }
     });
 
     if (!submission || submission.userId !== session.user.id) {
         throw new Error("Unauthorized or submission not found");
     }
 
+    // 1. Calcular nota final
+    const totalQuestions = submission.attempt?.evaluation?.questions?.length || 1;
+    const totalScoreSum = submission.answersList.reduce((acc, a) => acc + (a.score || 0), 0);
+    const calculatedBase = Number((totalScoreSum / totalQuestions).toFixed(2));
+
+    const prevWildcards = (submission.wildcardsUsed as any) || {};
+    const penalty = Number(prevWildcards.penalty || 0);
+    const baseScore = prevWildcards.baseScore !== undefined ? Number(prevWildcards.baseScore) : calculatedBase;
+    const finalScore = submission.score !== null && submission.score !== undefined && prevWildcards.baseScore !== undefined
+        ? submission.score
+        : Math.max(0, Number((baseScore - penalty).toFixed(2)));
+
+    // 2. Generar mensaje pedagógico con LLM según la nota obtenida
+    let feedback = "";
+    try {
+        const evaluationTitle = submission.attempt?.evaluation?.title || "Evaluación";
+        const teacherId = submission.attempt?.evaluation?.authorId;
+        const { generateSubmissionFeedback } = await import("../../teacher/services/ai/evaluationAnalysisService");
+        feedback = await generateSubmissionFeedback(
+            evaluationTitle,
+            finalScore,
+            submission.expulsions || 0,
+            teacherId
+        );
+    } catch (err) {
+        console.error("Error generating feedback in submitEvaluationAction:", err);
+        feedback = finalScore >= 3.0 ? "¡Evaluación completada con éxito!" : "Evaluación finalizada. Revisa tus respuestas y fortalece los conceptos clave.";
+    }
+
+    const updatedWildcards = {
+        ...prevWildcards,
+        baseScore,
+        llmFeedback: feedback,
+    };
+
     await prisma.evaluationSubmission.update({
         where: { id: submissionId },
-        data: { submittedAt: new Date() }
+        data: { 
+            submittedAt: new Date(),
+            score: finalScore,
+            wildcardsUsed: updatedWildcards,
+        }
     });
 
     // 🎯 AUDIT LOG
-    const { auditLogger } = await import("../../admin/services/auditLogger");
-    await auditLogger.log({
-        action: "UPDATE",
-        entity: "EVALUATION_SUBMISSION",
-        entityId: submissionId,
-        userId: session.user.id,
-        userName: session.user.name || "Estudiante",
-        userRole: session.user.role,
-        description: `Evaluación enviada: ${submissionId}`,
-        success: true,
+    try {
+        const { auditLogger } = await import("../../admin/services/auditLogger");
+        await auditLogger.log({
+            action: "UPDATE",
+            entity: "EVALUATION_SUBMISSION",
+            entityId: submissionId,
+            userId: session.user.id,
+            userName: session.user.name || "Estudiante",
+            userRole: session.user.role,
+            description: `Evaluación enviada con nota ${finalScore}: ${submissionId}`,
+            success: true,
+        });
+    } catch (e) {
+        console.error("Audit log error:", e);
+    }
+
+    revalidatePath(`/dashboard/student`);
+    if (submission.attempt?.courseId) {
+        revalidatePath(`/dashboard/student?courseId=${submission.attempt.courseId}&tab=evaluations`);
+    }
+    return { success: true, score: finalScore, feedback };
+}
+
+export async function getOrGenerateEvaluationFeedbackAction(submissionId: string) {
+    const session = await getSession();
+    if (!session || session.user.role !== "student") {
+        throw new Error("Unauthorized");
+    }
+
+    const submission = await prisma.evaluationSubmission.findUnique({
+        where: { id: submissionId },
+        include: {
+            attempt: {
+                include: {
+                    evaluation: {
+                        include: { questions: { select: { id: true } } }
+                    }
+                }
+            },
+            answersList: true
+        }
+    });
+
+    if (!submission || submission.userId !== session.user.id) {
+        throw new Error("Unauthorized or submission not found");
+    }
+
+    const wildcards = (submission.wildcardsUsed as any) || {};
+    if (wildcards.llmFeedback) {
+        return { feedback: wildcards.llmFeedback, score: submission.score };
+    }
+
+    const totalQuestions = submission.attempt?.evaluation?.questions?.length || 1;
+    const totalScoreSum = submission.answersList.reduce((acc, a) => acc + (a.score || 0), 0);
+    const calculatedBase = Number((totalScoreSum / totalQuestions).toFixed(2));
+    const penalty = Number(wildcards.penalty || 0);
+    const baseScore = wildcards.baseScore !== undefined ? Number(wildcards.baseScore) : calculatedBase;
+    const finalScore = submission.score !== null && submission.score !== undefined
+        ? submission.score
+        : Math.max(0, Number((baseScore - penalty).toFixed(2)));
+
+    const evaluationTitle = submission.attempt?.evaluation?.title || "Evaluación";
+    const teacherId = submission.attempt?.evaluation?.authorId;
+    const { generateSubmissionFeedback } = await import("../../teacher/services/ai/evaluationAnalysisService");
+    const feedback = await generateSubmissionFeedback(
+        evaluationTitle,
+        finalScore,
+        submission.expulsions || 0,
+        teacherId
+    );
+
+    const updatedWildcards = {
+        ...wildcards,
+        llmFeedback: feedback,
+    };
+
+    await prisma.evaluationSubmission.update({
+        where: { id: submissionId },
+        data: {
+            score: finalScore,
+            wildcardsUsed: updatedWildcards,
+        }
     });
 
     revalidatePath(`/dashboard/student`);
-    return { success: true };
+    return { feedback, score: finalScore };
 }
 
 export async function evaluateAnswerWithAIAction(submissionId: string, questionId: string, currentAnswer: string) {

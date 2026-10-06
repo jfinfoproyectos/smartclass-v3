@@ -360,7 +360,8 @@ export async function generateQuestionAction(
     difficulty: "easy" | "medium" | "hard" | "expert" = "medium",
     bloomTaxonomy: "remember" | "understand" | "apply" | "analyze" | "evaluate" | "create" = "apply",
     includeBoilerplate: boolean = false,
-    includeTestCases: boolean = false
+    includeTestCases: boolean = false,
+    docContextParams?: { docProjectId: string; pageIds: string[] }
 ) {
     const session = await getSession();
     if (!session || session.user.role !== "teacher") {
@@ -368,8 +369,35 @@ export async function generateQuestionAction(
     }
 
     try {
+        let docContext: { docName: string; files: { title: string; slug: string; content: string }[] } | undefined = undefined;
+
+        if (docContextParams && docContextParams.docProjectId && docContextParams.pageIds.length > 0) {
+            const docProject = await prisma.docProject.findUnique({
+                where: { id: docContextParams.docProjectId },
+                select: { name: true }
+            });
+            const pages = await prisma.docPage.findMany({
+                where: {
+                    docProjectId: docContextParams.docProjectId,
+                    id: { in: docContextParams.pageIds }
+                },
+                select: { title: true, slug: true, content: true }
+            });
+            if (docProject && pages.length > 0) {
+                docContext = {
+                    docName: docProject.name,
+                    files: pages
+                };
+            }
+        }
+
         const { generateQuestion } = await import("../services/ai/questionGenerationService");
-        const data = await generateQuestion(topic, type, language, customPrompt, size, openness, includeCode, difficulty, bloomTaxonomy, includeBoilerplate, includeTestCases, session.user.id);
+        const data = await generateQuestion(
+            topic, type, language, customPrompt,
+            size, openness, includeCode,
+            difficulty, bloomTaxonomy, includeBoilerplate, includeTestCases,
+            session.user.id, docContext
+        );
         return { success: true, data };
     } catch (error: any) {
         return { success: false, error: error.message || "Error al generar la pregunta." };
@@ -594,4 +622,292 @@ export async function deleteEvaluationSubmissionAction(submissionId: string, cou
 
     revalidatePath(`/dashboard/teacher/courses/${courseId}`);
     return { success: true };
+}
+
+export async function updateSubmissionPenaltyAction(
+    submissionId: string,
+    penalty: number,
+    comment: string,
+    courseId: string
+): Promise<
+    | {
+          success: true;
+          finalScore: number;
+          baseScore: number;
+          penalty: number;
+          comment: string;
+      }
+    | {
+          success: false;
+          error: string;
+          finalScore?: never;
+      }
+> {
+    const session = await getSession();
+    if (!session || (session.user.role !== "admin" && session.user.role !== "teacher")) {
+        return { success: false, error: "No autorizado" };
+    }
+
+    const submission = await prisma.evaluationSubmission.findUnique({
+        where: { id: submissionId },
+        include: {
+            user: { select: { id: true, name: true, email: true } },
+            attempt: { select: { id: true, courseId: true, evaluation: { select: { title: true } } } },
+            answersList: { select: { score: true } }
+        }
+    });
+
+    if (!submission) {
+        return { success: false, error: "Entrega no encontrada" };
+    }
+
+    const wildcards = (submission.wildcardsUsed as any) || {};
+
+    // Obtener la nota base: si ya existía baseScore, preservarla; de lo contrario, tomar la nota previa de la entrega o calcularla
+    let baseScore = wildcards.baseScore !== undefined ? Number(wildcards.baseScore) : null;
+    if (baseScore === null) {
+        if (submission.score !== null && submission.score !== undefined) {
+            baseScore = Number(submission.score);
+        } else {
+            const totalSum = submission.answersList.reduce((acc, a) => acc + (a.score || 0), 0);
+            const qCount = submission.answersList.length || 1;
+            baseScore = Number((totalSum / qCount).toFixed(2));
+        }
+    }
+
+    const penaltyNum = Math.max(0, Math.min(5, Number(penalty || 0)));
+    const finalScore = Math.max(0, Number((baseScore - penaltyNum).toFixed(2)));
+
+    const updatedWildcards = {
+        ...wildcards,
+        baseScore,
+        penalty: penaltyNum,
+        penaltyComment: comment.trim(),
+        penalizedAt: new Date().toISOString(),
+        penalizedBy: session.user.name || "Profesor"
+    };
+
+    await prisma.evaluationSubmission.update({
+        where: { id: submissionId },
+        data: {
+            score: finalScore,
+            wildcardsUsed: updatedWildcards
+        }
+    });
+
+    // 🎯 AUDIT LOG
+    try {
+        const { auditLogger } = await import("../../admin/services/auditLogger");
+        await auditLogger.log({
+            action: "UPDATE",
+            entity: "EVALUATION_SUBMISSION",
+            entityId: submissionId,
+            userId: session.user.id,
+            userName: session.user.name || "Profesor",
+            userRole: session.user.role,
+            description: `Ajuste/descuento de nota (${penaltyNum > 0 ? `-${penaltyNum}` : 'Restablecido a 0'}) aplicado a ${submission.user.name || submission.user.email}: ${comment}`,
+            success: true,
+        });
+    } catch (auditErr) {
+        console.error("Audit log error in updateSubmissionPenaltyAction:", auditErr);
+    }
+
+    if (submission.attempt?.courseId) {
+        revalidatePath(`/dashboard/teacher/courses/${submission.attempt.courseId}/evaluations/${submission.attempt.id}`);
+        revalidatePath(`/dashboard/teacher/courses/${submission.attempt.courseId}/evaluations/${submission.attempt.id}/submissions/${submissionId}`);
+        revalidatePath(`/dashboard/teacher/courses/${submission.attempt.courseId}`);
+        revalidatePath(`/dashboard/student?courseId=${submission.attempt.courseId}&tab=evaluations`);
+    }
+    revalidatePath(`/evaluations/${submission.attempt.id}`);
+
+    return {
+        success: true,
+        finalScore,
+        baseScore,
+        penalty: penaltyNum,
+        comment: comment.trim()
+    };
+}
+
+export async function getEvaluationGroupDocsAction(evaluationId: string) {
+    const session = await getSession();
+    if (!session || (session.user.role !== "teacher" && session.user.role !== "admin")) {
+        return { success: false, error: "Unauthorized" };
+    }
+
+    try {
+        const { evaluationService } = await import("../services/evaluationService");
+        const groups = await evaluationService.getEvaluationGroupDocProjects(evaluationId, session.user.id);
+        return { success: true, data: groups };
+    } catch (error: any) {
+        console.error("Error fetching group docs:", error);
+        return { success: false, error: error.message || "Error al cargar las documentaciones del grupo." };
+    }
+}
+
+export async function generateQuestionsFromDocAction(
+    evaluationId: string,
+    docProjectId: string,
+    pageIds: string[],
+    config: {
+        type: "both" | "Code" | "Text";
+        codeCount?: number;
+        textCount?: number;
+        difficulty?: "easy" | "medium" | "hard" | "expert";
+        language?: string;
+        customPrompt?: string;
+        includeBoilerplate?: boolean;
+        includeTestCases?: boolean;
+    }
+) {
+    const session = await getSession();
+    if (!session || (session.user.role !== "teacher" && session.user.role !== "admin")) {
+        return { success: false, error: "Unauthorized" };
+    }
+
+    try {
+        const evaluation = await prisma.evaluation.findUnique({
+            where: { id: evaluationId },
+            select: { title: true }
+        });
+        if (!evaluation) {
+            return { success: false, error: "Evaluación no encontrada." };
+        }
+
+        const docProject = await prisma.docProject.findUnique({
+            where: { id: docProjectId },
+            select: { name: true }
+        });
+        if (!docProject) {
+            return { success: false, error: "Proyecto de documentación no encontrado." };
+        }
+
+        const pages = await prisma.docPage.findMany({
+            where: {
+                docProjectId,
+                id: { in: pageIds }
+            },
+            select: {
+                id: true,
+                title: true,
+                slug: true,
+                content: true,
+                category: true
+            }
+        });
+
+        if (pages.length === 0) {
+            return { success: false, error: "Debes seleccionar al menos un archivo de la documentación." };
+        }
+
+        const { generateQuestionsFromDocumentation } = await import("../services/ai/questionGenerationService");
+        const questions = await generateQuestionsFromDocumentation(
+            evaluation.title,
+            docProject.name,
+            pages,
+            config,
+            session.user.id
+        );
+
+        return { success: true, data: questions };
+    } catch (error: any) {
+        console.error("Error generating questions from documentation:", error);
+        return { success: false, error: error.message || "Error al generar preguntas desde la documentación." };
+    }
+}
+
+export async function saveBatchQuestionsAction(
+    evaluationId: string,
+    questions: Array<{ text: string; type: string; language?: string; referenceAnswer?: string }>
+) {
+    const session = await getSession();
+    if (!session || (session.user.role !== "teacher" && session.user.role !== "admin")) {
+        return { success: false, error: "Unauthorized" };
+    }
+
+    try {
+        const { evaluationService } = await import("../services/evaluationService");
+        const created = await evaluationService.createQuestionsBatch(evaluationId, session.user.id, questions);
+
+        revalidatePath(`/dashboard/teacher/evaluations/${evaluationId}`);
+        return { success: true, count: created.length };
+    } catch (error: any) {
+        console.error("Error saving batch questions:", error);
+        return { success: false, error: error.message || "Error al guardar las preguntas generadas." };
+    }
+}
+
+export async function refineQuestionAction(
+    currentText: string,
+    instruction: string,
+    type: string = "Text",
+    language?: string
+) {
+    const session = await getSession();
+    if (!session || (session.user.role !== "teacher" && session.user.role !== "admin")) {
+        return { error: "No autorizado" };
+    }
+
+    try {
+        const { refineQuestionStatement } = await import("../services/ai/questionGenerationService");
+        const content = await refineQuestionStatement(
+            currentText,
+            instruction,
+            type as any,
+            language,
+            session.user.id
+        );
+        return { content };
+    } catch (error: any) {
+        console.error("Error refining question:", error);
+        return { error: error.message || "Error al adaptar la pregunta con IA" };
+    }
+}
+
+export async function refinePenaltyCommentAction(rawComment: string) {
+    const session = await getSession();
+    if (!session || (session.user.role !== "teacher" && session.user.role !== "admin")) {
+        return { success: false, error: "No autorizado" };
+    }
+
+    if (!rawComment || !rawComment.trim()) {
+        return { success: false, error: "Debes ingresar un texto para corregir su redacción." };
+    }
+
+    try {
+        const { getAIModel } = await import("../services/ai/client");
+        const { generateText } = await import("ai");
+
+        const model = await getAIModel(session.user.role === "teacher" ? session.user.id : undefined);
+
+        const prompt = `Actúa como un corrector de estilo y ortografía profesional en español.
+Tu ÚNICA tarea es corregir la redacción, ortografía, gramática, puntuación y concordancia del siguiente texto escrito por un docente:
+
+"${rawComment.trim()}"
+
+REGLAS ESTRICTAS:
+1. SOLO CORRIGE LA REDACCIÓN Y ORTOGRAFÍA. ESTÁ TOTALMENTE PROHIBIDO GENERAR TEXTO NUEVO, EXPANDIRLO O INVENTAR HECHOS O NARRATIVAS.
+2. NO agregues encabezados ni prefijos como "Estudiante:", "Motivo:", "Justificación:", "Observación:", etc.
+3. Conserva fielmente la longitud, tono e ideas exactas del autor, limitándote a mejorar la claridad, cohesión y corrección sintáctica del mensaje que escribió.
+4. Si el texto es una palabra o frase corta (por ejemplo: "Fraude", "Copia durante la evaluación", "Salida indebida de la pantalla"), únicamente ajusta su ortografía, mayúsculas y puntuación correspondiente (ejemplo: "Fraude detectado durante la prueba." o "Copia durante la evaluación."), sin inventar nuevos detalles.
+5. NO incluyas saludos, introducciones ("Aquí tienes la corrección:"), notas ni explicaciones.
+6. Devuelve EXCLUSIVAMENTE el texto corregido, en texto plano, sin comillas externas ni markdown.`;
+
+        const { text } = await generateText({
+            model,
+            prompt,
+            temperature: 0.1,
+        });
+
+        // Limpiar comillas iniciales o finales si el modelo las agregó
+        let refined = text.trim().replace(/^["']+|["']+$/g, "").trim();
+
+        // Limpiar cualquier prefijo accidental como "Motivo: " o "Texto corregido: " o "Estudiante: ..."
+        refined = refined.replace(/^(Motivo|Justificación|Texto corregido|Estudiante|Corrección)\s*:\s*/i, "").trim();
+
+        return { success: true, refinedComment: refined };
+    } catch (error: any) {
+        console.error("Error refining penalty comment:", error);
+        return { success: false, error: error.message || "Error al conectar con el servicio de IA." };
+    }
 }

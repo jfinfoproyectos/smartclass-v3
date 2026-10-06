@@ -5,12 +5,20 @@ import { headers } from "next/headers";
 import { evaluationService } from "@/features/teacher/services/evaluationService";
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, CheckCircle2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, AlertCircle, Gavel } from 'lucide-react';
 import { formatDateTime } from '@/lib/dateUtils';
 import { FeedbackViewer } from "@/features/student/components/FeedbackViewer";
 import { DownloadSubmissionPDFWrapper as DownloadSubmissionPDF } from "@/features/teacher/components/DownloadSubmissionPDFWrapper";
+import { SubmissionPenaltyDialog } from "@/features/teacher/components/SubmissionPenaltyDialog";
 import prisma from "@/lib/prisma";
 import { CodeAnswerViewerWrapper } from "@/features/teacher/components/CodeAnswerViewerWrapper";
+import { cn } from "@/lib/utils";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export async function generateMetadata(): Promise<Metadata> {
     const settings = await prisma.systemSettings.findUnique({
@@ -80,6 +88,15 @@ export default async function SubmissionDetailsPage(
         };
     });
 
+    // Penalty / Descuento disciplinario
+    const wildcards = (submission.wildcardsUsed as any) || {};
+    const penalty = wildcards.penalty !== undefined ? Number(wildcards.penalty) : 0;
+    const penaltyComment = (wildcards.penaltyComment as string) || "";
+    const baseScore = wildcards.baseScore !== undefined
+        ? Number(wildcards.baseScore)
+        : (submission.score !== null ? Number(submission.score) : 0);
+    const finalScore = submission.score !== null ? Number(submission.score) : 0;
+
     return (
         <div className="flex flex-col gap-6 p-4 sm:p-6 md:p-8 max-w-7xl mx-auto w-full print:p-0 print:max-w-none">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
@@ -90,6 +107,21 @@ export default async function SubmissionDetailsPage(
                     </p>
                 </div>
                 <div className="flex items-center gap-2 print:hidden">
+                    <SubmissionPenaltyDialog
+                        submission={submission}
+                        courseId={courseId}
+                        studentName={user.name}
+                        trigger={
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-8 gap-1.5 font-semibold text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700/60 hover:bg-amber-500/10 shadow-xs cursor-pointer"
+                            >
+                                <Gavel className="h-4 w-4" />
+                                <span>{penalty > 0 ? "Ajustar Sanción" : "Aplicar Sanción"}</span>
+                            </Button>
+                        }
+                    />
                     <DownloadSubmissionPDF
                         appTitle={appTitle}
                         studentName={user.name}
@@ -104,21 +136,39 @@ export default async function SubmissionDetailsPage(
                         totalQuestions={evaluation.questions.length}
                         answeredQuestions={answersList.length}
                         expulsions={submission.expulsions || 0}
+                        penalty={penalty}
+                        penaltyComment={penaltyComment}
+                        baseScore={baseScore}
                         questions={questionsForPDF}
                     />
-                    <Button variant="outline" size="sm" asChild className="h-8 gap-1.5 font-semibold shadow-xs">
-                        <Link href={`/dashboard/teacher/courses/${courseId}/evaluations/${attemptId}`}>
-                            <ArrowLeft className="h-4 w-4" />
-                            <span>Volver a Resultados</span>
-                        </Link>
-                    </Button>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button variant="outline" size="sm" asChild className="h-8 gap-1.5 font-semibold shadow-xs cursor-pointer">
+                                <Link href={`/dashboard/teacher/courses/${courseId}/evaluations/${attemptId}`}>
+                                    <ArrowLeft className="h-4 w-4" />
+                                    <span>Volver a Resultados</span>
+                                </Link>
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                            <p>Regresar al monitor de entregas de la evaluación</p>
+                        </TooltipContent>
+                    </Tooltip>
                 </div>
             </div>
 
             {/* Resumen de la Entrega */}
             <div className="rounded-xl border bg-card p-6 shadow-sm">
-                <h3 className="font-bold text-lg mb-4">Resumen de la Entrega</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 text-sm">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-bold text-lg">Resumen de la Entrega</h3>
+                    {penalty > 0 && (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                            <Gavel className="h-3.5 w-3.5" />
+                            Sanción aplicada: -{penalty.toFixed(1)} pts
+                        </span>
+                    )}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-6 text-sm">
                     <div className="flex flex-col gap-1">
                         <span className="text-muted-foreground uppercase text-[10px] font-bold tracking-wider">Estado:</span>
                         <span className="font-semibold">{submission.submittedAt ? 'Enviado' : 'En progreso'}</span>
@@ -130,16 +180,77 @@ export default async function SubmissionDetailsPage(
                         </div>
                     )}
                     <div className="flex flex-col gap-1">
-                        <span className="text-muted-foreground uppercase text-[10px] font-bold tracking-wider">Nota Acumulada:</span>
-                        <span className="font-black text-blue-600 dark:text-blue-400 text-lg">
-                            {submission.score !== null ? Number(submission.score).toFixed(2) : "0.00"} <span className="text-xs text-muted-foreground font-normal">/ 5.0</span>
+                        <span className="text-muted-foreground uppercase text-[10px] font-bold tracking-wider">
+                            {penalty > 0 ? "Nota Final (Con Descuento):" : "Nota Obtenida:"}
                         </span>
+                        <div className="flex items-baseline gap-2">
+                            <span className={cn(
+                                "font-black text-xl",
+                                finalScore >= 3.0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"
+                            )}>
+                                {submission.score !== null ? Number(submission.score).toFixed(2) : "0.00"}
+                            </span>
+                            <span className="text-xs text-muted-foreground font-normal">/ 5.0</span>
+                            {penalty > 0 && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-bold bg-destructive/15 text-destructive border border-destructive/30">
+                                    -{penalty.toFixed(1)}
+                                </span>
+                            )}
+                        </div>
+                        {penalty > 0 && (
+                            <span className="text-[11px] text-muted-foreground">
+                                Nota original sin sanción: <span className="font-semibold text-foreground">{baseScore.toFixed(2)}</span>
+                            </span>
+                        )}
                     </div>
                     <div className="flex flex-col gap-1">
                         <span className="text-muted-foreground uppercase text-[10px] font-bold tracking-wider">Respuestas:</span>
                         <span className="font-semibold">{answersList.length} / {evaluation.questions.length}</span>
                     </div>
+                    <div className="flex flex-col gap-1">
+                        <span className="text-muted-foreground uppercase text-[10px] font-bold tracking-wider">Salidas de la App:</span>
+                        <span className={`font-bold flex items-center gap-1.5 ${(submission.expulsions || 0) > 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                            <AlertCircle className="h-4 w-4 shrink-0" />
+                            {submission.expulsions || 0} {(submission.expulsions || 0) === 1 ? "falta / salida" : "faltas / salidas"}
+                        </span>
+                    </div>
                 </div>
+
+                {/* Banner descriptivo de la sanción si existe */}
+                {penalty > 0 && (
+                    <div className="mt-5 pt-4 border-t flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-amber-500/5 -mx-6 -mb-6 p-4 rounded-b-xl border-amber-500/20">
+                        <div className="flex items-start gap-3">
+                            <div className="p-2 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 shrink-0">
+                                <Gavel className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <div className="font-semibold text-sm flex items-center gap-2 text-foreground">
+                                    <span>Penalización académica aplicada:</span>
+                                    <span className="font-bold text-destructive">-{penalty.toFixed(1)} puntos</span>
+                                    <span className="text-xs text-muted-foreground font-normal">(Nota base: {baseScore.toFixed(2)})</span>
+                                </div>
+                                {penaltyComment ? (
+                                    <p className="text-xs text-muted-foreground mt-0.5 italic">
+                                        &ldquo;{penaltyComment}&rdquo;
+                                    </p>
+                                ) : (
+                                    <p className="text-xs text-muted-foreground mt-0.5">Sin comentario registrado.</p>
+                                )}
+                            </div>
+                        </div>
+
+                        <SubmissionPenaltyDialog
+                            submission={submission}
+                            courseId={courseId}
+                            studentName={user.name}
+                            trigger={
+                                <Button size="sm" variant="outline" className="h-8 text-xs font-semibold shrink-0 border-amber-500/30 hover:bg-amber-500/10 cursor-pointer">
+                                    Modificar / Quitar Sanción
+                                </Button>
+                            }
+                        />
+                    </div>
+                )}
             </div>
 
             {/* Respuestas del Estudiante */}
