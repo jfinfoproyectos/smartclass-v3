@@ -911,3 +911,27 @@ REGLAS ESTRICTAS:
         return { success: false, error: error.message || "Error al conectar con el servicio de IA." };
     }
 }
+
+/**
+ * Obtiene las entregas actualizadas en tiempo real para el panel de monitoreo en vivo
+ */
+export async function getAttemptSubmissionsAction(attemptId: string) {
+    try {
+        const session = await getSession();
+        if (!session || (session.user.role !== "teacher" && session.user.role !== "admin")) {
+            return { success: false, error: "No autorizado" };
+        }
+
+        const { evaluationService } = await import("../services/evaluationService");
+        const submissions = await evaluationService.getSubmissionsByAttempt(attemptId);
+
+        return {
+            success: true,
+            submissions: JSON.parse(JSON.stringify(submissions))
+        };
+    } catch (error: any) {
+        console.error("Error al obtener entregas para monitoreo en vivo:", error);
+        return { success: false, error: error.message || "Error al consultar las entregas" };
+    }
+}
+

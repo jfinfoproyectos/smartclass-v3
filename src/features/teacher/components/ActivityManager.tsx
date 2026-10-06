@@ -2601,15 +2601,39 @@ function ActivityFormDialog({
                 criteria,
                 workshopConfig: exportData.workshopConfig,
             });
-        } else if (hasChecklist && selectedType === "GITHUB") {
+        } else if (selectedType === "GITHUB") {
             exportData.description = JSON.stringify({
-                hasChecklist: true,
-                aiWeight,
-                checklistWeight,
-                criteria,
+                hasChecklist: Boolean(hasChecklist),
+                aiWeight: hasChecklist ? aiWeight : 100,
+                checklistWeight: hasChecklist ? checklistWeight : 0,
+                criteria: criteria || [],
             });
         } else {
-            exportData.description = description || "";
+            let baseDesc: any = {};
+            try {
+                if (description && typeof description === "string" && description.trim().startsWith("{")) {
+                    baseDesc = JSON.parse(description);
+                }
+            } catch {}
+
+            if (hasChecklist) {
+                exportData.description = JSON.stringify({
+                    ...baseDesc,
+                    hasChecklist: true,
+                    aiWeight,
+                    checklistWeight,
+                    criteria: criteria || []
+                });
+            } else if (baseDesc && typeof baseDesc === "object" && "hasChecklist" in baseDesc) {
+                exportData.description = JSON.stringify({
+                    ...baseDesc,
+                    hasChecklist: false,
+                    aiWeight: 100,
+                    checklistWeight: 0
+                });
+            } else {
+                exportData.description = description || "";
+            }
         }
 
         const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -3017,15 +3041,39 @@ function ActivityFormDialog({
                     const uniquePaths = Array.from(new Set(workshopMilestones.map(m => m.targetFilePath?.trim()).filter(Boolean)));
                     formData.set("filePaths", uniquePaths.join(','));
                 }
-            } else if (hasChecklist && selectedType === "GITHUB") {
+            } else if (selectedType === "GITHUB") {
                 formData.set("description", JSON.stringify({
-                    hasChecklist: true,
-                    aiWeight: aiWeight,
-                    checklistWeight: checklistWeight,
-                    criteria: criteria
+                    hasChecklist: Boolean(hasChecklist),
+                    aiWeight: hasChecklist ? aiWeight : 100,
+                    checklistWeight: hasChecklist ? checklistWeight : 0,
+                    criteria: criteria || []
                 }));
             } else {
-                formData.set("description", description);
+                let baseDesc: any = {};
+                try {
+                    if (description && typeof description === "string" && description.trim().startsWith("{")) {
+                        baseDesc = JSON.parse(description);
+                    }
+                } catch {}
+
+                if (hasChecklist) {
+                    formData.set("description", JSON.stringify({
+                        ...baseDesc,
+                        hasChecklist: true,
+                        aiWeight,
+                        checklistWeight,
+                        criteria: criteria || []
+                    }));
+                } else if (baseDesc && typeof baseDesc === "object" && "hasChecklist" in baseDesc) {
+                    formData.set("description", JSON.stringify({
+                        ...baseDesc,
+                        hasChecklist: false,
+                        aiWeight: 100,
+                        checklistWeight: 0
+                    }));
+                } else {
+                    formData.set("description", description || "");
+                }
             }
 
             if (isEdit && activity?.id) {
@@ -3168,7 +3216,7 @@ function ActivityFormDialog({
                                     <FileText className="h-3.5 w-3.5 shrink-0" />
                                     <span>Contenido y Rúbrica</span>
                                 </TabsTrigger>
-                                {(selectedType === "GITHUB" || selectedType === "PDF_REVIEW" || selectedType === "CODE_CHALLENGE" || selectedType === "VIDEO_PITCH" || selectedType === "AI_INTERVIEW" || selectedType === "DB_MODELING" || selectedType === "WORKSHOP_CODE" || selectedType === "WORKSHOP_GITHUB") && hasChecklist && (
+                                {(selectedType === "GITHUB" || selectedType === "PDF_REVIEW" || selectedType === "CODE_CHALLENGE" || selectedType === "VIDEO_PITCH" || selectedType === "AUDIO_DEFENSE" || selectedType === "AI_INTERVIEW" || selectedType === "DB_MODELING" || selectedType === "WORKSHOP_CODE" || selectedType === "WORKSHOP_GITHUB") && hasChecklist && (
                                     <TabsTrigger value="checklist" className="text-xs px-2.5 sm:px-3.5 h-7 font-semibold gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-xs">
                                         <ListChecks className="h-3.5 w-3.5 text-primary shrink-0" />
                                         <span>Lista de Chequeo</span>
@@ -7150,7 +7198,7 @@ function ActivityFormDialog({
                         </TabsContent>
 
                         {/* Pestaña 3: Lista de Chequeo (Evaluación con Criterios) */}
-                        {(selectedType === "GITHUB" || selectedType === "PDF_REVIEW" || selectedType === "CODE_CHALLENGE" || selectedType === "VIDEO_PITCH" || selectedType === "AI_INTERVIEW" || selectedType === "DB_MODELING") && hasChecklist && (
+                        {(selectedType === "GITHUB" || selectedType === "PDF_REVIEW" || selectedType === "CODE_CHALLENGE" || selectedType === "VIDEO_PITCH" || selectedType === "AUDIO_DEFENSE" || selectedType === "AI_INTERVIEW" || selectedType === "DB_MODELING" || selectedType === "WORKSHOP_CODE" || selectedType === "WORKSHOP_GITHUB") && hasChecklist && (
                             <TabsContent 
                                 value="checklist" 
                                 forceMount 

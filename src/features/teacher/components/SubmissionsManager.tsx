@@ -23,7 +23,15 @@ import {
     BarChart3,
     FileCheck,
     ChevronDown,
-    Gavel
+    Gavel,
+    RefreshCw,
+    Activity,
+    SlidersHorizontal,
+    Check,
+    Table as TableIcon,
+    Maximize2,
+    Tv,
+    ExternalLink
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -61,7 +69,9 @@ import {
     CardHeader,
     CardTitle
 } from "@/components/ui/card";
-import { deleteEvaluationSubmissionAction } from "@/features/teacher/actions/evaluationActions";
+import { deleteEvaluationSubmissionAction, getAttemptSubmissionsAction } from "@/features/teacher/actions/evaluationActions";
+import { EvaluationLiveMonitor } from "./EvaluationLiveMonitor";
+import { Switch } from "@/components/ui/switch";
 import { EvaluationStats } from "./EvaluationStats";
 import { EvaluationReportPDF } from "./EvaluationReportPDF";
 import { exportEvaluationSubmissionsToExcel } from "@/lib/export-utils";
@@ -99,6 +109,11 @@ export function SubmissionsManager({
     teacherName,
     institutionName
 }: SubmissionsManagerProps) {
+    const [currentSubmissions, setCurrentSubmissions] = useState<any[]>(submissions);
+    const [autoRefresh, setAutoRefresh] = useState(true);
+    const [refreshIntervalSec, setRefreshIntervalSec] = useState(10);
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date());
     const [isDeleting, setIsDeleting] = useState(false);
     const [isExportingPdf, setIsExportingPdf] = useState(false);
     const [isExportingExcel, setIsExportingExcel] = useState(false);
@@ -110,9 +125,49 @@ export function SubmissionsManager({
         setIsMounted(true);
     }, []);
 
+    // Sincronizar si cambia el prop submissions
+    useEffect(() => {
+        setCurrentSubmissions(submissions);
+    }, [submissions]);
+
+    // Función para refrescar entregas en tiempo real
+    const fetchSubmissions = async (isManual = false) => {
+        setIsRefreshing(true);
+        try {
+            const res = await getAttemptSubmissionsAction(attempt.id);
+            if (res.success && res.submissions) {
+                setCurrentSubmissions(res.submissions);
+                setLastRefreshedAt(new Date());
+                if (isManual) {
+                    toast.success("Avance actualizado con éxito", { duration: 2500 });
+                }
+            } else if (isManual) {
+                toast.error(res.error || "No se pudo actualizar el avance");
+            }
+        } catch (err: any) {
+            console.error("Error al refrescar avance:", err);
+            if (isManual) {
+                toast.error("Error al sincronizar con el servidor");
+            }
+        } finally {
+            setIsRefreshing(false);
+        }
+    };
+
+    // Refresco periódico automático con temporizador
+    useEffect(() => {
+        if (!autoRefresh) return;
+
+        const intervalTimer = setInterval(() => {
+            fetchSubmissions(false);
+        }, refreshIntervalSec * 1000);
+
+        return () => clearInterval(intervalTimer);
+    }, [autoRefresh, refreshIntervalSec, attempt.id]);
+
     // Statistics Calculations
-    const totalStudents = submissions.length;
-    const submittedSubmissions = useMemo(() => submissions.filter(s => s.submittedAt), [submissions]);
+    const totalStudents = currentSubmissions.length;
+    const submittedSubmissions = useMemo(() => currentSubmissions.filter(s => s.submittedAt), [currentSubmissions]);
     const submittedCount = submittedSubmissions.length;
     const inProgressCount = totalStudents - submittedCount;
     const scores = useMemo(() => submittedSubmissions.map(s => Number(s.score) || 0), [submittedSubmissions]);
@@ -122,7 +177,7 @@ export function SubmissionsManager({
     const passCount = scores.filter(s => s >= 3.0).length;
     const failCount = scores.filter(s => s < 3.0).length;
     const passRate = submittedCount > 0 ? (passCount / submittedCount) * 100 : 0;
-    const totalExpulsions = submissions.reduce((acc, s) => acc + (s.expulsions || 0), 0);
+    const totalExpulsions = currentSubmissions.reduce((acc, s) => acc + (s.expulsions || 0), 0);
     const totalQuestions = attempt.evaluation?.questions?.length || 0;
 
     // Distribution Buckets
@@ -137,7 +192,7 @@ export function SubmissionsManager({
 
     // Live Filtering
     const filteredSubmissions = useMemo(() => {
-        return submissions.filter(sub => {
+        return currentSubmissions.filter(sub => {
             const studentName = formatName(sub.user?.name, sub.user?.profile).toLowerCase();
             const email = (sub.user?.email || "").toLowerCase();
             const query = searchQuery.toLowerCase().trim();
@@ -155,7 +210,7 @@ export function SubmissionsManager({
             if (statusFilter === "expulsions") return (sub.expulsions || 0) > 0;
             return true;
         });
-    }, [submissions, searchQuery, statusFilter]);
+    }, [currentSubmissions, searchQuery, statusFilter]);
 
     // PDF Export Handler
     const handleExportPdf = async () => {
@@ -170,7 +225,7 @@ export function SubmissionsManager({
                     evaluationTitle={attempt.evaluation?.title || "Evaluación"}
                     startTime={attempt.startTime}
                     endTime={attempt.endTime}
-                    submissions={submissions}
+                    submissions={currentSubmissions}
                 />
             ).toBlob();
 
@@ -203,7 +258,7 @@ export function SubmissionsManager({
                 evaluationTitle: attempt.evaluation?.title || "Evaluación",
                 startTime: attempt.startTime,
                 endTime: attempt.endTime,
-                submissions,
+                submissions: currentSubmissions,
                 totalQuestions,
             });
             toast.success("Consolidado institucional en Excel descargado exitosamente");
@@ -326,6 +381,149 @@ export function SubmissionsManager({
                                 <p>Regresar al listado general de evaluaciones del curso</p>
                             </TooltipContent>
                         </Tooltip>
+                    </div>
+                </div>
+
+                {/* ─── 1.1 Barra de Control de Monitoreo en Vivo & Refresco ─── */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 px-4 rounded-xl bg-card border border-border/80 shadow-2xs">
+                    {/* Botones de Lanzamiento a Nuevas Pestañas: Panel Profesor & Proyector en Clase */}
+                    <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+                        {/* 1. Panel del Profesor (Nueva Pestaña) */}
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    size="sm"
+                                    asChild
+                                    className="h-8.5 px-3.5 text-xs font-bold gap-1.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs cursor-pointer transition-all"
+                                >
+                                    <Link
+                                        href={`/evaluations/${attempt.id}/live?courseId=${courseId}&mode=teacher`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                    >
+                                        <Activity className="h-3.5 w-3.5" />
+                                        <span>Panel Docente</span>
+                                        <ExternalLink className="h-3 w-3 opacity-70 ml-0.5" />
+                                    </Link>
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="text-xs">
+                                <p>Abrir panel de supervisión en una nueva pestaña (Respuestas, alertas y notas)</p>
+                            </TooltipContent>
+                        </Tooltip>
+
+                        {/* 2. Proyector en Clase para Estudiantes (Nueva Pestaña) */}
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    asChild
+                                    className="h-8.5 px-3.5 text-xs font-bold gap-1.5 rounded-xl border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 shadow-xs cursor-pointer transition-all"
+                                >
+                                    <Link
+                                        href={`/evaluations/${attempt.id}/live?courseId=${courseId}&mode=projector`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                    >
+                                        <Tv className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                        <span>Proyector Aula</span>
+                                        <ExternalLink className="h-3 w-3 opacity-70 ml-0.5" />
+                                    </Link>
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="text-xs">
+                                <p>Abrir modo proyector en nueva pestaña para los alumnos (Reloj gigante, avance grupal y privacidad)</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </div>
+
+                    {/* Controles de Refresco Periódico y Manual */}
+                    <div className="flex items-center gap-2.5 flex-wrap justify-end">
+                        {/* Toggle Switch Auto-Refresco */}
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/40 border border-border/60">
+                            <Switch
+                                id="auto-refresh-toggle"
+                                checked={autoRefresh}
+                                onCheckedChange={setAutoRefresh}
+                                className="data-[state=checked]:bg-emerald-500 cursor-pointer"
+                            />
+                            <label
+                                htmlFor="auto-refresh-toggle"
+                                className="text-xs font-semibold cursor-pointer select-none flex items-center gap-1.5"
+                            >
+                                {autoRefresh ? (
+                                    <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                        Auto-refresco ({refreshIntervalSec}s)
+                                    </span>
+                                ) : (
+                                    <span className="text-muted-foreground font-medium">
+                                        Refresco manual (Pausado)
+                                    </span>
+                                )}
+                            </label>
+                        </div>
+
+                        {/* Selector de Intervalo (solo si auto-refresco está activo) */}
+                        {autoRefresh && (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="sm" className="h-8 text-xs px-2.5 font-semibold gap-1 cursor-pointer">
+                                        <SlidersHorizontal className="h-3.5 w-3.5 opacity-70" />
+                                        <span>{refreshIntervalSec}s</span>
+                                        <ChevronDown className="h-3 w-3 opacity-60" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-40 p-1">
+                                    <DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground px-2 py-1">
+                                        Cadencia de refresco
+                                    </DropdownMenuLabel>
+                                    {[5, 10, 15, 30, 60].map((sec) => (
+                                        <DropdownMenuItem
+                                            key={sec}
+                                            onClick={() => setRefreshIntervalSec(sec)}
+                                            className="text-xs cursor-pointer justify-between font-medium py-1.5 px-2"
+                                        >
+                                            <span>Cada {sec} segundos</span>
+                                            {refreshIntervalSec === sec && <Check className="h-3.5 w-3.5 text-primary" />}
+                                        </DropdownMenuItem>
+                                    ))}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        )}
+
+                        {/* Botón Refrescar Manual en cualquier momento */}
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => fetchSubmissions(true)}
+                                    disabled={isRefreshing}
+                                    className="h-8 text-xs px-3 gap-1.5 font-bold shadow-2xs hover:border-primary/50 cursor-pointer"
+                                >
+                                    <RefreshCw className={`h-3.5 w-3.5 text-primary ${isRefreshing ? "animate-spin" : ""}`} />
+                                    <span>{isRefreshing ? "Actualizando..." : "Refrescar"}</span>
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="text-xs">
+                                <p>Sincronizar el avance en tiempo real desde el servidor</p>
+                                {lastRefreshedAt && (
+                                    <p className="text-[10px] text-muted-foreground mt-0.5 font-mono">
+                                        Última sincronización: {formatDateTime(lastRefreshedAt, "HH:mm:ss")}
+                                    </p>
+                                )}
+                            </TooltipContent>
+                        </Tooltip>
+
+                        {/* Indicador de última actualización sutil */}
+                        {lastRefreshedAt && (
+                            <span className="text-[11px] font-mono text-muted-foreground hidden lg:inline-block">
+                                Sync: {formatDateTime(lastRefreshedAt, "HH:mm:ss")}
+                            </span>
+                        )}
                     </div>
                 </div>
 
@@ -457,20 +655,20 @@ export function SubmissionsManager({
                     </Tooltip>
                 </div>
 
-            {/* ─── 3. Layout Principal de 2 Columnas (Aprovecha Espacio Lateral en xl+) ─── */}
+            {/* ─── 3. Contenido Principal: Layout de 2 Columnas de Entregas y Estadísticas ─── */}
             <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-                {/* ═══ COLUMNA PRINCIPAL (8 columnas): Listado de Estudiantes con Buscador y Filtros ═══ */}
-                <div className="xl:col-span-8 space-y-4">
-                    <Card className="border-border/70 shadow-xs">
-                        <CardHeader className="p-4 sm:p-5 border-b border-border/50">
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                <div>
-                                    <div className="flex items-center gap-2">
-                                        <CardTitle className="text-lg font-bold">Listado de Estudiantes</CardTitle>
-                                        <Badge variant="secondary" className="font-mono text-xs font-bold">
-                                            {filteredSubmissions.length} de {submissions.length}
-                                        </Badge>
-                                    </div>
+                    {/* ═══ COLUMNA PRINCIPAL (8 columnas): Listado de Estudiantes con Buscador y Filtros ═══ */}
+                    <div className="xl:col-span-8 space-y-4">
+                        <Card className="border-border/70 shadow-xs">
+                            <CardHeader className="p-4 sm:p-5 border-b border-border/50">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <CardTitle className="text-lg font-bold">Listado de Estudiantes</CardTitle>
+                                            <Badge variant="secondary" className="font-mono text-xs font-bold">
+                                                {filteredSubmissions.length} de {currentSubmissions.length}
+                                            </Badge>
+                                        </div>
                                     <CardDescription className="text-xs mt-0.5">
                                         Gestiona las entregas, revisa respuestas en detalle o administra permisos.
                                     </CardDescription>
@@ -499,7 +697,7 @@ export function SubmissionsManager({
                                             onClick={() => setStatusFilter("all")}
                                             className="h-7 text-xs font-semibold px-2.5 cursor-pointer rounded-lg"
                                         >
-                                            Todos ({submissions.length})
+                                            Todos ({currentSubmissions.length})
                                         </Button>
                                     </TooltipTrigger>
                                     <TooltipContent side="top">
@@ -804,32 +1002,30 @@ export function SubmissionsManager({
                                                         {/* Acciones */}
                                                         <TableCell className="text-right pr-4 sm:pr-6 py-3">
                                                             <div className="flex items-center justify-end gap-1">
-                                                                {isSubmitted && (
-                                                                    <>
-                                                                        <Tooltip>
-                                                                            <TooltipTrigger asChild>
-                                                                                <Button
-                                                                                    variant="ghost"
-                                                                                    size="icon"
-                                                                                    className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg cursor-pointer"
-                                                                                    asChild
-                                                                                >
-                                                                                    <Link href={`/dashboard/teacher/courses/${courseId}/evaluations/${attempt.id}/submissions/${sub.id}`}>
-                                                                                        <Eye className="h-4 w-4" />
-                                                                                    </Link>
-                                                                                </Button>
-                                                                            </TooltipTrigger>
-                                                                            <TooltipContent side="top">
-                                                                                <p>Ver respuestas detalladas y retroalimentación</p>
-                                                                            </TooltipContent>
-                                                                        </Tooltip>
+                                                                <Tooltip>
+                                                                    <TooltipTrigger asChild>
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg cursor-pointer"
+                                                                            asChild
+                                                                        >
+                                                                            <Link href={`/dashboard/teacher/courses/${courseId}/evaluations/${attempt.id}/submissions/${sub.id}`}>
+                                                                                <Eye className="h-4 w-4" />
+                                                                            </Link>
+                                                                        </Button>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent side="top">
+                                                                        <p>{isSubmitted ? "Ver respuestas detalladas y retroalimentación" : "Ver avance actual y respuestas en progreso"}</p>
+                                                                    </TooltipContent>
+                                                                </Tooltip>
 
-                                                                        <SubmissionPenaltyDialog
-                                                                            submission={sub}
-                                                                            courseId={courseId}
-                                                                            studentName={studentName}
-                                                                        />
-                                                                    </>
+                                                                {isSubmitted && (
+                                                                    <SubmissionPenaltyDialog
+                                                                        submission={sub}
+                                                                        courseId={courseId}
+                                                                        studentName={studentName}
+                                                                    />
                                                                 )}
                                                                 
                                                                 <Dialog>
@@ -1061,7 +1257,7 @@ export function SubmissionsManager({
 
                 <div className="rounded-2xl border border-border/70 bg-card p-4 sm:p-6 shadow-xs">
                     <EvaluationStats
-                        submissions={submissions}
+                        submissions={currentSubmissions}
                         totalQuestions={totalQuestions}
                         questions={attempt.evaluation?.questions || []}
                         evaluationId={attempt.evaluationId}

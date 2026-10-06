@@ -582,7 +582,10 @@ export const evaluationService = {
                 answersList: {
                     select: {
                         questionId: true,
+                        answer: true,
                         score: true,
+                        aiFeedback: true,
+                        updatedAt: true,
                     }
                 },
                 _count: {
