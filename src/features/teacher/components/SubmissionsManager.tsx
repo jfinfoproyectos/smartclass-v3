@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { formatDateTime } from "@/lib/dateUtils";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { formatDateTime, formatDurationHMS, formatDurationHuman } from "@/lib/dateUtils";
 import { formatName, getInitials } from "@/lib/utils";
 import { 
     Trash2, 
@@ -26,10 +26,6 @@ import {
     Gavel,
     RefreshCw,
     Activity,
-    SlidersHorizontal,
-    Check,
-    Table as TableIcon,
-    Maximize2,
     Tv,
     ExternalLink
 } from "lucide-react";
@@ -70,8 +66,6 @@ import {
     CardTitle
 } from "@/components/ui/card";
 import { deleteEvaluationSubmissionAction, getAttemptSubmissionsAction } from "@/features/teacher/actions/evaluationActions";
-import { EvaluationLiveMonitor } from "./EvaluationLiveMonitor";
-import { Switch } from "@/components/ui/switch";
 import { EvaluationStats } from "./EvaluationStats";
 import { EvaluationReportPDF } from "./EvaluationReportPDF";
 import { exportEvaluationSubmissionsToExcel } from "@/lib/export-utils";
@@ -83,6 +77,9 @@ import {
     TooltipTrigger
 } from "@/components/ui/tooltip";
 import { toast } from "sonner";
+import { TeacherStudentMessageDialog } from "./TeacherStudentMessageDialog";
+import { TeacherBroadcastMessageDialog } from "./TeacherBroadcastMessageDialog";
+import { EvaluationLockToggleButton } from "./EvaluationLockToggleButton";
 
 interface SubmissionsManagerProps {
     courseId: string;
@@ -110,16 +107,20 @@ export function SubmissionsManager({
     institutionName
 }: SubmissionsManagerProps) {
     const [currentSubmissions, setCurrentSubmissions] = useState<any[]>(submissions);
-    const [autoRefresh, setAutoRefresh] = useState(true);
-    const [refreshIntervalSec, setRefreshIntervalSec] = useState(10);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date());
+    const [isLiveConnected, setIsLiveConnected] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isExportingPdf, setIsExportingPdf] = useState(false);
     const [isExportingExcel, setIsExportingExcel] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState<"all" | "submitted" | "in_progress" | "passed" | "failed" | "expulsions">("all");
     const [isMounted, setIsMounted] = useState(false);
+
+    const isRefreshingRef = useRef(false);
+    isRefreshingRef.current = isRefreshing;
+
+    const lastEventTimeRef = useRef(0);
 
     useEffect(() => {
         setIsMounted(true);
@@ -131,7 +132,8 @@ export function SubmissionsManager({
     }, [submissions]);
 
     // Función para refrescar entregas en tiempo real
-    const fetchSubmissions = async (isManual = false) => {
+    const fetchSubmissions = useCallback(async (isManual = false) => {
+        if (isRefreshingRef.current) return;
         setIsRefreshing(true);
         try {
             const res = await getAttemptSubmissionsAction(attempt.id);
@@ -152,18 +154,77 @@ export function SubmissionsManager({
         } finally {
             setIsRefreshing(false);
         }
-    };
+    }, [attempt.id]);
 
-    // Refresco periódico automático con temporizador
+    // Conexión Server-Sent Events (SSE) para actualizaciones instantáneas en tiempo real
     useEffect(() => {
-        if (!autoRefresh) return;
+        if (!isMounted || !attempt?.id) return;
 
-        const intervalTimer = setInterval(() => {
-            fetchSubmissions(false);
-        }, refreshIntervalSec * 1000);
+        let eventSource: EventSource | null = null;
+        let reconnectTimeout: NodeJS.Timeout | null = null;
 
-        return () => clearInterval(intervalTimer);
-    }, [autoRefresh, refreshIntervalSec, attempt.id]);
+        const connectSSE = () => {
+            try {
+                eventSource = new EventSource(`/api/evaluations/${attempt.id}/events`);
+
+                eventSource.onopen = () => {
+                    setIsLiveConnected(true);
+                };
+
+                eventSource.addEventListener("connected", () => {
+                    setIsLiveConnected(true);
+                });
+
+                eventSource.addEventListener("evaluation-updated", (event: MessageEvent) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data?.type === "TIME_LIMIT_EXCEEDED") {
+                            toast.warning("Alerta de Tiempo Fuera Superado", {
+                                description: data.message || "Un estudiante ha excedido el tiempo acumulado permitido fuera de la prueba.",
+                                duration: 6000,
+                            });
+                        }
+                    } catch {}
+
+                    const now = Date.now();
+                    // Debounce de 350ms para evitar avalancha de peticiones
+                    if (now - lastEventTimeRef.current > 350) {
+                        lastEventTimeRef.current = now;
+                        fetchSubmissions(false);
+                    }
+                });
+
+                eventSource.addEventListener("teacher-message", () => {
+                    fetchSubmissions(false);
+                });
+
+                eventSource.onerror = () => {
+                    setIsLiveConnected(false);
+                    if (eventSource) {
+                        eventSource.close();
+                        eventSource = null;
+                    }
+                    reconnectTimeout = setTimeout(connectSSE, 4000);
+                };
+            } catch (err) {
+                console.error("Error al conectar SSE en panel docente:", err);
+                setIsLiveConnected(false);
+                reconnectTimeout = setTimeout(connectSSE, 5000);
+            }
+        };
+
+        connectSSE();
+
+        return () => {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+            if (reconnectTimeout) {
+                clearTimeout(reconnectTimeout);
+            }
+        };
+    }, [isMounted, attempt?.id, fetchSubmissions]);
 
     // Statistics Calculations
     const totalStudents = currentSubmissions.length;
@@ -436,62 +497,47 @@ export function SubmissionsManager({
                                 <p>Abrir modo proyector en nueva pestaña para los alumnos (Reloj gigante, avance grupal y privacidad)</p>
                             </TooltipContent>
                         </Tooltip>
+
+                        {/* 3. Mensaje Global a Todos los Estudiantes */}
+                        <TeacherBroadcastMessageDialog
+                            attemptId={attempt.id}
+                            evaluationId={attempt.evaluationId}
+                            evaluationTitle={attempt.evaluation?.title}
+                        />
+
+                        {/* 4. Bloquear / Desbloquear Evaluación en Vivo */}
+                        <EvaluationLockToggleButton
+                            attemptId={attempt.id}
+                            initialIsLocked={attempt.isLocked}
+                            courseId={courseId}
+                        />
                     </div>
 
-                    {/* Controles de Refresco Periódico y Manual */}
+                    {/* Controles de Refresco Periódico y Manual con SSE */}
                     <div className="flex items-center gap-2.5 flex-wrap justify-end">
-                        {/* Toggle Switch Auto-Refresco */}
-                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/40 border border-border/60">
-                            <Switch
-                                id="auto-refresh-toggle"
-                                checked={autoRefresh}
-                                onCheckedChange={setAutoRefresh}
-                                className="data-[state=checked]:bg-emerald-500 cursor-pointer"
-                            />
-                            <label
-                                htmlFor="auto-refresh-toggle"
-                                className="text-xs font-semibold cursor-pointer select-none flex items-center gap-1.5"
-                            >
-                                {autoRefresh ? (
-                                    <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
-                                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                        Auto-refresco ({refreshIntervalSec}s)
-                                    </span>
-                                ) : (
-                                    <span className="text-muted-foreground font-medium">
-                                        Refresco manual (Pausado)
-                                    </span>
-                                )}
-                            </label>
-                        </div>
+                        {/* Estado SSE en tiempo real */}
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold select-none transition-colors ${
+                                    isLiveConnected 
+                                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
+                                        : "bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300"
+                                }`}>
+                                    <span className={`h-2 w-2 rounded-full shrink-0 ${isLiveConnected ? "bg-emerald-500 animate-pulse" : "bg-amber-500"}`} />
+                                    <span className="font-bold">{isLiveConnected ? "SSE en vivo" : "Reconectando..."}</span>
+                                </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="text-xs max-w-xs">
+                                <p className="font-bold">{isLiveConnected ? "Sincronización en Vivo SSE Activa" : "Conectando al canal de eventos"}</p>
+                                <p className="text-muted-foreground text-[11px] mt-0.5">
+                                    {isLiveConnected 
+                                        ? "Las respuestas, salidas de pantalla, alertas de tiempo y entregas de los alumnos se actualizan al instante vía Server-Sent Events." 
+                                        : "Intentando conectar con el servidor para recibir actualizaciones instantáneas."}
+                                </p>
+                            </TooltipContent>
+                        </Tooltip>
 
-                        {/* Selector de Intervalo (solo si auto-refresco está activo) */}
-                        {autoRefresh && (
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="outline" size="sm" className="h-8 text-xs px-2.5 font-semibold gap-1 cursor-pointer">
-                                        <SlidersHorizontal className="h-3.5 w-3.5 opacity-70" />
-                                        <span>{refreshIntervalSec}s</span>
-                                        <ChevronDown className="h-3 w-3 opacity-60" />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-40 p-1">
-                                    <DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground px-2 py-1">
-                                        Cadencia de refresco
-                                    </DropdownMenuLabel>
-                                    {[5, 10, 15, 30, 60].map((sec) => (
-                                        <DropdownMenuItem
-                                            key={sec}
-                                            onClick={() => setRefreshIntervalSec(sec)}
-                                            className="text-xs cursor-pointer justify-between font-medium py-1.5 px-2"
-                                        >
-                                            <span>Cada {sec} segundos</span>
-                                            {refreshIntervalSec === sec && <Check className="h-3.5 w-3.5 text-primary" />}
-                                        </DropdownMenuItem>
-                                    ))}
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        )}
+
 
                         {/* Botón Refrescar Manual en cualquier momento */}
                         <Tooltip>
@@ -521,7 +567,7 @@ export function SubmissionsManager({
                         {/* Indicador de última actualización sutil */}
                         {lastRefreshedAt && (
                             <span className="text-[11px] font-mono text-muted-foreground hidden lg:inline-block">
-                                Sync: {formatDateTime(lastRefreshedAt, "HH:mm:ss")}
+                                {isLiveConnected ? "Sync: SSE en vivo" : `Sync: ${formatDateTime(lastRefreshedAt, "HH:mm:ss")}`}
                             </span>
                         )}
                     </div>
@@ -839,10 +885,14 @@ export function SubmissionsManager({
                                                 const answersCount = sub._count?.answersList || 0;
                                                 const expulsions = sub.expulsions || 0;
 
-                                                const wildcards = (sub.wildcardsUsed as any) || {};
+                                                const wildcards = typeof sub.wildcardsUsed === 'string'
+                                                    ? JSON.parse(sub.wildcardsUsed)
+                                                    : (sub.wildcardsUsed as any) || {};
                                                 const penalty = wildcards.penalty !== undefined ? Number(wildcards.penalty) : 0;
                                                 const baseScore = wildcards.baseScore !== undefined ? Number(wildcards.baseScore) : score;
                                                 const penaltyComment = wildcards.penaltyComment || "";
+                                                const tabSwitches = wildcards.tabSwitchesCount || 0;
+                                                const timeAway = wildcards.totalTimeAwaySeconds || 0;
 
                                                 return (
                                                     <TableRow key={sub.id} className="hover:bg-muted/30 transition-colors">
@@ -972,31 +1022,56 @@ export function SubmissionsManager({
                                                             )}
                                                         </TableCell>
 
-                                                        {/* Expulsiones */}
+                                                        {/* Expulsiones y Salidas a otras pestañas */}
                                                         <TableCell className="text-center py-3">
-                                                            {expulsions > 0 ? (
-                                                                <Tooltip>
-                                                                    <TooltipTrigger asChild>
-                                                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-black bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/30 cursor-default">
-                                                                            <ShieldAlert className="w-3.5 h-3.5" />
-                                                                            {expulsions}
-                                                                        </span>
-                                                                    </TooltipTrigger>
-                                                                    <TooltipContent side="top">
-                                                                        <p className="font-semibold text-red-500">{expulsions} alertas de integridad registradas</p>
-                                                                        <p className="text-[11px] text-muted-foreground">Salidas de pantalla completa o pérdida de foco durante la prueba</p>
-                                                                    </TooltipContent>
-                                                                </Tooltip>
-                                                            ) : (
-                                                                <Tooltip>
-                                                                    <TooltipTrigger asChild>
-                                                                        <span className="text-xs text-muted-foreground font-mono cursor-default">0</span>
-                                                                    </TooltipTrigger>
-                                                                    <TooltipContent side="top">
-                                                                        <p>Sin salidas de pantalla ni faltas de integridad registradas</p>
-                                                                    </TooltipContent>
-                                                                </Tooltip>
-                                                            )}
+                                                            <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                                                                {expulsions > 0 && (
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-black bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/30 cursor-default">
+                                                                                <ShieldAlert className="w-3.5 h-3.5" />
+                                                                                {expulsions}
+                                                                            </span>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent side="top">
+                                                                            <p className="font-semibold text-red-500">{expulsions} expulsiones de integridad registradas</p>
+                                                                            <p className="text-[11px] text-muted-foreground">Pérdida de foco estricta durante el examen</p>
+                                                                        </TooltipContent>
+                                                                    </Tooltip>
+                                                                )}
+
+                                                                {tabSwitches > 0 && (
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 cursor-default">
+                                                                                <ExternalLink className="w-3 h-3 text-amber-500" />
+                                                                                <span>{tabSwitches}</span>
+                                                                                <span className="text-[10px] opacity-75 font-normal font-mono">({formatDurationHMS(timeAway)})</span>
+                                                                            </span>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent side="top" className="max-w-xs space-y-1 text-left">
+                                                                            <p className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1 text-xs">
+                                                                                <ExternalLink className="w-3.5 h-3.5" />
+                                                                                {tabSwitches} {tabSwitches === 1 ? 'salida registrada' : 'salidas registradas'}
+                                                                            </p>
+                                                                            <p className="text-[11px] text-muted-foreground">
+                                                                                Tiempo acumulado fuera: <strong>{formatDurationHMS(timeAway)} ({formatDurationHuman(timeAway)})</strong>
+                                                                            </p>
+                                                                        </TooltipContent>
+                                                                    </Tooltip>
+                                                                )}
+
+                                                                {expulsions === 0 && tabSwitches === 0 && (
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <span className="text-xs text-muted-foreground font-mono cursor-default">0</span>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent side="top">
+                                                                            <p>Sin salidas de pestaña ni faltas registradas</p>
+                                                                        </TooltipContent>
+                                                                    </Tooltip>
+                                                                )}
+                                                            </div>
                                                         </TableCell>
 
                                                         {/* Acciones */}
@@ -1019,6 +1094,15 @@ export function SubmissionsManager({
                                                                         <p>{isSubmitted ? "Ver respuestas detalladas y retroalimentación" : "Ver avance actual y respuestas en progreso"}</p>
                                                                     </TooltipContent>
                                                                 </Tooltip>
+
+                                                                {/* Botón para enviar mensaje prioritario vía SSE */}
+                                                                <TeacherStudentMessageDialog
+                                                                    attemptId={attempt.id}
+                                                                    evaluationId={attempt.evaluationId}
+                                                                    submissionId={sub.id}
+                                                                    studentId={sub.userId}
+                                                                    studentName={studentName}
+                                                                />
 
                                                                 {isSubmitted && (
                                                                     <SubmissionPenaltyDialog
@@ -1052,7 +1136,7 @@ export function SubmissionsManager({
                                                                                 try {
                                                                                     await deleteEvaluationSubmissionAction(sub.id, courseId);
                                                                                     toast.success("Entrega eliminada correctamente");
-                                                                                } catch (err: any) {
+                                                                                } catch {
                                                                                     toast.error("Error al eliminar la entrega");
                                                                                 } finally {
                                                                                     setIsDeleting(false);

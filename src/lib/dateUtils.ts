@@ -131,12 +131,22 @@ export function parseISOAsUTC(dateString: string): Date {
     return new Date(dateString);
 }
 /**
- * Formatea una fecha con hora.
+ * Formatea una fecha con hora de forma segura.
  */
 export function formatDateTime(date: Date | string, formatStr: string = "dd/MM/yyyy HH:mm"): string {
     const d = typeof date === 'string' ? new Date(date) : date;
     if (isNaN(d.getTime())) return "Fecha inválida";
-    return format(d, formatStr, { locale: es });
+    // Sanitizar tokens comunes incompatibles con date-fns (DD -> dd, YYYY -> yyyy)
+    const safeFormatStr = formatStr.replace(/DD/g, "dd").replace(/YYYY/g, "yyyy");
+    try {
+        return format(d, safeFormatStr, { locale: es });
+    } catch {
+        try {
+            return format(d, "dd/MM/yyyy HH:mm", { locale: es });
+        } catch {
+            return d.toLocaleString("es-CO");
+        }
+    }
 }
 
 export function getCourseClassDates(
@@ -233,4 +243,29 @@ export function formatDayMonthDate(dateStr: string): string {
     const d = new Date(dateStr);
     return isNaN(d.getTime()) ? dateStr : format(d, "dd MMM", { locale: es });
 }
+
+/**
+ * Convierte una duración en segundos al formato estándar HH:mm:ss (hora, minutos y segundos).
+ */
+export function formatDurationHMS(totalSeconds: number): string {
+    const s = Math.max(0, Math.floor(totalSeconds || 0));
+    const hours = Math.floor(s / 3600);
+    const minutes = Math.floor((s % 3600) / 60);
+    const seconds = s % 60;
+    return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+}
+
+/**
+ * Convierte una duración en segundos a texto legible en hora, minutos y segundos (ej: 1h 25m 10s o 2m 15s).
+ */
+export function formatDurationHuman(totalSeconds: number): string {
+    const s = Math.max(0, Math.floor(totalSeconds || 0));
+    const hours = Math.floor(s / 3600);
+    const minutes = Math.floor((s % 3600) / 60);
+    const seconds = s % 60;
+    if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
+    if (minutes > 0) return `${minutes}m ${seconds}s`;
+    return `${seconds}s`;
+}
+
 

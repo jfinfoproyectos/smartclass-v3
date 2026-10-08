@@ -389,6 +389,7 @@ export const evaluationService = {
         blockMultipleDisplays?: boolean;
         blockClipboard?: boolean;
         maxWarnings?: number;
+        maxExitTimeSeconds?: number;
         helpUrl?: string | null;
         maxSupportAttempts?: number;
         aiSupportDelaySeconds?: number;
@@ -408,6 +409,7 @@ export const evaluationService = {
                 blockMultipleDisplays: data.blockMultipleDisplays ?? true,
                 blockClipboard: data.blockClipboard ?? true,
                 maxWarnings: data.maxWarnings ?? 3,
+                maxExitTimeSeconds: data.maxExitTimeSeconds ?? 60,
                 helpUrl: data.helpUrl,
                 maxSupportAttempts: data.maxSupportAttempts ?? 3,
                 aiSupportDelaySeconds: data.aiSupportDelaySeconds ?? 60,
@@ -434,6 +436,7 @@ export const evaluationService = {
         blockMultipleDisplays?: boolean;
         blockClipboard?: boolean;
         maxWarnings?: number;
+        maxExitTimeSeconds?: number;
         helpUrl?: string | null;
         maxSupportAttempts?: number;
         aiSupportDelaySeconds?: number;
@@ -469,6 +472,9 @@ export const evaluationService = {
         }
         if (data.maxWarnings !== undefined) {
             updateData.maxWarnings = data.maxWarnings;
+        }
+        if (data.maxExitTimeSeconds !== undefined) {
+            updateData.maxExitTimeSeconds = data.maxExitTimeSeconds;
         }
         if (data.helpUrl !== undefined) {
             updateData.helpUrl = data.helpUrl;

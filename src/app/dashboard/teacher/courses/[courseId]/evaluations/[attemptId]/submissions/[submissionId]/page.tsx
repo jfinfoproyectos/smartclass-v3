@@ -5,8 +5,9 @@ import { headers } from "next/headers";
 import { evaluationService } from "@/features/teacher/services/evaluationService";
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, CheckCircle2, AlertCircle, Gavel } from 'lucide-react';
-import { formatDateTime } from '@/lib/dateUtils';
+import { Badge } from '@/components/ui/badge';
+import { ArrowLeft, CheckCircle2, AlertCircle, Gavel, ExternalLink } from 'lucide-react';
+import { formatDateTime, formatDurationHMS, formatDurationHuman } from '@/lib/dateUtils';
 import { FeedbackViewer } from "@/features/student/components/FeedbackViewer";
 import { DownloadSubmissionPDFWrapper as DownloadSubmissionPDF } from "@/features/teacher/components/DownloadSubmissionPDFWrapper";
 import { SubmissionPenaltyDialog } from "@/features/teacher/components/SubmissionPenaltyDialog";
@@ -208,10 +209,10 @@ export default async function SubmissionDetailsPage(
                         <span className="font-semibold">{answersList.length} / {evaluation.questions.length}</span>
                     </div>
                     <div className="flex flex-col gap-1">
-                        <span className="text-muted-foreground uppercase text-[10px] font-bold tracking-wider">Salidas de la App:</span>
+                        <span className="text-muted-foreground uppercase text-[10px] font-bold tracking-wider">Expulsiones Temporales:</span>
                         <span className={`font-bold flex items-center gap-1.5 ${(submission.expulsions || 0) > 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
                             <AlertCircle className="h-4 w-4 shrink-0" />
-                            {submission.expulsions || 0} {(submission.expulsions || 0) === 1 ? "falta / salida" : "faltas / salidas"}
+                            {submission.expulsions || 0} {(submission.expulsions || 0) === 1 ? "expulsión" : "expulsiones"} (por redimensionar / monitor)
                         </span>
                     </div>
                 </div>
@@ -252,6 +253,56 @@ export default async function SubmissionDetailsPage(
                     </div>
                 )}
             </div>
+
+            {/* Registro Forense de Navegación Externa / Salidas a Otras Pestañas */}
+            {wildcards.tabSwitchesCount > 0 && (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-5 space-y-4 print:break-inside-avoid shadow-2xs">
+                    {wildcards.hasTimeLimitAlert && (
+                        <div className="p-3 rounded-lg border border-red-500/40 bg-red-500/15 text-red-700 dark:text-red-300 flex items-center gap-2.5 text-xs font-bold animate-in fade-in">
+                            <AlertCircle className="w-4 h-4 shrink-0 text-red-600 dark:text-red-400" />
+                            <span>⚠️ ALERTA DE SEGURIDAD: El estudiante superó el tiempo máximo permitido fuera del examen ({Math.max(1, Math.round((wildcards.totalTimeAwaySeconds || 0) / 60))} min acumulados).</span>
+                        </div>
+                    )}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-500/20 pb-3">
+                        <div className="flex items-center gap-2.5">
+                            <div className="p-2 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                                <ExternalLink className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-base text-foreground flex items-center gap-2">
+                                    <span>Registro de Navegación Externa (Cambios de Pestaña)</span>
+                                    <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 font-mono font-bold text-[11px]">
+                                        {wildcards.tabSwitchesCount} {wildcards.tabSwitchesCount === 1 ? 'salida' : 'salidas'}
+                                    </Badge>
+                                </h3>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                    Supervisión activa sin expulsión. Tiempo acumulado fuera: <strong>{formatDurationHMS(wildcards.totalTimeAwaySeconds || 0)} ({formatDurationHuman(wildcards.totalTimeAwaySeconds || 0)})</strong>.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="text-xs font-mono font-bold text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-lg w-fit">
+                            Tiempo Total Fuera: {formatDurationHMS(wildcards.totalTimeAwaySeconds || 0)} ({formatDurationHuman(wildcards.totalTimeAwaySeconds || 0)})
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-72 overflow-y-auto pr-1">
+                        {Array.isArray(wildcards.tabSwitchLogs) && wildcards.tabSwitchLogs.map((log: any, idx: number) => (
+                            <div key={log.id || idx} className="p-3 rounded-lg border bg-card/80 flex flex-col justify-between gap-2 text-xs shadow-2xs">
+                                <div className="flex items-center justify-between gap-1">
+                                    <span className="font-bold text-foreground">Salida #{idx + 1}</span>
+                                    <Badge variant="outline" className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 font-mono font-bold text-[10px]">
+                                        {log.durationSeconds}s fuera
+                                    </Badge>
+                                </div>
+                                <div className="text-[10px] text-muted-foreground font-mono pt-1 border-t border-border/40 flex justify-between items-center">
+                                    <span>Salida: {log.leftAt ? formatDateTime(log.leftAt, "HH:mm:ss") : "—"}</span>
+                                    <span>Retorno: {log.returnedAt ? formatDateTime(log.returnedAt, "HH:mm:ss") : "—"}</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Respuestas del Estudiante */}
             <div className="space-y-6 mt-4">

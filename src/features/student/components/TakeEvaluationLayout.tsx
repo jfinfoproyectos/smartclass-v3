@@ -1,15 +1,13 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
-import { formatDistanceToNow, format, differenceInSeconds } from "date-fns";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { format, differenceInSeconds } from "date-fns";
 import { es } from "date-fns/locale";
 import MDEditor from "@uiw/react-md-editor";
 import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Editor, { loader } from "@monaco-editor/react";
 
 // Configurar Monaco para usar CDN de Cloudflare para autocompletado y workers
@@ -36,29 +34,26 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 import { 
     CheckCircle, Clock, AlertTriangle, MessageSquare, Loader2, Sparkles, BookOpen, 
-    LogOut, ShieldAlert, ShieldCheck, Lightbulb, RotateCcw, ZoomIn, ZoomOut, 
+    LogOut, ShieldAlert, ShieldCheck, Lightbulb, RotateCcw, ZoomIn, ZoomOut, RefreshCw, 
     ChevronLeft, ChevronRight, ListChecks, Send, BarChart3, CheckCircle2, ArrowRight,
-    ArrowLeft, BellOff, Monitor, Laptop, Maximize2, CopySlash, Keyboard, SlidersHorizontal,
-    HelpCircle, Info, ExternalLink, FileText, Calendar, Check, X, Shield, Lock, BellRing,
-    AlertCircle, Zap
+    ArrowLeft, Monitor, Laptop, Maximize2, ExternalLink, Calendar, Check, X, Lock,
+    AlertCircle, XCircle, Copy
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { submitEvaluationAction, saveAnswerAction, evaluateAnswerWithAIAction, registerExpulsionAction, useAiHintAction } from "@/features/student/actions/evaluationActions";
+import { submitEvaluationAction, saveAnswerAction, evaluateAnswerWithAIAction, registerTabSwitchLogAction, registerExpulsionAction, useAiHintAction as requestAiHintAction, getEvaluationAttemptDataAction } from "@/features/student/actions/evaluationActions";
 import { ModeToggle } from "@/components/theme/ModeToggle";
 import { ThemeSelector } from "@/components/theme/ThemeSelector";
 import { CodeThemeSelector } from "@/components/theme/CodeThemeSelector";
 import { cn } from "@/lib/utils";
+import { formatDurationHMS, formatDurationHuman } from "@/lib/dateUtils";
+import { TextAnswerEditor } from "./TextAnswerEditor";
+import { EvaluationPreExamBarrier } from "./EvaluationPreExamBarrier";
+import { EvaluationTabSwitchesModal } from "./EvaluationTabSwitchesModal";
+import { formatHintMarkdown } from "@/features/student/utils/formatHintMarkdown";
 
 function getScoreColorClass(score: number): string {
     if (score >= 4.5) return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30";
@@ -85,6 +80,59 @@ export function TakeEvaluationLayout({
     const router = useRouter();
     const { theme } = useTheme();
     const [mounted, setMounted] = useState(false);
+    const [currentAttempt, setCurrentAttempt] = useState(attempt);
+    const [isAttemptLocked, setIsAttemptLocked] = useState<boolean>(!!attempt?.isLocked);
+    useEffect(() => {
+        setCurrentAttempt(attempt);
+        if (attempt?.isLocked !== undefined) {
+            setIsAttemptLocked(!!attempt.isLocked);
+        }
+    }, [attempt]);
+
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const [isLiveConnected, setIsLiveConnected] = useState(false);
+
+    const handleRefreshEvaluation = async (isAutoSync: boolean = false, customMessage?: string) => {
+        if (isRefreshing) return;
+        setIsRefreshing(true);
+        try {
+            const updated = await getEvaluationAttemptDataAction(currentAttempt.id);
+            if (updated) {
+                setCurrentAttempt(updated);
+
+                // Si el profesor actualizó datos en la entrega del alumno (comodines, faltas, intentos de IA)
+                if ((updated as any).studentSubmission) {
+                    const sub = (updated as any).studentSubmission;
+                    if (sub.expulsions !== undefined) {
+                        setExpulsionsCount(sub.expulsions);
+                        expulsionsCountRef.current = sub.expulsions;
+                    }
+                    if (sub.wildcardsUsed) {
+                        const w = typeof sub.wildcardsUsed === 'string' ? JSON.parse(sub.wildcardsUsed) : sub.wildcardsUsed;
+                        if (w?.aiHintsUsed !== undefined) setAiHintsUsed(w.aiHintsUsed);
+                        if (Array.isArray(w?.aiHintQuestions)) {
+                            setUnlockedHints(w.aiHintQuestions.filter((h: any) => h && h.hint));
+                        }
+                    }
+                    if (sub.answersList && Array.isArray(sub.answersList)) {
+                        setSupportAttempts(prev => {
+                            const newMap = { ...prev };
+                            sub.answersList.forEach((ans: any) => {
+                                if (ans.supportAttempts !== undefined) {
+                                    newMap[ans.questionId] = ans.supportAttempts;
+                                }
+                            });
+                            return newMap;
+                        });
+                    }
+                }
+            }
+        } catch (error: any) {
+            console.error("Error al sincronizar evaluación:", error);
+        } finally {
+            setIsRefreshing(false);
+        }
+    };
 
     // Modal states
     const [alertMessage, setAlertMessage] = useState<{ title: string; desc: string } | null>(null);
@@ -92,39 +140,105 @@ export function TakeEvaluationLayout({
     const [finishConfirmText, setFinishConfirmText] = useState("");
     const [showOverviewModal, setShowOverviewModal] = useState(false);
 
-    // Security/Anti-cheat states
+    // Mensaje prioritario del profesor vía SSE con lectura obligatoria (10s)
+    const [teacherMessageModal, setTeacherMessageModal] = useState<{
+        message: string;
+        senderName: string;
+        timestamp: number;
+    } | null>(null);
+    const [messageCountdown, setMessageCountdown] = useState<number>(10);
+
+    // Temporizador de 10 segundos de lectura obligatoria
+    useEffect(() => {
+        if (!teacherMessageModal) return;
+        setMessageCountdown(10);
+        const interval = setInterval(() => {
+            setMessageCountdown((prev) => {
+                if (prev <= 1) {
+                    clearInterval(interval);
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [teacherMessageModal]);
+
+    // Telemetría de cambios de pestaña cuando la expulsión está desactivada
+    const initialWildcards = useMemo(() => {
+        try {
+            return typeof submission.wildcardsUsed === 'string'
+                ? JSON.parse(submission.wildcardsUsed)
+                : (submission.wildcardsUsed as any) || {};
+        } catch {
+            return {};
+        }
+    }, [submission.wildcardsUsed]);
+
+    const [tabSwitchesCount, setTabSwitchesCount] = useState<number>(initialWildcards.tabSwitchesCount || 0);
+    const tabSwitchesCountRef = useRef(initialWildcards.tabSwitchesCount || 0);
+    const [totalTimeAwaySeconds, setTotalTimeAwaySeconds] = useState<number>(initialWildcards.totalTimeAwaySeconds || 0);
+    const [tabSwitchLogs, setTabSwitchLogs] = useState<any[]>(initialWildcards.tabSwitchLogs || []);
+    const [showTabSwitchesModal, setShowTabSwitchesModal] = useState(false);
+    const tabLeaveTimeRef = useRef<number>(0);
+    const activeQuestionIdxRef = useRef<number>(0);
+
     const [hasStarted, setHasStarted] = useState(false);
     const [isMaximized, setIsMaximized] = useState(false);
-    const [expulsionsCount, setExpulsionsCount] = useState<number>(submission.expulsions || 0);
-    const expulsionsCountRef = useRef(submission.expulsions || 0);
-    const isExpellingRef = useRef(false);
-    const lastViolationTimeRef = useRef(0);
-    const isProcessingViolationRef = useRef(false);
     const [isMobile, setIsMobile] = useState(false);
     const [hasMultipleScreens, setHasMultipleScreens] = useState(false);
+    const isSubmitted = Boolean(submission?.submittedAt);
 
-    // Refs para acceder a las respuestas y pregunta activa en eventos asíncronos y expulsiones
+    // Estado y control de expulsiones temporales con reingreso
+    const [expulsionsCount, setExpulsionsCount] = useState<number>(submission.expulsions || 0);
+    const expulsionsCountRef = useRef<number>(submission.expulsions || 0);
+    const [expulsionReason, setExpulsionReason] = useState<"resize" | "multi_screen" | null>(null);
+    const isExpellingRef = useRef(false);
+
+    // Refs para acceder a las respuestas y pregunta activa en eventos asíncronos
     const answersRef = useRef<Record<string, string>>({});
     const currentQuestionRef = useRef<any>(null);
     const editorRef = useRef<any>(null);
-    const internalCodeClipboardRef = useRef<string>("");
 
-    // Keep ref in sync with state
-    useEffect(() => {
-        expulsionsCountRef.current = expulsionsCount;
-    }, [expulsionsCount]);
+    const triggerExpulsion = useCallback(async (reason: "resize" | "multi_screen") => {
+        if (isExpellingRef.current || isSubmitted || !hasStarted) return;
+        isExpellingRef.current = true;
+        try {
+            setHasStarted(false);
+            setExpulsionReason(reason);
+            // Guardar borrador de la pregunta actual antes de pausar
+            if (currentQuestionRef.current?.id) {
+                const currentVal = editorRef.current && currentQuestionRef.current.type === "Code"
+                    ? editorRef.current.getValue()
+                    : answersRef.current[currentQuestionRef.current.id];
+                if (currentVal !== undefined) {
+                    saveAnswerAction(submission.id, currentQuestionRef.current.id, currentVal || "").catch(() => {});
+                }
+            }
+            const res = await registerExpulsionAction(submission.id);
+            if (res?.success) {
+                setExpulsionsCount(res.expulsions);
+                expulsionsCountRef.current = res.expulsions;
+            }
+        } catch (err) {
+            console.error("Error al registrar expulsión:", err);
+        } finally {
+            setTimeout(() => {
+                isExpellingRef.current = false;
+            }, 1500);
+        }
+    }, [hasStarted, isSubmitted, submission.id]);
 
     // Surveillance and restriction configuration from attempt
-    const surveillanceEnabled = attempt.enableSurveillance !== false;
-    const blockTabSwitch = surveillanceEnabled && (attempt.blockTabSwitch !== false);
-    const requireFullscreen = surveillanceEnabled && (attempt.requireFullscreen !== false);
-    const blockMultipleDisplays = surveillanceEnabled && (attempt.blockMultipleDisplays !== false);
-    const blockClipboard = surveillanceEnabled && (attempt.blockClipboard !== false);
-    const maxWarnings = attempt.maxWarnings ?? 3;
+    const surveillanceEnabled = currentAttempt.enableSurveillance !== false;
+    const blockTabSwitch = surveillanceEnabled && (currentAttempt.blockTabSwitch !== false);
+    const requireFullscreen = surveillanceEnabled && (currentAttempt.requireFullscreen !== false);
+    const blockMultipleDisplays = surveillanceEnabled && (currentAttempt.blockMultipleDisplays !== false);
+    const maxExitTimeSeconds = currentAttempt.maxExitTimeSeconds ?? attempt.maxExitTimeSeconds ?? 60;
+    const hasExitTimeAlert = blockTabSwitch && (totalTimeAwaySeconds >= maxExitTimeSeconds);
 
     // Wildcards State
     const maxAiHints = attempt.wildcardAiHints ?? attempt.evaluation.wildcardAiHints ?? 0;
-    const initialWildcards: any = submission.wildcardsUsed || {};
     const [aiHintsUsed, setAiHintsUsed] = useState<number>(initialWildcards.aiHintsUsed || 0);
     const [isUsingHint, setIsUsingHint] = useState(false);
     const [showHintConfirm, setShowHintConfirm] = useState(false);
@@ -139,58 +253,30 @@ export function TakeEvaluationLayout({
     const effectiveHelpUrl = attempt.helpUrl || attempt.evaluation.helpUrl;
     const hasHelpUrl = !!effectiveHelpUrl;
 
-    const handleExpulsion = async (reason: string, details: string) => {
-        if (!surveillanceEnabled) return;
-        if (isExpellingRef.current) return;
-
-        isExpellingRef.current = true;
-
-        // Guardar inmediatamente la respuesta actual (código o texto) antes de ser expulsado
-        try {
-            const currentQ = currentQuestionRef.current;
-            if (currentQ?.id) {
-                const currentAns = answersRef.current[currentQ.id];
-                if (currentAns !== undefined) {
-                    await saveAnswerAction(submission.id, currentQ.id, currentAns || "");
-                }
-            }
-        } catch (saveErr) {
-            console.error("Error guardando borrador previo a la expulsión:", saveErr);
-        }
-
-        try {
-            const currentWarnings = expulsionsCountRef.current;
-            const result = await registerExpulsionAction(submission.id);
-            const newCount = result?.expulsions ?? (currentWarnings + 1);
-
-            expulsionsCountRef.current = newCount;
-            setExpulsionsCount(newCount);
-        } catch (e) {
-            console.error("Failed to register expulsion / exit violation:", e);
-        }
-
-        toast.error(`🚫 Has sido expulsado de la evaluación`, {
-            description: `${reason}: ${details} Has perdido el foco o salido de la evaluación y la prueba se ha cerrado definitivamente.`,
-            duration: 8000,
-        });
-
-        // Redirigir de inmediato al dashboard del estudiante indicando la expulsión
-        router.push(`/dashboard/student?courseId=${attempt.courseId}&tab=evaluations&error=${encodeURIComponent(`Expulsado de la evaluación: ${reason}. ${details}`)}`);
-    };
-
-    const handleExpulsionRef = useRef(handleExpulsion);
-    useEffect(() => {
-        handleExpulsionRef.current = handleExpulsion;
-    });
+    // Sistema sin expulsiones: opera exclusivamente por conteo de salidas y alertas por umbral de tiempo
 
     useEffect(() => {
         setMounted(true);
+        toast.dismiss();
     }, []);
 
     const [activeQuestionIdx, setActiveQuestionIdx] = useState(0);
-    const questions = attempt.evaluation.questions || [];
-    const currentQuestion = questions[activeQuestionIdx];
-    const isSubmitted = !!submission.submittedAt;
+    const questions = currentAttempt.evaluation?.questions || attempt.evaluation.questions || [];
+    const currentQuestion = questions[activeQuestionIdx] || questions[0];
+
+    // Pistas Permanentes de IA (guardadas en base de datos para consulta ilimitada durante la prueba)
+    const [unlockedHints, setUnlockedHints] = useState<Array<{ questionId: string; hint: string; usedAt: string }>>(() => {
+        if (Array.isArray(initialWildcards.aiHintQuestions)) {
+            return initialWildcards.aiHintQuestions.filter((h: any) => h && h.hint);
+        }
+        return [];
+    });
+    const [copiedHintKey, setCopiedHintKey] = useState<string | null>(null);
+
+    const currentQuestionHints = useMemo(() => {
+        if (!currentQuestion?.id) return [];
+        return unlockedHints.filter(h => h.questionId === currentQuestion.id);
+    }, [unlockedHints, currentQuestion?.id]);
 
     // In case the student already submitted, they don't need the security screen and can be considered "started"
     useEffect(() => {
@@ -198,6 +284,88 @@ export function TakeEvaluationLayout({
             setHasStarted(true);
         }
     }, [isSubmitted]);
+// Conexión Server-Sent Events (SSE) para recibir cambios del docente en tiempo real
+    useEffect(() => {
+        if (!mounted || !currentAttempt?.id || isSubmitted) return;
+
+        let eventSource: EventSource | null = null;
+        let isCancelled = false;
+
+        try {
+            eventSource = new EventSource(`/api/evaluations/${currentAttempt.id}/events`);
+
+            eventSource.onopen = () => {
+                if (!isCancelled) setIsLiveConnected(true);
+            };
+
+            const processTeacherMessage = (data: any) => {
+                const targetMatches = 
+                    (!data.studentId && !data.submissionId) ||
+                    data.studentId === studentId ||
+                    data.submissionId === submission?.id;
+
+                if (targetMatches && data.message) {
+                    setTeacherMessageModal({
+                        message: data.message,
+                        senderName: data.senderName || "El Profesor",
+                        timestamp: data.timestamp || Date.now(),
+                    });
+                    try {
+                        if (typeof window !== "undefined" && "navigator" in window && navigator.vibrate) {
+                            navigator.vibrate([150, 100, 150]);
+                        }
+                    } catch {}
+                }
+            };
+
+            eventSource.addEventListener("evaluation-updated", (event: MessageEvent) => {
+                if (isCancelled) return;
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data?.type === "TEACHER_MESSAGE") {
+                        processTeacherMessage(data);
+                        return;
+                    }
+                    if (data?.type === "EVALUATION_LOCKED") {
+                        setIsAttemptLocked(true);
+                        return;
+                    }
+                    if (data?.type === "EVALUATION_UNLOCKED") {
+                        setIsAttemptLocked(false);
+                        return;
+                    }
+                    handleRefreshEvaluation(true, data?.message);
+                } catch {
+                    handleRefreshEvaluation(true);
+                }
+            });
+
+            eventSource.addEventListener("teacher-message", (event: MessageEvent) => {
+                if (isCancelled) return;
+                try {
+                    const data = JSON.parse(event.data);
+                    processTeacherMessage(data);
+                } catch (err) {
+                    console.error("Error al procesar teacher-message SSE:", err);
+                }
+            });
+
+            eventSource.onerror = () => {
+                if (!isCancelled) setIsLiveConnected(false);
+            };
+        } catch (err) {
+            console.error("SSE connection error:", err);
+        }
+
+        return () => {
+            isCancelled = true;
+            if (eventSource) {
+                eventSource.close();
+            }
+            setIsLiveConnected(false);
+        };
+    }, [mounted, currentAttempt?.id, isSubmitted]);
+
 
     // Device checks: mobile and multi-monitor
     useEffect(() => {
@@ -248,36 +416,86 @@ export function TakeEvaluationLayout({
             if (!requireFullscreen) return;
             const currentlyMaximized = checkMaximized();
             if (hasStarted && !currentlyMaximized) {
-                handleExpulsionRef.current("Cambio de tamaño de ventana", "Has reducido o modificado el tamaño de la ventana de la evaluación.");
+                triggerExpulsion("resize");
+            }
+        };
+
+        const handleTabLeave = () => {
+            // Si blockTabSwitch está desactivado, el sistema NO registra nada
+            if (!blockTabSwitch) return;
+            if (hasStarted && !isSubmitted && !tabLeaveTimeRef.current) {
+                tabLeaveTimeRef.current = Date.now();
+            }
+        };
+
+        const handleTabReturn = () => {
+            // Si blockTabSwitch está desactivado, el sistema NO registra nada
+            if (!blockTabSwitch) return;
+            if (hasStarted && !isSubmitted && tabLeaveTimeRef.current > 0) {
+                const leftAtMs = tabLeaveTimeRef.current;
+                tabLeaveTimeRef.current = 0;
+                const duration = Math.round((Date.now() - leftAtMs) / 1000);
+                if (duration >= 1) {
+                    const qIdx = activeQuestionIdxRef.current + 1;
+                    const qTitle = currentQuestionRef.current?.text?.substring(0, 60) || `Pregunta ${qIdx}`;
+                    const leftAtISO = new Date(leftAtMs).toISOString();
+                    const returnedAtISO = new Date().toISOString();
+
+                    registerTabSwitchLogAction({
+                        submissionId: submission.id,
+                        durationSeconds: duration,
+                        questionNumber: qIdx,
+                        questionTitle: qTitle,
+                        leftAt: leftAtISO,
+                        returnedAt: returnedAtISO,
+                    }).then((res) => {
+                        if (res?.success) {
+                            tabSwitchesCountRef.current = res.tabSwitchesCount;
+                            setTabSwitchesCount(res.tabSwitchesCount);
+                            setTotalTimeAwaySeconds(res.totalTimeAwaySeconds);
+                            if (res.logEntry) {
+                                setTabSwitchLogs((prev) => [...prev, res.logEntry]);
+                            }
+                        }
+                    }).catch((err) => {
+                        console.error("Error al registrar salida de pestaña:", err);
+                    });
+                }
             }
         };
 
         const handleVisibilityChange = () => {
             if (!blockTabSwitch) return;
-            if (hasStarted && document.visibilityState === 'hidden') {
-                handleExpulsionRef.current("Abandono de pestaña", "Has abandonado o cambiado la pestaña de la evaluación.");
+            if (document.visibilityState === 'hidden') {
+                handleTabLeave();
+            } else if (document.visibilityState === 'visible') {
+                handleTabReturn();
             }
         };
 
         const handleBlur = () => {
             if (!blockTabSwitch) return;
             if (hasStarted && !isHelpModeRef.current) {
-                handleExpulsionRef.current("Pérdida de foco", "Has interactuado fuera de la aplicación o cambiado de ventana.");
+                handleTabLeave();
             }
+        };
+
+        const handleFocus = () => {
+            if (!blockTabSwitch) return;
+            handleTabReturn();
         };
 
         const handleScreenChange = () => {
             if (!blockMultipleDisplays) return;
             if (hasStarted && (window.screen as any).isExtended) {
-                handleExpulsionRef.current("Múltiples monitores detectados", "Has conectado un monitor adicional durante la evaluación.");
+                triggerExpulsion("multi_screen");
             }
         };
 
         if (requireFullscreen) window.addEventListener('resize', handleResize);
-        if (blockTabSwitch) {
-            document.addEventListener('visibilitychange', handleVisibilityChange);
-            window.addEventListener('blur', handleBlur);
-        }
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        window.addEventListener('blur', handleBlur);
+        window.addEventListener('focus', handleFocus);
         if (blockMultipleDisplays) {
             (window.screen as any).addEventListener?.('change', handleScreenChange);
         }
@@ -286,102 +504,11 @@ export function TakeEvaluationLayout({
             window.removeEventListener('resize', handleResize);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
             window.removeEventListener('blur', handleBlur);
+            window.removeEventListener('focus', handleFocus);
             (window.screen as any).removeEventListener?.('change', handleScreenChange);
         };
-    }, [mounted, isSubmitted, hasStarted, surveillanceEnabled, blockTabSwitch, requireFullscreen, blockMultipleDisplays]);
+    }, [mounted, isSubmitted, hasStarted, surveillanceEnabled, blockTabSwitch, requireFullscreen, blockMultipleDisplays, maxExitTimeSeconds, triggerExpulsion]);
 
-    // Bloqueo de portapapeles y menú contextual si está habilitado
-    useEffect(() => {
-        if (!mounted || !hasStarted || isSubmitted || !blockClipboard) return;
-
-        const preventClipboard = (e: Event) => {
-            const target = e.target as HTMLElement | null;
-            const isEditorArea = !!target?.closest('.monaco-editor') ||
-                                 target?.tagName === "TEXTAREA" ||
-                                 target?.tagName === "INPUT" ||
-                                 target?.isContentEditable;
-
-            // En el editor de código y campos de respuesta, permitir copiar y cortar texto propio con total libertad
-            if ((e.type === "copy" || e.type === "cut") && isEditorArea) {
-                return;
-            }
-
-            // En el pegado dentro de Monaco o áreas de respuesta, su propio manejador verifica origen interno
-            if (e.type === "paste" && isEditorArea) {
-                return;
-            }
-
-            e.preventDefault();
-            toast.warning("Acción restringida", {
-                description: "Copiar el contenido del examen está restringido en esta evaluación.",
-            });
-        };
-
-        const handleContextMenu = (e: MouseEvent) => {
-            // Permitir menú contextual en el editor de código Monaco y en campos editables
-            const target = e.target as HTMLElement | null;
-            const isEditable = target && (
-                target.tagName === "TEXTAREA" ||
-                target.tagName === "INPUT" ||
-                target.isContentEditable ||
-                !!target.closest('.monaco-editor')
-            );
-
-            if (isEditable && !target?.hasAttribute("readonly") && !(target as any)?.disabled) {
-                // Se permite menú nativo o de Monaco para corrector y acciones del editor
-                return;
-            }
-
-            e.preventDefault();
-            toast.warning("Acción restringida", {
-                description: "El menú contextual está deshabilitado en esta evaluación.",
-            });
-        };
-
-        const handleKeyDown = (e: KeyboardEvent) => {
-            const target = e.target as HTMLElement | null;
-            const isEditorArea = !!target?.closest('.monaco-editor') ||
-                                 target?.tagName === "TEXTAREA" ||
-                                 target?.tagName === "INPUT" ||
-                                 target?.isContentEditable;
-
-            // Permitir copiar y cortar (Ctrl+C, Ctrl+X) en el editor y campos de respuesta del estudiante
-            if ((e.ctrlKey || e.metaKey) && ["c", "x", "C", "X"].includes(e.key)) {
-                if (isEditorArea) {
-                    return;
-                }
-                e.preventDefault();
-                toast.warning("Acción restringida", {
-                    description: "Copiar enunciados está deshabilitado en esta evaluación.",
-                });
-                return;
-            }
-
-            // Pegar (Ctrl+V): si está fuera de áreas editables, bloquear
-            if ((e.ctrlKey || e.metaKey) && ["v", "V"].includes(e.key)) {
-                if (!isEditorArea) {
-                    e.preventDefault();
-                    toast.warning("Acción restringida", {
-                        description: "Pegar contenido está deshabilitado.",
-                    });
-                }
-            }
-        };
-
-        document.addEventListener("copy", preventClipboard);
-        document.addEventListener("cut", preventClipboard);
-        document.addEventListener("paste", preventClipboard);
-        document.addEventListener("contextmenu", handleContextMenu);
-        document.addEventListener("keydown", handleKeyDown);
-
-        return () => {
-            document.removeEventListener("copy", preventClipboard);
-            document.removeEventListener("cut", preventClipboard);
-            document.removeEventListener("paste", preventClipboard);
-            document.removeEventListener("contextmenu", handleContextMenu);
-            document.removeEventListener("keydown", handleKeyDown);
-        };
-    }, [mounted, hasStarted, isSubmitted, blockClipboard]);
 
     // Initialize local state for answers based on what's already saved
     const [answers, setAnswers] = useState<Record<string, string>>(() => {
@@ -401,7 +528,8 @@ export function TakeEvaluationLayout({
 
     useEffect(() => {
         currentQuestionRef.current = currentQuestion;
-    }, [currentQuestion]);
+        activeQuestionIdxRef.current = activeQuestionIdx;
+    }, [currentQuestion, activeQuestionIdx]);
 
     // Auto-guardado continuo en segundo plano (debounce 800ms) para código y texto
     useEffect(() => {
@@ -450,7 +578,7 @@ export function TakeEvaluationLayout({
     const [accumulatedScore, setAccumulatedScore] = useState<number>(submission.score || 0);
 
     // Active tab in the answer panel
-    const [activeTab, setActiveTab] = useState("answer");
+    const [activeTab, setActiveTab] = useState<"answer" | "feedback" | "hints">("answer");
 
     // Tracking support attempts locally so the UI updates
     const [supportAttempts, setSupportAttempts] = useState<Record<string, number>>(() => {
@@ -473,6 +601,8 @@ export function TakeEvaluationLayout({
         }
         return initialMap;
     });
+
+
 
     const activeChipRef = useRef<HTMLButtonElement | null>(null);
 
@@ -518,9 +648,16 @@ export function TakeEvaluationLayout({
         return isSubmitted && ansScore !== undefined ? ansScore : (ansScore !== undefined && ansScore > 0 ? ansScore : maxAiScore);
     }, [currentQuestion, aiFeedbackMap, answerScores, isSubmitted]);
 
-    const timeEnd = new Date(attempt.endTime);
-    const maxSupportAttempts = attempt.maxSupportAttempts ?? attempt.evaluation.maxSupportAttempts ?? 3;
-    const aiSupportDelaySeconds = attempt.aiSupportDelaySeconds ?? attempt.evaluation.aiSupportDelaySeconds ?? 60;
+    const timeEnd = useMemo(() => new Date(currentAttempt.endTime), [currentAttempt.endTime]);
+    const maxSupportAttempts = currentAttempt.maxSupportAttempts ?? currentAttempt.evaluation?.maxSupportAttempts ?? 3;
+    const aiSupportDelaySeconds = currentAttempt.aiSupportDelaySeconds ?? currentAttempt.evaluation?.aiSupportDelaySeconds ?? 60;
+
+    // Asegurar que el índice de pregunta se mantenga válido si el profesor edita la cantidad de preguntas
+    useEffect(() => {
+        if (questions.length > 0 && activeQuestionIdx >= questions.length) {
+            setActiveQuestionIdx(Math.max(0, questions.length - 1));
+        }
+    }, [questions.length, activeQuestionIdx]);
 
     // Get the most recent requestedAt timestamp across all questions
     const latestGlobalRequestTime = useMemo(() => {
@@ -594,6 +731,11 @@ export function TakeEvaluationLayout({
                 return;
             }
 
+            // Si el profesor otorgó más tiempo, reactivar temporizador y desbloquear auto-envío
+            if (hasAutoSubmitted.current && !isSubmitted) {
+                hasAutoSubmitted.current = false;
+            }
+
             const h = Math.floor(diffMs / (1000 * 60 * 60));
             const m = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
             const s = Math.floor((diffMs % (1000 * 60)) / 1000);
@@ -622,479 +764,36 @@ export function TakeEvaluationLayout({
 
     // Pantalla completa de inicio y validación de requisitos antes de comenzar
     if (!hasStarted && !isSubmitted && mounted) {
-        const canStart = !surveillanceEnabled || (!isMobile && (!blockMultipleDisplays || !hasMultipleScreens) && (!requireFullscreen || isMaximized));
-        const startTime = attempt.startTime ? new Date(attempt.startTime) : null;
-        const endTime = attempt.endTime ? new Date(attempt.endTime) : null;
-
         return (
-            <div className="fixed inset-0 z-50 bg-background overflow-y-auto flex flex-col min-h-screen text-foreground">
-                {/* Header Superior Coherente con SmartClass */}
-                <header className="border-b border-border/60 bg-card/70 backdrop-blur sticky top-0 z-30 px-4 sm:px-8 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="gap-2 text-xs font-semibold h-8 cursor-pointer text-muted-foreground hover:text-foreground"
-                            onClick={() => router.push(`/dashboard/student?courseId=${attempt.courseId}&tab=evaluations`)}
-                        >
-                            <ArrowLeft className="w-4 h-4" />
-                            <span>Volver al Curso</span>
-                        </Button>
-                        <div className="h-4 w-px bg-border/60 hidden sm:block" />
-                        <span className="text-xs font-medium text-muted-foreground hidden sm:inline">
-                            SmartClass • Módulo de Evaluaciones
-                        </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <ThemeSelector themes={themes} />
-                        <ModeToggle />
-                    </div>
-                </header>
-
-                {/* Contenedor Principal que ocupa todo el espacio */}
-                <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col gap-6">
-
-                    {/* Banner Hero Principal */}
-                    <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-gradient-to-br from-card via-card to-primary/5 p-6 sm:p-8 shadow-xs space-y-4">
-                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                            <div className="space-y-2.5 max-w-4xl">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                    {surveillanceEnabled ? (
-                                        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/25 text-xs font-bold gap-1 px-2.5 py-0.5">
-                                            <ShieldAlert className="w-3.5 h-3.5" />
-                                            Vigilancia Activa
-                                        </Badge>
-                                    ) : (
-                                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25 text-xs font-bold gap-1 px-2.5 py-0.5">
-                                            <ShieldCheck className="w-3.5 h-3.5" />
-                                            Modo Libre
-                                        </Badge>
-                                    )}
-
-                                    {blockTabSwitch && (
-                                        <Badge variant="destructive" className="text-xs font-bold gap-1 px-2.5 py-0.5 shadow-2xs">
-                                            <Zap className="w-3 h-3" />
-                                            Expulsión Inmediata por Pérdida de Foco
-                                        </Badge>
-                                    )}
-
-                                    {blockTabSwitch && (
-                                        <Badge variant="outline" className={cn(
-                                            "text-xs font-bold font-mono gap-1 px-2.5 py-0.5",
-                                            expulsionsCount > 0 
-                                                ? "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30" 
-                                                : "bg-muted text-muted-foreground border-border/50"
-                                        )}>
-                                            <AlertCircle className="w-3.5 h-3.5 text-red-500" />
-                                            <span>{expulsionsCount} {expulsionsCount === 1 ? 'Expulsión acumulada' : 'Expulsiones acumuladas'}</span>
-                                        </Badge>
-                                    )}
-
-                                    <Badge variant="secondary" className="text-xs font-semibold px-2.5 py-0.5">
-                                        {questions.length} {questions.length === 1 ? 'Pregunta' : 'Preguntas'}
-                                    </Badge>
-                                </div>
-
-                                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-foreground">
-                                    {attempt.evaluation.title}
-                                </h1>
-
-                                {attempt.evaluation.description && (
-                                    <div
-                                        className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground leading-relaxed [&_p]:text-muted-foreground [&_strong]:text-foreground [&_p]:my-1"
-                                        data-color-mode={mounted && theme === "dark" ? "dark" : "light"}
-                                    >
-                                        <MDEditor.Markdown
-                                            source={attempt.evaluation.description}
-                                            style={{ backgroundColor: 'transparent', fontSize: 'inherit' }}
-                                        />
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Tiempos de Entrega */}
-                        <div className="flex flex-wrap items-center gap-4 sm:gap-6 pt-2 border-t border-border/50 text-xs text-muted-foreground">
-                            {startTime && (
-                                <div className="flex items-center gap-1.5">
-                                    <Calendar className="w-3.5 h-3.5 text-primary" />
-                                    <span>Inicio: <strong className="text-foreground">{format(startTime, "d 'de' MMMM, p", { locale: es })}</strong></span>
-                                </div>
-                            )}
-                            {endTime && (
-                                <div className="flex items-center gap-1.5">
-                                    <Clock className="w-3.5 h-3.5 text-amber-500" />
-                                    <span>Cierre: <strong className="text-foreground">{format(endTime, "d 'de' MMMM, p", { locale: es })}</strong></span>
-                                </div>
-                            )}
-                            <div className="flex items-center gap-1.5">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                                <span>Guardado: <strong className="text-foreground">Automático en la nube</strong></span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Banner Destacado si tiene expulsiones previas por pérdida de foco */}
-                    {blockTabSwitch && expulsionsCount > 0 && (
-                        <div className="p-4 sm:p-5 rounded-2xl border border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400 flex items-start gap-4 shadow-2xs">
-                            <ShieldAlert className="w-6 h-6 shrink-0 text-red-500 mt-0.5" />
-                            <div className="flex-1 space-y-1.5">
-                                <div className="flex items-center justify-between flex-wrap gap-2">
-                                    <h3 className="font-bold text-sm sm:text-base">
-                                        Registro de Seguridad: Has sido expulsado {expulsionsCount} {expulsionsCount === 1 ? 'vez' : 'veces'} de esta evaluación
-                                    </h3>
-                                    <Badge variant="outline" className="font-mono text-xs font-black bg-red-500/20 text-red-600 dark:text-red-300 border-red-500/30">
-                                        {expulsionsCount} {expulsionsCount === 1 ? 'expulsión previa' : 'expulsiones previas'}
-                                    </Badge>
-                                </div>
-                                <p className="text-xs leading-relaxed opacity-95">
-                                    La restricción de pérdida de foco está activa. Cada vez que cambias de pestaña, sales de la ventana del navegador o una aplicación en segundo plano toma el foco, la prueba se cierra de inmediato y se suma una nueva falta ante tu profesor. Lee atentamente la guía de recomendaciones para evitar expulsiones involuntarias.
-                                </p>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Cuadrícula Principal de 3 Columnas utilizando todo el ancho */}
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-
-                        {/* Columna 1: Configuración de la Evaluación (4 cols) */}
-                        <div className="lg:col-span-4 flex flex-col gap-4">
-                            <Card className="flex-1 border-border/80 shadow-xs flex flex-col">
-                                <CardHeader className="pb-3 border-b border-border/50">
-                                    <div className="flex items-center gap-2">
-                                        <SlidersHorizontal className="w-4 h-4 text-primary" />
-                                        <CardTitle className="text-sm font-bold">Parámetros de la Evaluación</CardTitle>
-                                    </div>
-                                    <CardDescription className="text-xs">
-                                        Reglas configuradas para esta prueba
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent className="pt-4 space-y-3 flex-1 text-xs">
-                                    {/* Pérdida de foco */}
-                                    <div className={cn(
-                                        "p-3 rounded-xl border flex items-start gap-3",
-                                        blockTabSwitch ? "bg-red-500/5 border-red-500/25" : "bg-muted/40 border-border/60"
-                                    )}>
-                                        <ShieldAlert className={cn("w-4 h-4 shrink-0 mt-0.5", blockTabSwitch ? "text-red-500" : "text-muted-foreground")} />
-                                        <div className="space-y-0.5">
-                                            <div className="flex items-center justify-between gap-2">
-                                                <span className="font-bold text-foreground">Control de Foco</span>
-                                                <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0 font-bold", blockTabSwitch ? "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30" : "bg-muted text-muted-foreground")}>
-                                                    {blockTabSwitch ? "Estricto" : "Libre"}
-                                                </Badge>
-                                            </div>
-                                            <p className="text-muted-foreground text-[11px] leading-relaxed">
-                                                {blockTabSwitch
-                                                    ? "Prohibido cambiar de pestaña o ventana. Provoca expulsión inmediata sin advertencias."
-                                                    : "Puedes cambiar de pestaña sin que se cierre tu prueba."}
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    {/* Tamaño de ventana */}
-                                    <div className={cn(
-                                        "p-3 rounded-xl border flex items-start gap-3",
-                                        requireFullscreen ? "bg-amber-500/5 border-amber-500/25" : "bg-muted/40 border-border/60"
-                                    )}>
-                                        <Maximize2 className={cn("w-4 h-4 shrink-0 mt-0.5", requireFullscreen ? "text-amber-500" : "text-muted-foreground")} />
-                                        <div className="space-y-0.5">
-                                            <div className="flex items-center justify-between gap-2">
-                                                <span className="font-bold text-foreground">Ventana Maximizada</span>
-                                                <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0 font-bold", requireFullscreen ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30" : "bg-muted text-muted-foreground")}>
-                                                    {requireFullscreen ? "Obligatorio" : "Flexible"}
-                                                </Badge>
-                                            </div>
-                                            <p className="text-muted-foreground text-[11px] leading-relaxed">
-                                                {requireFullscreen
-                                                    ? "La ventana debe permanecer maximizada durante todo el examen."
-                                                    : "Puedes ajustar las dimensiones del navegador según tu preferencia."}
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    {/* Múltiples monitores */}
-                                    <div className={cn(
-                                        "p-3 rounded-xl border flex items-start gap-3",
-                                        blockMultipleDisplays ? "bg-blue-500/5 border-blue-500/25" : "bg-muted/40 border-border/60"
-                                    )}>
-                                        <Monitor className={cn("w-4 h-4 shrink-0 mt-0.5", blockMultipleDisplays ? "text-blue-500" : "text-muted-foreground")} />
-                                        <div className="space-y-0.5">
-                                            <div className="flex items-center justify-between gap-2">
-                                                <span className="font-bold text-foreground">Pantallas Conectadas</span>
-                                                <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0 font-bold", blockMultipleDisplays ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30" : "bg-muted text-muted-foreground")}>
-                                                    {blockMultipleDisplays ? "1 Monitor" : "Múltiples"}
-                                                </Badge>
-                                            </div>
-                                            <p className="text-muted-foreground text-[11px] leading-relaxed">
-                                                {blockMultipleDisplays
-                                                    ? "Solo se permite una pantalla conectada al equipo."
-                                                    : "Puedes usar pantallas secundarias o externas."}
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    {/* Portapapeles */}
-                                    <div className="p-3 rounded-xl border bg-muted/40 border-border/60 flex items-start gap-3">
-                                        <CopySlash className="w-4 h-4 shrink-0 mt-0.5 text-muted-foreground" />
-                                        <div className="space-y-0.5">
-                                            <div className="flex items-center justify-between gap-2">
-                                                <span className="font-bold text-foreground">Portapapeles</span>
-                                                <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0 font-bold", blockClipboard ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30" : "bg-muted text-muted-foreground")}>
-                                                    {blockClipboard ? "Bloqueado" : "Habilitado"}
-                                                </Badge>
-                                            </div>
-                                            <p className="text-muted-foreground text-[11px] leading-relaxed">
-                                                {blockClipboard
-                                                    ? "Copiar, pegar, cortar y menú contextual deshabilitados."
-                                                    : "Acceso libre al portapapeles."}
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    {/* Material de ayuda y comodines */}
-                                    {hasHelpUrl && (
-                                        <div className="p-3 rounded-xl border bg-primary/5 border-primary/25 flex items-start gap-3">
-                                            <BookOpen className="w-4 h-4 shrink-0 mt-0.5 text-primary" />
-                                            <div className="space-y-0.5">
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <span className="font-bold text-foreground">Material de Consulta</span>
-                                                    <Badge className="bg-primary/15 text-primary text-[10px] px-1.5 py-0">Permitido</Badge>
-                                                </div>
-                                                <p className="text-muted-foreground text-[11px] leading-relaxed">
-                                                    El profesor habilitó material de apoyo. Puedes consultarlo dentro del examen sin penalización.
-                                                </p>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {maxAiHints > 0 && (
-                                        <div className="p-3 rounded-xl border bg-amber-500/5 border-amber-500/25 flex items-start gap-3">
-                                            <Lightbulb className="w-4 h-4 shrink-0 mt-0.5 text-amber-500" />
-                                            <div className="space-y-0.5">
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <span className="font-bold text-foreground">Pistas con IA</span>
-                                                    <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] px-1.5 py-0 font-bold">{maxAiHints} Pistas</Badge>
-                                                </div>
-                                                <p className="text-muted-foreground text-[11px] leading-relaxed">
-                                                    Dispones de {maxAiHints} consultas conceptuales asistidas por IA para desbloquearte.
-                                                </p>
-                                            </div>
-                                        </div>
-                                    )}
-                                </CardContent>
-                            </Card>
-                        </div>
-
-                        {/* Columna 2: Sugerencias Cruciales Anti-Interrupción (5 cols) */}
-                        <div className="lg:col-span-5 flex flex-col gap-4">
-                            <Card className="flex-1 border-border/80 shadow-xs flex flex-col">
-                                <CardHeader className="pb-3 border-b border-border/50">
-                                    <div className="flex items-center justify-between gap-2">
-                                        <div className="flex items-center gap-2">
-                                            <BellOff className="w-4 h-4 text-red-500" />
-                                            <CardTitle className="text-sm font-bold">Guía Anti-Interrupciones</CardTitle>
-                                        </div>
-                                        <Badge variant="outline" className="text-[10px] font-bold text-red-600 dark:text-red-400 border-red-500/30 bg-red-500/10">
-                                            Importante
-                                        </Badge>
-                                    </div>
-                                    <CardDescription className="text-xs">
-                                        Evita que notificaciones del sistema o aplicaciones externas provoquen tu expulsión
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent className="pt-4 space-y-3.5 flex-1 text-xs">
-                                    {/* Sugerencia 1: Notificaciones del Sistema Operativo */}
-                                    <div className="p-3.5 rounded-xl border border-border/80 bg-muted/30 space-y-1.5">
-                                        <div className="flex items-center gap-2 font-bold text-foreground">
-                                            <BellRing className="w-4 h-4 text-amber-500 shrink-0" />
-                                            <span>1. Desactiva las Notificaciones del Sistema Operativo</span>
-                                        </div>
-                                        <p className="text-muted-foreground text-[11px] leading-relaxed">
-                                            Un cartel emergente de correo, calendario o antivirus roba el foco de la ventana activa del navegador.
-                                        </p>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 font-mono text-[10px]">
-                                            <div className="p-2 rounded-lg bg-background border border-border/60">
-                                                <span className="font-bold text-primary block mb-0.5">En Windows:</span>
-                                                <span className="text-muted-foreground">Presiona <strong>Win + N</strong> y activa el modo <strong>No molestar</strong> o Asistente de concentración.</span>
-                                            </div>
-                                            <div className="p-2 rounded-lg bg-background border border-border/60">
-                                                <span className="font-bold text-primary block mb-0.5">En macOS:</span>
-                                                <span className="text-muted-foreground">Abre el <strong>Centro de Control</strong> arriba a la derecha y activa <strong>No molestar (Focus)</strong>.</span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Sugerencia 2: Apps en segundo plano */}
-                                    <div className="p-3.5 rounded-xl border border-border/80 bg-muted/30 space-y-1.5">
-                                        <div className="flex items-center gap-2 font-bold text-foreground">
-                                            <MessageSquare className="w-4 h-4 text-blue-500 shrink-0" />
-                                            <span>2. Cierra Mensajería y Apps en Segundo Plano</span>
-                                        </div>
-                                        <p className="text-muted-foreground text-[11px] leading-relaxed">
-                                            Cierra completamente <strong>WhatsApp, Telegram, Discord, Teams, Slack, Outlook o Skype</strong>. Una llamada entrante o mensaje con notificación flotante desenfoca el navegador y genera expulsión inmediata.
-                                        </p>
-                                    </div>
-
-                                    {/* Sugerencia 3: Atajos de teclado */}
-                                    <div className="p-3.5 rounded-xl border border-border/80 bg-muted/30 space-y-1.5">
-                                        <div className="flex items-center gap-2 font-bold text-foreground">
-                                            <Keyboard className="w-4 h-4 text-purple-500 shrink-0" />
-                                            <span>3. Evita Atajos de Teclado del Sistema</span>
-                                        </div>
-                                        <p className="text-muted-foreground text-[11px] leading-relaxed">
-                                            No presiones <strong>Alt + Tab</strong>, la tecla <strong>Windows / Command</strong>, ni combinaciones como <strong>Ctrl + Esc</strong> o <strong>Win + D</strong> que abran el menú de inicio o la barra de tareas.
-                                        </p>
-                                    </div>
-
-                                    {/* Sugerencia 4: Gestos del touchpad */}
-                                    <div className="p-3.5 rounded-xl border border-border/80 bg-muted/30 space-y-1.5">
-                                        <div className="flex items-center gap-2 font-bold text-foreground">
-                                            <Laptop className="w-4 h-4 text-emerald-500 shrink-0" />
-                                            <span>4. Cuidado con Gestos en Computadores Portátiles</span>
-                                        </div>
-                                        <p className="text-muted-foreground text-[11px] leading-relaxed">
-                                            Si usas laptop, evita deslizar con 3 o 4 dedos en el touchpad para no alternar de escritorio virtual ni minimizar la pantalla sin querer.
-                                        </p>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </div>
-
-                        {/* Columna 3: Estado de tus Requisitos (3 cols) */}
-                        <div className="lg:col-span-3 flex flex-col gap-4">
-                            <Card className="flex-1 border-border/80 shadow-xs flex flex-col">
-                                <CardHeader className="pb-3 border-b border-border/50">
-                                    <div className="flex items-center gap-2">
-                                        <CheckCircle className="w-4 h-4 text-emerald-500" />
-                                        <CardTitle className="text-sm font-bold">Verificación en Vivo</CardTitle>
-                                    </div>
-                                    <CardDescription className="text-xs">
-                                        Estado de tu equipo y navegador
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent className="pt-4 space-y-3 flex-1 text-xs">
-                                    {/* Dispositivo compatible */}
-                                    <div className={cn(
-                                        "p-2.5 rounded-xl border flex items-center justify-between gap-2",
-                                        !isMobile ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-700 dark:text-emerald-300" : "bg-red-500/10 border-red-500/25 text-red-700 dark:text-red-300"
-                                    )}>
-                                        <div className="flex items-center gap-2">
-                                            <Laptop className="w-4 h-4 shrink-0" />
-                                            <span className="font-semibold">Dispositivo</span>
-                                        </div>
-                                        <span className="font-bold text-[11px]">
-                                            {!isMobile ? "Compatible ✓" : "Móvil detectado ✕"}
-                                        </span>
-                                    </div>
-
-                                    {/* Pantalla única */}
-                                    {blockMultipleDisplays && (
-                                        <div className={cn(
-                                            "p-2.5 rounded-xl border flex items-center justify-between gap-2",
-                                            !hasMultipleScreens ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-700 dark:text-emerald-300" : "bg-red-500/10 border-red-500/25 text-red-700 dark:text-red-300"
-                                        )}>
-                                            <div className="flex items-center gap-2">
-                                                <Monitor className="w-4 h-4 shrink-0" />
-                                                <span className="font-semibold">Monitores</span>
-                                            </div>
-                                            <span className="font-bold text-[11px]">
-                                                {!hasMultipleScreens ? "1 Monitor ✓" : "Desconecta el 2do ✕"}
-                                            </span>
-                                        </div>
-                                    )}
-
-                                    {/* Ventana maximizada */}
-                                    {requireFullscreen && (
-                                        <div className={cn(
-                                            "p-2.5 rounded-xl border flex items-center justify-between gap-2",
-                                            isMaximized ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/10 border-amber-500/25 text-amber-700 dark:text-amber-300"
-                                        )}>
-                                            <div className="flex items-center gap-2">
-                                                <Maximize2 className="w-4 h-4 shrink-0" />
-                                                <span className="font-semibold">Ventana</span>
-                                            </div>
-                                            <span className="font-bold text-[11px]">
-                                                {isMaximized ? "Maximizada ✓" : "Maximizar ⚠️"}
-                                            </span>
-                                        </div>
-                                    )}
-
-                                    {/* Conexión */}
-                                    <div className="p-2.5 rounded-xl border bg-emerald-500/10 border-emerald-500/25 text-emerald-700 dark:text-emerald-300 flex items-center justify-between gap-2">
-                                        <div className="flex items-center gap-2">
-                                            <CheckCircle2 className="w-4 h-4 shrink-0" />
-                                            <span className="font-semibold">Conexión</span>
-                                        </div>
-                                        <span className="font-bold text-[11px]">En línea ✓</span>
-                                    </div>
-
-                                    {/* Estado global */}
-                                    <div className={cn(
-                                        "p-3 rounded-xl border mt-2 text-center",
-                                        canStart 
-                                            ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-800 dark:text-emerald-300" 
-                                            : "bg-amber-500/15 border-amber-500/30 text-amber-800 dark:text-amber-300"
-                                    )}>
-                                        <p className="font-bold text-xs">
-                                            {canStart ? "Entorno Validado ✓" : "Requisitos Incompletos"}
-                                        </p>
-                                        <p className="text-[10px] opacity-80 mt-0.5">
-                                            {canStart ? "Puedes comenzar la evaluación" : "Ajusta tu entorno para continuar"}
-                                        </p>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </div>
-
-                    </div>
-
-                </main>
-
-                {/* Footer Barra de Acción Pegajosa Inferior */}
-                <footer className="border-t border-border/70 bg-card/95 backdrop-blur sticky bottom-0 z-30 p-4 px-4 sm:px-8 shadow-lg">
-                    <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-                        <div className="flex items-center gap-2 text-xs">
-                            {canStart ? (
-                                <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold">
-                                    <CheckCircle2 className="w-4 h-4" />
-                                    Todos los requisitos cumplidos. Estás listo para comenzar.
-                                </span>
-                            ) : (
-                                <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-bold">
-                                    <AlertTriangle className="w-4 h-4" />
-                                    Por favor cumple los requisitos de la columna de verificación para poder comenzar.
-                                </span>
-                            )}
-                        </div>
-
-                        <div className="flex items-center gap-3 w-full sm:w-auto">
-                            <Button
-                                variant="outline"
-                                className="flex-1 sm:flex-none text-xs font-semibold h-10 cursor-pointer"
-                                onClick={() => router.push(`/dashboard/student?courseId=${attempt.courseId}&tab=evaluations`)}
-                            >
-                                Volver al Curso
-                            </Button>
-                            <Button
-                                size="lg"
-                                className="flex-1 sm:flex-none font-bold text-sm h-10 cursor-pointer gap-2 shadow-sm"
-                                disabled={!canStart}
-                                onClick={() => setHasStarted(true)}
-                            >
-                                {canStart ? (
-                                    <>
-                                        <span>Acepto las normas — Comenzar Evaluación</span>
-                                        <ArrowRight className="w-4 h-4" />
-                                    </>
-                                ) : (
-                                    <span>Requisitos pendientes para iniciar</span>
-                                )}
-                            </Button>
-                        </div>
-                    </div>
-                </footer>
-            </div>
+            <EvaluationPreExamBarrier
+                attempt={attempt}
+                currentAttempt={currentAttempt}
+                questions={questions}
+                themes={themes}
+                mounted={mounted}
+                theme={theme}
+                surveillanceEnabled={surveillanceEnabled}
+                blockTabSwitch={blockTabSwitch}
+                requireFullscreen={requireFullscreen}
+                blockMultipleDisplays={blockMultipleDisplays}
+                maxExitTimeSeconds={maxExitTimeSeconds}
+                tabSwitchesCount={tabSwitchesCount}
+                totalTimeAwaySeconds={totalTimeAwaySeconds}
+                hasExitTimeAlert={hasExitTimeAlert}
+                hasHelpUrl={Boolean(attempt.helpUrl)}
+                maxAiHints={maxAiHints}
+                isMobile={isMobile}
+                hasMultipleScreens={hasMultipleScreens}
+                isMaximized={isMaximized}
+                expulsionReason={expulsionReason}
+                expulsionsCount={expulsionsCount}
+                onStart={() => {
+                    setExpulsionReason(null);
+                    setHasStarted(true);
+                }}
+                onBack={() => router.push(`/dashboard/student?courseId=${attempt.courseId}&tab=evaluations`)}
+                onOpenTabSwitchesModal={() => setShowTabSwitchesModal(true)}
+            />
         );
     }
 
@@ -1112,7 +811,9 @@ export function TakeEvaluationLayout({
         setActiveTab("answer"); // Reset tab
     };
 
+
     const handleAnswerChange = (val: string) => {
+        if (!currentQuestion?.id) return;
         answersRef.current[currentQuestion.id] = val;
         setAnswers(prev => {
             if (prev[currentQuestion.id] === val) return prev;
@@ -1131,12 +832,6 @@ export function TakeEvaluationLayout({
                 : answers[currentQuestion.id];
             if (val !== undefined && val !== null) {
                 await saveAnswerAction(submission.id, currentQuestion.id, val || "");
-                if (notify === true) {
-                    toast.success("Borrador guardado", {
-                        description: "Tu respuesta se ha sincronizado correctamente.",
-                        duration: 2500,
-                    });
-                }
             }
         }
         setIsSaving(false);
@@ -1156,15 +851,9 @@ export function TakeEvaluationLayout({
             : (answers[currentQuestion.id] || "");
 
         if (!currentAns?.trim()) {
-            toast.warning("Respuesta Vacía", {
-                description: "Debes escribir alguna respuesta antes de pedirle a la IA que la evalúe.",
-            });
+            setActiveTab("answer");
             return;
         }
-
-        const toastId = toast.loading("Evaluando respuesta con IA...", {
-            description: "Analizando criterios pedagógicos y precisión técnica...",
-        });
 
         setIsEvaluatingAI(true);
         try {
@@ -1207,18 +896,8 @@ export function TakeEvaluationLayout({
                 ...prev,
                 [currentQuestion.id]: (prev[currentQuestion.id] || 0) + 1
             }));
-
-            toast.success(`Evaluación completada • Nota: ${res.scoreContribution.toFixed(1)} / 5.0`, {
-                id: toastId,
-                description: res.attemptsRemaining === 0
-                    ? "Has agotado las solicitudes a la IA para esta pregunta."
-                    : `Te quedan ${res.attemptsRemaining} intento(s) de mejora.`,
-            });
         } catch (error: any) {
-            toast.error("Error al evaluar con IA", {
-                id: toastId,
-                description: error.message || "No se pudo consultar a la IA. Inténtalo de nuevo.",
-            });
+            console.error("Error al evaluar con IA:", error);
         } finally {
             setIsEvaluatingAI(false);
         }
@@ -1231,20 +910,20 @@ export function TakeEvaluationLayout({
     const handleUseAiHint = async () => {
         setShowHintConfirm(false);
         setIsUsingHint(true);
-        const toastId = toast.loading("Obteniendo pista de IA...");
         try {
-            const res = await useAiHintAction(submission.id, currentQuestion.id, answers[currentQuestion.id] || "");
+            const res = await requestAiHintAction(submission.id, currentQuestion.id, answers[currentQuestion.id] || "");
             setAiHintsUsed(prev => prev + 1);
-            toast.info("💡 Pista de la IA", {
-                id: toastId,
-                description: res.hint,
-                duration: 12000,
-            });
+            if (res.hint) {
+                const newHintEntry = {
+                    questionId: currentQuestion.id,
+                    hint: res.hint,
+                    usedAt: new Date().toISOString()
+                };
+                setUnlockedHints(prev => [...prev, newHintEntry]);
+            }
+            setActiveTab("hints");
         } catch (error: any) {
-            toast.error("Error al obtener pista", {
-                id: toastId,
-                description: error.message || "No se pudo generar la pista.",
-            });
+            console.error("Error al obtener pista:", error);
         } finally {
             setIsUsingHint(false);
         }
@@ -1299,43 +978,195 @@ export function TakeEvaluationLayout({
                         <TooltipContent>Calificación actual: {accumulatedScore.toFixed(1)} / 5.0 (clic para ver panorámica)</TooltipContent>
                     </Tooltip>
 
-                    {/* Indicador de Vigilancia Estricta y Expulsiones */}
+                    {/* Indicador de Vigilancia de la Evaluación */}
                     {surveillanceEnabled && !isSubmitted && (
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <div className={cn(
-                                    "flex items-center gap-1.5 px-2.5 h-8 rounded-lg border text-xs font-bold transition-all shadow-2xs",
-                                    expulsionsCount > 0 
+                                    "flex items-center gap-1.5 px-2.5 h-8 rounded-lg border text-xs font-bold transition-all shadow-2xs cursor-help",
+                                    hasExitTimeAlert
                                         ? "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30" 
-                                        : "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20"
+                                        : "bg-primary/10 text-primary border-primary/20"
                                 )}>
                                     <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
-                                    <span className="text-[10px] uppercase font-bold hidden sm:inline">Vigilancia Estricta</span>
-                                    {blockTabSwitch && (
-                                        <span className="flex items-center gap-1 ml-1 pl-1.5 border-l border-red-500/30 text-[11px] font-mono font-bold">
-                                            <span className="text-[10px] uppercase font-semibold opacity-80 hidden md:inline">Expulsiones:</span>
-                                            <span className={cn(
-                                                "px-1.5 py-0.2 rounded font-black",
-                                                expulsionsCount > 0 ? "bg-red-600 text-white" : "text-foreground"
-                                            )}>{expulsionsCount}</span>
-                                        </span>
-                                    )}
+                                    <span className="text-[10px] uppercase font-bold hidden sm:inline">
+                                        {blockTabSwitch ? "Supervisión Activa" : "Vigilancia Básica"}
+                                    </span>
                                 </div>
                             </TooltipTrigger>
-                            <TooltipContent>
-                                {blockTabSwitch 
-                                    ? `Vigilancia de foco activa. Veces expulsado: ${expulsionsCount}. Salir o perder el foco provocará expulsión inmediata.`
-                                    : "Vigilancia estricta activa: salir de la pantalla, cambiar de ventana o perder el foco provocará tu expulsión inmediata del examen."}
+                            <TooltipContent side="bottom" align="end" className="max-w-xs sm:max-w-sm p-3.5 space-y-2.5 bg-popover/95 backdrop-blur-md shadow-xl border-border">
+                                <div className="flex items-center gap-2 pb-2 border-b border-border/60">
+                                    <ShieldAlert className="w-4 h-4 text-primary shrink-0" />
+                                    <div>
+                                        <p className="font-bold text-xs text-foreground leading-tight">Medidas de Seguridad de la Evaluación</p>
+                                        <p className="text-[10px] text-muted-foreground">Estado de las restricciones configuradas por el docente:</p>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2 text-[11px] text-left">
+                                    <div className="flex items-start gap-2">
+                                        {blockTabSwitch ? (
+                                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                                        ) : (
+                                            <XCircle className="w-3.5 h-3.5 text-muted-foreground/60 shrink-0 mt-0.5" />
+                                        )}
+                                        <div>
+                                            <span className="font-semibold text-foreground">
+                                                Control de Salidas y Pestañas:
+                                            </span>{" "}
+                                            <span className="text-muted-foreground">
+                                                {blockTabSwitch 
+                                                    ? `Habilitado (se registran salidas y tiempo fuera. Límite de alerta docente: ${Math.max(1, Math.round(maxExitTimeSeconds / 60))} min).` 
+                                                    : "Deshabilitado (el sistema no registra salidas ni tiempo fuera)."}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-start gap-2">
+                                        {requireFullscreen ? (
+                                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                                        ) : (
+                                            <XCircle className="w-3.5 h-3.5 text-muted-foreground/60 shrink-0 mt-0.5" />
+                                        )}
+                                        <div>
+                                            <span className="font-semibold text-foreground">Pantalla Maximizada:</span>{" "}
+                                            <span className="text-muted-foreground">
+                                                {requireFullscreen 
+                                                    ? "Habilitada (se solicita mantener la ventana maximizada)." 
+                                                    : "Deshabilitada (modo ventana normal permitido)."}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-start gap-2">
+                                        {blockMultipleDisplays ? (
+                                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                                        ) : (
+                                            <XCircle className="w-3.5 h-3.5 text-muted-foreground/60 shrink-0 mt-0.5" />
+                                        )}
+                                        <div>
+                                            <span className="font-semibold text-foreground">Múltiples Monitores:</span>{" "}
+                                            <span className="text-muted-foreground">
+                                                {blockMultipleDisplays 
+                                                    ? "Supervisado (se avisa si detecta pantallas secundarias)." 
+                                                    : "Permitido (pantallas secundarias permitidas)."}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
                             </TooltipContent>
                         </Tooltip>
                     )}
 
-                    {blockTabSwitch && isSubmitted && (
-                        <div className="flex items-center gap-1.5 px-2.5 h-8 rounded-lg border text-xs font-bold bg-muted/50 border-border/50 text-muted-foreground">
-                            <ShieldAlert className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                            <span className="text-[10px] uppercase">Expulsiones:</span>
-                            <span className="font-mono font-black text-foreground">{expulsionsCount}</span>
-                        </div>
+                    {!surveillanceEnabled && !isSubmitted && (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className="flex items-center gap-1.5 px-2.5 h-8 rounded-lg border text-xs font-bold transition-all shadow-2xs bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 cursor-help">
+                                    <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                                    <span className="text-[10px] uppercase font-bold hidden sm:inline">Modo Libre</span>
+                                </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" align="end" className="max-w-xs sm:max-w-sm p-3.5 space-y-2 text-left bg-popover/95 backdrop-blur-md shadow-xl border-border">
+                                <div className="flex items-center gap-2 pb-1.5 border-b border-border/60">
+                                    <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
+                                    <div>
+                                        <p className="font-bold text-xs text-foreground leading-tight">Modo Libre de Vigilancia</p>
+                                        <p className="text-[10px] text-muted-foreground">Medidas de seguridad:</p>
+                                    </div>
+                                </div>
+                                <div className="space-y-1.5 text-[11px]">
+                                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                                        <XCircle className="w-3.5 h-3.5 text-muted-foreground/60 shrink-0" />
+                                        <span>Sin expulsión por pérdida de foco ni cambio de ventana.</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                                        <XCircle className="w-3.5 h-3.5 text-muted-foreground/60 shrink-0" />
+                                        <span>Sin restricción de pantalla completa ni monitores.</span>
+                                    </div>
+                                </div>
+                            </TooltipContent>
+                        </Tooltip>
+                    )}
+
+                    {blockTabSwitch && (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div
+                                    onClick={() => setShowTabSwitchesModal(true)}
+                                    className={cn(
+                                        "flex items-center gap-1.5 px-2.5 h-8 rounded-lg border text-xs font-bold transition-all shadow-2xs select-none cursor-pointer",
+                                        hasExitTimeAlert
+                                            ? "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/40"
+                                            : tabSwitchesCount > 0
+                                                ? "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30"
+                                                : "bg-muted/30 text-muted-foreground border-border/50"
+                                    )}
+                                >
+                                    {hasExitTimeAlert ? (
+                                        <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                                    ) : (
+                                        <ExternalLink className={cn("w-3.5 h-3.5 shrink-0", tabSwitchesCount > 0 ? "text-amber-500" : "text-muted-foreground")} />
+                                    )}
+                                    <span className="text-[10px] uppercase hidden sm:inline">Salidas:</span>
+                                    <span className="font-mono font-black">{tabSwitchesCount}</span>
+                                    {tabSwitchesCount > 0 && (
+                                        <span className="text-[10px] opacity-80 font-normal font-mono hidden md:inline">({formatDurationHMS(totalTimeAwaySeconds)})</span>
+                                    )}
+                                    {hasExitTimeAlert && (
+                                        <span className="text-[9px] uppercase font-black bg-red-600 text-white px-1 py-0.2 rounded ml-0.5">Alerta</span>
+                                    )}
+                                </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" align="end" className="max-w-xs p-3.5 space-y-2 bg-popover/95 backdrop-blur-md shadow-xl border-border text-left">
+                                <div className="flex items-center justify-between pb-1.5 border-b border-border/60">
+                                    <div className="flex items-center gap-1.5">
+                                        {hasExitTimeAlert ? (
+                                            <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                                        ) : (
+                                            <ExternalLink className="w-4 h-4 text-amber-500 shrink-0" />
+                                        )}
+                                        <span className="font-bold text-xs text-foreground">Control de Salidas</span>
+                                    </div>
+                                    <span className={cn(
+                                        "text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border",
+                                        hasExitTimeAlert 
+                                            ? "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30" 
+                                            : "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30"
+                                    )}>
+                                        {tabSwitchesCount} {tabSwitchesCount === 1 ? 'salida' : 'salidas'} • {formatDurationHMS(totalTimeAwaySeconds)}
+                                    </span>
+                                </div>
+                                <div className="space-y-1.5 text-xs">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-muted-foreground text-[11px]">Veces que salió:</span>
+                                        <span className="font-bold font-mono text-foreground">
+                                            {tabSwitchesCount} {tabSwitchesCount === 1 ? "vez" : "veces"}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-muted-foreground text-[11px]">Tiempo acumulado fuera:</span>
+                                        <span className={cn("font-bold font-mono", hasExitTimeAlert ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400")}>
+                                            {formatDurationHMS(totalTimeAwaySeconds)} ({formatDurationHuman(totalTimeAwaySeconds)})
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-muted-foreground text-[11px]">Límite de alerta docente:</span>
+                                        <span className="font-bold font-mono text-muted-foreground">
+                                            {Math.max(1, Math.round(maxExitTimeSeconds / 60))} min
+                                        </span>
+                                    </div>
+                                </div>
+                                {hasExitTimeAlert ? (
+                                    <div className="p-2 rounded bg-red-500/10 border border-red-500/30 text-[10px] text-red-600 dark:text-red-400 font-medium">
+                                        ⚠️ <strong>Límite superado:</strong> Has acumulado más tiempo del permitido fuera de la prueba. El docente tiene registrada esta alerta.
+                                    </div>
+                                ) : (
+                                    <p className="text-[10px] text-muted-foreground pt-1.5 border-t border-border/50">
+                                        👁️ Clic para ver historial completo de salidas registradas.
+                                    </p>
+                                )}
+                            </TooltipContent>
+                        </Tooltip>
                     )}
 
                     {/* Wildcard Buttons */}
@@ -1347,13 +1178,14 @@ export function TakeEvaluationLayout({
                                         onClick={() => setShowHintConfirm(true)}
                                         disabled={aiHintsUsed >= maxAiHints || isUsingHint}
                                         className={cn(
-                                            "group flex items-center gap-1.5 px-2.5 h-8 rounded-lg text-xs font-bold transition-all border cursor-pointer",
+                                            "group flex items-center gap-1.5 px-2.5 h-8 rounded-lg text-xs font-bold transition-all border cursor-pointer shadow-2xs",
                                             aiHintsUsed >= maxAiHints
                                                 ? "bg-muted/60 text-muted-foreground border-border/50 cursor-not-allowed opacity-60"
                                                 : "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/25"
                                         )}
                                     >
                                         {isUsingHint ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" /> : <Lightbulb className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
+                                        <span className="hidden md:inline font-semibold">Pista IA</span>
                                         <span className={cn(
                                             "px-1.5 py-0.5 rounded-full text-[10px] font-black",
                                             aiHintsUsed >= maxAiHints ? "bg-muted text-muted-foreground" : "bg-amber-500/20 text-amber-700 dark:text-amber-300"
@@ -1362,7 +1194,7 @@ export function TakeEvaluationLayout({
                                         </span>
                                     </button>
                                 </TooltipTrigger>
-                                <TooltipContent>💡 Pista de IA — Obtén una orientación sin revelar la respuesta ({maxAiHints - aiHintsUsed} disponibles)</TooltipContent>
+                                <TooltipContent>💡 Pista de IA — Obtén una orientación conceptual ({maxAiHints - aiHintsUsed} disponibles)</TooltipContent>
                             </Tooltip>
                         </div>
                     )}
@@ -1420,6 +1252,47 @@ export function TakeEvaluationLayout({
                         <ThemeSelector themes={themes} className="h-7 w-7 rounded-md" />
                         <CodeThemeSelector className="h-7 w-7 rounded-md" />
                         <ModeToggle className="h-7 w-7 rounded-md" />
+                        {isLiveConnected ? (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <div className="h-7 px-2 rounded-md select-none text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 cursor-default">
+                                        <span className="relative flex h-2 w-2">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                        </span>
+                                        <span className="text-[11px] font-medium hidden md:inline">
+                                            En vivo
+                                        </span>
+                                    </div>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" className="text-xs">
+                                    Conectado en tiempo real (SSE) — Los cambios del profesor se reflejan automáticamente
+                                </TooltipContent>
+                            </Tooltip>
+                        ) : (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => handleRefreshEvaluation(false)}
+                                        disabled={isRefreshing}
+                                        className="h-7 px-2 rounded-md cursor-pointer hover:bg-muted text-muted-foreground hover:text-foreground transition-all flex items-center gap-1.5"
+                                    >
+                                        <span className="relative flex h-2 w-2">
+                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-muted-foreground/40"></span>
+                                        </span>
+                                        <RefreshCw className={cn("w-3 h-3", isRefreshing && "animate-spin text-primary")} />
+                                        <span className="text-[11px] font-medium hidden md:inline">
+                                            Reconectar
+                                        </span>
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" className="text-xs">
+                                    {isRefreshing ? "Reconectando..." : "Conexión desconectada. Haz clic para reconectar y sincronizar"}
+                                </TooltipContent>
+                            </Tooltip>
+                        )}
                     </div>
 
                     {!isSubmitted && (
@@ -1623,7 +1496,7 @@ export function TakeEvaluationLayout({
                         <div className="px-4 py-1.5 border-b border-border shrink-0 bg-muted/20 flex items-center justify-between gap-3 h-[49px]">
                             {/* Izquierda: Nombre de la Evaluación, Pregunta y Nota */}
                             <div className="flex flex-col justify-center min-w-0">
-                                {attempt.evaluation?.title && (
+                                {currentAttempt.evaluation?.title && (
                                     <span className="text-[11px] font-medium text-muted-foreground truncate leading-tight" title={attempt.evaluation.title}>
                                         {attempt.evaluation.title}
                                     </span>
@@ -1644,8 +1517,32 @@ export function TakeEvaluationLayout({
                                 </div>
                             </div>
 
-                            {/* Derecha: Tipo de Pregunta */}
+                            {/* Derecha: Tipo de Pregunta y Acceso Rápido a Pistas */}
                             <div className="flex items-center gap-2 shrink-0">
+                                {!isSubmitted && maxAiHints > 0 && (
+                                    currentQuestionHints.length > 0 ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveTab("hints")}
+                                            className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition-all cursor-pointer shadow-2xs"
+                                            title="Ver pistas desbloqueadas para esta pregunta"
+                                        >
+                                            <Lightbulb className="w-3 h-3 text-amber-500" />
+                                            <span>{currentQuestionHints.length} {currentQuestionHints.length === 1 ? "Pista" : "Pistas"}</span>
+                                        </button>
+                                    ) : aiHintsUsed < maxAiHints ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowHintConfirm(true)}
+                                            disabled={isUsingHint}
+                                            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 hover:bg-amber-500/20 transition-all cursor-pointer shadow-2xs"
+                                            title={`Pedir pista de IA (${maxAiHints - aiHintsUsed} disponibles)`}
+                                        >
+                                            <Lightbulb className="w-3 h-3 text-amber-500" />
+                                            <span className="hidden sm:inline">Pista IA</span>
+                                        </button>
+                                    ) : null
+                                )}
                                 <span className="text-[11px] uppercase font-bold px-2.5 py-1 bg-muted rounded-md tracking-wider text-muted-foreground border border-border">
                                     {currentQuestion.type === 'Text' ? 'TEXTO' : 'CÓDIGO'}
                                 </span>
@@ -1655,11 +1552,8 @@ export function TakeEvaluationLayout({
                     {/* Question Statement (Markdown) */}
                     <div className="flex-1 overflow-y-auto p-4 md:p-6" data-color-mode={mounted && theme === "dark" ? "dark" : "light"}>
                         <div
-                            className="prose prose-sm dark:prose-invert max-w-none transition-all duration-200 text-foreground"
+                            className="prose prose-sm dark:prose-invert max-w-none transition-all duration-200 text-foreground select-text"
                             style={{ fontSize: `${14 * zoomLevel}px` }}
-                            onCopy={(e) => { if (!isSubmitted) e.preventDefault(); }}
-                            onCut={(e) => { if (!isSubmitted) e.preventDefault(); }}
-                            onContextMenu={(e) => { if (!isSubmitted) e.preventDefault(); }}
                         >
                             <MDEditor.Markdown
                                 source={currentQuestion.text || ""}
@@ -1671,13 +1565,54 @@ export function TakeEvaluationLayout({
 
                 {/* Right Panel: Student Answer Area */}
                 <div className="w-1/2 flex flex-col h-full bg-card">
-                    <Tabs defaultValue="answer" value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
+                    <div className="h-full flex flex-col">
                         <div className="px-4 py-2 border-b border-border shrink-0 bg-muted/20 flex flex-col gap-2">
                             <div className="flex justify-between items-center">
-                                <TabsList className="h-8">
-                                    <TabsTrigger value="answer" className="text-xs px-3">Tu Respuesta</TabsTrigger>
-                                    <TabsTrigger value="feedback" className="text-xs px-3" disabled={!hasAI}>Feedback IA</TabsTrigger>
-                                </TabsList>
+                                <div className="bg-muted text-muted-foreground inline-flex h-8 items-center justify-center rounded-lg p-[3px]">
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveTab("answer")}
+                                        className={cn(
+                                            "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-xs font-medium transition-all cursor-pointer",
+                                            activeTab === "answer"
+                                                ? "bg-background text-foreground shadow-xs font-semibold"
+                                                : "text-muted-foreground hover:text-foreground"
+                                        )}
+                                    >
+                                        Tu Respuesta
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => hasAI && setActiveTab("feedback")}
+                                        disabled={!hasAI}
+                                        className={cn(
+                                            "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-xs font-medium transition-all cursor-pointer disabled:pointer-events-none disabled:opacity-40",
+                                            activeTab === "feedback"
+                                                ? "bg-background text-foreground shadow-xs font-semibold"
+                                                : "text-muted-foreground hover:text-foreground"
+                                        )}
+                                    >
+                                        Feedback IA
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveTab("hints")}
+                                        className={cn(
+                                            "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1 text-xs font-medium transition-all cursor-pointer",
+                                            activeTab === "hints"
+                                                ? "bg-background text-foreground shadow-xs font-semibold"
+                                                : "text-muted-foreground hover:text-foreground"
+                                        )}
+                                    >
+                                        <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
+                                        <span>Pistas</span>
+                                        {currentQuestionHints.length > 0 && (
+                                            <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                                                {currentQuestionHints.length}
+                                            </span>
+                                        )}
+                                    </button>
+                                </div>
                                 <div className="flex gap-2 items-center">
                                     {currentQuestion.type === "Code" && currentQuestion.language && (
                                         <span className="text-[10px] text-muted-foreground font-mono bg-background border px-2 py-0.5 rounded">
@@ -1691,42 +1626,24 @@ export function TakeEvaluationLayout({
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-hidden relative">
+                        <div className="flex-1 overflow-hidden relative h-full flex flex-col">
                             {/* Answer Tab */}
-                            <TabsContent value="answer" className="h-full m-0 data-[state=inactive]:hidden">
-                                {currentQuestion.type === "Target" || currentQuestion.type === "Text" ? (
-                                    <Textarea
-                                        className="w-full h-full min-h-full resize-none font-medium leading-relaxed bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 p-4 rounded-none shadow-none transition-all duration-200"
-                                        style={{ fontSize: `${16 * zoomLevel}px` }}
-                                        placeholder={isSubmitted ? "No hubo respuesta provista." : "Escribe tu respuesta detallada aquí..."}
-                                        value={answers[currentQuestion.id] || ""}
-                                        onChange={(e) => handleAnswerChange(e.target.value)}
-                                        onBlur={handleSaveCurrent}
+                            <div 
+                                className={cn(
+                                    "h-full m-0 flex flex-col flex-1",
+                                    activeTab !== "answer" && "hidden"
+                                )}
+                            >
+                                {currentQuestion?.type === "Target" || currentQuestion?.type === "Text" ? (
+                                    <TextAnswerEditor
+                                        key={currentQuestion.id}
+                                        questionId={currentQuestion.id}
+                                        initialValue={answers[currentQuestion?.id] || ""}
+                                        onAnswerChange={handleAnswerChange}
+                                        onSaveCurrent={handleSaveCurrent}
                                         disabled={isSubmitted}
-                                        readOnly={isSubmitted}
-                                        spellCheck={true}
-                                        lang="es"
-                                        autoComplete="on"
-                                        autoCorrect="on"
-                                        onPaste={(e) => { 
-                                            if (!isSubmitted && blockClipboard) {
-                                                const pasted = e.clipboardData?.getData('text/plain') || '';
-                                                const isInternal = internalCodeClipboardRef.current && (
-                                                    pasted === internalCodeClipboardRef.current ||
-                                                    internalCodeClipboardRef.current.includes(pasted)
-                                                );
-                                                if (!isInternal) {
-                                                    e.preventDefault();
-                                                    toast.warning("Acción restringida", { description: "Pegar texto externo está deshabilitado en esta evaluación." });
-                                                }
-                                            }
-                                        }}
-                                        onDrop={(e) => {
-                                            if (!isSubmitted) {
-                                                e.preventDefault();
-                                                toast.warning("Acción restringida", { description: "Arrastrar y soltar contenido está deshabilitado." });
-                                            }
-                                        }}
+                                        zoomLevel={zoomLevel}
+                                        placeholder={isSubmitted ? "No hubo respuesta provista." : "Escribe tu respuesta detallada aquí..."}
                                     />
                                 ) : (
                                     <Editor
@@ -1761,8 +1678,8 @@ export function TakeEvaluationLayout({
                                             },
                                             suggestOnTriggerCharacters: true,
                                             wordBasedSuggestions: "currentDocument",
-                                            dragAndDrop: false,
-                                            formatOnPaste: false,
+                                            dragAndDrop: true,
+                                            formatOnPaste: true,
                                         }}
                                         onMount={(editor, monaco) => {
                                             editorRef.current = editor;
@@ -1836,48 +1753,16 @@ export function TakeEvaluationLayout({
                                                 );
                                             }
 
-                                            // Permitir copiar y cortar (Ctrl+C, Ctrl+X) nativamente y guardar el texto copiado internamente
-                                            const updateInternalClipboard = () => {
-                                                const selection = editor.getSelection();
-                                                if (selection && !selection.isEmpty()) {
-                                                    const text = editor.getModel()?.getValueInRange(selection);
-                                                    if (text) {
-                                                        internalCodeClipboardRef.current = text;
-                                                    }
+
+
+                                            // Sobreescribir el portapapeles cuando Monaco recibe foco
+                                            const overwriteMonacoClipboard = () => {
+                                                if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+                                                    navigator.clipboard.writeText("No está permitido pegar contenido externo.").catch(() => {});
                                                 }
                                             };
-
-                                            editor.onKeyDown((e: any) => {
-                                                if ((e.ctrlKey || e.metaKey) && (e.keyCode === monaco.KeyCode.KeyC || e.keyCode === monaco.KeyCode.KeyX)) {
-                                                    updateInternalClipboard();
-                                                }
-                                            });
-
-                                            const domNode = editor.getDomNode();
-                                            if (domNode) {
-                                                domNode.addEventListener('copy', updateInternalClipboard, true);
-                                                domNode.addEventListener('cut', updateInternalClipboard, true);
-
-                                                // Si la evaluación tiene bloqueo de portapapeles, solo permitir pegar lo que el estudiante haya copiado dentro del propio examen
-                                                if (blockClipboard && !isSubmitted) {
-                                                    domNode.addEventListener('paste', (e: ClipboardEvent) => {
-                                                        const clipboardText = e.clipboardData?.getData('text/plain') || '';
-                                                        const isInternal = internalCodeClipboardRef.current && (
-                                                            clipboardText === internalCodeClipboardRef.current ||
-                                                            internalCodeClipboardRef.current.includes(clipboardText) ||
-                                                            clipboardText.includes(internalCodeClipboardRef.current)
-                                                        );
-
-                                                        if (!isInternal) {
-                                                            e.preventDefault();
-                                                            e.stopPropagation();
-                                                            toast.warning("Pegado externo bloqueado", {
-                                                                description: "Por seguridad académica, solo puedes duplicar o pegar código que hayas redactado dentro de esta prueba.",
-                                                            });
-                                                        }
-                                                    }, true);
-                                                }
-                                            }
+                                            editor.onDidFocusEditorText(overwriteMonacoClipboard);
+                                            editor.onDidFocusEditorWidget(overwriteMonacoClipboard);
 
                                             // Guardar borrador de código cuando Monaco pierde el foco
                                             editor.onDidBlurEditorText(() => {
@@ -1890,10 +1775,13 @@ export function TakeEvaluationLayout({
                                         }}
                                     />
                                 )}
-                            </TabsContent>
+                            </div>
 
                             {/* Feedback Tab */}
-                            <TabsContent value="feedback" className="h-full m-0 p-6 overflow-y-auto data-[state=inactive]:hidden bg-muted/5">
+                            <div className={cn(
+                                "h-full m-0 p-6 overflow-y-auto bg-muted/5",
+                                activeTab !== "feedback" && "hidden"
+                            )}>
                                 {hasAI ? (
                                     <div className="flex flex-col gap-4">
                                         <div className="flex justify-between items-center bg-card p-3 rounded-md border shadow-sm">
@@ -1931,7 +1819,137 @@ export function TakeEvaluationLayout({
                                         <p>Solicita una evaluación con IA para ver los resultados aquí.</p>
                                     </div>
                                 )}
-                            </TabsContent>
+                            </div>
+
+                            {/* Hints Tab */}
+                            <div className={cn(
+                                "h-full m-0 p-4 md:p-6 overflow-y-auto bg-muted/5 flex flex-col",
+                                activeTab !== "hints" && "hidden"
+                            )}>
+                                {currentQuestionHints.length > 0 ? (
+                                    <div className="flex flex-col gap-4 max-w-3xl mx-auto w-full">
+                                        <div className="flex items-center justify-between bg-card p-3 rounded-xl border border-border shadow-xs">
+                                            <div className="flex items-center gap-2">
+                                                <div className="p-1.5 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                                                    <Lightbulb className="w-4 h-4" />
+                                                </div>
+                                                <div>
+                                                    <h3 className="font-bold text-xs sm:text-sm text-foreground">
+                                                        Pistas de esta Pregunta
+                                                    </h3>
+                                                    <p className="text-[11px] text-muted-foreground">
+                                                        {currentQuestionHints.length} {currentQuestionHints.length === 1 ? "pista desbloqueada" : "pistas desbloqueadas"} • Guardadas permanentemente
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                {!isSubmitted && maxAiHints > aiHintsUsed && (
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        onClick={() => setShowHintConfirm(true)}
+                                                        disabled={isUsingHint}
+                                                        className="bg-amber-500 hover:bg-amber-600 text-amber-950 font-bold text-xs h-7 px-2.5 gap-1 shadow-xs cursor-pointer"
+                                                    >
+                                                        {isUsingHint ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lightbulb className="w-3.5 h-3.5" />}
+                                                        <span>Otra pista</span>
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {currentQuestionHints.map((hintItem, idx) => (
+                                            <div
+                                                key={idx}
+                                                className="rounded-xl border border-amber-500/30 bg-amber-500/[0.04] p-4 sm:p-5 shadow-xs relative overflow-hidden group"
+                                            >
+                                                <div className="flex items-center justify-between border-b border-amber-500/20 pb-2.5 mb-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-amber-500/20 text-amber-800 dark:text-amber-200">
+                                                            Pista #{idx + 1}
+                                                        </span>
+                                                        <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                                                            <Clock className="w-3 h-3" />
+                                                            {format(new Date(hintItem.usedAt), "HH:mm:ss", { locale: es })}
+                                                        </span>
+                                                    </div>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            const key = `hint-tab-${idx}`;
+                                                            navigator.clipboard.writeText(hintItem.hint);
+                                                            setCopiedHintKey(key);
+                                                            setTimeout(() => setCopiedHintKey(prev => prev === key ? null : prev), 2000);
+                                                        }}
+                                                        className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground hover:bg-amber-500/10 gap-1.5 cursor-pointer"
+                                                    >
+                                                        {copiedHintKey === `hint-tab-${idx}` ? (
+                                                            <>
+                                                                <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                                                                <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold">Copiado</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Copy className="w-3.5 h-3.5" />
+                                                                <span className="text-[11px]">Copiar</span>
+                                                            </>
+                                                        )}
+                                                    </Button>
+                                                </div>
+
+                                                <div
+                                                    className="prose prose-sm dark:prose-invert max-w-none text-foreground leading-relaxed [&_h3]:text-sm [&_h3]:font-bold [&_h3]:text-amber-700 dark:[&_h3]:text-amber-300 [&_h3]:mt-4 [&_h3]:mb-1.5 [&_h3]:first:mt-0 [&_p]:my-2.5 [&_p]:leading-relaxed [&_li]:my-1.5 [&_ol]:my-2.5 [&_ul]:my-2.5 bg-card/60 rounded-xl p-4 border border-amber-500/20"
+                                                    data-color-mode={mounted && theme === "dark" ? "dark" : "light"}
+                                                    style={{ fontSize: `${14 * zoomLevel}px` }}
+                                                >
+                                                    <MDEditor.Markdown
+                                                        source={formatHintMarkdown(hintItem.hint)}
+                                                        style={{ backgroundColor: "transparent", fontSize: "inherit" }}
+                                                    />
+                                                </div>
+
+                                                <div className="mt-3 pt-2 border-t border-amber-500/15 flex items-center justify-between text-[11px] text-muted-foreground">
+                                                    <span>💡 Orientación pedagógica generada por IA</span>
+                                                    <span className="text-emerald-600 dark:text-emerald-400 font-medium">✓ Disponible durante toda la prueba</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center flex-1 text-center py-12 px-4 max-w-md mx-auto">
+                                        <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-500 mb-3.5">
+                                            <Lightbulb className="w-7 h-7" />
+                                        </div>
+                                        <h3 className="font-bold text-base text-foreground mb-1">
+                                            Sin pistas para esta pregunta
+                                        </h3>
+                                        <p className="text-xs text-muted-foreground leading-relaxed mb-5">
+                                            Si estás atascado o necesitas orientación conceptual para estructurar tu respuesta, puedes solicitar una pista pedagógica de IA. Quedará guardada permanentemente en esta pregunta para que puedas consultarla cuando quieras.
+                                        </p>
+                                        {!isSubmitted && maxAiHints > aiHintsUsed ? (
+                                            <Button
+                                                type="button"
+                                                onClick={() => setShowHintConfirm(true)}
+                                                disabled={isUsingHint}
+                                                className="bg-amber-500 hover:bg-amber-600 text-amber-950 font-bold text-xs h-9 px-4 gap-2 shadow-xs cursor-pointer"
+                                            >
+                                                {isUsingHint ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lightbulb className="w-4 h-4" />}
+                                                <span>Solicitar Pista de IA ({maxAiHints - aiHintsUsed} disponibles)</span>
+                                            </Button>
+                                        ) : maxAiHints === 0 ? (
+                                            <span className="text-xs text-muted-foreground bg-muted px-3 py-1 rounded-full border">
+                                                Las pistas de IA no están habilitadas para esta evaluación.
+                                            </span>
+                                        ) : (
+                                            <span className="text-xs text-amber-700 dark:text-amber-300 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/30">
+                                                Has utilizado las {maxAiHints} pistas disponibles en este intento.
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         {/* Botón de Evaluar con IA a todo lo ancho en la parte inferior */}
@@ -1973,7 +1991,7 @@ export function TakeEvaluationLayout({
                                 </p>
                             )}
                         </div>
-                    </Tabs>
+                    </div>
                 </div>
             </div>
         </div>
@@ -2163,24 +2181,35 @@ export function TakeEvaluationLayout({
                                 </span>
                             </div>
 
-                            {/* Expulsiones por Pérdida de Foco */}
+                            {/* Salidas y Tiempo Fuera */}
                             {blockTabSwitch && (
                                 <div className={cn(
                                     "p-3 rounded-xl border flex flex-col justify-between",
-                                    expulsionsCount > 0 
+                                    hasExitTimeAlert 
                                         ? "bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400" 
-                                        : "bg-muted/30 border-border/80 text-muted-foreground"
+                                        : tabSwitchesCount > 0
+                                            ? "bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400"
+                                            : "bg-muted/30 border-border/80 text-muted-foreground"
                                 )}>
-                                    <span className="text-[10px] uppercase font-bold">Expulsiones</span>
+                                    <span className="text-[10px] uppercase font-bold">Salidas de Pantalla</span>
                                     <div className="flex items-baseline gap-1 my-1">
-                                        <span className={cn("text-2xl font-black", expulsionsCount > 0 ? "text-red-600 dark:text-red-400" : "text-foreground")}>
-                                            {expulsionsCount}
+                                        <span className={cn("text-2xl font-black", hasExitTimeAlert ? "text-red-600 dark:text-red-400" : "text-foreground")}>
+                                            {tabSwitchesCount}
                                         </span>
-                                        <span className="text-xs text-muted-foreground">{expulsionsCount === 1 ? 'vez' : 'veces'}</span>
+                                        <span className="text-xs text-muted-foreground">{tabSwitchesCount === 1 ? 'salida' : 'salidas'}</span>
                                     </div>
                                     <span className="text-[10px] font-semibold flex items-center gap-1">
-                                        <ShieldAlert className="w-3 h-3 text-red-500 shrink-0" />
-                                        <span>Pérdida de foco</span>
+                                        {hasExitTimeAlert ? (
+                                            <>
+                                                <AlertCircle className="w-3 h-3 text-red-500 shrink-0" />
+                                                <span>⚠️ Límite superado ({formatDurationHMS(totalTimeAwaySeconds)})</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <ExternalLink className="w-3 h-3 text-amber-500 shrink-0" />
+                                                <span>{formatDurationHMS(totalTimeAwaySeconds)} fuera</span>
+                                            </>
+                                        )}
                                     </span>
                                 </div>
                             )}
@@ -2330,6 +2359,121 @@ export function TakeEvaluationLayout({
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Modal de Lectura Obligatoria de Mensaje del Docente vía SSE */}
+            <Dialog 
+                open={!!teacherMessageModal} 
+                onOpenChange={(open) => {
+                    if (!open && messageCountdown === 0) {
+                        setTeacherMessageModal(null);
+                    }
+                }}
+            >
+                <DialogContent 
+                    className="sm:max-w-lg border-2 border-blue-500/40 shadow-2xl bg-card p-6"
+                    showCloseButton={false}
+                    onInteractOutside={(e) => e.preventDefault()}
+                    onEscapeKeyDown={(e) => e.preventDefault()}
+                >
+                    <DialogHeader className="space-y-3">
+                        <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center border border-blue-500/20 shrink-0 animate-pulse">
+                                <MessageSquare className="w-5 h-5 text-blue-500" />
+                            </div>
+                            <div>
+                                <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 text-[10px] font-bold uppercase tracking-wider mb-1">
+                                    Mensaje del Docente • En Vivo
+                                </Badge>
+                                <DialogTitle className="text-lg font-black tracking-tight text-foreground">
+                                    Comunicado Importante
+                                </DialogTitle>
+                            </div>
+                        </div>
+                        <DialogDescription className="text-xs text-muted-foreground flex items-center gap-1.5 pt-1">
+                            <span>De: <strong className="text-foreground">{teacherMessageModal?.senderName}</strong></span>
+                            <span>•</span>
+                            <span>Lectura obligatoria durante la evaluación</span>
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="my-4 space-y-3">
+                        <div className="p-4 rounded-xl bg-muted/60 border border-border/80 text-foreground text-sm font-medium leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto select-text shadow-inner">
+                            {teacherMessageModal?.message}
+                        </div>
+
+                        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 text-xs flex items-center gap-2">
+                            <AlertCircle className="w-4 h-4 shrink-0 text-amber-500" />
+                            <span>
+                                {messageCountdown > 0 ? (
+                                    <>Por motivos de seguridad académica, debes leer este mensaje. Podrás cerrarlo en <strong>{messageCountdown} segundos</strong>.</>
+                                ) : (
+                                    <>Has completado el tiempo de lectura obligatorio. Ya puedes continuar con la evaluación.</>
+                                )}
+                            </span>
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            disabled={messageCountdown > 0}
+                            onClick={() => setTeacherMessageModal(null)}
+                            className={cn(
+                                "w-full h-10 font-bold transition-all cursor-pointer gap-2",
+                                messageCountdown > 0
+                                    ? "opacity-60 cursor-not-allowed bg-muted text-muted-foreground border"
+                                    : "bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg"
+                            )}
+                        >
+                            {messageCountdown > 0 ? (
+                                <>
+                                    <Clock className="w-4 h-4 animate-spin text-amber-500" />
+                                    <span>Entendido ({messageCountdown}s)</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Check className="w-4 h-4" />
+                                    <span>Entendido y Continuar Evaluación</span>
+                                </>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Modal de Historial de Salidas a Otras Pestañas (para el Estudiante) */}
+            <EvaluationTabSwitchesModal
+                open={showTabSwitchesModal}
+                onOpenChange={setShowTabSwitchesModal}
+                tabSwitchesCount={tabSwitchesCount}
+                totalTimeAwaySeconds={totalTimeAwaySeconds}
+                maxExitTimeSeconds={maxExitTimeSeconds}
+                hasExitTimeAlert={hasExitTimeAlert}
+                tabSwitchLogs={tabSwitchLogs}
+            />
+
+            {/* Pantalla de Bloqueo / Pausa de Evaluación impuesta por el Docente */}
+            {isAttemptLocked && (
+                <div className="fixed inset-0 z-[100] bg-background/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center select-none animate-in fade-in duration-200">
+                    <div className="w-20 h-20 rounded-3xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-500 mb-5 shadow-2xl animate-pulse">
+                        <Lock className="w-10 h-10" />
+                    </div>
+                    <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground mb-2">
+                        Evaluación Pausada por el Docente
+                    </h2>
+                    <p className="text-sm text-muted-foreground max-w-lg mb-6 leading-relaxed">
+                        El profesor ha puesto en pausa temporalmente la evaluación para toda la clase.
+                        Tus respuestas y avances guardados se encuentran 100% a salvo. La prueba se reanudará en cuanto el docente la desbloquee.
+                    </p>
+                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/10 border border-amber-500/25 text-xs font-semibold text-amber-600 dark:text-amber-400">
+                        <span className="relative flex h-2.5 w-2.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+                        </span>
+                        <span>Esperando reanudación en vivo...</span>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

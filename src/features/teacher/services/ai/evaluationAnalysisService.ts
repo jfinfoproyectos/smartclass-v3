@@ -1,6 +1,7 @@
 import { getAIModel } from "./client";
 import { generateObject, generateText } from "ai";
 import { z } from "zod";
+import { formatHintMarkdown } from "@/features/student/utils/formatHintMarkdown";
 
 export interface AIAnswerEvaluation {
     isCorrect: boolean;
@@ -146,18 +147,24 @@ export async function getAiHint(
         
         1. **Analiza** dónde está atascado el estudiante basándote en lo que ha escrito (o no ha escrito).
         2. **Identifica** el concepto clave, patrón o enfoque que necesita para avanzar.
-        3. **Redacta** una pista sustancial que incluya:
-           - Una orientación clara sobre por dónde empezar o continuar.
-           - Mención de conceptos específicos, funciones, métodos o patrones relevantes que debería investigar o aplicar.
-           ${codeSpecific}
+        3. **Estructura** la respuesta OBLIGATORIAMENTE en formato Markdown con saltos de línea dobles entre secciones y párrafos:
+
+### 💡 Enfoque clave
+Breve explicación conceptual de por dónde empezar o continuar.
+
+### 🔍 Conceptos clave
+Mención de métodos, conceptos, estructuras o sintaxis útiles para este problema.
+
+### ⚠️ Ten presente
+Advertencia de un error común o caso borde que no debe olvidar.
+        ${codeSpecific}
         
         **REGLAS**:
         - **NUNCA** des la respuesta completa, el código final ni la solución literal.
         - **SÍ** puedes mencionar nombres de funciones, métodos, operadores o conceptos que el estudiante debería usar.
         - **SÍ** puedes dar ejemplos análogos simplificados si ayudan a entender el enfoque (ej: "es similar a como harías X con Y").
-        - Sé **concreto y específico**, evita pistas vagas como "piensa mejor" o "revisa la documentación".
-        - Extensión: entre 3 y 6 oraciones. Lo suficiente para ser útil, no tan largo que abrume.
-        - Tono: motivador, directo y de confianza, como un profesor que quiere que el estudiante aprenda.
+        - Sé **concreto, didáctico y directo**, evita pistas vagas como "piensa mejor" o "revisa la documentación".
+        - Tono: motivador, pedagógico y positivo, como un profesor facilitador.
         `;
 
         const { object } = await generateObject({
@@ -170,7 +177,7 @@ export async function getAiHint(
 
         if (!object) throw new Error("No se recibió respuesta de la IA.");
 
-        return object.hint;
+        return formatHintMarkdown(object.hint);
     } catch (error: any) {
         console.error("Error getting AI hint:", error);
         const errorString = typeof error === 'string' ? error : (error.message || "");

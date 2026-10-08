@@ -17,14 +17,10 @@ import {
     Minimize2,
     X,
     RefreshCw,
-    SlidersHorizontal,
     Check,
     ArrowUpDown,
     CheckCircle,
-    HelpCircle,
-    UserX,
     Tv,
-    Presentation,
     Shield,
     ArrowLeft,
     Sparkles,
@@ -34,7 +30,8 @@ import {
     Radio,
     ChevronDown,
     FileText,
-    Code
+    Code,
+    Lock
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -67,6 +64,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { FeedbackViewer } from "@/features/student/components/FeedbackViewer";
 import { CodeAnswerViewerWrapper } from "@/features/teacher/components/CodeAnswerViewerWrapper";
 import { SubmissionPenaltyDialog } from "./SubmissionPenaltyDialog";
+import { TeacherStudentMessageDialog } from "./TeacherStudentMessageDialog";
+import { TeacherBroadcastMessageDialog } from "./TeacherBroadcastMessageDialog";
+import { EvaluationLockToggleButton } from "./EvaluationLockToggleButton";
 
 interface EvaluationLiveMonitorProps {
     courseId: string;
@@ -88,6 +88,9 @@ interface EvaluationLiveMonitorProps {
     secondsUntilRefresh?: number;
     lastRefreshedAt?: Date | null;
     isStandalonePage?: boolean;
+    isLiveConnected?: boolean;
+    isLocked?: boolean;
+    evaluationId?: string;
 }
 
 export function EvaluationLiveMonitor({
@@ -110,6 +113,9 @@ export function EvaluationLiveMonitor({
     secondsUntilRefresh,
     lastRefreshedAt,
     isStandalonePage = false,
+    isLiveConnected,
+    isLocked = false,
+    evaluationId,
 }: EvaluationLiveMonitorProps) {
     const currentMode = initialMode;
     const [projectorViewType, setProjectorViewType] = useState<"mosaic" | "table">("mosaic");
@@ -482,142 +488,193 @@ export function EvaluationLiveMonitor({
                             </div>
                         )}
 
-                        {/* Auto-refresco Switch con Programador de Tiempo y Animación de Cuenta Regresiva */}
-                        {onToggleAutoRefresh && (() => {
-                            const currentSecondsLeft = typeof secondsUntilRefresh === "number" ? secondsUntilRefresh : refreshIntervalSec;
-                            const progressRatio = Math.max(0, Math.min(1, currentSecondsLeft / (refreshIntervalSec || 1)));
+                        {/* Botones de Acción Docente: Mensaje a Todos y Bloqueo */}
+                        {!isProjector && (
+                            <>
+                                <TeacherBroadcastMessageDialog
+                                    attemptId={attemptId}
+                                    evaluationId={evaluationId}
+                                    evaluationTitle={evaluationTitle}
+                                />
+                                <EvaluationLockToggleButton
+                                    attemptId={attemptId}
+                                    initialIsLocked={isLocked}
+                                    courseId={courseId}
+                                />
+                            </>
+                        )}
 
-                            return (
-                                <div className={`relative overflow-hidden flex items-center gap-1.5 px-2 py-1 rounded-lg border transition-colors shrink-0 ${
-                                    isProjector ? "bg-slate-800/80 border-slate-700" : "bg-muted/50 border-border/60"
-                                }`}>
-                                    {/* Barra sutil de progreso inferior */}
-                                    {autoRefresh && (
-                                        <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-slate-700/30 overflow-hidden pointer-events-none">
-                                            <div
-                                                className={`h-full transition-all duration-1000 ease-linear ${
-                                                    isRefreshing
-                                                        ? "w-full bg-emerald-400 animate-pulse"
-                                                        : currentSecondsLeft <= 2
-                                                        ? "bg-amber-400"
-                                                        : "bg-emerald-500"
-                                                }`}
-                                                style={{ width: isRefreshing ? "100%" : `${progressRatio * 100}%` }}
-                                            />
+                        {/* Indicador SSE en Vivo o Auto-refresco Switch */}
+                        {isLiveConnected !== undefined ? (
+                            <div className={`flex items-center gap-2 px-2.5 py-1 rounded-lg border transition-all shrink-0 ${
+                                isLiveConnected
+                                    ? isProjector
+                                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                                        : "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300"
+                                    : isProjector
+                                        ? "bg-amber-500/10 border-amber-500/30 text-amber-400"
+                                        : "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300"
+                            }`}>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <div className="flex items-center gap-1.5 cursor-help select-none">
+                                            <span className="relative flex h-2 w-2">
+                                                {isLiveConnected && (
+                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                                )}
+                                                <span className={`relative inline-flex rounded-full h-2 w-2 ${isLiveConnected ? "bg-emerald-500" : "bg-amber-500 animate-pulse"}`}></span>
+                                            </span>
+                                            <span className="text-xs font-semibold tracking-tight">
+                                                {isLiveConnected ? "En vivo (SSE)" : "Reconectando..."}
+                                            </span>
                                         </div>
-                                    )}
+                                    </TooltipTrigger>
+                                    <TooltipContent side="bottom" className="text-xs max-w-xs">
+                                        <p>
+                                            {isLiveConnected
+                                                ? "Sincronización en tiempo real por SSE activa. Las entregas y avances de los alumnos se actualizan al instante sin demoras."
+                                                : "Reconectando canal de eventos SSE..."}
+                                        </p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </div>
+                        ) : (
+                            onToggleAutoRefresh && (() => {
+                                const currentSecondsLeft = typeof secondsUntilRefresh === "number" ? secondsUntilRefresh : refreshIntervalSec;
+                                const progressRatio = Math.max(0, Math.min(1, currentSecondsLeft / (refreshIntervalSec || 1)));
 
-                                    <Switch
-                                        id="monitor-live-autorefresh"
-                                        checked={autoRefresh}
-                                        onCheckedChange={onToggleAutoRefresh}
-                                        className="data-[state=checked]:bg-emerald-500 scale-75 sm:scale-90 cursor-pointer"
-                                    />
-                                    
-                                    <div className="flex items-center gap-1 select-none">
-                                        <DropdownMenu>
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <button
-                                                            type="button"
-                                                            className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded text-[11px] font-mono font-bold transition-all cursor-pointer ${
-                                                                autoRefresh
-                                                                    ? isProjector
-                                                                        ? "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/30"
-                                                                        : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/25"
-                                                                    : "bg-slate-800 text-slate-400 hover:bg-slate-700 border border-slate-700"
+                                return (
+                                    <div className={`relative overflow-hidden flex items-center gap-1.5 px-2 py-1 rounded-lg border transition-colors shrink-0 ${
+                                        isProjector ? "bg-slate-800/80 border-slate-700" : "bg-muted/50 border-border/60"
+                                    }`}>
+                                        {/* Barra sutil de progreso inferior */}
+                                        {autoRefresh && (
+                                            <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-slate-700/30 overflow-hidden pointer-events-none">
+                                                <div
+                                                    className={`h-full transition-all duration-1000 ease-linear ${
+                                                        isRefreshing
+                                                            ? "w-full bg-emerald-400 animate-pulse"
+                                                            : currentSecondsLeft <= 2
+                                                            ? "bg-amber-400"
+                                                            : "bg-emerald-500"
+                                                    }`}
+                                                    style={{ width: isRefreshing ? "100%" : `${progressRatio * 100}%` }}
+                                                />
+                                            </div>
+                                        )}
+
+                                        <Switch
+                                            id="monitor-live-autorefresh"
+                                            checked={autoRefresh}
+                                            onCheckedChange={onToggleAutoRefresh}
+                                            className="data-[state=checked]:bg-emerald-500 scale-75 sm:scale-90 cursor-pointer"
+                                        />
+                                        
+                                        <div className="flex items-center gap-1 select-none">
+                                            <DropdownMenu>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <button
+                                                                type="button"
+                                                                className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded text-[11px] font-mono font-bold transition-all cursor-pointer ${
+                                                                    autoRefresh
+                                                                        ? isProjector
+                                                                            ? "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/30"
+                                                                            : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/25"
+                                                                        : "bg-slate-800 text-slate-400 hover:bg-slate-700 border border-slate-700"
+                                                                }`}
+                                                            >
+                                                                {/* Indicador circular animado */}
+                                                                {autoRefresh ? (
+                                                                    <div className="relative flex items-center justify-center w-3.5 h-3.5 shrink-0">
+                                                                        <svg className={`w-3.5 h-3.5 -rotate-90 transform ${isRefreshing ? "animate-spin" : ""}`} viewBox="0 0 24 24">
+                                                                            <circle
+                                                                                cx="12"
+                                                                                cy="12"
+                                                                                r="9"
+                                                                                className={isProjector ? "stroke-slate-700" : "stroke-slate-300 dark:stroke-slate-700/60"}
+                                                                                strokeWidth="2.5"
+                                                                                fill="none"
+                                                                            />
+                                                                            <circle
+                                                                                cx="12"
+                                                                                cy="12"
+                                                                                r="9"
+                                                                                className={`${
+                                                                                    isRefreshing
+                                                                                        ? "stroke-emerald-300"
+                                                                                        : currentSecondsLeft <= 2
+                                                                                        ? "stroke-amber-400"
+                                                                                        : "stroke-emerald-400"
+                                                                                } transition-all duration-1000 ease-linear`}
+                                                                                strokeWidth="2.5"
+                                                                                strokeDasharray={56.5}
+                                                                                strokeDashoffset={isRefreshing ? 0 : 56.5 * (1 - progressRatio)}
+                                                                                strokeLinecap="round"
+                                                                                fill="none"
+                                                                            />
+                                                                        </svg>
+                                                                    </div>
+                                                                ) : (
+                                                                    <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                                                                )}
+
+                                                                <span className="hidden md:inline font-sans text-[10px] uppercase font-bold text-slate-400">
+                                                                    {autoRefresh ? "Auto" : "Pausa"}
+                                                                </span>
+
+                                                                <span className="tabular-nums font-bold">
+                                                                    {isRefreshing ? (
+                                                                        <span className="animate-pulse text-emerald-300">...</span>
+                                                                    ) : autoRefresh ? (
+                                                                        `${currentSecondsLeft}s`
+                                                                    ) : (
+                                                                        `${refreshIntervalSec}s`
+                                                                    )}
+                                                                </span>
+
+                                                                <ChevronDown className="h-3 w-3 opacity-80" />
+                                                            </button>
+                                                        </DropdownMenuTrigger>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="bottom" className="text-xs">
+                                                        <p>
+                                                            {autoRefresh
+                                                                ? `Refrescando en ${currentSecondsLeft}s (Click para cambiar intervalo)`
+                                                                : "Auto-refresco en pausa"}
+                                                        </p>
+                                                    </TooltipContent>
+                                                </Tooltip>
+
+                                                <DropdownMenuContent align="end" className={`min-w-[170px] ${isProjector ? "bg-slate-900 border-slate-800 text-slate-100" : ""}`}>
+                                                    <DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                                        <Clock className="h-3 w-3 text-emerald-400" />
+                                                        <span>Tiempo de Refresco</span>
+                                                    </DropdownMenuLabel>
+                                                    <DropdownMenuSeparator className={isProjector ? "bg-slate-800" : ""} />
+                                                    {[3, 5, 10, 15, 30, 60].map((sec) => (
+                                                        <DropdownMenuItem
+                                                            key={sec}
+                                                            onClick={() => {
+                                                                if (onChangeRefreshInterval) onChangeRefreshInterval(sec);
+                                                                if (!autoRefresh && onToggleAutoRefresh) onToggleAutoRefresh(true);
+                                                            }}
+                                                            className={`text-xs cursor-pointer flex items-center justify-between py-1.5 ${
+                                                                refreshIntervalSec === sec ? "font-bold text-emerald-400 bg-emerald-500/10" : ""
                                                             }`}
                                                         >
-                                                            {/* Indicador circular animado */}
-                                                            {autoRefresh ? (
-                                                                <div className="relative flex items-center justify-center w-3.5 h-3.5 shrink-0">
-                                                                    <svg className={`w-3.5 h-3.5 -rotate-90 transform ${isRefreshing ? "animate-spin" : ""}`} viewBox="0 0 24 24">
-                                                                        <circle
-                                                                            cx="12"
-                                                                            cy="12"
-                                                                            r="9"
-                                                                            className={isProjector ? "stroke-slate-700" : "stroke-slate-300 dark:stroke-slate-700/60"}
-                                                                            strokeWidth="2.5"
-                                                                            fill="none"
-                                                                        />
-                                                                        <circle
-                                                                            cx="12"
-                                                                            cy="12"
-                                                                            r="9"
-                                                                            className={`${
-                                                                                isRefreshing
-                                                                                    ? "stroke-emerald-300"
-                                                                                    : currentSecondsLeft <= 2
-                                                                                    ? "stroke-amber-400"
-                                                                                    : "stroke-emerald-400"
-                                                                            } transition-all duration-1000 ease-linear`}
-                                                                            strokeWidth="2.5"
-                                                                            strokeDasharray={56.5}
-                                                                            strokeDashoffset={isRefreshing ? 0 : 56.5 * (1 - progressRatio)}
-                                                                            strokeLinecap="round"
-                                                                            fill="none"
-                                                                        />
-                                                                    </svg>
-                                                                </div>
-                                                            ) : (
-                                                                <Clock className="w-3 h-3 text-slate-400 shrink-0" />
-                                                            )}
-
-                                                            <span className="hidden md:inline font-sans text-[10px] uppercase font-bold text-slate-400">
-                                                                {autoRefresh ? "Auto" : "Pausa"}
-                                                            </span>
-
-                                                            <span className="tabular-nums font-bold">
-                                                                {isRefreshing ? (
-                                                                    <span className="animate-pulse text-emerald-300">...</span>
-                                                                ) : autoRefresh ? (
-                                                                    `${currentSecondsLeft}s`
-                                                                ) : (
-                                                                    `${refreshIntervalSec}s`
-                                                                )}
-                                                            </span>
-
-                                                            <ChevronDown className="h-3 w-3 opacity-80" />
-                                                        </button>
-                                                    </DropdownMenuTrigger>
-                                                </TooltipTrigger>
-                                                <TooltipContent side="bottom" className="text-xs">
-                                                    <p>
-                                                        {autoRefresh
-                                                            ? `Refrescando en ${currentSecondsLeft}s (Click para cambiar intervalo)`
-                                                            : "Auto-refresco en pausa"}
-                                                    </p>
-                                                </TooltipContent>
-                                            </Tooltip>
-
-                                            <DropdownMenuContent align="end" className={`min-w-[170px] ${isProjector ? "bg-slate-900 border-slate-800 text-slate-100" : ""}`}>
-                                                <DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                                                    <Clock className="h-3 w-3 text-emerald-400" />
-                                                    <span>Tiempo de Refresco</span>
-                                                </DropdownMenuLabel>
-                                                <DropdownMenuSeparator className={isProjector ? "bg-slate-800" : ""} />
-                                                {[3, 5, 10, 15, 30, 60].map((sec) => (
-                                                    <DropdownMenuItem
-                                                        key={sec}
-                                                        onClick={() => {
-                                                            if (onChangeRefreshInterval) onChangeRefreshInterval(sec);
-                                                            if (!autoRefresh && onToggleAutoRefresh) onToggleAutoRefresh(true);
-                                                        }}
-                                                        className={`text-xs cursor-pointer flex items-center justify-between py-1.5 ${
-                                                            refreshIntervalSec === sec ? "font-bold text-emerald-400 bg-emerald-500/10" : ""
-                                                        }`}
-                                                    >
-                                                        <span>Cada {sec} segundos {sec === 10 ? "(Defecto)" : ""}</span>
-                                                        {refreshIntervalSec === sec && <Check className="h-3.5 w-3.5 text-emerald-400" />}
-                                                    </DropdownMenuItem>
-                                                ))}
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
+                                                            <span>Cada {sec} segundos {sec === 10 ? "(Defecto)" : ""}</span>
+                                                            {refreshIntervalSec === sec && <Check className="h-3.5 w-3.5 text-emerald-400" />}
+                                                        </DropdownMenuItem>
+                                                    ))}
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </div>
                                     </div>
-                                </div>
-                            );
-                        })()}
+                                );
+                            })()
+                        )}
 
                         {/* Botón Refrescar Manual */}
                         {onRefreshManual && (
@@ -716,6 +773,16 @@ export function EvaluationLiveMonitor({
                 {/* ═══════════════════════════════════════════════════════════════ */}
                 {isProjector ? (
                     <div className="flex-1 min-h-0 flex flex-col p-2.5 sm:p-3.5 gap-2.5 overflow-hidden">
+                        {/* Banner de Evaluación Pausada/Bloqueada en Proyector */}
+                        {isLocked && (
+                            <div className="shrink-0 p-2.5 px-4 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center justify-center gap-3 animate-pulse shadow-md">
+                                <Lock className="w-5 h-5 text-amber-400 shrink-0" />
+                                <span className="font-bold text-xs sm:text-sm tracking-wide uppercase">
+                                    ⚠️ Evaluación Pausada por el Docente • Respuestas Guardadas
+                                </span>
+                            </div>
+                        )}
+
                         {/* ─── 1. HUD SUPERIOR COMPACTO Y PANORÁMICO (SIMETRÍA COMPLETA) ─── */}
                         <div className="shrink-0 rounded-xl border border-slate-800 bg-slate-900/90 p-2.5 sm:p-3 shadow-lg">
                             {/* Grilla 100% Simétrica de 5 Tarjetas Equivalentes */}
@@ -1099,7 +1166,7 @@ export function EvaluationLiveMonitor({
                             </div>
 
                             <div className="hidden md:flex items-center gap-3 shrink-0 text-[11px] font-mono text-slate-400">
-                                <span>Sync: {refreshIntervalSec}s</span>
+                                <span>{isLiveConnected !== undefined ? (isLiveConnected ? "Sync: SSE en vivo" : "Sync: Reconectando...") : `Sync: ${refreshIntervalSec}s`}</span>
                                 <span>•</span>
                                 <span>Pulsa F11 para pantalla completa sin marcos</span>
                             </div>
@@ -1467,6 +1534,13 @@ export function EvaluationLiveMonitor({
 
                                                             <td className="py-3 px-4 text-right">
                                                                 <div className="flex items-center justify-end gap-1.5">
+                                                                    <TeacherStudentMessageDialog
+                                                                        attemptId={attemptId}
+                                                                        submissionId={sub.id}
+                                                                        studentId={sub.userId}
+                                                                        studentName={studentName}
+                                                                    />
+
                                                                     {expulsions > 0 && (
                                                                         <SubmissionPenaltyDialog
                                                                             submission={sub}
@@ -1670,7 +1744,7 @@ export function EvaluationLiveMonitor({
                                                 {studentAnswer?.updatedAt && (
                                                     <span className="text-xs text-muted-foreground font-mono flex items-center gap-1">
                                                         <Clock className="h-3 w-3" />
-                                                        Última actualización: {formatDateTime(studentAnswer.updatedAt, "DD/MM/YYYY HH:mm:ss")}
+                                                        Última actualización: {formatDateTime(studentAnswer.updatedAt, "dd/MM/yyyy HH:mm:ss")}
                                                     </span>
                                                 )}
                                             </div>

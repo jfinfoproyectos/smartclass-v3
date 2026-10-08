@@ -1,11 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { format } from "date-fns";
 import { formatDateTime } from "@/lib/dateUtils";
 import { 
     Plus, Trash2, CalendarClock, Link as LinkIcon, FileText, Users, Edit, LayoutGrid, List,
-    Shield, ShieldAlert, ShieldCheck, Monitor, Eye, Copy, Lock, AlertTriangle, Clock, Calendar,
+    ShieldAlert, ShieldCheck, Monitor, Eye, AlertTriangle, Clock, Calendar,
     Settings2, Info, Bot, Sparkles, BookOpen, UserCheck, Search
 } from "lucide-react";
 import { AICanvasCard } from "@/components/ui/ai-canvas-card";
@@ -116,10 +115,9 @@ function AssignmentModal({
     const [endTime, setEndTime] = useState(attempt ? formatForInput(new Date(attempt.endTime)) : "");
     const [enableSurveillance, setEnableSurveillance] = useState(true);
     const [blockTabSwitch, setBlockTabSwitch] = useState(true);
+    const [maxExitTimeMinutes, setMaxExitTimeMinutes] = useState<number>(Math.max(1, Math.round((attempt?.maxExitTimeSeconds ?? 60) / 60)));
     const [requireFullscreen, setRequireFullscreen] = useState(true);
     const [blockMultipleDisplays, setBlockMultipleDisplays] = useState(true);
-    const [blockClipboard, setBlockClipboard] = useState(true);
-    const [maxWarnings, setMaxWarnings] = useState<number>(3);
     const [helpUrl, setHelpUrl] = useState(attempt?.helpUrl || "");
     const [maxSupportAttempts, setMaxSupportAttempts] = useState<number>(attempt?.maxSupportAttempts ?? 3);
     const [aiSupportDelaySeconds, setAiSupportDelaySeconds] = useState<number>(attempt?.aiSupportDelaySeconds ?? 60);
@@ -138,10 +136,9 @@ function AssignmentModal({
             setEndTime(formatForInput(new Date(attempt.endTime)));
             setEnableSurveillance(attempt.enableSurveillance !== false);
             setBlockTabSwitch(attempt.blockTabSwitch !== false);
+            setMaxExitTimeMinutes(Math.max(1, Math.round((attempt.maxExitTimeSeconds ?? 60) / 60)));
             setRequireFullscreen(attempt.requireFullscreen !== false);
             setBlockMultipleDisplays(attempt.blockMultipleDisplays !== false);
-            setBlockClipboard(attempt.blockClipboard !== false);
-            setMaxWarnings(attempt.maxWarnings ?? 3);
             setHelpUrl(attempt.helpUrl || "");
             setMaxSupportAttempts(attempt.maxSupportAttempts ?? 3);
             setAiSupportDelaySeconds(attempt.aiSupportDelaySeconds ?? 60);
@@ -168,10 +165,9 @@ function AssignmentModal({
             setEndTime(formatForInput(new Date(now.getTime() + 2 * 60 * 60 * 1000)));
             setEnableSurveillance(true);
             setBlockTabSwitch(true);
+            setMaxExitTimeMinutes(1);
             setRequireFullscreen(true);
             setBlockMultipleDisplays(true);
-            setBlockClipboard(true);
-            setMaxWarnings(3);
             setHelpUrl("");
             setMaxSupportAttempts(3);
             setAiSupportDelaySeconds(60);
@@ -281,9 +277,10 @@ function AssignmentModal({
             formData.set("endTime", endTime);
             formData.set("enableSurveillance", String(enableSurveillance));
             formData.set("blockTabSwitch", String(blockTabSwitch));
+            formData.set("maxExitTimeSeconds", String(maxExitTimeMinutes * 60));
             formData.set("requireFullscreen", String(requireFullscreen));
             formData.set("blockMultipleDisplays", String(blockMultipleDisplays));
-            formData.set("blockClipboard", String(blockClipboard));
+            formData.set("blockClipboard", "false");
             formData.set("maxWarnings", "0");
             formData.set("helpUrl", helpUrl);
             formData.set("maxSupportAttempts", String(maxSupportAttempts));
@@ -833,24 +830,71 @@ function AssignmentModal({
                                 {/* Mecanismos detallados de supervisión */}
                                 {enableSurveillance ? (
                                     <div className="space-y-3 pt-1">
-                                        {/* 1. Monitoreo de pestaña y foco */}
-                                        <div className="flex items-start justify-between gap-3 p-3 rounded-xl border border-border/70 bg-card hover:bg-muted/10 transition-colors">
-                                            <div className="space-y-0.5">
-                                                <div className="flex items-center gap-2">
-                                                    <Eye className="h-4 w-4 text-amber-500 shrink-0" />
-                                                    <Label className="text-xs font-bold cursor-pointer">Bloquear Cambio de Pestaña y Pérdida de Foco</Label>
+                                        {/* 1. Monitoreo de pestaña y salidas (Sin expulsiones) */}
+                                        <div className="space-y-2 p-3 rounded-xl border border-border/70 bg-card hover:bg-muted/10 transition-colors">
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="space-y-0.5">
+                                                    <div className="flex items-center gap-2">
+                                                        <Eye className="h-4 w-4 text-amber-500 shrink-0" />
+                                                        <Label className="text-xs font-bold cursor-pointer">Supervisar Cambios de Pestaña y Salidas</Label>
+                                                    </div>
+                                                    <p className="text-[11px] text-muted-foreground pl-6">
+                                                        {blockTabSwitch 
+                                                            ? "Registra la cantidad de salidas y el tiempo acumulado fuera del examen sin expulsiones."
+                                                            : "Deshabilitado: el sistema NO registrará ninguna salida ni tiempo fuera del examen."}
+                                                    </p>
                                                 </div>
-                                                <p className="text-[11px] text-muted-foreground pl-6">
-                                                    Registra falta o expulsión si el alumno cambia de pestaña del navegador, minimiza o cambia a otra ventana.
-                                                </p>
+                                                <Switch
+                                                    checked={blockTabSwitch}
+                                                    onCheckedChange={setBlockTabSwitch}
+                                                />
                                             </div>
-                                            <Switch
-                                                checked={blockTabSwitch}
-                                                onCheckedChange={setBlockTabSwitch}
-                                            />
+
+                                            {/* Configuración de Tiempo Máximo de Salida para Alerta */}
+                                            {blockTabSwitch && (
+                                                <div className="ml-6 mt-2 p-3 rounded-xl border border-amber-500/30 bg-amber-500/5 dark:bg-amber-950/20 space-y-2">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <Label className="text-xs font-bold text-foreground">
+                                                            Tiempo Máximo Acumulado Fuera para Alerta (minutos)
+                                                        </Label>
+                                                        <span className="text-xs font-mono font-bold text-amber-600 dark:text-amber-400">
+                                                            {maxExitTimeMinutes} {maxExitTimeMinutes === 1 ? "minuto" : "minutos"}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-[11px] text-muted-foreground">
+                                                        Si el estudiante acumula este tiempo en minutos fuera del examen, se registrará una alerta prioritaria visible tanto para el alumno como para el docente.
+                                                    </p>
+                                                    <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                                                        {[1, 2, 3, 5, 10, 15].map((min) => (
+                                                            <Button
+                                                                key={min}
+                                                                type="button"
+                                                                size="sm"
+                                                                variant={maxExitTimeMinutes === min ? "default" : "outline"}
+                                                                className="h-7 text-xs px-2.5 font-bold cursor-pointer"
+                                                                onClick={() => setMaxExitTimeMinutes(min)}
+                                                            >
+                                                                {min} {min === 1 ? "minuto" : "min"}
+                                                            </Button>
+                                                        ))}
+                                                        <div className="flex items-center gap-1.5 ml-auto">
+                                                            <span className="text-[11px] text-muted-foreground">Personalizado:</span>
+                                                            <Input
+                                                                type="number"
+                                                                min={1}
+                                                                max={180}
+                                                                value={maxExitTimeMinutes}
+                                                                onChange={(e) => setMaxExitTimeMinutes(Math.max(1, parseInt(e.target.value) || 1))}
+                                                                className="h-7 w-20 text-xs font-mono font-bold"
+                                                            />
+                                                            <span className="text-[11px] text-muted-foreground">min</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
 
-                                        {/* 2. Pantalla completa / maximizada */}
+                                        {/* 2. Pantalla completa / maximizada (Expulsión temporal con reingreso) */}
                                         <div className="flex items-start justify-between gap-3 p-3 rounded-xl border border-border/70 bg-card hover:bg-muted/10 transition-colors">
                                             <div className="space-y-0.5">
                                                 <div className="flex items-center gap-2">
@@ -858,7 +902,7 @@ function AssignmentModal({
                                                     <Label className="text-xs font-bold cursor-pointer">Exigir Ventana Maximizada / Pantalla Completa</Label>
                                                 </div>
                                                 <p className="text-[11px] text-muted-foreground pl-6">
-                                                    Obliga a mantener la ventana maximizada e impide redimensionar para consultar otras apps en pantalla dividida.
+                                                    Obliga a mantener la ventana maximizada. Si el alumno la redimensiona, sufrirá una expulsión temporal pero podrá maximizarla y reingresar.
                                                 </p>
                                             </div>
                                             <Switch
@@ -867,7 +911,7 @@ function AssignmentModal({
                                             />
                                         </div>
 
-                                        {/* 3. Múltiples monitores */}
+                                        {/* 3. Múltiples monitores (Expulsión temporal con reingreso) */}
                                         <div className="flex items-start justify-between gap-3 p-3 rounded-xl border border-border/70 bg-card hover:bg-muted/10 transition-colors">
                                             <div className="space-y-0.5">
                                                 <div className="flex items-center gap-2">
@@ -875,7 +919,7 @@ function AssignmentModal({
                                                     <Label className="text-xs font-bold cursor-pointer">Bloquear Múltiples Monitores</Label>
                                                 </div>
                                                 <p className="text-[11px] text-muted-foreground pl-6">
-                                                    Detecta e impide la evaluación si el estudiante tiene monitores secundarios o proyectores extendidos.
+                                                    Detecta e impide pantallas secundarias. Si el alumno conecta un segundo monitor, sufrirá expulsión temporal hasta que lo desconecte y reingrese.
                                                 </p>
                                             </div>
                                             <Switch
@@ -884,34 +928,25 @@ function AssignmentModal({
                                             />
                                         </div>
 
-                                        {/* 4. Portapapeles y Clic Derecho */}
-                                        <div className="flex items-start justify-between gap-3 p-3 rounded-xl border border-border/70 bg-card hover:bg-muted/10 transition-colors">
-                                            <div className="space-y-0.5">
-                                                <div className="flex items-center gap-2">
-                                                    <Copy className="h-4 w-4 text-rose-500 shrink-0" />
-                                                    <Label className="text-xs font-bold cursor-pointer">Bloquear Copiar, Pegar y Clic Derecho</Label>
-                                                </div>
-                                                <p className="text-[11px] text-muted-foreground pl-6">
-                                                    Deshabilita copiar preguntas, pegar código o texto externo y anula el menú contextual del navegador.
-                                                </p>
-                                            </div>
-                                            <Switch
-                                                checked={blockClipboard}
-                                                onCheckedChange={setBlockClipboard}
-                                            />
-                                        </div>
-
-                                        {/* Régimen Estricto de Expulsión Inmediata */}
-                                        <div className="p-3.5 rounded-xl border border-red-500/30 bg-red-500/5 dark:bg-red-950/20 space-y-1.5">
+                                        {/* Resumen de Políticas de Alertas y Reingreso */}
+                                        <div className="p-3.5 rounded-xl border border-blue-500/30 bg-blue-500/5 dark:bg-blue-950/20 space-y-2">
                                             <div className="flex items-center gap-2">
-                                                <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
-                                                <span className="text-xs font-bold text-red-600 dark:text-red-400">
-                                                    Régimen Estricto: Expulsión Inmediata por Pérdida de Foco
+                                                <AlertTriangle className="h-4 w-4 text-blue-500 shrink-0" />
+                                                <span className="text-xs font-bold text-blue-600 dark:text-blue-400">
+                                                    Políticas de Seguridad, Alertas y Reingreso
                                                 </span>
                                             </div>
-                                            <p className="text-[11px] text-muted-foreground pl-6">
-                                                Sin tolerancia ni advertencias acumulativas. Si el estudiante cambia de pestaña, minimiza la ventana o interactúa con otra aplicación, el sistema lo <strong>expulsará automáticamente</strong> de la evaluación.
-                                            </p>
+                                            <ul className="text-[11px] text-muted-foreground space-y-1.5 pl-6 list-disc">
+                                                <li>
+                                                    <strong>Sin expulsiones por pestañas:</strong> Los cambios de pestaña o pérdida de foco no expulsan al estudiante. Solo se contabilizan las salidas y el tiempo fuera, registrando una alerta si se supera el tiempo límite configurado.
+                                                </li>
+                                                <li>
+                                                    <strong>Expulsiones por redimensionar o monitores:</strong> Aplican si el alumno desmaximiza la ventana o conecta una segunda pantalla.
+                                                </li>
+                                                <li>
+                                                    <strong>Reingreso habilitado:</strong> Las expulsiones no finalizan la prueba. El estudiante puede corregir la situación (maximizar ventana o desconectar monitor) y hacer clic en <em>Reingresar</em> para continuar sin perder sus respuestas.
+                                                </li>
+                                            </ul>
                                         </div>
                                     </div>
                                 ) : (
@@ -1224,7 +1259,7 @@ export function EvaluationAssignmentManager({
                     })}
                     {attempts.length === 0 && (
                         <div className="col-span-full border-2 border-dashed border-border/60 rounded-xl p-8 text-center text-muted-foreground">
-                            No hay evaluaciones asignadas a este grupo todavía. Haz clic en "Asignar Evaluación" para comenzar.
+                            No hay evaluaciones asignadas a este grupo todavía. Haz clic en &quot;Asignar Evaluación&quot; para comenzar.
                         </div>
                     )}
                 </div>

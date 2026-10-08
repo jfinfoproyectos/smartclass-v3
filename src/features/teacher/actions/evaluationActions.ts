@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import prisma from "@/lib/prisma";
+import { emitEvaluationUpdate } from "@/lib/evaluationEvents";
 
 async function getSession() {
     return await auth.api.getSession({ headers: await headers() });
@@ -95,6 +96,13 @@ export async function updateEvaluationAction(formData: FormData) {
         wildcardSecondChance
     });
 
+    emitEvaluationUpdate({
+        evaluationId,
+        type: "EVALUATION_UPDATED",
+        timestamp: Date.now(),
+        message: "El profesor ha modificado los parámetros generales de la evaluación."
+    });
+
     // 🎯 AUDIT LOG
     const { auditLogger } = await import("../../admin/services/auditLogger");
     await auditLogger.log({
@@ -172,6 +180,13 @@ export async function createQuestionAction(formData: FormData) {
         referenceAnswer: referenceAnswer
     });
 
+    emitEvaluationUpdate({
+        evaluationId,
+        type: "QUESTION_UPDATED",
+        timestamp: Date.now(),
+        message: "El profesor ha añadido una nueva pregunta a la evaluación."
+    });
+
     revalidatePath(`/dashboard/teacher/evaluations/${evaluationId}`);
 }
 
@@ -197,6 +212,13 @@ export async function updateQuestionAction(formData: FormData) {
         referenceAnswer: referenceAnswer
     });
 
+    emitEvaluationUpdate({
+        evaluationId,
+        type: "QUESTION_UPDATED",
+        timestamp: Date.now(),
+        message: "El profesor ha modificado una pregunta de la evaluación."
+    });
+
     revalidatePath(`/dashboard/teacher/evaluations/${evaluationId}`);
 }
 
@@ -208,6 +230,13 @@ export async function updateQuestionsOrderAction(evaluationId: string, questionO
 
     const { evaluationService } = await import("../services/evaluationService");
     await evaluationService.updateQuestionsOrder(evaluationId, session.user.id, questionOrders);
+
+    emitEvaluationUpdate({
+        evaluationId,
+        type: "QUESTION_UPDATED",
+        timestamp: Date.now(),
+        message: "El profesor ha actualizado el orden de las preguntas."
+    });
 
     revalidatePath(`/dashboard/teacher/evaluations/${evaluationId}`);
 }
@@ -228,6 +257,13 @@ export async function deleteQuestionAction(formData: FormData) {
 
     const { evaluationService } = await import("../services/evaluationService");
     await evaluationService.deleteQuestion(questionId, evaluationId, session.user.id);
+
+    emitEvaluationUpdate({
+        evaluationId,
+        type: "QUESTION_UPDATED",
+        timestamp: Date.now(),
+        message: "El profesor ha eliminado una pregunta de la evaluación."
+    });
 
     revalidatePath(`/dashboard/teacher/evaluations/${evaluationId}`);
 }
@@ -250,6 +286,8 @@ export async function assignEvaluationAction(formData: FormData) {
     const blockClipboard = formData.has("blockClipboard") ? formData.get("blockClipboard") === "true" : true;
     const maxWarningsStr = formData.get("maxWarnings") as string;
     const maxWarnings = maxWarningsStr ? parseInt(maxWarningsStr, 10) : 3;
+    const maxExitTimeSecondsStr = formData.get("maxExitTimeSeconds") as string;
+    const maxExitTimeSeconds = maxExitTimeSecondsStr ? parseInt(maxExitTimeSecondsStr, 10) : 60;
 
     const helpUrl = (formData.get("helpUrl") as string) || null;
     const maxSupportAttemptsStr = formData.get("maxSupportAttempts") as string;
@@ -289,6 +327,7 @@ export async function assignEvaluationAction(formData: FormData) {
         blockMultipleDisplays,
         blockClipboard,
         maxWarnings,
+        maxExitTimeSeconds,
         helpUrl,
         maxSupportAttempts,
         aiSupportDelaySeconds,
@@ -554,6 +593,8 @@ export async function updateEvaluationAssignmentAction(formData: FormData) {
     const blockClipboard = formData.has("blockClipboard") ? formData.get("blockClipboard") === "true" : true;
     const maxWarningsStr = formData.get("maxWarnings") as string;
     const maxWarnings = maxWarningsStr ? parseInt(maxWarningsStr, 10) : 3;
+    const maxExitTimeSecondsStr = formData.get("maxExitTimeSeconds") as string;
+    const maxExitTimeSeconds = maxExitTimeSecondsStr ? parseInt(maxExitTimeSecondsStr, 10) : undefined;
 
     const helpUrl = formData.has("helpUrl") ? ((formData.get("helpUrl") as string) || null) : undefined;
     const maxSupportAttemptsStr = formData.get("maxSupportAttempts") as string;
@@ -587,12 +628,21 @@ export async function updateEvaluationAssignmentAction(formData: FormData) {
         blockMultipleDisplays,
         blockClipboard,
         maxWarnings,
+        maxExitTimeSeconds,
         helpUrl,
         maxSupportAttempts,
         aiSupportDelaySeconds,
         wildcardAiHints,
         wildcardSecondChance,
         assignedStudentIds,
+    });
+
+    emitEvaluationUpdate({
+        attemptId: attempt.id,
+        evaluationId: attempt.evaluationId,
+        type: "ASSIGNMENT_UPDATED",
+        timestamp: Date.now(),
+        message: "El profesor ha actualizado el tiempo o las reglas de la evaluación."
     });
 
     // 🎯 AUDIT LOG
@@ -693,6 +743,13 @@ export async function updateSubmissionPenaltyAction(
             score: finalScore,
             wildcardsUsed: updatedWildcards
         }
+    });
+
+    emitEvaluationUpdate({
+        attemptId: submission.attemptId,
+        type: "PENALTY_UPDATED",
+        timestamp: Date.now(),
+        message: "El profesor ha actualizado el estado de tus faltas o comodines."
     });
 
     // 🎯 AUDIT LOG
@@ -934,4 +991,137 @@ export async function getAttemptSubmissionsAction(attemptId: string) {
         return { success: false, error: error.message || "Error al consultar las entregas" };
     }
 }
+
+/**
+ * Envía un mensaje urgente en tiempo real a un estudiante durante la evaluación vía SSE
+ */
+export async function sendTeacherMessageAction({
+    attemptId,
+    evaluationId,
+    submissionId,
+    studentId,
+    message
+}: {
+    attemptId: string;
+    evaluationId?: string;
+    submissionId?: string;
+    studentId?: string;
+    message: string;
+}) {
+    try {
+        const session = await getSession();
+        if (!session || (session.user.role !== "teacher" && session.user.role !== "admin")) {
+            return { success: false, error: "No autorizado" };
+        }
+
+        if (!message || !message.trim()) {
+            return { success: false, error: "El mensaje no puede estar vacío" };
+        }
+
+        const trimmedMessage = message.trim();
+        const senderName = session.user.name || "Profesor";
+
+        // Persistir en la base de datos si existe la entrega
+        if (submissionId) {
+            try {
+                const sub = await prisma.evaluationSubmission.findUnique({
+                    where: { id: submissionId },
+                    select: { id: true, wildcardsUsed: true }
+                });
+                if (sub) {
+                    const currentWildcards = (sub.wildcardsUsed as any) || {};
+                    const prevMessages = Array.isArray(currentWildcards.teacherMessages)
+                        ? currentWildcards.teacherMessages
+                        : [];
+
+                    await prisma.evaluationSubmission.update({
+                        where: { id: submissionId },
+                        data: {
+                            wildcardsUsed: {
+                                ...currentWildcards,
+                                teacherMessages: [
+                                    ...prevMessages,
+                                    {
+                                        message: trimmedMessage,
+                                        senderName,
+                                        sentAt: new Date().toISOString()
+                                    }
+                                ]
+                            }
+                        }
+                    });
+                }
+            } catch (dbErr) {
+                console.error("Error al persistir mensaje en la entrega:", dbErr);
+            }
+        }
+
+        // Emitir en el bus de eventos SSE
+        emitEvaluationUpdate({
+            attemptId,
+            evaluationId,
+            submissionId,
+            studentId,
+            type: "TEACHER_MESSAGE",
+            timestamp: Date.now(),
+            message: trimmedMessage,
+            senderName,
+        });
+
+        return { success: true };
+    } catch (error: any) {
+        console.error("Error al enviar mensaje vía SSE:", error);
+        return { success: false, error: error.message || "Error al enviar mensaje" };
+    }
+}
+
+/**
+ * Bloquea o desbloquea una evaluación en tiempo real vía SSE y persiste el estado en la base de datos.
+ */
+export async function toggleEvaluationLockAction({
+    attemptId,
+    isLocked,
+    courseId
+}: {
+    attemptId: string;
+    isLocked: boolean;
+    courseId?: string;
+}) {
+    try {
+        const session = await getSession();
+        if (!session || (session.user.role !== "teacher" && session.user.role !== "admin")) {
+            return { success: false, error: "No autorizado" };
+        }
+
+        const updatedAttempt = await prisma.evaluationAttempt.update({
+            where: { id: attemptId },
+            data: { isLocked },
+            select: { id: true, isLocked: true, evaluationId: true, courseId: true }
+        });
+
+        // Emitir en el bus de eventos SSE
+        emitEvaluationUpdate({
+            attemptId,
+            evaluationId: updatedAttempt.evaluationId,
+            type: isLocked ? "EVALUATION_LOCKED" : "EVALUATION_UNLOCKED",
+            timestamp: Date.now(),
+            message: isLocked
+                ? "El profesor ha pausado la evaluación temporalmente."
+                : "El profesor ha reanudado la evaluación.",
+            isLocked,
+        });
+
+        if (courseId || updatedAttempt.courseId) {
+            const cId = courseId || updatedAttempt.courseId;
+            revalidatePath(`/dashboard/teacher/courses/${cId}/evaluations/${attemptId}`);
+        }
+        revalidatePath(`/evaluations/${attemptId}/live`);
+
+        return { success: true, isLocked: updatedAttempt.isLocked };
+    } catch (error: any) {
+        console.error("Error al alternar bloqueo de evaluación:", error);
+        return { success: false, error: error.message || "Error al cambiar el estado de la prueba" };
+    }
+}
+
 

@@ -440,6 +440,7 @@ model Evaluation {
   blockMultipleDisplays Boolean             @default(true)
   blockClipboard        Boolean             @default(true)
   maxWarnings           Int                 @default(3)
+  maxExitTimeSeconds    Int                 @default(60) // Límite de tiempo acumulado fuera del examen antes de activar alerta (en segundos)
 
   @@map("evaluation")
 }
@@ -482,6 +483,7 @@ model EvaluationAttempt {
   blockMultipleDisplays Boolean                @default(true)
   blockClipboard        Boolean                @default(true)
   maxWarnings           Int                    @default(3)
+  maxExitTimeSeconds    Int                    @default(60) // Límite de tiempo acumulado fuera del examen antes de activar alerta (en segundos)
 
   // Configuración de soporte IA, comodines y recursos por grupo
   helpUrl               String?
@@ -492,6 +494,9 @@ model EvaluationAttempt {
 
   // Asignación de estudiantes: vacío/[] o null = todos los estudiantes del curso; array de IDs = estudiantes específicos
   assignedStudentIds    Json?                  @default("[]")
+
+  // Estado de bloqueo/pausa en vivo de la evaluación
+  isLocked              Boolean                @default(false)
 
   @@map("evaluation_attempt")
 }
