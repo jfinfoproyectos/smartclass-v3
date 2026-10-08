@@ -68,6 +68,9 @@ function getScoreColorClass(score: number): string {
     return "bg-destructive/15 text-destructive border-destructive/30";
 }
 
+// Flag para registrar proveedores de autocompletado de Monaco una sola vez a nivel global
+let monacoCompletionsRegistered = false;
+
 export function TakeEvaluationLayout({
     attempt,
     submission,
@@ -103,6 +106,8 @@ export function TakeEvaluationLayout({
     // Refs para acceder a las respuestas y pregunta activa en eventos asíncronos y expulsiones
     const answersRef = useRef<Record<string, string>>({});
     const currentQuestionRef = useRef<any>(null);
+    const editorRef = useRef<any>(null);
+    const internalCodeClipboardRef = useRef<string>("");
 
     // Keep ref in sync with state
     useEffect(() => {
@@ -290,24 +295,40 @@ export function TakeEvaluationLayout({
         if (!mounted || !hasStarted || isSubmitted || !blockClipboard) return;
 
         const preventClipboard = (e: Event) => {
+            const target = e.target as HTMLElement | null;
+            const isEditorArea = !!target?.closest('.monaco-editor') ||
+                                 target?.tagName === "TEXTAREA" ||
+                                 target?.tagName === "INPUT" ||
+                                 target?.isContentEditable;
+
+            // En el editor de código y campos de respuesta, permitir copiar y cortar texto propio con total libertad
+            if ((e.type === "copy" || e.type === "cut") && isEditorArea) {
+                return;
+            }
+
+            // En el pegado dentro de Monaco o áreas de respuesta, su propio manejador verifica origen interno
+            if (e.type === "paste" && isEditorArea) {
+                return;
+            }
+
             e.preventDefault();
             toast.warning("Acción restringida", {
-                description: "Copiar y pegar están deshabilitados en esta evaluación.",
+                description: "Copiar el contenido del examen está restringido en esta evaluación.",
             });
         };
 
         const handleContextMenu = (e: MouseEvent) => {
-            // Permitir el menú contextual únicamente en campos editables (textarea / input)
-            // para que el estudiante pueda ver y seleccionar las correcciones ortográficas del navegador.
+            // Permitir menú contextual en el editor de código Monaco y en campos editables
             const target = e.target as HTMLElement | null;
             const isEditable = target && (
                 target.tagName === "TEXTAREA" ||
                 target.tagName === "INPUT" ||
-                target.isContentEditable
+                target.isContentEditable ||
+                !!target.closest('.monaco-editor')
             );
 
             if (isEditable && !target?.hasAttribute("readonly") && !(target as any)?.disabled) {
-                // Se permite el menú nativo del navegador para acceder al corrector ortográfico
+                // Se permite menú nativo o de Monaco para corrector y acciones del editor
                 return;
             }
 
@@ -318,12 +339,32 @@ export function TakeEvaluationLayout({
         };
 
         const handleKeyDown = (e: KeyboardEvent) => {
-            // Bloqueo estricto de atajos de teclado para copiar, pegar y cortar
-            if ((e.ctrlKey || e.metaKey) && ["c", "v", "x", "C", "V", "X"].includes(e.key)) {
+            const target = e.target as HTMLElement | null;
+            const isEditorArea = !!target?.closest('.monaco-editor') ||
+                                 target?.tagName === "TEXTAREA" ||
+                                 target?.tagName === "INPUT" ||
+                                 target?.isContentEditable;
+
+            // Permitir copiar y cortar (Ctrl+C, Ctrl+X) en el editor y campos de respuesta del estudiante
+            if ((e.ctrlKey || e.metaKey) && ["c", "x", "C", "X"].includes(e.key)) {
+                if (isEditorArea) {
+                    return;
+                }
                 e.preventDefault();
                 toast.warning("Acción restringida", {
-                    description: "Los atajos de teclado para copiar, cortar y pegar están deshabilitados.",
+                    description: "Copiar enunciados está deshabilitado en esta evaluación.",
                 });
+                return;
+            }
+
+            // Pegar (Ctrl+V): si está fuera de áreas editables, bloquear
+            if ((e.ctrlKey || e.metaKey) && ["v", "V"].includes(e.key)) {
+                if (!isEditorArea) {
+                    e.preventDefault();
+                    toast.warning("Acción restringida", {
+                        description: "Pegar contenido está deshabilitado.",
+                    });
+                }
             }
         };
 
@@ -1059,29 +1100,43 @@ export function TakeEvaluationLayout({
 
     const handleQuestionSelect = (idx: number) => {
         // Guardar la respuesta actual (código o texto) antes de navegar
-        if (currentQuestion?.id && answers[currentQuestion.id] !== undefined) {
-            saveAnswerAction(submission.id, currentQuestion.id, answers[currentQuestion.id] || "");
+        if (currentQuestion?.id) {
+            const currentVal = editorRef.current && currentQuestion.type === "Code"
+                ? editorRef.current.getValue()
+                : answers[currentQuestion.id];
+            if (currentVal !== undefined) {
+                saveAnswerAction(submission.id, currentQuestion.id, currentVal || "");
+            }
         }
         setActiveQuestionIdx(idx);
         setActiveTab("answer"); // Reset tab
     };
 
     const handleAnswerChange = (val: string) => {
-        setAnswers(prev => ({
-            ...prev,
-            [currentQuestion.id]: val
-        }));
+        answersRef.current[currentQuestion.id] = val;
+        setAnswers(prev => {
+            if (prev[currentQuestion.id] === val) return prev;
+            return {
+                ...prev,
+                [currentQuestion.id]: val
+            };
+        });
     };
 
     const handleSaveCurrent = async (notify: boolean | React.SyntheticEvent = false) => {
         setIsSaving(true);
-        if (answers[currentQuestion.id] != null) {
-            await saveAnswerAction(submission.id, currentQuestion.id, answers[currentQuestion.id] || "");
-            if (notify === true) {
-                toast.success("Borrador guardado", {
-                    description: "Tu respuesta se ha sincronizado correctamente.",
-                    duration: 2500,
-                });
+        if (currentQuestion?.id) {
+            const val = editorRef.current && currentQuestion.type === "Code"
+                ? editorRef.current.getValue()
+                : answers[currentQuestion.id];
+            if (val !== undefined && val !== null) {
+                await saveAnswerAction(submission.id, currentQuestion.id, val || "");
+                if (notify === true) {
+                    toast.success("Borrador guardado", {
+                        description: "Tu respuesta se ha sincronizado correctamente.",
+                        duration: 2500,
+                    });
+                }
             }
         }
         setIsSaving(false);
@@ -1096,7 +1151,11 @@ export function TakeEvaluationLayout({
     };
 
     const handleAskAI = async () => {
-        if (!answers[currentQuestion.id]?.trim()) {
+        const currentAns = (editorRef.current && currentQuestion.type === "Code")
+            ? editorRef.current.getValue()
+            : (answers[currentQuestion.id] || "");
+
+        if (!currentAns?.trim()) {
             toast.warning("Respuesta Vacía", {
                 description: "Debes escribir alguna respuesta antes de pedirle a la IA que la evalúe.",
             });
@@ -1112,7 +1171,7 @@ export function TakeEvaluationLayout({
             const res = await evaluateAnswerWithAIAction(
                 submission.id,
                 currentQuestion.id,
-                answers[currentQuestion.id]
+                currentAns
             );
 
             setAiFeedbackMap(prev => {
@@ -1649,22 +1708,17 @@ export function TakeEvaluationLayout({
                                         lang="es"
                                         autoComplete="on"
                                         autoCorrect="on"
-                                        onCopy={(e) => { 
-                                            if (!isSubmitted) {
-                                                e.preventDefault();
-                                                toast.warning("Acción restringida", { description: "Copiar texto está deshabilitado." });
-                                            }
-                                        }}
-                                        onCut={(e) => { 
-                                            if (!isSubmitted) {
-                                                e.preventDefault();
-                                                toast.warning("Acción restringida", { description: "Cortar texto está deshabilitado." });
-                                            }
-                                        }}
                                         onPaste={(e) => { 
-                                            if (!isSubmitted) {
-                                                e.preventDefault();
-                                                toast.warning("Acción restringida", { description: "Pegar texto está deshabilitado." });
+                                            if (!isSubmitted && blockClipboard) {
+                                                const pasted = e.clipboardData?.getData('text/plain') || '';
+                                                const isInternal = internalCodeClipboardRef.current && (
+                                                    pasted === internalCodeClipboardRef.current ||
+                                                    internalCodeClipboardRef.current.includes(pasted)
+                                                );
+                                                if (!isInternal) {
+                                                    e.preventDefault();
+                                                    toast.warning("Acción restringida", { description: "Pegar texto externo está deshabilitado en esta evaluación." });
+                                                }
                                             }
                                         }}
                                         onDrop={(e) => {
@@ -1676,11 +1730,12 @@ export function TakeEvaluationLayout({
                                     />
                                 ) : (
                                     <Editor
+                                        key={currentQuestion.id}
                                         height="100%"
                                         width="100%"
                                         language={currentQuestion.language === "arduino" ? "cpp" : (currentQuestion.language || "javascript")}
                                         theme={mounted && theme === "dark" ? "vs-dark" : "light"}
-                                        value={answers[currentQuestion.id] || ""}
+                                        defaultValue={answers[currentQuestion.id] || ""}
                                         onChange={(value) => handleAnswerChange(value || "")}
                                         options={{
                                             fontSize: 14 * zoomLevel,
@@ -1694,6 +1749,11 @@ export function TakeEvaluationLayout({
                                             readOnly: isSubmitted,
                                             contextmenu: true,
                                             copyWithSyntaxHighlighting: false,
+                                            automaticLayout: true,
+                                            accessibilitySupport: "off",
+                                            unicodeHighlight: { ambiguousCharacters: false },
+                                            acceptSuggestionOnEnter: "off",
+                                            tabCompletion: "off",
                                             quickSuggestions: {
                                                 other: true,
                                                 comments: false,
@@ -1701,44 +1761,125 @@ export function TakeEvaluationLayout({
                                             },
                                             suggestOnTriggerCharacters: true,
                                             wordBasedSuggestions: "currentDocument",
-                                            acceptSuggestionOnEnter: "on",
-                                            tabCompletion: "on",
+                                            dragAndDrop: false,
+                                            formatOnPaste: false,
                                         }}
                                         onMount={(editor, monaco) => {
+                                            editorRef.current = editor;
 
-                                            // 1. Interceptamos el servicio de comandos (usamos 'any' para acceder a la propiedad privada)
-                                            const commandService = (editor as any)._commandService;
-
-                                            if (commandService) {
-                                                const originalExecuteCommand = commandService.executeCommand;
-
-                                                commandService.executeCommand = function (id: string, ...args: any[]) {
-                                                    // Bloqueamos la acción de pegar
-                                                    if (id === 'editor.action.clipboardPasteAction') {
-                                                        return null;
-                                                    }
-                                                    return originalExecuteCommand.apply(this, [id, ...args]);
+                                            // Helper para registrar autocompletado de palabras clave pedagógicas una sola vez
+                                            if (!monacoCompletionsRegistered) {
+                                                monacoCompletionsRegistered = true;
+                                                const registerCompletions = (langId: string, keywords: string[], builtins: string[]) => {
+                                                    monaco.languages.registerCompletionItemProvider(langId, {
+                                                        provideCompletionItems: (model: any, position: any) => {
+                                                            const word = model.getWordUntilPosition(position);
+                                                            const range = {
+                                                                startLineNumber: position.lineNumber,
+                                                                endLineNumber: position.lineNumber,
+                                                                startColumn: word.startColumn,
+                                                                endColumn: word.endColumn
+                                                            };
+                                                            const suggestions = [
+                                                                ...keywords.map((kw: string) => ({
+                                                                    label: kw,
+                                                                    kind: monaco.languages.CompletionItemKind.Keyword,
+                                                                    insertText: kw,
+                                                                    range: range
+                                                                })),
+                                                                ...builtins.map((bi: string) => ({
+                                                                    label: bi,
+                                                                    kind: monaco.languages.CompletionItemKind.Function,
+                                                                    insertText: bi,
+                                                                    range: range
+                                                                }))
+                                                            ];
+                                                            return { suggestions };
+                                                        }
+                                                    });
                                                 };
+
+                                                // Python
+                                                registerCompletions('python',
+                                                    ['def', 'class', 'if', 'else', 'elif', 'for', 'while', 'return', 'import', 'from', 'as', 'try', 'except', 'finally', 'with', 'lambda', 'yield', 'global', 'nonlocal', 'pass', 'break', 'continue', 'and', 'or', 'not', 'is', 'in', 'None', 'True', 'False'],
+                                                    ['print', 'len', 'range', 'int', 'str', 'float', 'list', 'dict', 'set', 'tuple', 'enumerate', 'zip', 'map', 'filter', 'sum', 'min', 'max', 'abs', 'round', 'sorted', 'any', 'all', 'input', 'open', 'type', 'isinstance', 'help']
+                                                );
+
+                                                // Arduino / C++
+                                                registerCompletions('cpp',
+                                                    ['void', 'int', 'float', 'double', 'char', 'long', 'unsigned', 'const', 'static', 'if', 'else', 'for', 'while', 'do', 'switch', 'case', 'break', 'continue', 'return', 'struct', 'class', 'public', 'private', 'protected', 'virtual', 'override', 'HIGH', 'LOW', 'INPUT', 'OUTPUT', 'INPUT_PULLUP', 'LED_BUILTIN', 'true', 'false'],
+                                                    ['setup', 'loop', 'pinMode', 'digitalWrite', 'digitalRead', 'analogRead', 'analogWrite', 'delay', 'millis', 'micros', 'Serial.begin', 'Serial.print', 'Serial.println', 'Serial.available', 'Serial.read', 'attachInterrupt', 'detachInterrupt', 'bitRead', 'bitWrite', 'abs', 'min', 'max', 'map', 'constrain']
+                                                );
+
+                                                // Java
+                                                registerCompletions('java',
+                                                    ['public', 'private', 'protected', 'static', 'final', 'class', 'interface', 'extends', 'implements', 'new', 'this', 'super', 'import', 'package', 'return', 'if', 'else', 'for', 'while', 'do', 'switch', 'case', 'break', 'continue', 'try', 'catch', 'finally', 'throw', 'throws', 'instanceof', 'void', 'int', 'boolean', 'double', 'float', 'long', 'char', 'byte', 'short', 'true', 'false', 'null'],
+                                                    ['System.out.println', 'System.out.print', 'Scanner', 'ArrayList', 'HashMap', 'String.valueOf', 'Integer.parseInt', 'Math.max', 'Math.min', 'Math.sqrt', 'Math.pow']
+                                                );
+
+                                                // C#
+                                                registerCompletions('csharp',
+                                                    ['using', 'namespace', 'class', 'public', 'private', 'protected', 'internal', 'static', 'void', 'int', 'string', 'bool', 'double', 'float', 'long', 'char', 'decimal', 'var', 'new', 'this', 'return', 'if', 'else', 'for', 'foreach', 'while', 'do', 'switch', 'case', 'break', 'continue', 'try', 'catch', 'finally', 'throw', 'async', 'await', 'task', 'true', 'false', 'null'],
+                                                    ['Console.WriteLine', 'Console.ReadLine', 'List', 'Dictionary', 'Math.Max', 'Math.Min', 'String.Format', 'int.Parse', 'double.Parse']
+                                                );
+
+                                                // PHP
+                                                registerCompletions('php',
+                                                    ['echo', 'print', 'if', 'else', 'elseif', 'foreach', 'for', 'while', 'do', 'switch', 'case', 'break', 'continue', 'function', 'class', 'public', 'private', 'protected', 'static', 'global', 'return', 'new', 'try', 'catch', 'finally', 'throw', 'array', 'true', 'false', 'null'],
+                                                    ['count', 'strlen', 'array_push', 'array_pop', 'array_merge', 'json_encode', 'json_decode', 'isset', 'empty', 'die', 'exit', 'str_replace', 'substr', 'explode', 'implode']
+                                                );
+
+                                                // SQL
+                                                registerCompletions('sql',
+                                                    ['SELECT', 'FROM', 'WHERE', 'AND', 'OR', 'NOT', 'INSERT', 'INTO', 'UPDATE', 'SET', 'DELETE', 'CREATE', 'TABLE', 'DROP', 'ALTER', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'ON', 'GROUP', 'BY', 'ORDER', 'HAVING', 'LIMIT', 'OFFSET', 'UNION', 'ALL', 'DISTINCT', 'AS', 'IN', 'BETWEEN', 'LIKE', 'IS', 'NULL', 'PRIMARY', 'KEY', 'FOREIGN', 'REFERENCES', 'VALUES'],
+                                                    ['COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'NOW', 'DATE', 'CONCAT', 'SUBSTR', 'LENGTH', 'UPPER', 'LOWER', 'ROUND']
+                                                );
                                             }
 
-                                            // 2. Bloqueo total del evento "paste" a nivel DOM
-                                            const domNode = editor.getDomNode();
-                                            if (domNode) {
-                                                domNode.addEventListener('paste', (e: ClipboardEvent) => {
-                                                    e.preventDefault();
-                                                    e.stopPropagation();
-                                                }, true);
-                                            }
+                                            // Permitir copiar y cortar (Ctrl+C, Ctrl+X) nativamente y guardar el texto copiado internamente
+                                            const updateInternalClipboard = () => {
+                                                const selection = editor.getSelection();
+                                                if (selection && !selection.isEmpty()) {
+                                                    const text = editor.getModel()?.getValueInRange(selection);
+                                                    if (text) {
+                                                        internalCodeClipboardRef.current = text;
+                                                    }
+                                                }
+                                            };
 
-                                            // 3. Opcional: Bloqueo de atajos de teclado (Ctrl/Cmd + V)
                                             editor.onKeyDown((e: any) => {
-                                                if ((e.ctrlKey || e.metaKey) && e.keyCode === monaco.KeyCode.KeyV) {
-                                                    e.preventDefault();
-                                                    e.stopPropagation();
+                                                if ((e.ctrlKey || e.metaKey) && (e.keyCode === monaco.KeyCode.KeyC || e.keyCode === monaco.KeyCode.KeyX)) {
+                                                    updateInternalClipboard();
                                                 }
                                             });
 
-                                            // 4. Guardar borrador de código cuando Monaco pierde el foco
+                                            const domNode = editor.getDomNode();
+                                            if (domNode) {
+                                                domNode.addEventListener('copy', updateInternalClipboard, true);
+                                                domNode.addEventListener('cut', updateInternalClipboard, true);
+
+                                                // Si la evaluación tiene bloqueo de portapapeles, solo permitir pegar lo que el estudiante haya copiado dentro del propio examen
+                                                if (blockClipboard && !isSubmitted) {
+                                                    domNode.addEventListener('paste', (e: ClipboardEvent) => {
+                                                        const clipboardText = e.clipboardData?.getData('text/plain') || '';
+                                                        const isInternal = internalCodeClipboardRef.current && (
+                                                            clipboardText === internalCodeClipboardRef.current ||
+                                                            internalCodeClipboardRef.current.includes(clipboardText) ||
+                                                            clipboardText.includes(internalCodeClipboardRef.current)
+                                                        );
+
+                                                        if (!isInternal) {
+                                                            e.preventDefault();
+                                                            e.stopPropagation();
+                                                            toast.warning("Pegado externo bloqueado", {
+                                                                description: "Por seguridad académica, solo puedes duplicar o pegar código que hayas redactado dentro de esta prueba.",
+                                                            });
+                                                        }
+                                                    }, true);
+                                                }
+                                            }
+
+                                            // Guardar borrador de código cuando Monaco pierde el foco
                                             editor.onDidBlurEditorText(() => {
                                                 const val = editor.getValue();
                                                 const currentQ = currentQuestionRef.current;
@@ -1746,84 +1887,6 @@ export function TakeEvaluationLayout({
                                                     saveAnswerAction(submission.id, currentQ.id, val);
                                                 }
                                             });
-
-                                            // Helper to register simple keyword/built-in completions
-                                            const registerCompletions = (langId: string, keywords: string[], builtins: string[]) => {
-                                                monaco.languages.registerCompletionItemProvider(langId, {
-                                                    provideCompletionItems: (model: any, position: any) => {
-                                                        const word = model.getWordUntilPosition(position);
-                                                        const range = {
-                                                            startLineNumber: position.lineNumber,
-                                                            endLineNumber: position.lineNumber,
-                                                            startColumn: word.startColumn,
-                                                            endColumn: word.endColumn
-                                                        };
-                                                        const suggestions = [
-                                                            ...keywords.map(kw => ({
-                                                                label: kw,
-                                                                kind: monaco.languages.CompletionItemKind.Keyword,
-                                                                insertText: kw,
-                                                                range: range
-                                                            })),
-                                                            ...builtins.map(bi => ({
-                                                                label: bi,
-                                                                kind: monaco.languages.CompletionItemKind.Function,
-                                                                insertText: bi.includes('(') ? bi : bi + '($1)',
-                                                                insertTextRules: bi.includes('(') ? undefined : monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                                                                range: range
-                                                            }))
-                                                        ];
-                                                        return { suggestions };
-                                                    }
-                                                });
-                                            };
-
-                                            // Python
-                                            registerCompletions('python',
-                                                ['def', 'class', 'if', 'else', 'elif', 'for', 'while', 'return', 'import', 'from', 'as', 'try', 'except', 'finally', 'with', 'lambda', 'yield', 'global', 'nonlocal', 'pass', 'break', 'continue', 'and', 'or', 'not', 'is', 'in', 'None', 'True', 'False'],
-                                                ['print', 'len', 'range', 'int', 'str', 'float', 'list', 'dict', 'set', 'tuple', 'enumerate', 'zip', 'map', 'filter', 'sum', 'min', 'max', 'abs', 'round', 'sorted', 'any', 'all', 'input', 'open', 'type', 'isinstance', 'help']
-                                            );
-
-                                            // Arduino / C++
-                                            registerCompletions('cpp',
-                                                ['void', 'int', 'float', 'double', 'char', 'long', 'unsigned', 'const', 'static', 'if', 'else', 'for', 'while', 'do', 'switch', 'case', 'break', 'continue', 'return', 'struct', 'class', 'public', 'private', 'protected', 'virtual', 'override', 'HIGH', 'LOW', 'INPUT', 'OUTPUT', 'INPUT_PULLUP', 'LED_BUILTIN', 'true', 'false'],
-                                                ['setup()', 'loop()', 'pinMode', 'digitalWrite', 'digitalRead', 'analogRead', 'analogWrite', 'delay', 'millis', 'micros', 'Serial.begin', 'Serial.print', 'Serial.println', 'Serial.available', 'Serial.read', 'attachInterrupt', 'detachInterrupt', 'bitRead', 'bitWrite', 'abs', 'min', 'max', 'map', 'constrain']
-                                            );
-
-                                            // Java
-                                            registerCompletions('java',
-                                                ['public', 'private', 'protected', 'static', 'final', 'class', 'interface', 'extends', 'implements', 'new', 'this', 'super', 'import', 'package', 'return', 'if', 'else', 'for', 'while', 'do', 'switch', 'case', 'break', 'continue', 'try', 'catch', 'finally', 'throw', 'throws', 'instanceof', 'void', 'int', 'boolean', 'double', 'float', 'long', 'char', 'byte', 'short', 'true', 'false', 'null'],
-                                                ['System.out.println', 'System.out.print', 'Scanner', 'ArrayList', 'HashMap', 'String.valueOf', 'Integer.parseInt', 'Math.max', 'Math.min', 'Math.sqrt', 'Math.pow']
-                                            );
-
-                                            // C#
-                                            registerCompletions('csharp',
-                                                ['using', 'namespace', 'class', 'public', 'private', 'protected', 'internal', 'static', 'void', 'int', 'string', 'bool', 'double', 'float', 'long', 'char', 'decimal', 'var', 'new', 'this', 'return', 'if', 'else', 'for', 'foreach', 'while', 'do', 'switch', 'case', 'break', 'continue', 'try', 'catch', 'finally', 'throw', 'async', 'await', 'task', 'true', 'false', 'null'],
-                                                ['Console.WriteLine', 'Console.ReadLine', 'List', 'Dictionary', 'Math.Max', 'Math.Min', 'String.Format', 'int.Parse', 'double.Parse']
-                                            );
-
-                                            // PHP
-                                            registerCompletions('php',
-                                                ['echo', 'print', 'if', 'else', 'elseif', 'foreach', 'for', 'while', 'do', 'switch', 'case', 'break', 'continue', 'function', 'class', 'public', 'private', 'protected', 'static', 'global', 'return', 'new', 'try', 'catch', 'finally', 'throw', 'array', 'true', 'false', 'null'],
-                                                ['count', 'strlen', 'array_push', 'array_pop', 'array_merge', 'json_encode', 'json_decode', 'isset', 'empty', 'die', 'exit', 'str_replace', 'substr', 'explode', 'implode']
-                                            );
-
-                                            // SQL
-                                            registerCompletions('sql',
-                                                ['SELECT', 'FROM', 'WHERE', 'AND', 'OR', 'NOT', 'INSERT', 'INTO', 'UPDATE', 'SET', 'DELETE', 'CREATE', 'TABLE', 'DROP', 'ALTER', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'ON', 'GROUP', 'BY', 'ORDER', 'HAVING', 'LIMIT', 'OFFSET', 'UNION', 'ALL', 'DISTINCT', 'AS', 'IN', 'BETWEEN', 'LIKE', 'IS', 'NULL', 'PRIMARY', 'KEY', 'FOREIGN', 'REFERENCES', 'VALUES'],
-                                                ['COUNT()', 'SUM()', 'AVG()', 'MIN()', 'MAX()', 'NOW()', 'DATE()', 'CONCAT()', 'SUBSTR()', 'LENGTH()', 'UPPER()', 'LOWER()', 'ROUND()']
-                                            );
-
-                                            if (!isSubmitted) {
-                                                // Block keyboard shortcuts Ctrl+C / Ctrl+X / Ctrl+V
-                                                editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => { });
-                                                editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, () => { });
-                                                editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => { });
-                                                // Override clipboard actions in the context menu so they are inert
-                                                editor.addAction({ id: 'vs.editor.ICodeEditor:1:clipboardCopyAction', label: '', run: () => { } });
-                                                editor.addAction({ id: 'vs.editor.ICodeEditor:1:clipboardCutAction', label: '', run: () => { } });
-                                                editor.addAction({ id: 'vs.editor.ICodeEditor:1:clipboardPasteAction', label: '', run: () => { } });
-                                            }
                                         }}
                                     />
                                 )}
