@@ -488,21 +488,7 @@ export function EvaluationLiveMonitor({
                             </div>
                         )}
 
-                        {/* Botones de Acción Docente: Mensaje a Todos y Bloqueo */}
-                        {!isProjector && (
-                            <>
-                                <TeacherBroadcastMessageDialog
-                                    attemptId={attemptId}
-                                    evaluationId={evaluationId}
-                                    evaluationTitle={evaluationTitle}
-                                />
-                                <EvaluationLockToggleButton
-                                    attemptId={attemptId}
-                                    initialIsLocked={isLocked}
-                                    courseId={courseId}
-                                />
-                            </>
-                        )}
+
 
                         {/* Indicador SSE en Vivo o Auto-refresco Switch */}
                         {isLiveConnected !== undefined ? (
@@ -1234,8 +1220,8 @@ export function EvaluationLiveMonitor({
                         </div>
 
                         {/* ─── Barra de Filtros, Ordenación y Búsqueda ─── */}
-                        <div className="shrink-0 p-3 sm:px-6 bg-card border-b border-border/70 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+                        <div className="shrink-0 p-3 sm:px-6 bg-card border-b border-border/70 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+                            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0">
                                 <Button
                                     type="button"
                                     size="sm"
@@ -1279,7 +1265,32 @@ export function EvaluationLiveMonitor({
                                 )}
                             </div>
 
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                                {/* Botones de Acción Docente: Mensaje a Todos y Bloqueo */}
+                                {!isProjector && (
+                                    <>
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                            <TeacherBroadcastMessageDialog
+                                                attemptId={attemptId}
+                                                evaluationId={evaluationId}
+                                                evaluationTitle={evaluationTitle}
+                                                className="h-8 px-3 text-xs font-semibold gap-1.5 rounded-lg border-blue-500/40 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 shadow-2xs cursor-pointer transition-all"
+                                            />
+                                            <EvaluationLockToggleButton
+                                                attemptId={attemptId}
+                                                initialIsLocked={isLocked}
+                                                courseId={courseId}
+                                                className={
+                                                    isLocked
+                                                        ? "h-8 px-3 text-xs font-semibold gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs cursor-pointer transition-all animate-pulse"
+                                                        : "h-8 px-3 text-xs font-semibold gap-1.5 rounded-lg border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 shadow-2xs cursor-pointer transition-all"
+                                                }
+                                            />
+                                        </div>
+                                        <div className="h-4 w-px bg-border/70 hidden sm:block shrink-0" />
+                                    </>
+                                )}
+
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
                                         <Button variant="outline" size="sm" className="h-8 text-xs px-2.5 font-semibold gap-1.5 cursor-pointer shrink-0">
