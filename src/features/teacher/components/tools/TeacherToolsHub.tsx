@@ -20,7 +20,8 @@ import {
     Calendar,
     Search,
     X,
-    Video
+    Video,
+    Mic
 } from "lucide-react";
 import { DashboardContainer } from "@/components/ui/dashboard-container";
 import type { CourseWithStudents } from "@/features/teacher/components/TeacherToolsView";
@@ -255,6 +256,28 @@ export function TeacherToolsHub({ courses }: TeacherToolsHubProps) {
             ],
             btnText: "Abrir Grabador de Pantalla",
             route: "/dashboard/teacher/tools/loom-recorder"
+        },
+        {
+            id: "quick-report",
+            title: "Generador de Informes IA (Voz & Ideas)",
+            description: "Crea bitácoras de clase, actas de comité y reportes de seguimiento a partir de notas rápidas o audios con LLM multimodal.",
+            badge: "Voz & LLM Multimodal",
+            category: "docs",
+            icon: Mic,
+            colorClasses: {
+                iconBg: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20",
+                iconText: "text-rose-600 dark:text-rose-400",
+                borderHover: "hover:border-rose-500/50",
+                btnHover: "group-hover:bg-rose-600 group-hover:text-white",
+                badge: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20",
+            },
+            bullets: [
+                "Grabación de voz en vivo, subida de audio y dictado en tiempo real",
+                "Plantillas oficiales: Bitácoras, seguimiento, actas y novedades",
+                "Exportación instantánea a Word (.doc), Markdown y PDF Corporativo"
+            ],
+            btnText: "Abrir Generador de Informes",
+            route: "/dashboard/teacher/tools/quick-report"
         }
     ], []);
 

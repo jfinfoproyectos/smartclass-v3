@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { 
@@ -85,6 +85,23 @@ export function MarkdownToPdfToolView() {
 
   const [activeLayout, setActiveLayout] = useState<"split" | "editor" | "preview">("split");
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  useEffect(() => {
+    try {
+      const imported = localStorage.getItem("smartclass_import_markdown");
+      if (imported) {
+        setMarkdownContent(imported);
+        const h1 = extractFirstH1(imported);
+        if (h1) {
+          setMetadata(prev => ({ ...prev, title: h1 }));
+        }
+        localStorage.removeItem("smartclass_import_markdown");
+        toast.success("Documento cargado desde el Generador de Informes IA");
+      }
+    } catch (e) {
+      console.warn("Error cargando documento importado:", e);
+    }
+  }, []);
 
   const handleContentChange = (newContent: string) => {
     setMarkdownContent(newContent);
