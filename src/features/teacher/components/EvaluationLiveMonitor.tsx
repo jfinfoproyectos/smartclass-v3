@@ -895,8 +895,8 @@ export function EvaluationLiveMonitor({
                                     <h3 className="text-xs sm:text-sm font-bold text-white tracking-wide uppercase">
                                         Panorámica del Aula ({filteredSubmissions.length} estudiantes)
                                     </h3>
-                                    <Badge variant="outline" className="text-[10px] bg-slate-800 text-slate-300 border-slate-700 py-0 hidden md:inline-flex">
-                                        Privacidad Activa
+                                    <Badge variant="outline" className="text-[10px] bg-slate-800 text-slate-300 border-slate-700 py-0 hidden md:inline-flex" title="Las barras reflejan el nivel de calificación de forma visual manteniendo la privacidad del aula">
+                                        Privacidad Activa • Barra por Calificación
                                     </Badge>
                                 </div>
 
@@ -968,6 +968,32 @@ export function EvaluationLiveMonitor({
                                             const percent = totalQuestions > 0 ? Math.round((answersCount / totalQuestions) * 100) : 0;
                                             const lastActivity = getRelativeActivity(sub);
 
+                                            // Cálculo de calificación para la barra de rendimiento (sin exhibir números para preservar privacidad)
+                                            let studentScore: number | null = sub.score !== null && sub.score !== undefined ? Number(sub.score) : null;
+                                            if (studentScore === null && sub.answersList && sub.answersList.length > 0 && totalQuestions > 0) {
+                                                const scoredAnswers = sub.answersList.filter((a: any) => a.score !== null && a.score !== undefined);
+                                                if (scoredAnswers.length > 0) {
+                                                    const sum = scoredAnswers.reduce((acc: number, curr: any) => acc + (Number(curr.score) || 0), 0);
+                                                    studentScore = Number((sum / totalQuestions).toFixed(2));
+                                                }
+                                            }
+
+                                            // Porcentaje sobre la escala máxima (5.0)
+                                            const scoreBarWidth = studentScore !== null 
+                                                ? Math.min(100, Math.max(0, Math.round((studentScore / 5.0) * 100))) 
+                                                : 0;
+
+                                            // Color semántico según el nivel de calificación
+                                            const scoreBarColor = studentScore === null || answersCount === 0
+                                                ? "bg-slate-700"
+                                                : studentScore >= 4.0
+                                                    ? "bg-emerald-500"
+                                                    : studentScore >= 3.0
+                                                        ? "bg-teal-400"
+                                                        : studentScore >= 2.0
+                                                            ? "bg-amber-500"
+                                                            : "bg-rose-500";
+
                                             return (
                                                 <div
                                                     key={sub.id}
@@ -1027,13 +1053,11 @@ export function EvaluationLiveMonitor({
                                                             </div>
                                                         )}
 
-                                                        {/* Barra de Progreso */}
-                                                        <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                                        {/* Barra de Progreso por Calificación (Privacidad Activa: visual sin número) */}
+                                                        <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden" title="Nivel de desempeño">
                                                             <div 
-                                                                className={`h-full rounded-full transition-all duration-500 ${
-                                                                    isSubmitted ? "bg-emerald-500" : "bg-primary"
-                                                                }`}
-                                                                style={{ width: `${percent}%` }}
+                                                                className={`h-full rounded-full transition-all duration-500 ${scoreBarColor}`}
+                                                                style={{ width: `${scoreBarWidth}%` }}
                                                             />
                                                         </div>
                                                     </div>
@@ -1079,6 +1103,30 @@ export function EvaluationLiveMonitor({
                                                             const percent = totalQuestions > 0 ? Math.round((answersCount / totalQuestions) * 100) : 0;
                                                             const lastActivity = getRelativeActivity(sub);
 
+                                                            // Cálculo de calificación para la barra de rendimiento (sin exhibir números para preservar privacidad)
+                                                            let studentScore: number | null = sub.score !== null && sub.score !== undefined ? Number(sub.score) : null;
+                                                            if (studentScore === null && sub.answersList && sub.answersList.length > 0 && totalQuestions > 0) {
+                                                                const scoredAnswers = sub.answersList.filter((a: any) => a.score !== null && a.score !== undefined);
+                                                                if (scoredAnswers.length > 0) {
+                                                                    const sum = scoredAnswers.reduce((acc: number, curr: any) => acc + (Number(curr.score) || 0), 0);
+                                                                    studentScore = Number((sum / totalQuestions).toFixed(2));
+                                                                }
+                                                            }
+
+                                                            const scoreBarWidth = studentScore !== null 
+                                                                ? Math.min(100, Math.max(0, Math.round((studentScore / 5.0) * 100))) 
+                                                                : 0;
+
+                                                            const scoreBarColor = studentScore === null || answersCount === 0
+                                                                ? "bg-slate-700"
+                                                                : studentScore >= 4.0
+                                                                    ? "bg-emerald-500"
+                                                                    : studentScore >= 3.0
+                                                                        ? "bg-teal-400"
+                                                                        : studentScore >= 2.0
+                                                                            ? "bg-amber-500"
+                                                                            : "bg-rose-500";
+
                                                             return (
                                                                 <tr key={sub.id} className="hover:bg-slate-800/40 transition-colors">
                                                                     <td className="py-2 px-2.5 text-center font-mono text-slate-500 text-[10px]">
@@ -1106,10 +1154,10 @@ export function EvaluationLiveMonitor({
                                                                     </td>
                                                                     <td className="py-2 px-2.5">
                                                                         <div className="flex items-center gap-1.5 min-w-[90px]">
-                                                                            <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                                                            <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden" title="Nivel de desempeño">
                                                                                 <div 
-                                                                                    className={`h-full rounded-full ${isSubmitted ? "bg-emerald-500" : "bg-primary"}`}
-                                                                                    style={{ width: `${percent}%` }}
+                                                                                    className={`h-full rounded-full transition-all duration-500 ${scoreBarColor}`}
+                                                                                    style={{ width: `${scoreBarWidth}%` }}
                                                                                 />
                                                                             </div>
                                                                             <span className="text-[10px] font-mono text-slate-300 w-12 text-right shrink-0">

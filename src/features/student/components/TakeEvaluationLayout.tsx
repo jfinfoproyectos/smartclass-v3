@@ -8,10 +8,7 @@ import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import Editor, { loader } from "@monaco-editor/react";
-
-// Configurar Monaco para usar CDN de Cloudflare para autocompletado y workers
-loader.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' } });
+import { CodeAnswerEditor } from "./CodeAnswerEditor";
 import { useTheme } from "next-themes";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -62,9 +59,6 @@ function getScoreColorClass(score: number): string {
     if (score >= 2.0) return "bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/30";
     return "bg-destructive/15 text-destructive border-destructive/30";
 }
-
-// Flag para registrar proveedores de autocompletado de Monaco una sola vez a nivel global
-let monacoCompletionsRegistered = false;
 
 export function TakeEvaluationLayout({
     attempt,
@@ -1646,133 +1640,18 @@ export function TakeEvaluationLayout({
                                         placeholder={isSubmitted ? "No hubo respuesta provista." : "Escribe tu respuesta detallada aquí..."}
                                     />
                                 ) : (
-                                    <Editor
+                                    <CodeAnswerEditor
                                         key={currentQuestion.id}
-                                        height="100%"
-                                        width="100%"
-                                        language={currentQuestion.language === "arduino" ? "cpp" : (currentQuestion.language || "javascript")}
+                                        questionId={currentQuestion.id}
+                                        language={currentQuestion.language || "javascript"}
+                                        initialValue={answers[currentQuestion.id] || ""}
+                                        onAnswerChange={handleAnswerChange}
+                                        onSaveCurrent={handleSaveCurrent}
+                                        disabled={isSubmitted}
+                                        zoomLevel={zoomLevel}
                                         theme={mounted && theme === "dark" ? "vs-dark" : "light"}
-                                        defaultValue={answers[currentQuestion.id] || ""}
-                                        onChange={(value) => handleAnswerChange(value || "")}
-                                        options={{
-                                            fontSize: 14 * zoomLevel,
-                                            minimap: { enabled: false },
-                                            lineNumbers: "on",
-                                            scrollBeyondLastLine: false,
-                                            wordWrap: "on",
-                                            fontFamily: "'Fira Code', 'Monaco', 'Cascadia Code', monospace",
-                                            fontWeight: "500",
-                                            padding: { top: 16, bottom: 16 },
-                                            readOnly: isSubmitted,
-                                            contextmenu: true,
-                                            copyWithSyntaxHighlighting: false,
-                                            automaticLayout: true,
-                                            accessibilitySupport: "off",
-                                            unicodeHighlight: { ambiguousCharacters: false },
-                                            acceptSuggestionOnEnter: "off",
-                                            tabCompletion: "off",
-                                            quickSuggestions: {
-                                                other: true,
-                                                comments: false,
-                                                strings: true
-                                            },
-                                            suggestOnTriggerCharacters: true,
-                                            wordBasedSuggestions: "currentDocument",
-                                            dragAndDrop: true,
-                                            formatOnPaste: true,
-                                        }}
-                                        onMount={(editor, monaco) => {
-                                            editorRef.current = editor;
-
-                                            // Helper para registrar autocompletado de palabras clave pedagógicas una sola vez
-                                            if (!monacoCompletionsRegistered) {
-                                                monacoCompletionsRegistered = true;
-                                                const registerCompletions = (langId: string, keywords: string[], builtins: string[]) => {
-                                                    monaco.languages.registerCompletionItemProvider(langId, {
-                                                        provideCompletionItems: (model: any, position: any) => {
-                                                            const word = model.getWordUntilPosition(position);
-                                                            const range = {
-                                                                startLineNumber: position.lineNumber,
-                                                                endLineNumber: position.lineNumber,
-                                                                startColumn: word.startColumn,
-                                                                endColumn: word.endColumn
-                                                            };
-                                                            const suggestions = [
-                                                                ...keywords.map((kw: string) => ({
-                                                                    label: kw,
-                                                                    kind: monaco.languages.CompletionItemKind.Keyword,
-                                                                    insertText: kw,
-                                                                    range: range
-                                                                })),
-                                                                ...builtins.map((bi: string) => ({
-                                                                    label: bi,
-                                                                    kind: monaco.languages.CompletionItemKind.Function,
-                                                                    insertText: bi,
-                                                                    range: range
-                                                                }))
-                                                            ];
-                                                            return { suggestions };
-                                                        }
-                                                    });
-                                                };
-
-                                                // Python
-                                                registerCompletions('python',
-                                                    ['def', 'class', 'if', 'else', 'elif', 'for', 'while', 'return', 'import', 'from', 'as', 'try', 'except', 'finally', 'with', 'lambda', 'yield', 'global', 'nonlocal', 'pass', 'break', 'continue', 'and', 'or', 'not', 'is', 'in', 'None', 'True', 'False'],
-                                                    ['print', 'len', 'range', 'int', 'str', 'float', 'list', 'dict', 'set', 'tuple', 'enumerate', 'zip', 'map', 'filter', 'sum', 'min', 'max', 'abs', 'round', 'sorted', 'any', 'all', 'input', 'open', 'type', 'isinstance', 'help']
-                                                );
-
-                                                // Arduino / C++
-                                                registerCompletions('cpp',
-                                                    ['void', 'int', 'float', 'double', 'char', 'long', 'unsigned', 'const', 'static', 'if', 'else', 'for', 'while', 'do', 'switch', 'case', 'break', 'continue', 'return', 'struct', 'class', 'public', 'private', 'protected', 'virtual', 'override', 'HIGH', 'LOW', 'INPUT', 'OUTPUT', 'INPUT_PULLUP', 'LED_BUILTIN', 'true', 'false'],
-                                                    ['setup', 'loop', 'pinMode', 'digitalWrite', 'digitalRead', 'analogRead', 'analogWrite', 'delay', 'millis', 'micros', 'Serial.begin', 'Serial.print', 'Serial.println', 'Serial.available', 'Serial.read', 'attachInterrupt', 'detachInterrupt', 'bitRead', 'bitWrite', 'abs', 'min', 'max', 'map', 'constrain']
-                                                );
-
-                                                // Java
-                                                registerCompletions('java',
-                                                    ['public', 'private', 'protected', 'static', 'final', 'class', 'interface', 'extends', 'implements', 'new', 'this', 'super', 'import', 'package', 'return', 'if', 'else', 'for', 'while', 'do', 'switch', 'case', 'break', 'continue', 'try', 'catch', 'finally', 'throw', 'throws', 'instanceof', 'void', 'int', 'boolean', 'double', 'float', 'long', 'char', 'byte', 'short', 'true', 'false', 'null'],
-                                                    ['System.out.println', 'System.out.print', 'Scanner', 'ArrayList', 'HashMap', 'String.valueOf', 'Integer.parseInt', 'Math.max', 'Math.min', 'Math.sqrt', 'Math.pow']
-                                                );
-
-                                                // C#
-                                                registerCompletions('csharp',
-                                                    ['using', 'namespace', 'class', 'public', 'private', 'protected', 'internal', 'static', 'void', 'int', 'string', 'bool', 'double', 'float', 'long', 'char', 'decimal', 'var', 'new', 'this', 'return', 'if', 'else', 'for', 'foreach', 'while', 'do', 'switch', 'case', 'break', 'continue', 'try', 'catch', 'finally', 'throw', 'async', 'await', 'task', 'true', 'false', 'null'],
-                                                    ['Console.WriteLine', 'Console.ReadLine', 'List', 'Dictionary', 'Math.Max', 'Math.Min', 'String.Format', 'int.Parse', 'double.Parse']
-                                                );
-
-                                                // PHP
-                                                registerCompletions('php',
-                                                    ['echo', 'print', 'if', 'else', 'elseif', 'foreach', 'for', 'while', 'do', 'switch', 'case', 'break', 'continue', 'function', 'class', 'public', 'private', 'protected', 'static', 'global', 'return', 'new', 'try', 'catch', 'finally', 'throw', 'array', 'true', 'false', 'null'],
-                                                    ['count', 'strlen', 'array_push', 'array_pop', 'array_merge', 'json_encode', 'json_decode', 'isset', 'empty', 'die', 'exit', 'str_replace', 'substr', 'explode', 'implode']
-                                                );
-
-                                                // SQL
-                                                registerCompletions('sql',
-                                                    ['SELECT', 'FROM', 'WHERE', 'AND', 'OR', 'NOT', 'INSERT', 'INTO', 'UPDATE', 'SET', 'DELETE', 'CREATE', 'TABLE', 'DROP', 'ALTER', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'ON', 'GROUP', 'BY', 'ORDER', 'HAVING', 'LIMIT', 'OFFSET', 'UNION', 'ALL', 'DISTINCT', 'AS', 'IN', 'BETWEEN', 'LIKE', 'IS', 'NULL', 'PRIMARY', 'KEY', 'FOREIGN', 'REFERENCES', 'VALUES'],
-                                                    ['COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'NOW', 'DATE', 'CONCAT', 'SUBSTR', 'LENGTH', 'UPPER', 'LOWER', 'ROUND']
-                                                );
-                                            }
-
-
-
-                                            // Sobreescribir el portapapeles cuando Monaco recibe foco
-                                            const overwriteMonacoClipboard = () => {
-                                                if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-                                                    navigator.clipboard.writeText("No está permitido pegar contenido externo.").catch(() => {});
-                                                }
-                                            };
-                                            editor.onDidFocusEditorText(overwriteMonacoClipboard);
-                                            editor.onDidFocusEditorWidget(overwriteMonacoClipboard);
-
-                                            // Guardar borrador de código cuando Monaco pierde el foco
-                                            editor.onDidBlurEditorText(() => {
-                                                const val = editor.getValue();
-                                                const currentQ = currentQuestionRef.current;
-                                                if (val !== undefined && currentQ?.id) {
-                                                    saveAnswerAction(submission.id, currentQ.id, val);
-                                                }
-                                            });
-                                        }}
+                                        editorRef={editorRef}
+                                        isActiveTab={activeTab === "answer"}
                                     />
                                 )}
                             </div>

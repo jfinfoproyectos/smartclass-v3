@@ -628,6 +628,17 @@ body {
     background: transparent !important;
   }
 
+  /* Monaco Editor Strict Monospace and Alignment Isolation */
+  .monaco-editor,
+  .monaco-editor .view-lines,
+  .monaco-editor .view-line,
+  .monaco-editor .view-line span {
+    font-feature-settings: normal !important;
+    font-variant-ligatures: none !important;
+    letter-spacing: 0px !important;
+    word-spacing: 0px !important;
+  }
+
   /* --- High contrast editor text area caret, cursor & color-scheme rules --- */
   textarea,
   input[type="text"] {
