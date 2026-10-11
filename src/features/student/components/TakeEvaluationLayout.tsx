@@ -261,9 +261,15 @@ export function TakeEvaluationLayout({
     const [expulsionReason, setExpulsionReason] = useState<"resize" | "multi_screen" | null>(null);
     const isExpellingRef = useRef(false);
 
-    // Control de Auditoría y Detección de Múltiples Direcciones IP
+    // Control de Auditoría y Detección de Múltiples Direcciones IP y Dispositivos Concurrentes
     const [multipleIpAlert, setMultipleIpAlert] = useState<boolean>(
         Boolean(initialWildcards.multipleIpAlert || (Array.isArray(initialWildcards.effectiveIps || initialWildcards.detectedIps) && (initialWildcards.effectiveIps || initialWildcards.detectedIps).length > 1))
+    );
+    const [multipleDevicesAlert, setMultipleDevicesAlert] = useState<boolean>(
+        Boolean(initialWildcards.multipleDevicesAlert || (Array.isArray(initialWildcards.activeDevices) && initialWildcards.activeDevices.length > 1))
+    );
+    const [activeDevicesList, setActiveDevicesList] = useState<any[]>(
+        Array.isArray(initialWildcards.activeDevices) ? initialWildcards.activeDevices : []
     );
     const [detectedIps, setDetectedIps] = useState<string[]>(
         Array.isArray(initialWildcards.effectiveIps || initialWildcards.detectedIps)
@@ -272,11 +278,37 @@ export function TakeEvaluationLayout({
     );
     const [showIpAlertModal, setShowIpAlertModal] = useState(false);
 
-    // Captura de IP pública WAN y latido periódico de seguridad
+    // Identificador único de sesión / dispositivo local del navegador
+    const localDeviceIdRef = useRef<string>("");
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        try {
+            let dId = sessionStorage.getItem(`eval_device_${submission?.id}`);
+            if (!dId) {
+                dId = `dev_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+                sessionStorage.setItem(`eval_device_${submission?.id}`, dId);
+            }
+            localDeviceIdRef.current = dId;
+        } catch {
+            localDeviceIdRef.current = `dev_${Date.now()}`;
+        }
+    }, [submission?.id]);
+
+    // Captura de IP pública WAN, huella digital de dispositivo y latido periódico de seguridad
     useEffect(() => {
         if (!mounted || isSubmitted || !submission?.id) return;
 
         let isCancelled = false;
+
+        const getDevicePayload = () => {
+            if (typeof window === "undefined") return undefined;
+            return {
+                deviceId: localDeviceIdRef.current,
+                screenRes: `${window.screen?.width || 0}x${window.screen?.height || 0}`,
+                browserInfo: navigator.userAgent?.substring(0, 150) || "N/A",
+                platform: navigator.platform || "N/A",
+            };
+        };
 
         const syncPublicIp = async (action: string = "heartbeat") => {
             let clientPublicIp: string | undefined = undefined;
@@ -294,13 +326,21 @@ export function TakeEvaluationLayout({
             if (isCancelled) return;
 
             try {
-                const res = await recordEvaluationIpAction(submission.id, clientPublicIp, action);
+                const res = await recordEvaluationIpAction(
+                    submission.id, 
+                    clientPublicIp, 
+                    action,
+                    getDevicePayload()
+                );
                 if (res && res.success && !isCancelled) {
                     if (Array.isArray(res.detectedIps) && res.detectedIps.length > 0) {
                         setDetectedIps(res.detectedIps);
                     }
                     if (res.multipleIpAlert) {
                         setMultipleIpAlert(true);
+                    }
+                    if (res.multipleDevicesAlert) {
+                        setMultipleDevicesAlert(true);
                     }
                 }
             } catch {}
@@ -459,6 +499,23 @@ export function TakeEvaluationLayout({
                         setShowIpAlertModal(true);
                         toast.error("🚨 Alerta de Seguridad Crítica", {
                             description: data.message || "Se ha detectado la presentación de la prueba desde dos lugares o IPs diferentes.",
+                            duration: 10000,
+                        });
+                        try {
+                            if (typeof window !== "undefined" && "navigator" in window && navigator.vibrate) {
+                                navigator.vibrate([200, 100, 200, 100, 300]);
+                            }
+                        } catch {}
+                        return;
+                    }
+                    if (data?.type === "CONCURRENT_SESSION_DETECTED") {
+                        setMultipleDevicesAlert(true);
+                        if (Array.isArray(data.deviceInfo?.devices)) {
+                            setActiveDevicesList(data.deviceInfo.devices);
+                        }
+                        setShowIpAlertModal(true);
+                        toast.error("🚨 Alerta: Sesiones Simultáneas", {
+                            description: data.message || "Se ha detectado la prueba abierta en más de un dispositivo o navegador simultáneamente.",
                             duration: 10000,
                         });
                         try {
@@ -2647,13 +2704,26 @@ export function TakeEvaluationLayout({
                                     Esta irregularidad y las direcciones IP quedan registradas permanentemente ante tu profesor.
                                 </p>
                             </div>
+                        ) : multipleDevicesAlert ? (
+                            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs space-y-2">
+                                <p className="font-bold flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
+                                    <ShieldAlert className="w-4 h-4 shrink-0" />
+                                    Alerta: Múltiples Dispositivos / Sesiones Concurrentes
+                                </p>
+                                <p className="leading-relaxed">
+                                    El sistema detectó que esta evaluación está abierta en más de una computadora o navegador simultáneamente (incluso dentro de la misma red o institución). Realizar la prueba en múltiples pestañas o compartirla en diferentes equipos no está permitido.
+                                </p>
+                                <p className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 pt-1 border-t border-amber-500/20">
+                                    Las huellas de los dispositivos y las horas de actividad están registradas en el panel del docente.
+                                </p>
+                            </div>
                         ) : (
                             <div className="p-3 rounded-xl bg-muted/40 border border-border text-xs text-muted-foreground space-y-1">
                                 <p className="font-semibold text-foreground flex items-center gap-1.5">
                                     <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
                                     Conexión Segura Registrada
                                 </p>
-                                <p>Tu sesión está vinculada a una única ubicación de red autorizada.</p>
+                                <p>Tu sesión está vinculada a un único dispositivo y ubicación autorizada.</p>
                             </div>
                         )}
 

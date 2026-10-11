@@ -29,7 +29,9 @@ import {
     Tv,
     ExternalLink,
     Globe,
-    History
+    History,
+    Laptop,
+    Smartphone
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -190,6 +192,11 @@ export function SubmissionsManager({
                         } else if (data?.type === "MULTIPLE_IP_DETECTED") {
                             toast.error("🚨 Alerta de Múltiples Direcciones IP", {
                                 description: data.message || "Se ha detectado presentación desde más de una ubicación o dirección IP.",
+                                duration: 10000,
+                            });
+                        } else if (data?.type === "CONCURRENT_SESSION_DETECTED") {
+                            toast.error("🚨 Alerta de Sesiones Simultáneas / Dispositivos", {
+                                description: data.message || "Se ha detectado la prueba abierta en múltiples dispositivos o navegadores a la vez.",
                                 duration: 10000,
                             });
                         } else if (data?.type === "FRAUD_ATTEMPT_DETECTED") {
@@ -1075,6 +1082,8 @@ export function SubmissionsManager({
                                                     ? (wildcards.effectiveIps || wildcards.detectedIps)
                                                     : wildcards.initialIp ? [wildcards.initialIp] : [];
                                                 const subHasMultipleIps = Boolean(wildcards.multipleIpAlert || subDetectedIps.length > 1);
+                                                const activeDevices: any[] = Array.isArray(wildcards.activeDevices) ? wildcards.activeDevices : [];
+                                                const subHasMultipleDevices = Boolean(wildcards.multipleDevicesAlert || activeDevices.length > 1);
                                                 const fraudAttempts: any[] = Array.isArray(wildcards.fraudAttempts) ? wildcards.fraudAttempts : [];
                                                 const subHasFraud = Boolean(wildcards.hasFraudAlert || fraudAttempts.length > 0);
 
@@ -1101,10 +1110,45 @@ export function SubmissionsManager({
                                                                             )
                                                                         )}
                                                                     </div>
-                                                                    <span className="text-xs text-muted-foreground truncate">{sub.user?.email}</span>
+                                                                        <div className="flex items-center gap-2 mt-0.5">
+                                                                            <span className="text-xs text-muted-foreground truncate">{sub.user?.email}</span>
+                                                                            {subDetectedIps.length > 0 && (
+                                                                                <Tooltip>
+                                                                                    <TooltipTrigger asChild>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                setSelectedIpDetails({ studentName, sub, wildcards });
+                                                                                            }}
+                                                                                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono border transition-colors cursor-pointer shrink-0 ${
+                                                                                                subHasMultipleIps
+                                                                                                    ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30 hover:bg-rose-500/25 animate-pulse font-bold"
+                                                                                                    : "bg-muted/60 text-foreground/80 border-border/70 hover:bg-muted"
+                                                                                            }`}
+                                                                                        >
+                                                                                            <Globe className="w-2.5 h-2.5 opacity-70" />
+                                                                                            <span>{subDetectedIps[0]}</span>
+                                                                                            {subDetectedIps.length > 1 && (
+                                                                                                <span className="font-bold text-rose-600 dark:text-rose-400">+{subDetectedIps.length - 1}</span>
+                                                                                            )}
+                                                                                        </button>
+                                                                                    </TooltipTrigger>
+                                                                                    <TooltipContent side="right" className="text-xs">
+                                                                                        <p className="font-bold">Dirección IP de conexión:</p>
+                                                                                        <p className="font-mono text-[11px] text-muted-foreground mt-0.5">
+                                                                                            {subDetectedIps.join(", ")}
+                                                                                        </p>
+                                                                                        <p className="text-[10px] text-primary mt-1 font-sans">
+                                                                                            Clic para ver timeline forense completo
+                                                                                        </p>
+                                                                                    </TooltipContent>
+                                                                                </Tooltip>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
                                                                 </div>
-                                                            </div>
-                                                        </TableCell>
+                                                            </TableCell>
 
                                                         {/* Estado de Entrega */}
                                                         <TableCell className="py-3">
@@ -1314,6 +1358,31 @@ export function SubmissionsManager({
                                                                         </TooltipContent>
                                                                     </Tooltip>
                                                                 ) : null}
+
+                                                                {/* Alerta de Seguridad de Múltiples Dispositivos / Sesiones Concurrentes (misma o diferente IP) */}
+                                                                {subHasMultipleDevices && (
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => setSelectedIpDetails({ studentName, sub, wildcards })}
+                                                                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-black bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/35 hover:bg-amber-500/25 transition-colors cursor-pointer animate-pulse"
+                                                                            >
+                                                                                <Laptop className="w-3.5 h-3.5" />
+                                                                                <span>{activeDevices.length} Equipos</span>
+                                                                            </button>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent side="top" className="max-w-xs space-y-1 text-left">
+                                                                            <p className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1 text-xs">
+                                                                                <Laptop className="w-3.5 h-3.5" />
+                                                                                🚨 Alerta: Sesiones Simultáneas / Varios Dispositivos
+                                                                            </p>
+                                                                            <p className="text-[11px] text-muted-foreground">
+                                                                                Se detectó la prueba abierta en {activeDevices.length} computadores o navegadores distintos (posiblemente bajo la misma IP institucional). Clic para ver detalles.
+                                                                            </p>
+                                                                        </TooltipContent>
+                                                                    </Tooltip>
+                                                                )}
 
                                                                 {/* Alerta de Intentos de Fraude / Solicitud de Respuesta */}
                                                                 {subHasFraud && (
@@ -1758,6 +1827,53 @@ export function SubmissionsManager({
                                     </Table>
                                 </div>
                             </div>
+
+                            {/* Detalle Forense de Dispositivos / Sesiones Concurrentes */}
+                            {Array.isArray(selectedIpDetails.wildcards?.activeDevices) && selectedIpDetails.wildcards.activeDevices.length > 0 && (
+                                <div className="space-y-2 pt-2 border-t border-border/50">
+                                    <div className="flex items-center justify-between">
+                                        <h4 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                                            <Laptop className="w-3.5 h-3.5 text-primary" />
+                                            <span>Dispositivos / Sesiones Detectadas ({selectedIpDetails.wildcards.activeDevices.length})</span>
+                                        </h4>
+                                        {selectedIpDetails.wildcards.activeDevices.length > 1 && (
+                                            <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 font-bold">
+                                                🚨 {selectedIpDetails.wildcards.activeDevices.length} Equipos Concurrentes
+                                            </Badge>
+                                        )}
+                                    </div>
+
+                                    {selectedIpDetails.wildcards.activeDevices.length > 1 && (
+                                        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-800 dark:text-amber-200 text-xs">
+                                            <p className="font-semibold">⚠️ Posible doble apertura en la misma red (misma IP institucional):</p>
+                                            <p className="text-[11px] mt-0.5 opacity-90">
+                                                Se detectaron firmas de hardware o navegadores distintos enviando respuestas. Esto comprueba que la prueba fue operada desde más de un computador.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        {selectedIpDetails.wildcards.activeDevices.map((dev: any, dIdx: number) => (
+                                            <div key={dev.id || dIdx} className="p-2.5 rounded-lg border bg-muted/20 text-xs space-y-1">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="font-bold text-foreground flex items-center gap-1">
+                                                        <Laptop className="w-3 h-3 text-muted-foreground" />
+                                                        Dispositivo #{dIdx + 1}
+                                                    </span>
+                                                    <span className="text-[10px] font-mono font-bold text-primary">{dev.count || 1} pings</span>
+                                                </div>
+                                                <div className="text-[10px] text-muted-foreground font-mono space-y-0.5">
+                                                    <p><span className="font-semibold text-foreground">IP:</span> {dev.ip || "N/A"}</p>
+                                                    <p><span className="font-semibold text-foreground">Pantalla:</span> {dev.screenRes || "N/A"}</p>
+                                                    <p><span className="font-semibold text-foreground">SO:</span> {dev.platform || "N/A"}</p>
+                                                    <p className="truncate" title={dev.userAgent}><span className="font-semibold text-foreground">Navegador:</span> {dev.userAgent || "N/A"}</p>
+                                                    <p><span className="font-semibold text-foreground">Última actividad:</span> {dev.lastSeen ? formatDateTime(dev.lastSeen, "HH:mm:ss") : "—"}</p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         <DialogFooter>

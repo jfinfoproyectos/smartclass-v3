@@ -243,10 +243,21 @@ export async function registerExpulsionAction(submissionId: string, reason?: "re
  * Si se detecta más de una IP distinta (no loopback), activa alerta inmediata
  * para el profesor (SSE + auditoría) y para el estudiante.
  */
+/**
+ * Registra y audita la dirección IP y huella digital del dispositivo para una entrega de evaluación.
+ * Detecta tanto múltiples IPs (diferentes ubicaciones geográficas/redes) como
+ * múltiples dispositivos o sesiones concurrentes bajo la misma IP (ej. misma red escolar/institucional).
+ */
 export async function recordIpForSubmission(
     submissionId: string,
     clientReportedIp?: string,
-    actionName: string = "activity"
+    actionName: string = "activity",
+    devicePayload?: {
+        deviceId?: string;
+        screenRes?: string;
+        browserInfo?: string;
+        platform?: string;
+    }
 ) {
     try {
         const reqHeaders = await headers();
@@ -298,10 +309,42 @@ export async function recordIpForSubmission(
             ? [...currentWildcards.ipHistory]
             : [];
 
+        // Registro de dispositivos / sesiones (Huella digital para detectar múltiples equipos bajo la misma IP)
+        const activeDevices: Array<any> = Array.isArray(currentWildcards.activeDevices)
+            ? [...currentWildcards.activeDevices]
+            : [];
+
+        const currentDeviceId = devicePayload?.deviceId || submission.deviceId || null;
         const nowIso = new Date().toISOString();
 
         if (!rawDetectedIps.includes(currentIp)) {
             rawDetectedIps.push(currentIp);
+        }
+
+        // Registrar / actualizar dispositivo en la lista
+        if (currentDeviceId) {
+            const devIdx = activeDevices.findIndex((d: any) => d.id === currentDeviceId);
+            const devInfo = {
+                id: currentDeviceId,
+                ip: currentIp,
+                userAgent: userAgent ? userAgent.substring(0, 150) : "N/A",
+                screenRes: devicePayload?.screenRes || "N/A",
+                platform: devicePayload?.platform || "N/A",
+                lastSeen: nowIso,
+            };
+            if (devIdx >= 0) {
+                activeDevices[devIdx] = {
+                    ...activeDevices[devIdx],
+                    ...devInfo,
+                    count: (activeDevices[devIdx].count || 1) + 1,
+                };
+            } else {
+                activeDevices.push({
+                    ...devInfo,
+                    firstSeen: nowIso,
+                    count: 1,
+                });
+            }
         }
 
         const historyIndex = prevHistory.findIndex((h: any) => h.ip === currentIp);
@@ -312,6 +355,7 @@ export async function recordIpForSubmission(
                 count: (prevHistory[historyIndex].count || 1) + 1,
                 action: actionName,
                 userAgent: userAgent ? userAgent.substring(0, 150) : prevHistory[historyIndex].userAgent,
+                deviceId: currentDeviceId || prevHistory[historyIndex].deviceId,
             };
         } else {
             prevHistory.push({
@@ -321,6 +365,7 @@ export async function recordIpForSubmission(
                 count: 1,
                 action: actionName,
                 userAgent: userAgent ? userAgent.substring(0, 150) : "N/A",
+                deviceId: currentDeviceId || undefined,
             });
         }
 
@@ -329,27 +374,40 @@ export async function recordIpForSubmission(
         const effectiveIps = nonLoopbackIps.length > 0 ? nonLoopbackIps : rawDetectedIps;
 
         const hasMultipleIps = effectiveIps.length > 1;
-        const wasAlreadyAlerted = Boolean(currentWildcards.multipleIpAlert);
+        const wasAlreadyAlertedIps = Boolean(currentWildcards.multipleIpAlert);
+
+        // Detección de múltiples dispositivos concurrentes (ej. misma red escolar / misma IP institucional pero 2 computadores)
+        const hasMultipleDevices = activeDevices.length > 1;
+        const wasAlreadyAlertedDevice = Boolean(currentWildcards.multipleDevicesAlert);
 
         const updatedWildcards = {
             ...currentWildcards,
             initialIp: currentWildcards.initialIp || currentIp,
+            initialDeviceId: currentWildcards.initialDeviceId || currentDeviceId,
             detectedIps: rawDetectedIps,
             effectiveIps,
+            activeDevices,
             multipleIpAlert: hasMultipleIps,
             multipleIpAlertTriggeredAt: (hasMultipleIps && !currentWildcards.multipleIpAlertTriggeredAt)
                 ? nowIso
                 : currentWildcards.multipleIpAlertTriggeredAt,
+            multipleDevicesAlert: hasMultipleDevices,
+            multipleDevicesAlertTriggeredAt: (hasMultipleDevices && !currentWildcards.multipleDevicesAlertTriggeredAt)
+                ? nowIso
+                : currentWildcards.multipleDevicesAlertTriggeredAt,
             ipHistory: prevHistory,
         };
 
         await prisma.evaluationSubmission.update({
             where: { id: submissionId },
-            data: { wildcardsUsed: updatedWildcards }
+            data: { 
+                wildcardsUsed: updatedWildcards,
+                deviceId: currentDeviceId || submission.deviceId
+            }
         });
 
-        // Si se detecta una segunda IP o ubicación, alertar a docente y estudiante
-        if (hasMultipleIps && !wasAlreadyAlerted) {
+        // Caso A: Alerta de múltiples IPs públicas
+        if (hasMultipleIps && !wasAlreadyAlertedIps) {
             try {
                 const { emitEvaluationUpdate } = await import("@/lib/evaluationEvents");
                 emitEvaluationUpdate({
@@ -365,6 +423,29 @@ export async function recordIpForSubmission(
             } catch (sseErr) {
                 console.error("Error al emitir evento MULTIPLE_IP_DETECTED SSE:", sseErr);
             }
+        }
+
+        // Caso B: Alerta de múltiples dispositivos bajo la misma IP (o diferentes)
+        if (hasMultipleDevices && !wasAlreadyAlertedDevice) {
+            try {
+                const { emitEvaluationUpdate } = await import("@/lib/evaluationEvents");
+                emitEvaluationUpdate({
+                    attemptId: submission.attemptId,
+                    evaluationId: submission.attempt?.evaluationId,
+                    submissionId: submission.id,
+                    studentId: submission.userId,
+                    type: "CONCURRENT_SESSION_DETECTED",
+                    timestamp: Date.now(),
+                    ips: effectiveIps,
+                    deviceInfo: {
+                        devicesCount: activeDevices.length,
+                        devices: activeDevices,
+                    },
+                    message: `🚨 ALERTA DE SESIONES SIMULTÁNEAS: Se ha detectado la prueba abierta en ${activeDevices.length} dispositivos diferentes (misma o diferente IP). Posible duplicación de sesión en la misma red o institución.`,
+                });
+            } catch (sseErr) {
+                console.error("Error al emitir evento CONCURRENT_SESSION_DETECTED SSE:", sseErr);
+            }
 
             try {
                 const { auditLogger } = await import("../../admin/services/auditLogger");
@@ -375,16 +456,16 @@ export async function recordIpForSubmission(
                     userId: submission.user?.id || submission.userId,
                     userName: submission.user?.name || "Estudiante",
                     userRole: submission.user?.role || "student",
-                    description: `ALERTA DE SEGURIDAD: Presentación indebida de evaluación desde ${effectiveIps.length} direcciones IP diferentes (${effectiveIps.join(", ")}). Entrega: ${submissionId}`,
+                    description: `ALERTA DE SEGURIDAD: Concurrencia de ${activeDevices.length} dispositivos en la misma evaluación. Entrega: ${submissionId}`,
                     success: true,
                     metadata: {
-                        effectiveIps,
-                        rawDetectedIps,
+                        devicesCount: activeDevices.length,
+                        activeDevices,
                         action: actionName,
                     }
                 });
             } catch (auditErr) {
-                console.error("Error al registrar auditoría de múltiples IPs:", auditErr);
+                console.error("Error al registrar auditoría de dispositivos concurrentes:", auditErr);
             }
 
             if (submission.attempt?.courseId) {
@@ -397,6 +478,8 @@ export async function recordIpForSubmission(
             success: true,
             detectedIps: effectiveIps,
             multipleIpAlert: hasMultipleIps,
+            multipleDevicesAlert: hasMultipleDevices,
+            activeDevicesCount: activeDevices.length,
             currentIp,
         };
     } catch (err) {
@@ -408,15 +491,21 @@ export async function recordIpForSubmission(
 export async function recordEvaluationIpAction(
     submissionId: string,
     clientReportedIp?: string,
-    actionName: string = "heartbeat"
+    actionName: string = "heartbeat",
+    devicePayload?: {
+        deviceId?: string;
+        screenRes?: string;
+        browserInfo?: string;
+        platform?: string;
+    }
 ) {
     const session = await getSession();
     if (!session || session.user.role !== "student") {
         throw new Error("Unauthorized");
     }
 
-    const res = await recordIpForSubmission(submissionId, clientReportedIp, actionName);
-    return res || { success: false, detectedIps: [], multipleIpAlert: false };
+    const res = await recordIpForSubmission(submissionId, clientReportedIp, actionName, devicePayload);
+    return res || { success: false, detectedIps: [], multipleIpAlert: false, multipleDevicesAlert: false };
 }
 
 export async function saveAnswerAction(submissionId: string, questionId: string, content: string) {

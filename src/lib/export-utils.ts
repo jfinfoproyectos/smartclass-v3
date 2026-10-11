@@ -975,7 +975,7 @@ export async function exportEvaluationSubmissionsToExcel({
     // SHEET 1: Resultados de Evaluación
     // ==========================================
     const ws1 = workbook.addWorksheet('Resultados Evaluación');
-    const totalCols = 9;
+    const totalCols = 10;
 
     // 1. Banner Institucional Principal
     const titleRow = ws1.addRow([`${institutionName.toUpperCase()} • REPORTE EJECUTIVO DE EVALUACIÓN`]);
@@ -1043,6 +1043,7 @@ export async function exportEvaluationSubmissionsToExcel({
         'N°',
         'Estudiante',
         'Correo Electrónico',
+        'IP Registrada',
         'Estado',
         'Fecha de Entrega',
         'Respuestas',
@@ -1078,10 +1079,19 @@ export async function exportEvaluationSubmissionsToExcel({
         const resultText = !isSubmitted ? 'EN PROGRESO' : (scoreNum >= 3.0 ? 'APROBADO' : 'REPROBADO');
         const expulsions = sub.expulsions || 0;
 
+        const wildcards = typeof sub.wildcardsUsed === 'string'
+            ? JSON.parse(sub.wildcardsUsed)
+            : (sub.wildcardsUsed as any) || {};
+        const detectedIps: string[] = Array.isArray(wildcards.effectiveIps || wildcards.detectedIps)
+            ? (wildcards.effectiveIps || wildcards.detectedIps)
+            : (wildcards.initialIp ? [wildcards.initialIp] : []);
+        const ipStr = detectedIps.length > 0 ? detectedIps.join(", ") : "-";
+
         const row = ws1.addRow([
             idx + 1,
             studentName,
             email,
+            ipStr,
             statusText,
             submittedDateStr,
             answersRatio,
@@ -1104,17 +1114,18 @@ export async function exportEvaluationSubmissionsToExcel({
             if (colIdx === 1) cell.alignment = { horizontal: 'center', vertical: 'middle' };
             else if (colIdx === 2) cell.alignment = { horizontal: 'left', vertical: 'middle' };
             else if (colIdx === 3) cell.alignment = { horizontal: 'left', vertical: 'middle' };
-            else if (colIdx === 4 || colIdx === 5 || colIdx === 6) cell.alignment = { horizontal: 'center', vertical: 'middle' };
-            else if (colIdx === 7) {
+            else if (colIdx === 4) cell.alignment = { horizontal: 'center', vertical: 'middle' };
+            else if (colIdx === 5 || colIdx === 6 || colIdx === 7) cell.alignment = { horizontal: 'center', vertical: 'middle' };
+            else if (colIdx === 8) {
                 cell.alignment = { horizontal: 'center', vertical: 'middle' };
                 if (isSubmitted) {
                     cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: scoreNum >= 3.0 ? 'FF16A34A' : 'FFDC2626' } };
                     cell.numFmt = '0.00';
                 }
-            } else if (colIdx === 8) {
+            } else if (colIdx === 9) {
                 cell.alignment = { horizontal: 'center', vertical: 'middle' };
                 cell.font = { name: 'Calibri', size: 9, bold: true, color: { argb: resultText === 'APROBADO' ? 'FF16A34A' : resultText === 'REPROBADO' ? 'FFDC2626' : 'FFD97706' } };
-            } else if (colIdx === 9) {
+            } else if (colIdx === 10) {
                 cell.alignment = { horizontal: 'center', vertical: 'middle' };
                 if (expulsions > 0) {
                     cell.font = { name: 'Calibri', size: 9.5, bold: true, color: { argb: 'FFDC2626' } };
@@ -1127,6 +1138,7 @@ export async function exportEvaluationSubmissionsToExcel({
     const footerRow = ws1.addRow([
         '',
         'PROMEDIO GENERAL',
+        '',
         '',
         `${submittedOnes.length} entregados`,
         '',
@@ -1145,7 +1157,7 @@ export async function exportEvaluationSubmissionsToExcel({
             left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
             right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
         };
-        if (colIdx === 2 || colIdx === 7 || colIdx === 8) {
+        if (colIdx === 2 || colIdx === 8 || colIdx === 9) {
             cell.alignment = { horizontal: 'center', vertical: 'middle' };
         }
     });
@@ -1154,12 +1166,13 @@ export async function exportEvaluationSubmissionsToExcel({
     ws1.getColumn(1).width = 7;   // N°
     ws1.getColumn(2).width = 34;  // Estudiante
     ws1.getColumn(3).width = 32;  // Correo
-    ws1.getColumn(4).width = 15;  // Estado
-    ws1.getColumn(5).width = 20;  // Fecha
-    ws1.getColumn(6).width = 16;  // Respuestas
-    ws1.getColumn(7).width = 18;  // Nota
-    ws1.getColumn(8).width = 16;  // Resultado
-    ws1.getColumn(9).width = 15;  // Expulsiones
+    ws1.getColumn(4).width = 18;  // IP Registrada
+    ws1.getColumn(5).width = 15;  // Estado
+    ws1.getColumn(6).width = 20;  // Fecha
+    ws1.getColumn(7).width = 16;  // Respuestas
+    ws1.getColumn(8).width = 18;  // Nota
+    ws1.getColumn(9).width = 16;  // Resultado
+    ws1.getColumn(10).width = 15; // Expulsiones
 
     // Freeze panes at row 7 (headers) and enable autofilter
     ws1.views = [{ state: 'frozen', ySplit: 7 }];

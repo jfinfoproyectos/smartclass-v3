@@ -16,6 +16,7 @@ export interface EvaluationUpdatePayload {
         | "EVALUATION_LOCKED"
         | "EVALUATION_UNLOCKED"
         | "MULTIPLE_IP_DETECTED"
+        | "CONCURRENT_SESSION_DETECTED"
         | "FRAUD_ATTEMPT_DETECTED"
         | "PING";
     timestamp: number;
@@ -24,6 +25,7 @@ export interface EvaluationUpdatePayload {
     isLocked?: boolean;
     ips?: string[];
     fraudEvidence?: any;
+    deviceInfo?: any;
 }
 
 class EvaluationEventEmitter extends EventEmitter {

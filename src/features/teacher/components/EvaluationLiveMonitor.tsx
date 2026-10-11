@@ -1486,9 +1486,32 @@ export function EvaluationLiveMonitor({
                                                                         <span className="font-bold text-foreground text-xs truncate max-w-[200px]" title={studentName}>
                                                                             {studentName}
                                                                         </span>
-                                                                        <span className="text-[11px] text-muted-foreground truncate max-w-[200px]" title={sub.user?.email}>
-                                                                            {sub.user?.email || "Sin correo"}
-                                                                        </span>
+                                                                        <div className="flex items-center gap-1.5 mt-0.5">
+                                                                            <span className="text-[11px] text-muted-foreground truncate max-w-[150px]" title={sub.user?.email}>
+                                                                                {sub.user?.email || "Sin correo"}
+                                                                            </span>
+                                                                            {subIps.length > 0 && (
+                                                                                <Tooltip>
+                                                                                    <TooltipTrigger asChild>
+                                                                                        <span className={`inline-flex items-center gap-1 px-1 py-0.2 rounded text-[10px] font-mono border shrink-0 cursor-default ${
+                                                                                            hasMultiIps
+                                                                                                ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30 font-bold animate-pulse"
+                                                                                                : "bg-muted/60 text-muted-foreground border-border/60"
+                                                                                        }`}>
+                                                                                            <Globe className="w-2.5 h-2.5 opacity-70" />
+                                                                                            <span>{subIps[0]}</span>
+                                                                                            {subIps.length > 1 && (
+                                                                                                <span className="font-bold text-rose-600 dark:text-rose-400">+{subIps.length - 1}</span>
+                                                                                            )}
+                                                                                        </span>
+                                                                                    </TooltipTrigger>
+                                                                                    <TooltipContent side="right" className="text-xs">
+                                                                                        <p className="font-bold">IP detectada en vivo:</p>
+                                                                                        <p className="font-mono text-[11px] text-muted-foreground mt-0.5">{subIps.join(", ")}</p>
+                                                                                    </TooltipContent>
+                                                                                </Tooltip>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                             </td>

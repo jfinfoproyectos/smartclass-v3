@@ -95,6 +95,11 @@ export function EvaluationLivePageClient({
                                 description: data.message || "Se ha detectado presentación desde más de una ubicación o dirección IP.",
                                 duration: 10000,
                             });
+                        } else if (data?.type === "CONCURRENT_SESSION_DETECTED") {
+                            toast.error("🚨 Alerta: Sesiones Simultáneas / Dispositivos", {
+                                description: data.message || "Se ha detectado la prueba abierta en más de un dispositivo simultáneamente.",
+                                duration: 10000,
+                            });
                         } else if (data?.type === "FRAUD_ATTEMPT_DETECTED") {
                             toast.error("🚨 Alerta de Intento de Fraude", {
                                 description: data.message || "Se ha detectado un intento de solicitar la solución o respuesta.",
