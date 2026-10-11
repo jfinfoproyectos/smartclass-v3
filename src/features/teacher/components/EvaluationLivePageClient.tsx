@@ -137,6 +137,11 @@ export function EvaluationLivePageClient({
 
         connectSSE();
 
+        // Polling de respaldo cada 12 segundos para entornos serverless (Vercel)
+        const pollingTimer = setInterval(() => {
+            fetchSubmissions(false);
+        }, 12000);
+
         return () => {
             if (eventSource) {
                 eventSource.close();
@@ -145,6 +150,7 @@ export function EvaluationLivePageClient({
             if (reconnectTimeout) {
                 clearTimeout(reconnectTimeout);
             }
+            clearInterval(pollingTimer);
         };
     }, [attemptId, fetchSubmissions]);
 

@@ -529,7 +529,13 @@ export function TakeEvaluationLayout({
                         processTeacherMessage(data);
                         return;
                     }
+                    const isForThisStudent = 
+                        (!data.studentId && !data.submissionId) ||
+                        data.studentId === studentId ||
+                        data.submissionId === submission?.id;
+
                     if (data?.type === "MULTIPLE_IP_DETECTED") {
+                        if (!isForThisStudent) return;
                         setMultipleIpAlert(true);
                         if (Array.isArray(data.ips) && data.ips.length > 0) {
                             setDetectedIps(data.ips);
@@ -547,6 +553,7 @@ export function TakeEvaluationLayout({
                         return;
                     }
                     if (data?.type === "CONCURRENT_SESSION_DETECTED") {
+                        if (!isForThisStudent) return;
                         setMultipleDevicesAlert(true);
                         if (Array.isArray(data.deviceInfo?.devices)) {
                             setActiveDevicesList(data.deviceInfo.devices);
