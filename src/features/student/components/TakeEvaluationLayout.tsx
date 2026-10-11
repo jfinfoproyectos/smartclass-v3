@@ -36,12 +36,12 @@ import {
     LogOut, ShieldAlert, ShieldCheck, Lightbulb, RotateCcw, ZoomIn, ZoomOut, RefreshCw, 
     ChevronLeft, ChevronRight, ListChecks, Send, BarChart3, CheckCircle2, ArrowRight,
     ArrowLeft, Monitor, Laptop, Maximize2, ExternalLink, Calendar, Check, X, Lock,
-    AlertCircle, XCircle, Copy
+    AlertCircle, XCircle, Copy, Globe
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { submitEvaluationAction, saveAnswerAction, evaluateAnswerWithAIAction, registerTabSwitchLogAction, registerExpulsionAction, useAiHintAction as requestAiHintAction, getEvaluationAttemptDataAction } from "@/features/student/actions/evaluationActions";
+import { submitEvaluationAction, saveAnswerAction, evaluateAnswerWithAIAction, registerTabSwitchLogAction, registerExpulsionAction, useAiHintAction as requestAiHintAction, getEvaluationAttemptDataAction, recordEvaluationIpAction } from "@/features/student/actions/evaluationActions";
 import { ModeToggle } from "@/components/theme/ModeToggle";
 import { ThemeSelector } from "@/components/theme/ThemeSelector";
 import { CodeThemeSelector } from "@/components/theme/CodeThemeSelector";
@@ -77,9 +77,23 @@ export function TakeEvaluationLayout({
     const [currentAttempt, setCurrentAttempt] = useState(attempt);
     const [isAttemptLocked, setIsAttemptLocked] = useState<boolean>(!!attempt?.isLocked);
     useEffect(() => {
-        setCurrentAttempt(attempt);
-        if (attempt?.isLocked !== undefined) {
-            setIsAttemptLocked(!!attempt.isLocked);
+        if (attempt) {
+            setCurrentAttempt((prev: any) => {
+                // Si ya teníamos preguntas actualizadas por el servidor, preservar las preguntas vigentes más recientes
+                if (prev?.evaluation?.questions && prev.evaluation.questions.length !== attempt.evaluation?.questions?.length) {
+                    return {
+                        ...attempt,
+                        evaluation: {
+                            ...attempt.evaluation,
+                            questions: prev.evaluation.questions
+                        }
+                    };
+                }
+                return attempt;
+            });
+            if (attempt?.isLocked !== undefined) {
+                setIsAttemptLocked(!!attempt.isLocked);
+            }
         }
     }, [attempt]);
 
@@ -94,9 +108,12 @@ export function TakeEvaluationLayout({
             if (updated) {
                 setCurrentAttempt(updated);
 
-                // Si el profesor actualizó datos en la entrega del alumno (comodines, faltas, intentos de IA)
+                // Si el profesor actualizó datos en la entrega del alumno (comodines, faltas, intentos de IA, nota)
                 if ((updated as any).studentSubmission) {
                     const sub = (updated as any).studentSubmission;
+                    if (sub.score !== undefined && sub.score !== null) {
+                        setAccumulatedScore(sub.score);
+                    }
                     if (sub.expulsions !== undefined) {
                         setExpulsionsCount(sub.expulsions);
                         expulsionsCountRef.current = sub.expulsions;
@@ -109,6 +126,16 @@ export function TakeEvaluationLayout({
                         }
                     }
                     if (sub.answersList && Array.isArray(sub.answersList)) {
+                        const currentQIds = new Set(updated.evaluation?.questions?.map((q: any) => q.id) || []);
+                        setAnswerScores(prev => {
+                            const newMap = { ...prev };
+                            sub.answersList.forEach((ans: any) => {
+                                if (currentQIds.has(ans.questionId) && ans.score !== undefined && ans.score !== null) {
+                                    newMap[ans.questionId] = ans.score;
+                                }
+                            });
+                            return newMap;
+                        });
                         setSupportAttempts(prev => {
                             const newMap = { ...prev };
                             sub.answersList.forEach((ans: any) => {
@@ -133,6 +160,51 @@ export function TakeEvaluationLayout({
     const [showFinishConfirm, setShowFinishConfirm] = useState(false);
     const [finishConfirmText, setFinishConfirmText] = useState("");
     const [showOverviewModal, setShowOverviewModal] = useState(false);
+
+    // Sincronización obligatoria antes de abrir el modal de confirmación de envío
+    const handleOpenFinishConfirm = async () => {
+        setIsRefreshing(true);
+        try {
+            const updated = await getEvaluationAttemptDataAction(currentAttempt.id);
+            if (updated) {
+                setCurrentAttempt(updated);
+                if ((updated as any).studentSubmission) {
+                    const sub = (updated as any).studentSubmission;
+                    if (sub.score !== undefined && sub.score !== null) {
+                        setAccumulatedScore(sub.score);
+                    }
+                    if (sub.answersList && Array.isArray(sub.answersList)) {
+                        const currentQIds = new Set(updated.evaluation?.questions?.map((q: any) => q.id) || []);
+                        setAnswerScores(prev => {
+                            const newMap: Record<string, number> = {};
+                            sub.answersList.forEach((ans: any) => {
+                                if (currentQIds.has(ans.questionId) && ans.score !== undefined && ans.score !== null) {
+                                    newMap[ans.questionId] = ans.score;
+                                }
+                            });
+                            return newMap;
+                        });
+                    }
+                }
+            }
+        } catch (err) {
+            console.error("Error al sincronizar preguntas vigentes antes de enviar:", err);
+        } finally {
+            setIsRefreshing(false);
+            setFinishConfirmText("");
+            setShowFinishConfirm(true);
+        }
+    };
+
+    const handleOpenOverview = async () => {
+        setShowOverviewModal(true);
+        try {
+            const updated = await getEvaluationAttemptDataAction(currentAttempt.id);
+            if (updated) {
+                setCurrentAttempt(updated);
+            }
+        } catch (e) {}
+    };
 
     // Mensaje prioritario del profesor vía SSE con lectura obligatoria (10s)
     const [teacherMessageModal, setTeacherMessageModal] = useState<{
@@ -188,6 +260,63 @@ export function TakeEvaluationLayout({
     const expulsionsCountRef = useRef<number>(submission.expulsions || 0);
     const [expulsionReason, setExpulsionReason] = useState<"resize" | "multi_screen" | null>(null);
     const isExpellingRef = useRef(false);
+
+    // Control de Auditoría y Detección de Múltiples Direcciones IP
+    const [multipleIpAlert, setMultipleIpAlert] = useState<boolean>(
+        Boolean(initialWildcards.multipleIpAlert || (Array.isArray(initialWildcards.effectiveIps || initialWildcards.detectedIps) && (initialWildcards.effectiveIps || initialWildcards.detectedIps).length > 1))
+    );
+    const [detectedIps, setDetectedIps] = useState<string[]>(
+        Array.isArray(initialWildcards.effectiveIps || initialWildcards.detectedIps)
+            ? (initialWildcards.effectiveIps || initialWildcards.detectedIps)
+            : initialWildcards.initialIp ? [initialWildcards.initialIp] : []
+    );
+    const [showIpAlertModal, setShowIpAlertModal] = useState(false);
+
+    // Captura de IP pública WAN y latido periódico de seguridad
+    useEffect(() => {
+        if (!mounted || isSubmitted || !submission?.id) return;
+
+        let isCancelled = false;
+
+        const syncPublicIp = async (action: string = "heartbeat") => {
+            let clientPublicIp: string | undefined = undefined;
+            try {
+                const ctrl = new AbortController();
+                const tId = setTimeout(() => ctrl.abort(), 3500);
+                const res = await fetch("https://api.ipify.org?format=json", { signal: ctrl.signal });
+                clearTimeout(tId);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data?.ip) clientPublicIp = String(data.ip);
+                }
+            } catch {}
+
+            if (isCancelled) return;
+
+            try {
+                const res = await recordEvaluationIpAction(submission.id, clientPublicIp, action);
+                if (res && res.success && !isCancelled) {
+                    if (Array.isArray(res.detectedIps) && res.detectedIps.length > 0) {
+                        setDetectedIps(res.detectedIps);
+                    }
+                    if (res.multipleIpAlert) {
+                        setMultipleIpAlert(true);
+                    }
+                }
+            } catch {}
+        };
+
+        syncPublicIp("session_start");
+
+        const heartbeatTimer = setInterval(() => {
+            syncPublicIp("heartbeat");
+        }, 45000);
+
+        return () => {
+            isCancelled = true;
+            clearInterval(heartbeatTimer);
+        };
+    }, [mounted, isSubmitted, submission?.id]);
 
     // Refs para acceder a las respuestas y pregunta activa en eventos asíncronos
     const answersRef = useRef<Record<string, string>>({});
@@ -255,7 +384,9 @@ export function TakeEvaluationLayout({
     }, []);
 
     const [activeQuestionIdx, setActiveQuestionIdx] = useState(0);
-    const questions = currentAttempt.evaluation?.questions || attempt.evaluation.questions || [];
+    const questions = useMemo(() => {
+        return currentAttempt?.evaluation?.questions ?? attempt?.evaluation?.questions ?? [];
+    }, [currentAttempt?.evaluation?.questions, attempt?.evaluation?.questions]);
     const currentQuestion = questions[activeQuestionIdx] || questions[0];
 
     // Pistas Permanentes de IA (guardadas en base de datos para consulta ilimitada durante la prueba)
@@ -318,6 +449,23 @@ export function TakeEvaluationLayout({
                     const data = JSON.parse(event.data);
                     if (data?.type === "TEACHER_MESSAGE") {
                         processTeacherMessage(data);
+                        return;
+                    }
+                    if (data?.type === "MULTIPLE_IP_DETECTED") {
+                        setMultipleIpAlert(true);
+                        if (Array.isArray(data.ips) && data.ips.length > 0) {
+                            setDetectedIps(data.ips);
+                        }
+                        setShowIpAlertModal(true);
+                        toast.error("🚨 Alerta de Seguridad Crítica", {
+                            description: data.message || "Se ha detectado la presentación de la prueba desde dos lugares o IPs diferentes.",
+                            duration: 10000,
+                        });
+                        try {
+                            if (typeof window !== "undefined" && "navigator" in window && navigator.vibrate) {
+                                navigator.vibrate([200, 100, 200, 100, 300]);
+                            }
+                        } catch {}
                         return;
                     }
                     if (data?.type === "EVALUATION_LOCKED") {
@@ -610,8 +758,13 @@ export function TakeEvaluationLayout({
         return questions.filter((q: any) => !!answers[q.id]?.trim()).length;
     }, [questions, answers]);
 
-    const pendingCount = Math.max(0, questions.length - answeredCount);
-    const allAnswered = answeredCount === questions.length && questions.length > 0;
+    const pendingCount = useMemo(() => {
+        return Math.max(0, questions.length - answeredCount);
+    }, [questions.length, answeredCount]);
+
+    const allAnswered = useMemo(() => {
+        return questions.length > 0 && answeredCount === questions.length;
+    }, [questions.length, answeredCount]);
 
     const gradedQuestionsCount = useMemo(() => {
         return questions.filter((q: any) => {
@@ -857,32 +1010,53 @@ export function TakeEvaluationLayout({
                 currentAns
             );
 
-            setAiFeedbackMap(prev => {
-                const currentHistory = prev[currentQuestion.id] || [];
-                return {
+            const isFraud = Boolean((res as any).isFraudAttempt);
+            if (isFraud) {
+                toast.error("🚨 Detención por Falta de Integridad Académica", {
+                    description: "Se detectó la solicitud directa de respuesta. Tu respuesta fue guardada como evidencia con nota 0.0. Consulta la reflexión en la pestaña de feedback.",
+                    duration: 9000,
+                });
+            }
+
+            if ((res as any).feedbackHistory) {
+                setAiFeedbackMap(prev => ({
                     ...prev,
-                    [currentQuestion.id]: [
-                        ...currentHistory,
-                        {
-                            attempt: currentHistory.length + 1,
-                            feedback: res.feedback,
-                            score: res.scoreContribution,
-                            isCorrect: res.isCorrect,
-                            requestedAt: res.requestedAt
-                        }
-                    ]
-                };
-            });
+                    [currentQuestion.id]: (res as any).feedbackHistory
+                }));
+            } else {
+                setAiFeedbackMap(prev => {
+                    const currentHistory = prev[currentQuestion.id] || [];
+                    return {
+                        ...prev,
+                        [currentQuestion.id]: [
+                            ...currentHistory,
+                            {
+                                attempt: currentHistory.length + 1,
+                                feedback: res.feedback,
+                                score: res.scoreContribution,
+                                isCorrect: res.isCorrect,
+                                isFraudAttempt: (res as any).isFraudAttempt,
+                                detectedPattern: (res as any).detectedPattern,
+                                requestedAt: res.requestedAt
+                            }
+                        ]
+                    };
+                });
+            }
+
             if (res.accumulatedScore !== undefined) {
                 setAccumulatedScore(res.accumulatedScore);
             }
-            // Update individual answer score
-            if (res.scoreContribution !== undefined) {
-                setAnswerScores(prev => ({
-                    ...prev,
-                    [currentQuestion.id]: res.scoreContribution
-                }));
-            }
+
+            // Actualizar la nota de la pregunta con la más alta vigente (o 0.0 si hubo fraude)
+            const currentQScore = (res as any).questionScore !== undefined
+                ? (res as any).questionScore
+                : ((res as any).isFraudAttempt ? 0.0 : res.scoreContribution);
+
+            setAnswerScores(prev => ({
+                ...prev,
+                [currentQuestion.id]: currentQScore
+            }));
             // Automatically switch to the "feedback" tab
             setActiveTab("feedback");
 
@@ -906,7 +1080,14 @@ export function TakeEvaluationLayout({
         setIsUsingHint(true);
         try {
             const res = await requestAiHintAction(submission.id, currentQuestion.id, answers[currentQuestion.id] || "");
-            setAiHintsUsed(prev => prev + 1);
+            if ((res as any).isFraudAttempt) {
+                toast.error("🚨 Detención por Integridad Académica", {
+                    description: "No se otorgan pistas para solicitudes directas de respuesta o solución.",
+                    duration: 8000,
+                });
+            } else {
+                setAiHintsUsed(prev => prev + 1);
+            }
             if (res.hint) {
                 const newHintEntry = {
                     questionId: currentQuestion.id,
@@ -1163,6 +1344,42 @@ export function TakeEvaluationLayout({
                         </Tooltip>
                     )}
 
+                    {/* Indicador de Seguridad de IPs / Ubicación */}
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <button
+                                type="button"
+                                onClick={() => setShowIpAlertModal(true)}
+                                className={cn(
+                                    "flex items-center gap-1.5 px-2.5 h-8 rounded-lg border text-xs font-bold transition-all shadow-2xs select-none cursor-pointer",
+                                    multipleIpAlert
+                                        ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/40 animate-pulse"
+                                        : "bg-muted/30 text-muted-foreground border-border/50 hover:bg-muted/50"
+                                )}
+                            >
+                                <Globe className={cn("w-3.5 h-3.5 shrink-0", multipleIpAlert ? "text-rose-500" : "text-muted-foreground")} />
+                                <span className="text-[10px] uppercase hidden sm:inline">IPs:</span>
+                                <span className="font-mono font-black">{Math.max(1, detectedIps.length)}</span>
+                                {multipleIpAlert && (
+                                    <span className="text-[9px] uppercase font-black bg-rose-600 text-white px-1 py-0.2 rounded ml-0.5">
+                                        Alerta
+                                    </span>
+                                )}
+                            </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" align="end" className="max-w-xs p-3 space-y-1.5 bg-popover/95 backdrop-blur-md shadow-xl border-border text-left">
+                            <p className="font-bold text-xs flex items-center gap-1.5 text-foreground">
+                                <Globe className={cn("w-3.5 h-3.5", multipleIpAlert ? "text-rose-500" : "text-primary")} />
+                                {multipleIpAlert ? "🚨 Alerta: Múltiples Ubicaciones Detectadas" : "Supervisión de Ubicación e IP"}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">
+                                {multipleIpAlert 
+                                    ? `Se detectaron ${detectedIps.length} direcciones IP distintas (${detectedIps.join(", ")}). Clic para ver detalles.` 
+                                    : `Conexión registrada desde tu dirección IP (${detectedIps[0] || "en supervisión"}).`}
+                            </p>
+                        </TooltipContent>
+                    </Tooltip>
+
                     {/* Wildcard Buttons */}
                     {!isSubmitted && maxAiHints > 0 && (
                         <div className="flex items-center gap-2 ml-1 pl-2 border-l border-border/50">
@@ -1301,15 +1518,16 @@ export function TakeEvaluationLayout({
                                             ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 hover:border-emerald-500"
                                             : "border-border/70 bg-card hover:bg-destructive/10 text-foreground hover:text-destructive hover:border-destructive/40"
                                     )}
-                                    onClick={() => {
-                                        setFinishConfirmText("");
-                                        setShowFinishConfirm(true);
-                                    }}
-                                    disabled={isSubmitting}
+                                    onClick={handleOpenFinishConfirm}
+                                    disabled={isSubmitting || isRefreshing}
                                 >
-                                    <Send className="w-3.5 h-3.5 shrink-0 opacity-70" />
-                                    <span>{isSubmitting ? "Enviando..." : "Terminar Evaluación"}</span>
-                                    {!allAnswered && pendingCount > 0 && (
+                                    {isRefreshing ? (
+                                        <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
+                                    ) : (
+                                        <Send className="w-3.5 h-3.5 shrink-0 opacity-70" />
+                                    )}
+                                    <span>{isSubmitting ? "Enviando..." : isRefreshing ? "Verificando..." : "Terminar Evaluación"}</span>
+                                    {!allAnswered && pendingCount > 0 && !isRefreshing && (
                                         <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-muted text-muted-foreground border border-border/50">
                                             {pendingCount} pend.
                                         </span>
@@ -1318,8 +1536,8 @@ export function TakeEvaluationLayout({
                             </TooltipTrigger>
                             <TooltipContent side="bottom" className="text-xs max-w-[240px]">
                                 {allAnswered
-                                    ? "✓ Has respondido todas las preguntas. Listo para enviar."
-                                    : `⚠️ Tienes ${pendingCount} pregunta(s) sin responder de ${questions.length}.`}
+                                    ? `✓ Has respondido todas las preguntas actuales (${questions.length}/${questions.length}). Listo para enviar.`
+                                    : `⚠️ Tienes ${pendingCount} pregunta(s) sin responder de las ${questions.length} actuales.`}
                             </TooltipContent>
                         </Tooltip>
                     )}
@@ -1357,6 +1575,33 @@ export function TakeEvaluationLayout({
             {/* Main Workspace */}
             <div className={`flex flex-col flex-1 overflow-hidden z-10 ${isHelpMode ? 'hidden' : 'flex'}`}>
 
+                {/* Banner de Alerta Crítica: Múltiples Direcciones IP Detectadas */}
+                {multipleIpAlert && (
+                    <div className="w-full bg-rose-500/15 border-b border-rose-500/30 text-rose-800 dark:text-rose-200 px-4 py-2 flex items-center justify-between gap-3 shrink-0 animate-in fade-in slide-in-from-top-1 z-20">
+                        <div className="flex items-center gap-2.5 text-xs sm:text-sm min-w-0">
+                            <ShieldAlert className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 animate-pulse" />
+                            <div className="truncate">
+                                <span className="font-black text-rose-700 dark:text-rose-300">🚨 ALERTA DE SEGURIDAD:</span>{" "}
+                                <span className="font-medium">
+                                    Se detectó actividad o presentación desde <strong>{detectedIps.length} direcciones IP diferentes</strong> ({detectedIps.join(", ")}).
+                                </span>
+                                <span className="hidden md:inline text-muted-foreground text-xs ml-1">
+                                    Tu docente ha recibido esta notificación en tiempo real.
+                                </span>
+                            </div>
+                        </div>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => setShowIpAlertModal(true)}
+                            className="h-6.5 text-[11px] px-2.5 font-bold shrink-0 cursor-pointer shadow-2xs"
+                        >
+                            Ver Detalles
+                        </Button>
+                    </div>
+                )}
+
                 {/* Mapa Visual de Preguntas (Chips de Estado y Calificación) */}
                 <div className="w-full bg-card/70 backdrop-blur-xs border-b border-border px-3 sm:px-4 py-1.5 flex items-center justify-between gap-3 shrink-0 select-none">
                     {/* Indicador / Resumen */}
@@ -1374,7 +1619,7 @@ export function TakeEvaluationLayout({
                                     size="sm"
                                     variant="outline"
                                     className="h-7 px-2.5 text-xs font-semibold gap-1.5 text-primary border-primary/30 bg-primary/10 hover:bg-primary/20 hover:text-primary rounded-md cursor-pointer shadow-2xs"
-                                    onClick={() => setShowOverviewModal(true)}
+                                    onClick={handleOpenOverview}
                                 >
                                     <BarChart3 className="w-3.5 h-3.5 shrink-0" />
                                     <span className="hidden md:inline">Panorámica</span>
@@ -1392,7 +1637,7 @@ export function TakeEvaluationLayout({
                             const qHistory = aiFeedbackMap[q.id] || [];
                             const maxAiScore = qHistory.length > 0 ? Math.max(...qHistory.map(h => h.score ?? 0)) : null;
                             const ansScore = answerScores[q.id];
-                            const score = isSubmitted && ansScore !== undefined ? ansScore : (ansScore !== undefined && ansScore > 0 ? ansScore : maxAiScore);
+                            const score = ansScore !== undefined ? ansScore : maxAiScore;
                             const hasScore = score !== null && score !== undefined;
 
                             return (
@@ -1666,31 +1911,69 @@ export function TakeEvaluationLayout({
                                         <div className="flex justify-between items-center bg-card p-3 rounded-md border shadow-sm">
                                             <h3 className="font-bold text-sm">Historial de Evaluaciones de IA</h3>
                                             <span className="text-sm font-semibold text-primary">
-                                                Mejor Nota: {Math.max(...aiFeedbackHistory.map((h) => h.score || 0)).toFixed(1)} / 5.0
+                                                Mejor Nota: {Math.max(0, ...aiFeedbackHistory.map((h) => Number(h.score || 0))).toFixed(1)} / 5.0
                                             </span>
                                         </div>
-                                        {aiFeedbackHistory.slice().reverse().map((attemptData, index) => (
-                                            <div key={index} className={`p-4 rounded-lg border ${attemptData.isCorrect ? 'bg-green-500/5 border-green-500/20 text-green-800 dark:text-green-300' : 'bg-orange-500/5 border-orange-500/20 text-orange-800 dark:text-orange-300'} animate-in fade-in zoom-in-95 transition-all duration-200`} style={{ fontSize: `${14 * zoomLevel}px` }}>
-                                                <div className="flex items-center justify-between gap-2 mb-3 border-b pb-2 border-inherit">
-                                                    <div className="flex items-center gap-2">
-                                                        {attemptData.isCorrect ? <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-500" /> : <AlertTriangle className="w-5 h-5 text-orange-600 dark:text-orange-500" />}
-                                                        <h3 className="font-bold text-sm">Intento #{attemptData.attempt}</h3>
-                                                    </div>
-                                                    <span className="text-xs font-bold px-2 py-1 bg-background/50 rounded-full border border-inherit">
-                                                        Nota: {Number(attemptData.score || 0).toFixed(1)} / 5.0
-                                                    </span>
-                                                </div>
-                                                <div
-                                                    className="prose prose-sm dark:prose-invert max-w-none leading-relaxed"
-                                                    data-color-mode={mounted && theme === "dark" ? "dark" : "light"}
-                                                >
-                                                    <MDEditor.Markdown
-                                                        source={attemptData.feedback || ""}
-                                                        style={{ backgroundColor: 'transparent', fontSize: 'inherit' }}
-                                                    />
-                                                </div>
+                                        {aiFeedbackHistory.some(h => (h as any).isFraudAttempt) && (
+                                            <div className="p-3 rounded-lg border border-rose-500/40 bg-rose-500/10 text-rose-800 dark:text-rose-200 text-xs flex items-center gap-2">
+                                                <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
+                                                <span>Se detectó un intento de fraude en esta pregunta. Las notas previas fueron anuladas a 0.0. Solo podrás obtener calificación utilizando los intentos restantes con respuestas legítimas.</span>
                                             </div>
-                                        ))}
+                                        )}
+                                        {aiFeedbackHistory.slice().reverse().map((attemptData, index) => {
+                                            const isFraud = Boolean((attemptData as any).isFraudAttempt);
+                                            const wasInvalidated = Boolean((attemptData as any).invalidatedByFraud);
+                                            return (
+                                                <div 
+                                                    key={index} 
+                                                    className={`p-4 rounded-xl border ${
+                                                        isFraud 
+                                                            ? 'bg-rose-500/10 border-rose-500/40 text-rose-950 dark:text-rose-100 shadow-xs' 
+                                                            : wasInvalidated
+                                                            ? 'bg-amber-500/10 border-amber-500/40 text-amber-950 dark:text-amber-100 shadow-xs'
+                                                            : attemptData.isCorrect 
+                                                            ? 'bg-green-500/5 border-green-500/20 text-green-800 dark:text-green-300' 
+                                                            : 'bg-orange-500/5 border-orange-500/20 text-orange-800 dark:text-orange-300'
+                                                    } animate-in fade-in zoom-in-95 transition-all duration-200`} 
+                                                    style={{ fontSize: `${14 * zoomLevel}px` }}
+                                                >
+                                                    <div className="flex items-center justify-between gap-2 mb-3 border-b pb-2 border-inherit">
+                                                        <div className="flex items-center gap-2">
+                                                            {isFraud ? (
+                                                                <ShieldAlert className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0" />
+                                                            ) : wasInvalidated ? (
+                                                                <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
+                                                            ) : attemptData.isCorrect ? (
+                                                                <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-500 shrink-0" />
+                                                            ) : (
+                                                                <AlertTriangle className="w-5 h-5 text-orange-600 dark:text-orange-500 shrink-0" />
+                                                            )}
+                                                            <h3 className={`font-bold text-sm ${isFraud ? "text-rose-600 dark:text-rose-400 font-black" : wasInvalidated ? "text-amber-600 dark:text-amber-400" : ""}`}>
+                                                                {isFraud ? `Intento #${attemptData.attempt} — DETENCIÓN DE INTEGRIDAD` : wasInvalidated ? `Intento #${attemptData.attempt} — ANULADO POR FRAUDE POSTERIOR` : `Intento #${attemptData.attempt}`}
+                                                            </h3>
+                                                        </div>
+                                                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${
+                                                            isFraud 
+                                                                ? "bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-500/40" 
+                                                                : wasInvalidated
+                                                                ? "bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/40"
+                                                                : "bg-background/50 border-inherit"
+                                                        }`}>
+                                                            {isFraud ? "Nota: 0.0 (Fraude)" : wasInvalidated ? "Nota: 0.0 (Anulada)" : `Nota: ${Number(attemptData.score || 0).toFixed(1)} / 5.0`}
+                                                        </span>
+                                                    </div>
+                                                    <div
+                                                        className="prose prose-sm dark:prose-invert max-w-none leading-relaxed"
+                                                        data-color-mode={mounted && theme === "dark" ? "dark" : "light"}
+                                                    >
+                                                        <MDEditor.Markdown
+                                                            source={attemptData.feedback || ""}
+                                                            style={{ backgroundColor: 'transparent', fontSize: 'inherit' }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 ) : (
                                     <div className="flex flex-col items-center justify-center h-full text-muted-foreground opacity-50 space-y-4">
@@ -1890,13 +2173,13 @@ export function TakeEvaluationLayout({
                                         <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                                         <div className="leading-relaxed">
                                             <strong className="block font-bold mb-0.5">Preguntas pendientes:</strong>
-                                            Tienes <strong>{pendingCount} de {questions.length}</strong> preguntas sin responder. Si decides terminar ahora, esas preguntas quedarán con nota 0.0.
+                                            Tienes <strong>{pendingCount} de {questions.length}</strong> {questions.length === 1 ? "pregunta actual" : "preguntas actuales"} sin responder. Si decides terminar ahora, esas preguntas quedarán con nota 0.0.
                                         </div>
                                     </div>
                                 ) : (
                                     <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-200 text-xs flex items-center gap-2.5">
                                         <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
-                                        <span>Has respondido todas las preguntas ({questions.length}/{questions.length}).</span>
+                                        <span>Has respondido todas las preguntas actuales de la evaluación ({questions.length}/{questions.length}).</span>
                                     </div>
                                 )}
                                 <span className="text-xs text-muted-foreground">
@@ -2188,12 +2471,12 @@ export function TakeEvaluationLayout({
                             {!allAnswered && pendingCount > 0 ? (
                                 <>
                                     <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                                    <span>Te faltan <strong>{pendingCount} pregunta(s)</strong> por responder.</span>
+                                    <span>Te faltan <strong>{pendingCount} pregunta(s)</strong> por responder de las {questions.length} actuales.</span>
                                 </>
                             ) : (
                                 <>
                                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                                    <span className="text-emerald-700 dark:text-emerald-400 font-semibold">¡Has respondido todas las preguntas!</span>
+                                    <span className="text-emerald-700 dark:text-emerald-400 font-semibold">¡Has respondido todas las preguntas actuales! ({questions.length}/{questions.length})</span>
                                 </>
                             )}
                         </div>
@@ -2212,11 +2495,11 @@ export function TakeEvaluationLayout({
                                     className="h-8 text-xs font-semibold cursor-pointer gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90"
                                     onClick={() => {
                                         setShowOverviewModal(false);
-                                        setFinishConfirmText("");
-                                        setShowFinishConfirm(true);
+                                        handleOpenFinishConfirm();
                                     }}
+                                    disabled={isRefreshing}
                                 >
-                                    <Send className="w-3 h-3" />
+                                    {isRefreshing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
                                     <span>Terminar Evaluación</span>
                                 </Button>
                             )}
@@ -2330,6 +2613,84 @@ export function TakeEvaluationLayout({
                 hasExitTimeAlert={hasExitTimeAlert}
                 tabSwitchLogs={tabSwitchLogs}
             />
+
+            {/* Modal de Alerta de Seguridad de IPs / Ubicación (para el Estudiante) */}
+            <Dialog open={showIpAlertModal} onOpenChange={setShowIpAlertModal}>
+                <DialogContent className="max-w-md p-6 bg-card border-border shadow-2xl">
+                    <DialogHeader className="space-y-2">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2.5 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30">
+                                <Globe className="w-6 h-6 animate-pulse" />
+                            </div>
+                            <div>
+                                <DialogTitle className="text-base font-bold text-foreground">
+                                    {multipleIpAlert ? "🚨 Alerta: Presentación desde Múltiples Ubicaciones" : "Supervisión de Conexión de Red"}
+                                </DialogTitle>
+                                <DialogDescription className="text-xs text-muted-foreground">
+                                    Monitoreo de seguridad de direcciones IP públicas de la prueba
+                                </DialogDescription>
+                            </div>
+                        </div>
+                    </DialogHeader>
+
+                    <div className="space-y-3.5 my-2">
+                        {multipleIpAlert ? (
+                            <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs space-y-2">
+                                <p className="font-bold flex items-center gap-1.5 text-rose-600 dark:text-rose-400">
+                                    <ShieldAlert className="w-4 h-4 shrink-0" />
+                                    Acceso detectado desde dos o más ubicaciones distintas
+                                </p>
+                                <p className="leading-relaxed">
+                                    El sistema identificó que esta evaluación ha sido accedida o respondida desde más de una dirección IP pública. Recibir ayuda remota o permitir que otra persona resuelva la prueba desde otra ubicación constituye una falta grave contra las normas de integridad académica.
+                                </p>
+                                <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 pt-1 border-t border-rose-500/20">
+                                    Esta irregularidad y las direcciones IP quedan registradas permanentemente ante tu profesor.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="p-3 rounded-xl bg-muted/40 border border-border text-xs text-muted-foreground space-y-1">
+                                <p className="font-semibold text-foreground flex items-center gap-1.5">
+                                    <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
+                                    Conexión Segura Registrada
+                                </p>
+                                <p>Tu sesión está vinculada a una única ubicación de red autorizada.</p>
+                            </div>
+                        )}
+
+                        <div className="space-y-2">
+                            <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
+                                Direcciones IP Detectadas ({detectedIps.length})
+                            </h4>
+                            <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                                {detectedIps.map((ip, idx) => (
+                                    <div
+                                        key={ip || idx}
+                                        className="flex items-center justify-between p-2.5 rounded-lg border bg-muted/30 text-xs font-mono"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <span className="h-2 w-2 rounded-full bg-primary" />
+                                            <span className="font-bold text-foreground">{ip}</span>
+                                        </div>
+                                        <Badge variant="outline" className="text-[10px] uppercase font-sans">
+                                            {idx === 0 ? "IP Inicial" : `IP Remota #${idx}`}
+                                        </Badge>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            onClick={() => setShowIpAlertModal(false)}
+                            className="w-full h-8 text-xs font-bold cursor-pointer"
+                        >
+                            Entendido, Continuar
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Pantalla de Bloqueo / Pausa de Evaluación impuesta por el Docente */}
             {isAttemptLocked && (

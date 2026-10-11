@@ -12,6 +12,7 @@ import prisma from "@/lib/prisma";
  */
 export async function getAIModel(userId?: string, customModel?: string): Promise<any> {
     let apiKey: string | null = null;
+    let userAiUrl: string | null = null;
     let provider = process.env.AI_PROVIDER || "google";
     let activeModel = process.env.AI_MODEL || "";
 
@@ -31,6 +32,9 @@ export async function getAIModel(userId?: string, customModel?: string): Promise
         if (user?.aiModel) {
             activeModel = user.aiModel;
         }
+        if (user?.aiUrl) {
+            userAiUrl = user.aiUrl;
+        }
 
         if (user?.encryptedGeminiApiKey) {
             try {
@@ -45,6 +49,8 @@ export async function getAIModel(userId?: string, customModel?: string): Promise
         activeModel = customModel;
         if (customModel.startsWith("gemini-")) {
             provider = "google";
+        } else if (customModel.includes("nemotron") || customModel.includes("nvidia/")) {
+            provider = "nvidia";
         } else if (customModel.includes("minimax")) {
             provider = "minimax";
         } else if (customModel.includes("deepseek")) {
@@ -57,12 +63,38 @@ export async function getAIModel(userId?: string, customModel?: string): Promise
     }
 
     if (provider === "ollama") {
-        const { createOpenAI } = await import("@ai-sdk/openai");
-        const ollama = createOpenAI({
-            baseURL: "http://localhost:11434/v1",
+        const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
+        const ollama = createOpenAICompatible({
+            name: "ollama",
+            baseURL: userAiUrl || "http://localhost:11434/v1",
             apiKey: "ollama"
         });
         return ollama(activeModel);
+    }
+
+    if (provider === "nvidia") {
+        const nvidiaKey = apiKey || process.env.NVIDIA_API_KEY || null;
+        if (!nvidiaKey) {
+            throw new Error("API Key de NVIDIA no configurada. Por favor, ve a Configuración para suministrarla.");
+        }
+        const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
+        const effectiveBaseUrl = (userAiUrl && userAiUrl.trim()) || "https://integrate.api.nvidia.com/v1";
+        const effectiveModel = activeModel || "nvidia/nemotron-3.5-lightning-30b-a3b";
+        const nvidia = createOpenAICompatible({
+            name: "nvidia",
+            baseURL: effectiveBaseUrl,
+            apiKey: nvidiaKey,
+            transformRequestBody: (body: any) => {
+                if (effectiveModel.includes("nemotron") || effectiveModel.includes("nvidia/")) {
+                    return {
+                        ...body,
+                        chat_template_kwargs: { enable_thinking: true }
+                    };
+                }
+                return body;
+            }
+        });
+        return nvidia(effectiveModel);
     }
 
     if (provider === "minimax") {
@@ -124,16 +156,25 @@ export async function getAIModel(userId?: string, customModel?: string): Promise
         return mistral(activeModel);
     }
 
-    if (provider === "openai") {
+    if (provider === "openai" || provider === "custom") {
         const openaiKey = apiKey || process.env.OPENAI_API_KEY || null;
         if (!openaiKey) {
             throw new Error("API Key de OpenAI no configurada.");
+        }
+        if (provider === "custom" || userAiUrl) {
+            const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
+            const custom = createOpenAICompatible({
+                name: provider,
+                baseURL: userAiUrl || "https://api.openai.com/v1",
+                apiKey: openaiKey
+            });
+            return custom(activeModel);
         }
         const { createOpenAI } = await import("@ai-sdk/openai");
         const openai = createOpenAI({
             apiKey: openaiKey
         });
-        return openai(activeModel);
+        return openai.chat(activeModel);
     }
 
     // Google by default

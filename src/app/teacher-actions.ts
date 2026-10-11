@@ -99,7 +99,7 @@ export async function getTeacherCredentialsAction() {
     };
 }
 
-export async function testAICredentialsAction({ provider, model, apiKey }: { provider: string; model: string; apiKey: string }) {
+export async function testAICredentialsAction({ provider, model, apiKey, aiUrl }: { provider: string; model: string; apiKey: string; aiUrl?: string }) {
     const session = await getSession();
     if (!session?.user || session.user.role !== "teacher") {
         throw new Error("Unauthorized");
@@ -120,27 +120,45 @@ export async function testAICredentialsAction({ provider, model, apiKey }: { pro
         if (provider === "google") {
             const { createGoogleGenerativeAI } = await import("@ai-sdk/google");
             modelInstance = createGoogleGenerativeAI({ apiKey: apiKeyToUse })(model);
-        } else if (provider === "openai") {
-            const { createOpenAI } = await import("@ai-sdk/openai");
-            modelInstance = createOpenAI({ apiKey: apiKeyToUse })(model);
-        } else if (provider === "anthropic") {
-            const { createAnthropic } = await import("@ai-sdk/anthropic");
-            modelInstance = createAnthropic({ apiKey: apiKeyToUse })(model);
-        } else if (provider === "minimax") {
-            const { createMinimax } = await import("vercel-minimax-ai-provider");
-            modelInstance = createMinimax({ apiKey: apiKeyToUse })(model);
-        } else if (provider === "deepseek") {
-            const { createDeepSeek } = await import("@ai-sdk/deepseek");
-            modelInstance = createDeepSeek({ apiKey: apiKeyToUse })(model);
-        } else if (provider === "xai") {
-            const { createXai } = await import("@ai-sdk/xai");
-            modelInstance = createXai({ apiKey: apiKeyToUse })(model);
-        } else if (provider === "mistral") {
-            const { createMistral } = await import("@ai-sdk/mistral");
-            modelInstance = createMistral({ apiKey: apiKeyToUse })(model);
+        } else if (provider === "nvidia") {
+            const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
+            const effectiveBaseUrl = aiUrl?.trim() || "https://integrate.api.nvidia.com/v1";
+            const effectiveModel = model?.trim() || "nvidia/nemotron-3.5-lightning-30b-a3b";
+            modelInstance = createOpenAICompatible({
+                name: "nvidia",
+                baseURL: effectiveBaseUrl,
+                apiKey: apiKeyToUse,
+                transformRequestBody: (body: any) => {
+                    if (effectiveModel.includes("nemotron") || effectiveModel.includes("nvidia/")) {
+                        return {
+                            ...body,
+                            chat_template_kwargs: { enable_thinking: true }
+                        };
+                    }
+                    return body;
+                }
+            })(effectiveModel);
+        } else if (provider === "openai" || provider === "custom") {
+            if (provider === "custom" || aiUrl) {
+                const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
+                modelInstance = createOpenAICompatible({
+                    name: provider,
+                    baseURL: aiUrl || "https://api.openai.com/v1",
+                    apiKey: apiKeyToUse
+                })(model);
+            } else {
+                const { createOpenAI } = await import("@ai-sdk/openai");
+                modelInstance = createOpenAI({
+                    apiKey: apiKeyToUse
+                }).chat(model);
+            }
         } else if (provider === "ollama") {
-            const { createOpenAI } = await import("@ai-sdk/openai");
-            modelInstance = createOpenAI({ baseURL: "http://localhost:11434/v1", apiKey: "ollama" })(model);
+            const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
+            modelInstance = createOpenAICompatible({
+                name: "ollama",
+                baseURL: aiUrl || "http://localhost:11434/v1",
+                apiKey: "ollama"
+            })(model);
         } else {
             throw new Error("Proveedor no soportado");
         }

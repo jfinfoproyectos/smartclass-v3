@@ -6,7 +6,7 @@ import { evaluationService } from "@/features/teacher/services/evaluationService
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, CheckCircle2, AlertCircle, Gavel, ExternalLink } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, AlertCircle, Gavel, ExternalLink, Globe, ShieldAlert } from 'lucide-react';
 import { formatDateTime, formatDurationHMS, formatDurationHuman } from '@/lib/dateUtils';
 import { FeedbackViewer } from "@/features/student/components/FeedbackViewer";
 import { DownloadSubmissionPDFWrapper as DownloadSubmissionPDF } from "@/features/teacher/components/DownloadSubmissionPDFWrapper";
@@ -304,6 +304,155 @@ export default async function SubmissionDetailsPage(
                 </div>
             )}
 
+            {/* Registro Forense de Direcciones IP y Ubicación de Conexión */}
+            {((Array.isArray(wildcards.effectiveIps || wildcards.detectedIps) && (wildcards.effectiveIps || wildcards.detectedIps).length > 0) || wildcards.initialIp) && (
+                <div className={`rounded-xl border p-5 space-y-4 print:break-inside-avoid shadow-2xs ${
+                    Boolean(wildcards.multipleIpAlert || (Array.isArray(wildcards.effectiveIps || wildcards.detectedIps) && (wildcards.effectiveIps || wildcards.detectedIps).length > 1))
+                        ? "border-rose-500/40 bg-rose-500/5"
+                        : "border-border/70 bg-card/60"
+                }`}>
+                    {Boolean(wildcards.multipleIpAlert || (Array.isArray(wildcards.effectiveIps || wildcards.detectedIps) && (wildcards.effectiveIps || wildcards.detectedIps).length > 1)) && (
+                        <div className="p-3.5 rounded-lg border border-rose-500/40 bg-rose-500/15 text-rose-800 dark:text-rose-200 flex items-center gap-3 text-xs font-bold animate-in fade-in">
+                            <ShieldAlert className="w-5 h-5 shrink-0 text-rose-600 dark:text-rose-400 animate-pulse" />
+                            <div>
+                                <span className="block font-black text-rose-700 dark:text-rose-300">
+                                    🚨 ALERTA DE INTEGRIDAD: Presentación Indebida desde Múltiples Ubicaciones Detectada
+                                </span>
+                                <span className="font-medium text-[11px] text-rose-600/90 dark:text-rose-300/90">
+                                    Se registraron conexiones y respuestas desde <strong>{(wildcards.effectiveIps || wildcards.detectedIps || []).length} direcciones IP diferentes</strong> ({(wildcards.effectiveIps || wildcards.detectedIps || []).join(", ")}). Esto evidencia que el examen fue presentado o respondido con asistencia remota o sesión compartida.
+                                </span>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/40 pb-3">
+                        <div className="flex items-center gap-2.5">
+                            <div className={`p-2 rounded-lg ${
+                                Boolean(wildcards.multipleIpAlert || (Array.isArray(wildcards.effectiveIps || wildcards.detectedIps) && (wildcards.effectiveIps || wildcards.detectedIps).length > 1))
+                                    ? "bg-rose-500/15 text-rose-600 dark:text-rose-400"
+                                    : "bg-primary/10 text-primary"
+                            }`}>
+                                <Globe className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-base text-foreground flex items-center gap-2">
+                                    <span>Registro Forense de Direcciones IP de Conexión</span>
+                                    <Badge variant="outline" className={`font-mono font-bold text-[11px] ${
+                                        Boolean(wildcards.multipleIpAlert || (Array.isArray(wildcards.effectiveIps || wildcards.detectedIps) && (wildcards.effectiveIps || wildcards.detectedIps).length > 1))
+                                            ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30"
+                                            : "bg-muted text-muted-foreground"
+                                    }`}>
+                                        {(wildcards.effectiveIps || wildcards.detectedIps || []).length} {(wildcards.effectiveIps || wildcards.detectedIps || []).length === 1 ? 'dirección IP' : 'direcciones IP'}
+                                    </Badge>
+                                </h3>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                    IP inicial de apertura: <strong className="font-mono text-foreground">{wildcards.initialIp || wildcards.detectedIps?.[0] || "N/A"}</strong>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-72 overflow-y-auto pr-1">
+                        {Array.isArray(wildcards.ipHistory) && wildcards.ipHistory.length > 0 ? (
+                            wildcards.ipHistory.map((item: any, idx: number) => (
+                                <div key={item.ip || idx} className="p-3 rounded-lg border bg-card/80 flex flex-col justify-between gap-2 text-xs shadow-2xs">
+                                    <div className="flex items-center justify-between gap-1">
+                                        <div className="flex items-center gap-1.5 font-bold font-mono text-foreground">
+                                            <Globe className="w-3.5 h-3.5 text-muted-foreground" />
+                                            <span>{item.ip}</span>
+                                        </div>
+                                        <Badge variant="outline" className="text-[10px] font-mono">
+                                            {item.count || 1} peticiones
+                                        </Badge>
+                                    </div>
+                                    <div className="text-[10px] text-muted-foreground font-mono pt-1 border-t border-border/40 flex justify-between items-center">
+                                        <span>Primera: {item.firstSeen ? formatDateTime(item.firstSeen, "HH:mm:ss") : "—"}</span>
+                                        <span>Última: {item.lastSeen ? formatDateTime(item.lastSeen, "HH:mm:ss") : "—"}</span>
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            (wildcards.detectedIps || []).map((ip: string, idx: number) => (
+                                <div key={idx} className="p-3 rounded-lg border bg-card/80 flex items-center justify-between gap-2 text-xs font-mono">
+                                    <span className="font-bold">{ip}</span>
+                                    <Badge variant="outline" className="text-[10px]">IP Conectada</Badge>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Registro Forense de Intentos de Fraude / Solicitud de Respuestas */}
+            {(Array.isArray(wildcards.fraudAttempts) && wildcards.fraudAttempts.length > 0) && (
+                <div className="rounded-xl border border-red-500/40 bg-red-500/5 p-5 space-y-4 print:break-inside-avoid shadow-2xs">
+                    <div className="p-3.5 rounded-lg border border-red-500/40 bg-red-500/15 text-red-800 dark:text-red-200 flex items-center gap-3 text-xs font-bold animate-in fade-in">
+                        <ShieldAlert className="w-5 h-5 shrink-0 text-red-600 dark:text-red-400" />
+                        <div>
+                            <span className="block font-black text-red-700 dark:text-red-300">
+                                🚨 EVIDENCIA DE FALTA DE INTEGRIDAD: Intentos de Solicitud de Respuestas Detectados ({wildcards.fraudAttempts.length})
+                            </span>
+                            <span className="font-medium text-[11px] text-red-600/90 dark:text-rose-300/90">
+                                El estudiante ingresó mensajes explícitos como &quot;dame la respuesta&quot; o &quot;dime la solución&quot;. El sistema bloqueó la revelación de soluciones, asignó 0.0 y emitió una detención ética pedagógica.
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-red-500/20 pb-3">
+                        <div className="flex items-center gap-2.5">
+                            <div className="p-2 rounded-lg bg-red-500/15 text-red-600 dark:text-red-400">
+                                <ShieldAlert className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-base text-foreground flex items-center gap-2">
+                                    <span>Historial Forense de Evasión / Fraude</span>
+                                    <Badge variant="outline" className="font-mono font-bold text-[11px] bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30">
+                                        {wildcards.fraudAttempts.length} {wildcards.fraudAttempts.length === 1 ? 'intento' : 'intentos'}
+                                    </Badge>
+                                </h3>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                    Evidencia forense de las peticiones textuales realizadas por el estudiante durante la prueba.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="space-y-3">
+                        {wildcards.fraudAttempts.map((item: any, idx: number) => (
+                            <div key={item.id || idx} className="p-3.5 rounded-lg border bg-card/90 space-y-2 text-xs shadow-2xs">
+                                <div className="flex items-center justify-between gap-2 border-b border-border/40 pb-2">
+                                    <span className="font-bold text-foreground">
+                                        {item.questionOrder !== undefined ? `Pregunta #${item.questionOrder + 1}` : `Incidente #${idx + 1}`} ({item.questionType || "Texto/Código"})
+                                    </span>
+                                    <span className="text-[10px] font-mono text-muted-foreground">
+                                        {item.timestamp ? formatDateTime(item.timestamp, "dd/MM/yyyy HH:mm:ss") : "—"}
+                                    </span>
+                                </div>
+                                {item.questionText && (
+                                    <p className="text-[11px] text-muted-foreground italic">
+                                        Enunciado: {item.questionText}
+                                    </p>
+                                )}
+                                <div>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                                        Texto exacto escrito por el estudiante:
+                                    </span>
+                                    <div className="p-2.5 rounded-md bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 font-mono text-xs text-red-900 dark:text-red-200 whitespace-pre-wrap break-all">
+                                        {item.studentAnswer}
+                                    </div>
+                                </div>
+                                {item.detectedPattern && (
+                                    <div className="text-[10px] text-red-600 dark:text-red-400 flex items-center justify-between pt-1">
+                                        <span>Patrón detectado: <strong>{item.detectedPattern}</strong></span>
+                                        <Badge variant="destructive" className="text-[9px] py-0 px-1.5">Nota asignada: 0.0</Badge>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {/* Respuestas del Estudiante */}
             <div className="space-y-6 mt-4">
                 <h2 className="text-xl font-bold border-b pb-2">Respuestas del Estudiante</h2>
@@ -313,6 +462,14 @@ export default async function SubmissionDetailsPage(
                     <div className="space-y-8">
                         {evaluation.questions.map((question: any, index: number) => {
                             const answer = answersList.find((a: any) => a.questionId === question.id);
+                            const recordedFraud = Array.isArray(wildcards.fraudAttempts)
+                                ? wildcards.fraudAttempts.find((fa: any) => fa.questionId === question.id)
+                                : null;
+                            const aiFeedbackFraud = Array.isArray(answer?.aiFeedback)
+                                ? (answer.aiFeedback as any[]).find((f: any) => f.isFraudAttempt)
+                                : null;
+                            const isAnswerFraud = Boolean(recordedFraud || aiFeedbackFraud);
+                            const fraudReason = recordedFraud?.detectedPattern || aiFeedbackFraud?.detectedPattern;
                             return (
                                 <div key={question.id} className="rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow print:break-inside-avoid print:shadow-none">
                                     <div className="bg-muted/50 p-4 border-b">
@@ -327,6 +484,12 @@ export default async function SubmissionDetailsPage(
                                     <div className="p-5 space-y-5">
                                         {answer ? (
                                             <>
+                                                {isAnswerFraud && (
+                                                    <div className="p-3 rounded-lg border border-red-500/40 bg-red-500/15 text-red-800 dark:text-red-200 text-xs flex items-center gap-2 font-semibold">
+                                                        <ShieldAlert className="w-4 h-4 text-red-600 shrink-0" />
+                                                        <span>🚨 Intento de Fraude / Solicitud de Respuesta detectado por la IA{fraudReason ? `: "${fraudReason}"` : ""}. Respuesta bloqueada con nota 0.0.</span>
+                                                    </div>
+                                                )}
                                                 <div>
                                                     <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-3 block">Respuesta del estudiante:</span>
                                                     {question.type === 'Code' ? (
@@ -349,12 +512,20 @@ export default async function SubmissionDetailsPage(
                                                                 (answer.aiFeedback as any[]).map((feedbackItem: any, i: number) => (
                                                                     <div key={i} className="border-t border-blue-100 dark:border-blue-900/30 pt-4 first:border-0 first:pt-0">
                                                                         <div className="flex items-center gap-2 mb-2">
-                                                                            {feedbackItem.isCorrect ? (
-                                                                                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                                                                            {feedbackItem.isFraudAttempt ? (
+                                                                                <ShieldAlert className="h-4 w-4 text-red-500 shrink-0" />
+                                                                            ) : feedbackItem.invalidatedByFraud ? (
+                                                                                <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />
+                                                                            ) : feedbackItem.isCorrect ? (
+                                                                                <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
                                                                             ) : (
-                                                                                <AlertCircle className="h-4 w-4 text-amber-500" />
+                                                                                <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />
                                                                             )}
-                                                                            <span className="font-bold text-xs">Intento {feedbackItem.attempt} &bull; Nota: {feedbackItem.score}</span>
+                                                                            <span className="font-bold text-xs">
+                                                                                Intento {feedbackItem.attempt} &bull; Nota: {Number(feedbackItem.score || 0).toFixed(1)}
+                                                                                {feedbackItem.isFraudAttempt && <span className="text-red-600 dark:text-red-400 font-semibold ml-1.5">(🚨 Fraude detectado)</span>}
+                                                                                {feedbackItem.invalidatedByFraud && <span className="text-amber-600 dark:text-amber-400 font-semibold ml-1.5">(⚠️ Anulada por fraude posterior)</span>}
+                                                                            </span>
                                                                         </div>
                                                                         <div className="text-sm text-zinc-700 dark:text-zinc-300">
                                                                             <FeedbackViewer feedback={feedbackItem.feedback} />

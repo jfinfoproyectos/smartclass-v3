@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { saveTeacherCredentialsAction } from "@/app/teacher-actions";
 import { 
@@ -38,6 +39,10 @@ export function TeacherSettings({ initialCredentials, themes }: TeacherSettingsP
     const [githubToken, setGithubToken] = useState("");
     const [aiProvider, setAiProvider] = useState(initialCredentials.aiProvider || "google");
     const [aiModel, setAiModel] = useState(initialCredentials.aiModel || "gemini-2.0-flash");
+    const [aiUrl, setAiUrl] = useState(initialCredentials.aiUrl || "");
+    const [useCustomUrl, setUseCustomUrl] = useState<boolean>(() => {
+        return Boolean(initialCredentials.aiUrl && initialCredentials.aiUrl.trim().length > 0);
+    });
     const [isSaving, setIsSaving] = useState(false);
 
     const [isTesting, setIsTesting] = useState(false);
@@ -50,6 +55,7 @@ export function TeacherSettings({ initialCredentials, themes }: TeacherSettingsP
             const formData = new FormData();
             formData.append("aiProvider", aiProvider);
             formData.append("aiModel", aiModel);
+            formData.append("aiUrl", useCustomUrl ? aiUrl.trim() : "");
 
             if (geminiApiKey) {
                 formData.append("geminiApiKey", geminiApiKey);
@@ -80,7 +86,8 @@ export function TeacherSettings({ initialCredentials, themes }: TeacherSettingsP
             const result = await testAICredentialsAction({
                 provider: aiProvider,
                 model: aiModel,
-                apiKey: geminiApiKey || ""
+                apiKey: geminiApiKey || "",
+                aiUrl: useCustomUrl ? aiUrl.trim() : ""
             });
 
             if (result.success) {
@@ -123,16 +130,37 @@ export function TeacherSettings({ initialCredentials, themes }: TeacherSettingsP
                                         id="aiProvider"
                                         className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
                                         value={aiProvider}
-                                        onChange={(e) => setAiProvider(e.target.value)}
+                                        onChange={(e) => {
+                                            const newProvider = e.target.value;
+                                            setAiProvider(newProvider);
+                                            if (newProvider === "nvidia") {
+                                                if (!aiModel || aiModel.includes("gemini") || aiModel.includes("gpt")) {
+                                                    setAiModel("nvidia/nemotron-3.5-lightning-30b-a3b");
+                                                }
+                                                if (!aiUrl) {
+                                                    setAiUrl("https://integrate.api.nvidia.com/v1");
+                                                }
+                                            } else if (newProvider === "google") {
+                                                if (!aiModel || aiModel.includes("nemotron") || aiModel.includes("gpt")) {
+                                                    setAiModel("gemini-2.0-flash");
+                                                }
+                                            } else if (newProvider === "openai") {
+                                                if (!aiModel || aiModel.includes("gemini") || aiModel.includes("nemotron")) {
+                                                    setAiModel("gpt-4o-mini");
+                                                }
+                                            }
+                                        }}
                                     >
                                         <option value="google">Google Gemini</option>
-                                        <option value="minimax">MiniMax</option>
-                                        <option value="ollama">Ollama (Local)</option>
-                                        <option value="deepseek">DeepSeek</option>
+                                        <option value="nvidia">NVIDIA NIM (Nemotron, Llama, etc.)</option>
+                                        <option value="openai">OpenAI</option>
                                         <option value="anthropic">Anthropic (Claude)</option>
+                                        <option value="deepseek">DeepSeek</option>
                                         <option value="xai">xAI (Grok)</option>
                                         <option value="mistral">Mistral AI</option>
-                                        <option value="openai">OpenAI</option>
+                                        <option value="minimax">MiniMax</option>
+                                        <option value="ollama">Ollama (Local)</option>
+                                        <option value="custom">Compatible OpenAI (URL personalizada)</option>
                                     </select>
                                 </div>
                                 <div className="space-y-2">
@@ -140,19 +168,91 @@ export function TeacherSettings({ initialCredentials, themes }: TeacherSettingsP
                                     <Input
                                         id="aiModel"
                                         type="text"
-                                        placeholder="Ej: gemini-2.0-flash"
+                                        placeholder={
+                                            aiProvider === "nvidia" 
+                                                ? "nvidia/nemotron-3.5-lightning-30b-a3b" 
+                                                : aiProvider === "openai" 
+                                                ? "gpt-4o-mini" 
+                                                : "Ej: gemini-2.0-flash"
+                                        }
                                         value={aiModel}
                                         onChange={(e) => setAiModel(e.target.value)}
                                         className="h-10 text-sm rounded-xl"
                                     />
                                 </div>
                             </div>
+
+                            {["nvidia", "custom", "ollama", "openai"].includes(aiProvider) && (
+                                <div className="space-y-3 pt-1">
+                                    <div className="flex items-center space-x-2.5">
+                                        <Checkbox
+                                            id="useCustomUrl"
+                                            checked={useCustomUrl}
+                                            onCheckedChange={(checked) => {
+                                                const isChecked = Boolean(checked);
+                                                setUseCustomUrl(isChecked);
+                                                if (isChecked && !aiUrl) {
+                                                    if (aiProvider === "nvidia") setAiUrl("https://integrate.api.nvidia.com/v1");
+                                                    else if (aiProvider === "ollama") setAiUrl("http://localhost:11434/v1");
+                                                    else if (aiProvider === "openai") setAiUrl("https://api.openai.com/v1");
+                                                }
+                                            }}
+                                        />
+                                        <Label htmlFor="useCustomUrl" className="text-xs font-semibold cursor-pointer select-none text-foreground">
+                                            Personalizar URL Base del API (Base URL)
+                                        </Label>
+                                    </div>
+
+                                    {useCustomUrl ? (
+                                        <div className="space-y-1.5 pl-6 animate-in fade-in slide-in-from-top-1 duration-150">
+                                            <div className="flex items-center justify-between">
+                                                <Label htmlFor="aiUrl" className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                                                    URL Base personalizada
+                                                </Label>
+                                                <span className="text-[10px] text-muted-foreground">
+                                                    {aiProvider === "nvidia" ? "Por defecto: https://integrate.api.nvidia.com/v1" : "Opcional"}
+                                                </span>
+                                            </div>
+                                            <Input
+                                                id="aiUrl"
+                                                type="text"
+                                                placeholder={
+                                                    aiProvider === "nvidia"
+                                                        ? "https://integrate.api.nvidia.com/v1"
+                                                        : aiProvider === "ollama"
+                                                        ? "http://localhost:11434/v1"
+                                                        : "https://api.openai.com/v1"
+                                                }
+                                                value={aiUrl}
+                                                onChange={(e) => setAiUrl(e.target.value)}
+                                                className="h-10 text-sm rounded-xl font-mono text-xs"
+                                            />
+                                        </div>
+                                    ) : (
+                                        <p className="pl-6 text-[11px] text-muted-foreground italic">
+                                            {aiProvider === "nvidia" && "Usando por defecto la URL oficial de NVIDIA NIM: https://integrate.api.nvidia.com/v1"}
+                                            {aiProvider === "ollama" && "Usando por defecto la URL local de Ollama: http://localhost:11434/v1"}
+                                            {aiProvider === "openai" && "Usando por defecto la API oficial de OpenAI"}
+                                            {aiProvider === "custom" && "Activa la casilla para ingresar tu URL base"}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
                             <div className="space-y-2">
-                                <Label htmlFor="geminiApiKey" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">API Key del Proveedor</Label>
+                                <Label htmlFor="geminiApiKey" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                                    {aiProvider === "nvidia" ? "API Key de NVIDIA (nvapi-...)" : "API Key del Proveedor"}
+                                </Label>
                                 <Input
                                     id="geminiApiKey"
                                     type="password"
-                                    placeholder={initialCredentials.hasGeminiApiKey ? "•••••••••••••••• (Clave activa)" : "Ingresa tu API Key"}
+                                    placeholder={
+                                        initialCredentials.hasGeminiApiKey
+                                            ? "•••••••••••••••• (Clave activa)"
+                                            : aiProvider === "nvidia"
+                                            ? "nvapi-..."
+                                            : "Ingresa tu API Key"
+                                    }
                                     value={geminiApiKey}
                                     onChange={(e) => setGeminiApiKey(e.target.value)}
                                     className="h-10 text-sm rounded-xl"

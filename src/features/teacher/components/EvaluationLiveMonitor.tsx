@@ -31,7 +31,8 @@ import {
     ChevronDown,
     FileText,
     Code,
-    Lock
+    Lock,
+    Globe
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -181,8 +182,14 @@ export function EvaluationLiveMonitor({
 
     // Métricas en vivo
     const submittedList = useMemo(() => submissions.filter(s => Boolean(s.submittedAt)), [submissions]);
-    const inProgressList = useMemo(() => submissions.filter(s => !s.submittedAt), [submissions]);
-    const alertList = useMemo(() => submissions.filter(s => (s.expulsions || 0) > 0), [submissions]);
+    const inProgressList = useMemo(() => submissions.filter(s => !s.submittedAt && !s.isNotStarted), [submissions]);
+    const notStartedList = useMemo(() => submissions.filter(s => Boolean(s.isNotStarted)), [submissions]);
+    const alertList = useMemo(() => submissions.filter(s => {
+        const w = typeof s.wildcardsUsed === 'string' ? JSON.parse(s.wildcardsUsed) : (s.wildcardsUsed as any) || {};
+        const ips = Array.isArray(w.effectiveIps || w.detectedIps) ? (w.effectiveIps || w.detectedIps) : [];
+        const hasFraud = Boolean(w.hasFraudAlert || (Array.isArray(w.fraudAttempts) && w.fraudAttempts.length > 0));
+        return (s.expulsions || 0) > 0 || (w.tabSwitchesCount || 0) > 0 || Boolean(w.multipleIpAlert) || ips.length > 1 || hasFraud;
+    }), [submissions]);
 
     const totalAnswersAnswered = useMemo(() => {
         return submissions.reduce((acc, sub) => acc + (sub._count?.answersList || sub.answersList?.length || 0), 0);
@@ -258,17 +265,29 @@ export function EvaluationLiveMonitor({
             const matchesSearch = !query || studentName.includes(query) || email.includes(query);
             if (!matchesSearch) return false;
 
-            if (filterStatus === "in_progress") return !sub.submittedAt;
+            if (filterStatus === "in_progress") return !sub.submittedAt && !sub.isNotStarted;
             if (filterStatus === "submitted") return Boolean(sub.submittedAt);
-            if (filterStatus === "alerts") return (sub.expulsions || 0) > 0;
+            if (filterStatus === "alerts") {
+                const w = typeof sub.wildcardsUsed === 'string' ? JSON.parse(sub.wildcardsUsed) : (sub.wildcardsUsed as any) || {};
+                const ips = Array.isArray(w.effectiveIps || w.detectedIps) ? (w.effectiveIps || w.detectedIps) : [];
+                return (sub.expulsions || 0) > 0 || (w.tabSwitchesCount || 0) > 0 || Boolean(w.multipleIpAlert) || ips.length > 1;
+            }
             return true;
         });
 
         return list.sort((a, b) => {
             const answersA = a._count?.answersList || (a.answersList ? a.answersList.length : 0);
             const answersB = b._count?.answersList || (b.answersList ? b.answersList.length : 0);
-            const alertsA = a.expulsions || 0;
-            const alertsB = b.expulsions || 0;
+
+            const getAlertScore = (subObj: any) => {
+                const w = typeof subObj.wildcardsUsed === 'string' ? JSON.parse(subObj.wildcardsUsed) : (subObj.wildcardsUsed as any) || {};
+                const ips = Array.isArray(w.effectiveIps || w.detectedIps) ? (w.effectiveIps || w.detectedIps) : [];
+                const ipAlertWeight = (w.multipleIpAlert || ips.length > 1) ? 5 : 0;
+                return (subObj.expulsions || 0) + (w.tabSwitchesCount || 0) + ipAlertWeight;
+            };
+
+            const alertsA = getAlertScore(a);
+            const alertsB = getAlertScore(b);
             const nameA = formatName(a.user?.name, a.user?.profile);
             const nameB = formatName(b.user?.name, b.user?.profile);
 
@@ -1026,7 +1045,17 @@ export function EvaluationLiveMonitor({
 
                                                     {/* Estado Visual */}
                                                     <div className="space-y-1 mt-auto">
-                                                        {isSubmitted ? (
+                                                        {sub.isNotStarted ? (
+                                                            <div className="flex items-center justify-between text-[10px] font-mono">
+                                                                <span className="inline-flex items-center gap-1 font-semibold text-slate-400">
+                                                                    <span className="h-1.5 w-1.5 rounded-full bg-slate-500" />
+                                                                    <span>Sin iniciar</span>
+                                                                </span>
+                                                                <span className="text-slate-500 font-bold">
+                                                                    Pendiente
+                                                                </span>
+                                                            </div>
+                                                        ) : isSubmitted ? (
                                                             <div className="flex items-center justify-between text-[10px] font-mono">
                                                                 <span className="inline-flex items-center gap-1 font-bold text-emerald-400">
                                                                     <CheckCircle2 className="h-3 w-3" />
@@ -1427,6 +1456,9 @@ export function EvaluationLiveMonitor({
                                                     const isPassing = score !== null && score >= 3.0;
                                                     const answersCount = sub._count?.answersList || (sub.answersList ? sub.answersList.length : 0);
                                                     const expulsions = sub.expulsions || 0;
+                                                    const subWildcards = typeof sub.wildcardsUsed === 'string' ? JSON.parse(sub.wildcardsUsed) : (sub.wildcardsUsed as any) || {};
+                                                    const subIps = Array.isArray(subWildcards.effectiveIps || subWildcards.detectedIps) ? (subWildcards.effectiveIps || subWildcards.detectedIps) : [];
+                                                    const hasMultiIps = Boolean(subWildcards.multipleIpAlert || subIps.length > 1);
                                                     const percent = totalQuestions > 0 ? Math.round((answersCount / totalQuestions) * 100) : 0;
                                                     const lastActivity = getRelativeActivity(sub);
 
@@ -1438,7 +1470,7 @@ export function EvaluationLiveMonitor({
                                                         <tr 
                                                             key={sub.id}
                                                             className={`hover:bg-muted/40 transition-colors ${
-                                                                expulsions > 0 ? "bg-red-500/5 hover:bg-red-500/10" : ""
+                                                                (expulsions > 0 || hasMultiIps) ? "bg-red-500/5 hover:bg-red-500/10" : ""
                                                             }`}
                                                         >
                                                             <td className="py-3 px-3 text-center font-mono text-[11px] text-muted-foreground">
@@ -1467,10 +1499,10 @@ export function EvaluationLiveMonitor({
                                                                         <CheckCircle2 className="h-3 w-3" />
                                                                         <span>Entregado</span>
                                                                     </Badge>
-                                                                ) : expulsions > 0 ? (
-                                                                    <Badge variant="destructive" className="gap-1 text-[11px] font-bold py-0.5 animate-pulse">
-                                                                        <ShieldAlert className="h-3 w-3" />
-                                                                        <span>Con Alertas</span>
+                                                                ) : (expulsions > 0 || hasMultiIps) ? (
+                                                                    <Badge variant="destructive" className="gap-1 text-[11px] font-bold py-0.5 animate-pulse bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30">
+                                                                        {hasMultiIps ? <Globe className="h-3 w-3" /> : <ShieldAlert className="h-3 w-3" />}
+                                                                        <span>{hasMultiIps ? `${subIps.length} IPs` : "Con Alertas"}</span>
                                                                     </Badge>
                                                                 ) : answersCount > 0 ? (
                                                                     <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 gap-1.5 text-[11px] font-semibold py-0.5">
@@ -1479,6 +1511,11 @@ export function EvaluationLiveMonitor({
                                                                             <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500"></span>
                                                                         </span>
                                                                         <span>Respondiendo</span>
+                                                                    </Badge>
+                                                                ) : sub.isNotStarted ? (
+                                                                    <Badge variant="outline" className="text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/30 gap-1 text-[11px] py-0.5">
+                                                                        <Clock className="h-3 w-3 text-amber-500" />
+                                                                        <span>Sin iniciar</span>
                                                                     </Badge>
                                                                 ) : (
                                                                     <Badge variant="outline" className="text-muted-foreground gap-1 text-[11px] py-0.5">
@@ -1608,29 +1645,48 @@ export function EvaluationLiveMonitor({
                                                                         />
                                                                     )}
 
-                                                                    <Tooltip>
-                                                                        <TooltipTrigger asChild>
-                                                                            <Button
-                                                                                variant="outline"
-                                                                                size="sm"
-                                                                                className="h-7 text-xs px-2 gap-1 font-semibold hover:border-primary cursor-pointer"
-                                                                                asChild
-                                                                            >
-                                                                                <Link 
-                                                                                    href={`/dashboard/teacher/courses/${courseId}/evaluations/${attemptId}/submissions/${sub.id}`}
-                                                                                    target="_blank"
+                                                                    {sub.isNotStarted ? (
+                                                                        <Tooltip>
+                                                                            <TooltipTrigger asChild>
+                                                                                <Button
+                                                                                    variant="outline"
+                                                                                    size="sm"
+                                                                                    disabled
+                                                                                    className="h-7 text-xs px-2 gap-1 font-semibold opacity-40 cursor-not-allowed"
                                                                                 >
-                                                                                    <Eye className="h-3.5 w-3.5 text-primary" />
-                                                                                    <span className="hidden sm:inline">
-                                                                                        {isSubmitted ? "Revisar" : "Avance"}
-                                                                                    </span>
-                                                                                </Link>
-                                                                            </Button>
-                                                                        </TooltipTrigger>
-                                                                        <TooltipContent side="top">
-                                                                            <p>{isSubmitted ? "Revisar respuestas y calificación del estudiante" : "Inspeccionar las respuestas y código redactados en tiempo real"}</p>
-                                                                        </TooltipContent>
-                                                                    </Tooltip>
+                                                                                    <Eye className="h-3.5 w-3.5" />
+                                                                                    <span className="hidden sm:inline">Sin iniciar</span>
+                                                                                </Button>
+                                                                            </TooltipTrigger>
+                                                                            <TooltipContent side="top">
+                                                                                <p>El estudiante aún no ha iniciado la evaluación</p>
+                                                                            </TooltipContent>
+                                                                        </Tooltip>
+                                                                    ) : (
+                                                                        <Tooltip>
+                                                                            <TooltipTrigger asChild>
+                                                                                <Button
+                                                                                    variant="outline"
+                                                                                    size="sm"
+                                                                                    className="h-7 text-xs px-2 gap-1 font-semibold hover:border-primary cursor-pointer"
+                                                                                    asChild
+                                                                                >
+                                                                                    <Link 
+                                                                                        href={`/dashboard/teacher/courses/${courseId}/evaluations/${attemptId}/submissions/${sub.id}`}
+                                                                                        target="_blank"
+                                                                                    >
+                                                                                        <Eye className="h-3.5 w-3.5 text-primary" />
+                                                                                        <span className="hidden sm:inline">
+                                                                                            {isSubmitted ? "Revisar" : "Avance"}
+                                                                                        </span>
+                                                                                    </Link>
+                                                                                </Button>
+                                                                            </TooltipTrigger>
+                                                                            <TooltipContent side="top">
+                                                                                <p>{isSubmitted ? "Revisar respuestas y calificación del estudiante" : "Inspeccionar las respuestas y código redactados en tiempo real"}</p>
+                                                                            </TooltipContent>
+                                                                        </Tooltip>
+                                                                    )}
                                                                 </div>
                                                             </td>
                                                         </tr>

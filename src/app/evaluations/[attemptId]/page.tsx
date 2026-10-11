@@ -6,10 +6,15 @@ import { TakeEvaluationLayout } from "@/features/student/components/TakeEvaluati
 import { getAvailableThemes } from "@/app/actions/themes";
 
 export default async function EvaluationPage({ params }: { params: Promise<{ attemptId: string }> }) {
-    const session = await auth.api.getSession({ headers: await headers() });
+    const headersList = await headers();
+    const session = await auth.api.getSession({ headers: headersList });
     if (!session || session.user.role !== "student") {
         redirect("/signin");
     }
+
+    const { extractClientIp } = await import("@/features/admin/services/ipSecurityService");
+    const clientIp = extractClientIp(headersList);
+    const userAgent = headersList.get("user-agent") || undefined;
 
     const { attemptId } = await params;
     const [attempt, themes] = await Promise.all([
@@ -31,8 +36,8 @@ export default async function EvaluationPage({ params }: { params: Promise<{ att
         redirect("/dashboard/student");
     }
 
-    // Initialize or fetch existing submission
-    const submission = await evaluationService.getOrCreateSubmission(attemptId, session.user.id);
+    // Initialize or fetch existing submission with client IP telemetry
+    const submission = await evaluationService.getOrCreateSubmission(attemptId, session.user.id, clientIp, userAgent);
 
     // Verify Time Window ONLY if not submitted
     const isSubmitted = !!submission.submittedAt;

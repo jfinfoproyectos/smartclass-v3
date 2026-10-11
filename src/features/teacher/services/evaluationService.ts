@@ -337,9 +337,57 @@ export const evaluationService = {
             throw new Error("Unauthorized");
         }
 
-        return await prisma.question.delete({
+        // Eliminar respuestas asociadas a la pregunta para evitar registros huérfanos
+        await prisma.evaluationAnswer.deleteMany({
+            where: { questionId: id }
+        });
+
+        const deleted = await prisma.question.delete({
             where: { id },
         });
+
+        // Recalcular notas de entregas existentes estrictamente con las preguntas restantes actuales
+        const remainingQuestions = await prisma.question.findMany({
+            where: { evaluationId },
+            select: { id: true }
+        });
+        const remainingCount = remainingQuestions.length || 1;
+        const remainingIds = new Set(remainingQuestions.map(q => q.id));
+
+        const attempts = await prisma.evaluationAttempt.findMany({
+            where: { evaluationId },
+            select: { id: true }
+        });
+        const attemptIds = attempts.map(a => a.id);
+
+        if (attemptIds.length > 0) {
+            const submissions = await prisma.evaluationSubmission.findMany({
+                where: { attemptId: { in: attemptIds } },
+                include: { answersList: true }
+            });
+
+            for (const sub of submissions) {
+                const validAnswers = sub.answersList.filter(a => remainingIds.has(a.questionId));
+                const totalScore = validAnswers.reduce((acc, a) => acc + (a.score || 0), 0);
+                const calculatedBase = Number((totalScore / remainingCount).toFixed(2));
+                const prevWildcards = (sub.wildcardsUsed as any) || {};
+                const penalty = Number(prevWildcards.penalty || 0);
+                const finalScore = Math.max(0, Number((calculatedBase - penalty).toFixed(2)));
+
+                await prisma.evaluationSubmission.update({
+                    where: { id: sub.id },
+                    data: { 
+                        score: finalScore,
+                        wildcardsUsed: {
+                            ...prevWildcards,
+                            baseScore: calculatedBase
+                        }
+                    }
+                });
+            }
+        }
+
+        return deleted;
     },
 
     // Assignments / Attempts
@@ -522,7 +570,7 @@ export const evaluationService = {
         });
     },
 
-    async getOrCreateSubmission(attemptId: string, userId: string) {
+    async getOrCreateSubmission(attemptId: string, userId: string, clientIp?: string, userAgent?: string) {
         // Find attempt to verify student authorization
         const attempt = await prisma.evaluationAttempt.findUnique({
             where: { id: attemptId },
@@ -539,6 +587,22 @@ export const evaluationService = {
                 throw new Error("No tienes asignada esta evaluación.");
             }
         }
+
+        const nowIso = new Date().toISOString();
+        const initialWildcards = clientIp ? {
+            initialIp: clientIp,
+            detectedIps: [clientIp],
+            effectiveIps: [clientIp],
+            multipleIpAlert: false,
+            ipHistory: [{
+                ip: clientIp,
+                firstSeen: nowIso,
+                lastSeen: nowIso,
+                count: 1,
+                userAgent: userAgent ? userAgent.substring(0, 150) : "N/A",
+                action: "init",
+            }],
+        } : {};
 
         // Find existing
         let submission = await prisma.evaluationSubmission.findFirst({
@@ -557,6 +621,7 @@ export const evaluationService = {
                 data: {
                     attemptId,
                     userId,
+                    wildcardsUsed: initialWildcards,
                 },
                 include: {
                     answersList: true
@@ -569,7 +634,12 @@ export const evaluationService = {
 
     // Teacher Evaluation Submissions Manager
     async getSubmissionsByAttempt(attemptId: string) {
-        return await prisma.evaluationSubmission.findMany({
+        const attempt = await prisma.evaluationAttempt.findUnique({
+            where: { id: attemptId },
+            select: { assignedStudentIds: true }
+        });
+
+        const submissions = await prisma.evaluationSubmission.findMany({
             where: { attemptId },
             include: {
                 user: {
@@ -606,6 +676,65 @@ export const evaluationService = {
                 }
             }
         });
+
+        const assignedIds: string[] = Array.isArray(attempt?.assignedStudentIds)
+            ? (attempt.assignedStudentIds as string[])
+            : typeof attempt?.assignedStudentIds === "string"
+                ? JSON.parse(attempt.assignedStudentIds)
+                : [];
+
+        if (assignedIds.length > 0) {
+            const existingUserIds = new Set(submissions.map(s => s.userId));
+            const missingAssignedIds = assignedIds.filter(id => !existingUserIds.has(id));
+
+            let pendingPlaceholders: any[] = [];
+            if (missingAssignedIds.length > 0) {
+                const missingUsers = await prisma.user.findMany({
+                    where: { id: { in: missingAssignedIds } },
+                    select: {
+                        id: true,
+                        name: true,
+                        email: true,
+                        profile: {
+                            select: {
+                                nombres: true,
+                                apellido: true,
+                            }
+                        }
+                    }
+                });
+
+                pendingPlaceholders = missingUsers.map(u => ({
+                    id: `pending-${u.id}`,
+                    attemptId,
+                    userId: u.id,
+                    score: null,
+                    submittedAt: null,
+                    expulsions: 0,
+                    wildcardsUsed: {},
+                    user: u,
+                    answersList: [],
+                    _count: { answersList: 0 },
+                    isNotStarted: true,
+                    isAssignedTarget: true,
+                }));
+            }
+
+            const enrichedExisting = submissions.map(s => ({
+                ...s,
+                isAssignedTarget: assignedIds.includes(s.userId),
+                isNotStarted: false
+            }));
+
+            // Return pending placeholders first or combined
+            return [...pendingPlaceholders, ...enrichedExisting];
+        }
+
+        return submissions.map(s => ({
+            ...s,
+            isAssignedTarget: true,
+            isNotStarted: false
+        }));
     },
 
     async getSubmissionDetails(submissionId: string) {

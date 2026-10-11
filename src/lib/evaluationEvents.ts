@@ -15,11 +15,15 @@ export interface EvaluationUpdatePayload {
         | "SUBMISSION_UPDATED"
         | "EVALUATION_LOCKED"
         | "EVALUATION_UNLOCKED"
+        | "MULTIPLE_IP_DETECTED"
+        | "FRAUD_ATTEMPT_DETECTED"
         | "PING";
     timestamp: number;
     message?: string;
     senderName?: string;
     isLocked?: boolean;
+    ips?: string[];
+    fraudEvidence?: any;
 }
 
 class EvaluationEventEmitter extends EventEmitter {

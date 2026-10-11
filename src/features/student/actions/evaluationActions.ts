@@ -9,6 +9,124 @@ async function getSession() {
     return await auth.api.getSession({ headers: await headers() });
 }
 
+export async function recordFraudAttemptForSubmission(
+    submissionId: string,
+    questionId: string,
+    studentAnswer: string,
+    detectedPattern?: string,
+    source: string = "manual"
+) {
+    try {
+        const submission = await prisma.evaluationSubmission.findUnique({
+            where: { id: submissionId },
+            include: {
+                attempt: { select: { id: true, courseId: true, evaluationId: true } },
+                user: { select: { id: true, name: true, role: true } }
+            }
+        });
+        if (!submission) return;
+
+        const question = await prisma.question.findUnique({
+            where: { id: questionId },
+            select: { id: true, text: true, type: true, order: true }
+        });
+
+        const currentWildcards = typeof submission.wildcardsUsed === 'string'
+            ? JSON.parse(submission.wildcardsUsed)
+            : (submission.wildcardsUsed as any) || {};
+
+        const fraudAttempts: Array<any> = Array.isArray(currentWildcards.fraudAttempts)
+            ? [...currentWildcards.fraudAttempts]
+            : [];
+
+        const nowIso = new Date().toISOString();
+
+        // Evitar duplicados consecutivos idénticos para la misma pregunta en menos de 5 segundos
+        const recentSame = fraudAttempts.find(
+            (f: any) => f.questionId === questionId && f.studentAnswer === studentAnswer && (Date.now() - new Date(f.timestamp).getTime() < 5000)
+        );
+
+        if (!recentSame) {
+            fraudAttempts.push({
+                id: `fraud_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+                questionId,
+                questionOrder: question?.order ?? 0,
+                questionText: question?.text ? question.text.substring(0, 300) : "Pregunta",
+                questionType: question?.type || "Text",
+                studentAnswer,
+                detectedPattern: detectedPattern || "Solicitud de respuesta detectada",
+                timestamp: nowIso,
+                source,
+            });
+
+            const updatedWildcards = {
+                ...currentWildcards,
+                hasFraudAlert: true,
+                fraudAttemptsCount: fraudAttempts.length,
+                fraudAttempts,
+                lastFraudAttemptAt: nowIso,
+            };
+
+            await prisma.evaluationSubmission.update({
+                where: { id: submissionId },
+                data: { wildcardsUsed: updatedWildcards }
+            });
+
+            // Notificar al monitor del docente vía SSE para actualizar el mapa de alertas al instante
+            try {
+                const { emitEvaluationUpdate } = await import("@/lib/evaluationEvents");
+                emitEvaluationUpdate({
+                    attemptId: submission.attemptId,
+                    evaluationId: submission.attempt?.evaluationId,
+                    submissionId: submission.id,
+                    studentId: submission.userId,
+                    type: "FRAUD_ATTEMPT_DETECTED",
+                    timestamp: Date.now(),
+                    message: `🚨 ALERTA DE INTEGRIDAD: El estudiante ${submission.user?.name || "Estudiante"} intentó solicitar la solución ("${detectedPattern || studentAnswer.substring(0, 40)}") en la pregunta.`,
+                    fraudEvidence: {
+                        questionId,
+                        questionText: question?.text,
+                        studentAnswer,
+                        pattern: detectedPattern
+                    }
+                });
+            } catch (sseErr) {
+                console.error("Error al emitir evento FRAUD_ATTEMPT_DETECTED SSE:", sseErr);
+            }
+
+            // Auditoría institucional
+            try {
+                const { auditLogger } = await import("../../admin/services/auditLogger");
+                await auditLogger.log({
+                    action: "UPDATE",
+                    entity: "EVALUATION_SUBMISSION",
+                    entityId: submissionId,
+                    userId: submission.user?.id || submission.userId,
+                    userName: submission.user?.name || "Estudiante",
+                    userRole: submission.user?.role || "student",
+                    description: `ALERTA DE SEGURIDAD: Intento de fraude / solicitud de respuesta ("${detectedPattern || "solicitud detectada"}"). Entrega: ${submissionId}`,
+                    success: true,
+                    metadata: {
+                        questionId,
+                        studentAnswer,
+                        detectedPattern,
+                        source
+                    }
+                });
+            } catch (auditErr) {
+                console.error("Error al registrar auditoría de fraude:", auditErr);
+            }
+
+            if (submission.attempt?.courseId) {
+                revalidatePath(`/dashboard/teacher/courses/${submission.attempt.courseId}/evaluations/${submission.attemptId}`);
+                revalidatePath(`/dashboard/teacher/courses/${submission.attempt.courseId}/evaluations/${submission.attemptId}/submissions/${submission.id}`);
+            }
+        }
+    } catch (err) {
+        console.error("Error en recordFraudAttemptForSubmission:", err);
+    }
+}
+
 export async function registerExpulsionAction(submissionId: string, reason?: "resize" | "multi_screen") {
     const session = await getSession();
     if (!session || session.user.role !== "student") {
@@ -120,11 +238,195 @@ export async function registerExpulsionAction(submissionId: string, reason?: "re
     return { success: true, expulsions: newExpulsions };
 }
 
+/**
+ * Registra y audita las direcciones IP públicas desde donde se realiza la evaluación.
+ * Si se detecta más de una IP distinta (no loopback), activa alerta inmediata
+ * para el profesor (SSE + auditoría) y para el estudiante.
+ */
+export async function recordIpForSubmission(
+    submissionId: string,
+    clientReportedIp?: string,
+    actionName: string = "activity"
+) {
+    try {
+        const reqHeaders = await headers();
+        const { extractClientIp, normalizeIp } = await import("../../admin/services/ipSecurityService");
+        const serverDetectedIp = extractClientIp(reqHeaders);
+        const userAgent = reqHeaders.get("user-agent") || "";
+
+        const cleanServerIp = normalizeIp(serverDetectedIp);
+        const cleanClientIp = clientReportedIp ? normalizeIp(clientReportedIp) : null;
+
+        // Si el cliente reporta una IP pública válida y no es loopback, la preferimos; de lo contrario usamos la detectada en el servidor
+        const currentIp = (cleanClientIp && cleanClientIp !== "127.0.0.1")
+            ? cleanClientIp
+            : cleanServerIp;
+
+        if (!currentIp) return null;
+
+        const submission = await prisma.evaluationSubmission.findUnique({
+            where: { id: submissionId },
+            include: {
+                attempt: {
+                    select: {
+                        id: true,
+                        courseId: true,
+                        evaluationId: true,
+                    }
+                },
+                user: {
+                    select: {
+                        id: true,
+                        name: true,
+                        role: true,
+                    }
+                }
+            }
+        });
+
+        if (!submission) return null;
+
+        const currentWildcards = typeof submission.wildcardsUsed === 'string'
+            ? JSON.parse(submission.wildcardsUsed)
+            : (submission.wildcardsUsed as any) || {};
+
+        const rawDetectedIps: string[] = Array.isArray(currentWildcards.detectedIps)
+            ? [...currentWildcards.detectedIps]
+            : (currentWildcards.initialIp ? [currentWildcards.initialIp] : []);
+
+        const prevHistory: Array<any> = Array.isArray(currentWildcards.ipHistory)
+            ? [...currentWildcards.ipHistory]
+            : [];
+
+        const nowIso = new Date().toISOString();
+
+        if (!rawDetectedIps.includes(currentIp)) {
+            rawDetectedIps.push(currentIp);
+        }
+
+        const historyIndex = prevHistory.findIndex((h: any) => h.ip === currentIp);
+        if (historyIndex >= 0) {
+            prevHistory[historyIndex] = {
+                ...prevHistory[historyIndex],
+                lastSeen: nowIso,
+                count: (prevHistory[historyIndex].count || 1) + 1,
+                action: actionName,
+                userAgent: userAgent ? userAgent.substring(0, 150) : prevHistory[historyIndex].userAgent,
+            };
+        } else {
+            prevHistory.push({
+                ip: currentIp,
+                firstSeen: nowIso,
+                lastSeen: nowIso,
+                count: 1,
+                action: actionName,
+                userAgent: userAgent ? userAgent.substring(0, 150) : "N/A",
+            });
+        }
+
+        // Determinar IPs efectivas excluyendo 127.0.0.1 cuando existen IPs externas reales
+        const nonLoopbackIps = rawDetectedIps.filter(ip => ip !== "127.0.0.1" && ip !== "::1" && ip !== "localhost");
+        const effectiveIps = nonLoopbackIps.length > 0 ? nonLoopbackIps : rawDetectedIps;
+
+        const hasMultipleIps = effectiveIps.length > 1;
+        const wasAlreadyAlerted = Boolean(currentWildcards.multipleIpAlert);
+
+        const updatedWildcards = {
+            ...currentWildcards,
+            initialIp: currentWildcards.initialIp || currentIp,
+            detectedIps: rawDetectedIps,
+            effectiveIps,
+            multipleIpAlert: hasMultipleIps,
+            multipleIpAlertTriggeredAt: (hasMultipleIps && !currentWildcards.multipleIpAlertTriggeredAt)
+                ? nowIso
+                : currentWildcards.multipleIpAlertTriggeredAt,
+            ipHistory: prevHistory,
+        };
+
+        await prisma.evaluationSubmission.update({
+            where: { id: submissionId },
+            data: { wildcardsUsed: updatedWildcards }
+        });
+
+        // Si se detecta una segunda IP o ubicación, alertar a docente y estudiante
+        if (hasMultipleIps && !wasAlreadyAlerted) {
+            try {
+                const { emitEvaluationUpdate } = await import("@/lib/evaluationEvents");
+                emitEvaluationUpdate({
+                    attemptId: submission.attemptId,
+                    evaluationId: submission.attempt?.evaluationId,
+                    submissionId: submission.id,
+                    studentId: submission.userId,
+                    type: "MULTIPLE_IP_DETECTED",
+                    timestamp: Date.now(),
+                    ips: effectiveIps,
+                    message: `🚨 ALERTA DE SEGURIDAD: Se ha detectado la presentación de la prueba desde ${effectiveIps.length} ubicaciones o direcciones IP distintas (${effectiveIps.join(", ")}). Posible asistencia externa o sesión duplicada.`,
+                });
+            } catch (sseErr) {
+                console.error("Error al emitir evento MULTIPLE_IP_DETECTED SSE:", sseErr);
+            }
+
+            try {
+                const { auditLogger } = await import("../../admin/services/auditLogger");
+                await auditLogger.log({
+                    action: "UPDATE",
+                    entity: "EVALUATION_SUBMISSION",
+                    entityId: submissionId,
+                    userId: submission.user?.id || submission.userId,
+                    userName: submission.user?.name || "Estudiante",
+                    userRole: submission.user?.role || "student",
+                    description: `ALERTA DE SEGURIDAD: Presentación indebida de evaluación desde ${effectiveIps.length} direcciones IP diferentes (${effectiveIps.join(", ")}). Entrega: ${submissionId}`,
+                    success: true,
+                    metadata: {
+                        effectiveIps,
+                        rawDetectedIps,
+                        action: actionName,
+                    }
+                });
+            } catch (auditErr) {
+                console.error("Error al registrar auditoría de múltiples IPs:", auditErr);
+            }
+
+            if (submission.attempt?.courseId) {
+                revalidatePath(`/dashboard/teacher/courses/${submission.attempt.courseId}/evaluations/${submission.attemptId}`);
+                revalidatePath(`/dashboard/teacher/courses/${submission.attempt.courseId}/evaluations/${submission.attemptId}/submissions/${submission.id}`);
+            }
+        }
+
+        return {
+            success: true,
+            detectedIps: effectiveIps,
+            multipleIpAlert: hasMultipleIps,
+            currentIp,
+        };
+    } catch (err) {
+        console.error("Error en recordIpForSubmission:", err);
+        return null;
+    }
+}
+
+export async function recordEvaluationIpAction(
+    submissionId: string,
+    clientReportedIp?: string,
+    actionName: string = "heartbeat"
+) {
+    const session = await getSession();
+    if (!session || session.user.role !== "student") {
+        throw new Error("Unauthorized");
+    }
+
+    const res = await recordIpForSubmission(submissionId, clientReportedIp, actionName);
+    return res || { success: false, detectedIps: [], multipleIpAlert: false };
+}
+
 export async function saveAnswerAction(submissionId: string, questionId: string, content: string) {
     const session = await getSession();
     if (!session || session.user.role !== "student") {
         throw new Error("Unauthorized");
     }
+
+    // Registrar IP de forma asíncrona para auditoría de conexiones
+    recordIpForSubmission(submissionId, undefined, "save_answer").catch(() => {});
 
     const existing = await prisma.evaluationAnswer.findFirst({
         where: { submissionId, questionId }
@@ -133,11 +435,17 @@ export async function saveAnswerAction(submissionId: string, questionId: string,
     if (existing) {
         await prisma.evaluationAnswer.update({
             where: { id: existing.id },
-            data: { answer: content }
+            data: { 
+                answer: content,
+            }
         });
     } else {
         await prisma.evaluationAnswer.create({
-            data: { submissionId, questionId, answer: content }
+            data: { 
+                submissionId, 
+                questionId, 
+                answer: content,
+            }
         });
     }
 
@@ -186,17 +494,60 @@ export async function submitEvaluationAction(submissionId: string) {
         throw new Error("Unauthorized or submission not found");
     }
 
-    // 1. Calcular nota final
-    const totalQuestions = submission.attempt?.evaluation?.questions?.length || 1;
-    const totalScoreSum = submission.answersList.reduce((acc, a) => acc + (a.score || 0), 0);
+    // Registrar IP de forma asíncrona para auditoría de entrega final
+    recordIpForSubmission(submissionId, undefined, "submit_evaluation").catch(() => {});
+
+    // 1. Calcular nota final estrictamente con las preguntas actuales de la evaluación
+    const currentQuestions = submission.attempt?.evaluation?.questions || [];
+    const currentQuestionIds = new Set(currentQuestions.map(q => q.id));
+    const totalQuestions = currentQuestions.length || 1;
+
+    // Purgar respuestas huérfanas en la base de datos si alguna pregunta fue eliminada durante la evaluación
+    if (submission.answersList.some(a => !currentQuestionIds.has(a.questionId))) {
+        await prisma.evaluationAnswer.deleteMany({
+            where: {
+                submissionId,
+                questionId: { notIn: Array.from(currentQuestionIds) }
+            }
+        });
+    }
+
+    // Filtrar estrictamente solo respuestas pertenecientes a las preguntas vigentes de la evaluación
+    const validAnswers = submission.answersList.filter(a => currentQuestionIds.has(a.questionId));
+
+    // Mantener la nota más alta por pregunta entre los intentos válidos.
+    // Si se detectó fraude, los intentos previos fueron anulados a 0.0 en evaluateAnswerWithAIAction,
+    // y solo los intentos legítimos restantes aportan puntaje.
+    for (const a of validAnswers) {
+        if (a.aiFeedback) {
+            try {
+                const feedbacks = Array.isArray(a.aiFeedback) 
+                    ? a.aiFeedback 
+                    : (typeof a.aiFeedback === 'string' ? JSON.parse(a.aiFeedback) : []);
+                if (feedbacks.length > 0) {
+                    const computedMax = Math.max(0.0, ...feedbacks.map((f: any) => Number(f.score || 0)));
+                    if (a.score !== computedMax) {
+                        a.score = computedMax;
+                        await prisma.evaluationAnswer.update({
+                            where: { id: a.id },
+                            data: { score: computedMax }
+                        });
+                    }
+                }
+            } catch (e) {
+                // Si no se puede parsear, mantener score actual
+            }
+        }
+    }
+
+    const totalScoreSum = validAnswers.reduce((acc, a) => acc + (a.score || 0), 0);
     const calculatedBase = Number((totalScoreSum / totalQuestions).toFixed(2));
 
     const prevWildcards = (submission.wildcardsUsed as any) || {};
     const penalty = Number(prevWildcards.penalty || 0);
-    const baseScore = prevWildcards.baseScore !== undefined ? Number(prevWildcards.baseScore) : calculatedBase;
-    const finalScore = submission.score !== null && submission.score !== undefined && prevWildcards.baseScore !== undefined
-        ? submission.score
-        : Math.max(0, Number((baseScore - penalty).toFixed(2)));
+    // Nota base recalculada estrictamente con las preguntas actuales
+    const baseScore = calculatedBase;
+    const finalScore = Math.max(0, Number((baseScore - penalty).toFixed(2)));
 
     // 2. Generar mensaje pedagógico con LLM según la nota obtenida
     let feedback = "";
@@ -338,6 +689,9 @@ export async function evaluateAnswerWithAIAction(submissionId: string, questionI
         throw new Error("Unauthorized");
     }
 
+    // Registrar IP de forma asíncrona para auditoría de conexiones
+    recordIpForSubmission(submissionId, undefined, "ai_evaluation").catch(() => {});
+
     const submission = await prisma.evaluationSubmission.findUnique({
         where: { id: submissionId },
         include: {
@@ -392,7 +746,29 @@ export async function evaluateAnswerWithAIAction(submissionId: string, questionI
     const { evaluateStudentAnswer } = await import("../../teacher/services/ai/evaluationAnalysisService");
     const aiResult = await evaluateStudentAnswer(question.text, question.type, currentAnswer, 5.0, question.referenceAnswer || undefined, teacherId);
 
-    let feedbackHistory: { attempt: number; feedback: string; score: number; isCorrect: boolean; requestedAt: string }[] = [];
+    const isFraudAttempt = Boolean(aiResult.isFraudAttempt);
+    const detectedPattern = aiResult.detectedPattern;
+
+    if (isFraudAttempt) {
+        await recordFraudAttemptForSubmission(
+            submissionId,
+            questionId,
+            currentAnswer,
+            detectedPattern || "Intento de solicitar la solución detectado por la IA",
+            "ai_evaluation"
+        );
+    }
+
+    let feedbackHistory: { 
+        attempt: number; 
+        feedback: string; 
+        score: number; 
+        isCorrect: boolean; 
+        isFraudAttempt?: boolean; 
+        detectedPattern?: string; 
+        invalidatedByFraud?: boolean;
+        requestedAt: string 
+    }[] = [];
     if (answerRecord.aiFeedback) {
         feedbackHistory = Array.isArray(answerRecord.aiFeedback) 
             ? answerRecord.aiFeedback as typeof feedbackHistory
@@ -401,15 +777,33 @@ export async function evaluateAnswerWithAIAction(submissionId: string, questionI
 
     const currentAttemptNumber = answerRecord.supportAttempts + 1;
     const now = new Date().toISOString();
+
+    // Si se detecta fraude en este intento:
+    // Se BORRA el histórico previo de calificaciones para esta pregunta y se restablece a 0.0.
+    // El estudiante solo podrá obtener nota mediante los intentos restantes.
+    if (isFraudAttempt) {
+        feedbackHistory = feedbackHistory.map(item => ({
+            ...item,
+            score: 0.0,
+            isCorrect: false,
+            invalidatedByFraud: true
+        }));
+    }
+
     feedbackHistory.push({
         attempt: currentAttemptNumber,
         feedback: aiResult.feedback,
-        score: aiResult.scoreContribution,
-        isCorrect: aiResult.isCorrect,
+        score: isFraudAttempt ? 0.0 : aiResult.scoreContribution,
+        isCorrect: isFraudAttempt ? false : aiResult.isCorrect,
+        isFraudAttempt,
+        detectedPattern,
         requestedAt: now
     });
 
-    const maxScore = Math.max(...feedbackHistory.map(f => f.score));
+    // Mantiene la nota más alta de todos los intentos vigentes.
+    // Si hubo fraude, todos los intentos previos quedaron en 0.0, por lo que el puntaje es 0.0
+    // a menos que en un intento restante posterior obtenga una calificación válida.
+    const maxScore = isFraudAttempt ? 0.0 : Math.max(0.0, ...feedbackHistory.map(f => Number(f.score || 0)));
 
     await prisma.evaluationAnswer.update({
         where: { id: answerRecord.id },
@@ -426,12 +820,17 @@ export async function evaluateAnswerWithAIAction(submissionId: string, questionI
         include: { questions: { select: { id: true } } }
     });
 
-    const totalQuestionsCount = evaluation?.questions.length || 1;
+    const currentQuestions = evaluation?.questions || [];
+    const currentQuestionIds = new Set(currentQuestions.map(q => q.id));
+    const totalQuestionsCount = currentQuestions.length || 1;
+
     const allAnswers = await prisma.evaluationAnswer.findMany({
         where: { submissionId }
     });
 
-    const totalScoreSum = allAnswers.reduce((acc, curr) => acc + (curr.score || 0), 0);
+    // Filtrar estrictamente solo respuestas a preguntas vigentes actuales
+    const validAnswers = allAnswers.filter(a => currentQuestionIds.has(a.questionId));
+    const totalScoreSum = validAnswers.reduce((acc, curr) => acc + (curr.score || 0), 0);
     const finalSubmissionScore = Number((totalScoreSum / totalQuestionsCount).toFixed(2));
 
     await prisma.evaluationSubmission.update({
@@ -441,9 +840,13 @@ export async function evaluateAnswerWithAIAction(submissionId: string, questionI
 
     return {
         success: true,
+        isFraudAttempt,
+        detectedPattern,
         feedback: aiResult.feedback,
-        isCorrect: aiResult.isCorrect,
-        scoreContribution: aiResult.scoreContribution,
+        isCorrect: isFraudAttempt ? false : aiResult.isCorrect,
+        scoreContribution: isFraudAttempt ? 0.0 : aiResult.scoreContribution,
+        questionScore: maxScore,
+        feedbackHistory,
         accumulatedScore: finalSubmissionScore,
         attemptsRemaining: Math.max(0, maxAttempts - currentAttemptNumber),
         requestedAt: now
@@ -474,7 +877,7 @@ export async function useAiHintAction(submissionId: string, questionId: string, 
     const maxHints = submission.attempt?.wildcardAiHints ?? submission.attempt?.evaluation?.wildcardAiHints ?? 0;
     const wildcardsUsed = (submission.wildcardsUsed || {}) as {
         aiHintsUsed?: number;
-        aiHintQuestions?: { questionId: string; usedAt: string }[];
+        aiHintQuestions?: { questionId: string; hint: string; usedAt: string }[];
         secondChanceUsed?: number;
         secondChanceQuestions?: { questionId: string; usedAt: string }[];
     };
@@ -490,8 +893,27 @@ export async function useAiHintAction(submissionId: string, questionId: string, 
     const teacherId = submission.attempt?.evaluation?.authorId;
 
     const { getAiHint } = await import("../../teacher/services/ai/evaluationAnalysisService");
-    const hint = await getAiHint(question.text, question.type, currentAnswer, teacherId);
+    const hintResult = await getAiHint(question.text, question.type, currentAnswer, teacherId);
 
+    // Si la IA detecta que el estudiante pide la solución directa o intenta fraude al pedir pista
+    if (hintResult.isFraudAttempt) {
+        await recordFraudAttemptForSubmission(
+            submissionId,
+            questionId,
+            currentAnswer,
+            hintResult.detectedPattern || "Solicitud de respuesta detectada por la IA al pedir pista",
+            "ai_hint"
+        );
+        return {
+            success: false,
+            isFraudAttempt: true,
+            hint: hintResult.hint,
+            hintsRemaining: Math.max(0, maxHints - hintsUsed),
+            aiHintQuestions: wildcardsUsed.aiHintQuestions || []
+        };
+    }
+
+    const hint = hintResult.hint;
     wildcardsUsed.aiHintsUsed = hintsUsed + 1;
     if (!wildcardsUsed.aiHintQuestions) wildcardsUsed.aiHintQuestions = [];
     const newHintEntry = {

@@ -90,6 +90,16 @@ export function EvaluationLivePageClient({
                             setIsLocked(true);
                         } else if (data?.type === "EVALUATION_UNLOCKED") {
                             setIsLocked(false);
+                        } else if (data?.type === "MULTIPLE_IP_DETECTED") {
+                            toast.error("🚨 Alerta de Múltiples Direcciones IP", {
+                                description: data.message || "Se ha detectado presentación desde más de una ubicación o dirección IP.",
+                                duration: 10000,
+                            });
+                        } else if (data?.type === "FRAUD_ATTEMPT_DETECTED") {
+                            toast.error("🚨 Alerta de Intento de Fraude", {
+                                description: data.message || "Se ha detectado un intento de solicitar la solución o respuesta.",
+                                duration: 10000,
+                            });
                         }
                     } catch {}
 

@@ -27,7 +27,9 @@ import {
     RefreshCw,
     Activity,
     Tv,
-    ExternalLink
+    ExternalLink,
+    Globe,
+    History
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -114,7 +116,9 @@ export function SubmissionsManager({
     const [isExportingPdf, setIsExportingPdf] = useState(false);
     const [isExportingExcel, setIsExportingExcel] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
-    const [statusFilter, setStatusFilter] = useState<"all" | "submitted" | "in_progress" | "passed" | "failed" | "expulsions">("all");
+    const [statusFilter, setStatusFilter] = useState<"all" | "assigned_targets" | "previous_batch" | "not_started" | "submitted" | "in_progress" | "passed" | "failed" | "expulsions" | "multiple_ips" | "fraud_attempts">("all");
+    const [selectedIpDetails, setSelectedIpDetails] = useState<{ studentName: string; sub: any; wildcards: any } | null>(null);
+    const [selectedFraudDetails, setSelectedFraudDetails] = useState<{ studentName: string; sub: any; fraudAttempts: any[] } | null>(null);
     const [isMounted, setIsMounted] = useState(false);
 
     const isRefreshingRef = useRef(false);
@@ -183,6 +187,16 @@ export function SubmissionsManager({
                                 description: data.message || "Un estudiante ha excedido el tiempo acumulado permitido fuera de la prueba.",
                                 duration: 6000,
                             });
+                        } else if (data?.type === "MULTIPLE_IP_DETECTED") {
+                            toast.error("🚨 Alerta de Múltiples Direcciones IP", {
+                                description: data.message || "Se ha detectado presentación desde más de una ubicación o dirección IP.",
+                                duration: 10000,
+                            });
+                        } else if (data?.type === "FRAUD_ATTEMPT_DETECTED") {
+                            toast.error("🚨 Alerta de Intento de Fraude", {
+                                description: data.message || "Un estudiante intentó solicitar la respuesta o solución durante el examen.",
+                                duration: 10000,
+                            });
                         }
                     } catch {}
 
@@ -226,11 +240,24 @@ export function SubmissionsManager({
         };
     }, [isMounted, attempt?.id, fetchSubmissions]);
 
+    // Selective Assignment Helpers
+    const assignedIds: string[] = useMemo(() => {
+        return Array.isArray(attempt?.assignedStudentIds)
+            ? attempt.assignedStudentIds
+            : typeof attempt?.assignedStudentIds === "string"
+                ? JSON.parse(attempt.assignedStudentIds)
+                : [];
+    }, [attempt?.assignedStudentIds]);
+    const isSelectiveAssignment = assignedIds.length > 0;
+
     // Statistics Calculations
     const totalStudents = currentSubmissions.length;
+    const notStartedCount = useMemo(() => currentSubmissions.filter(s => s.isNotStarted).length, [currentSubmissions]);
     const submittedSubmissions = useMemo(() => currentSubmissions.filter(s => s.submittedAt), [currentSubmissions]);
     const submittedCount = submittedSubmissions.length;
-    const inProgressCount = totalStudents - submittedCount;
+    const inProgressCount = useMemo(() => currentSubmissions.filter(s => !s.submittedAt && !s.isNotStarted).length, [currentSubmissions]);
+    const currentAssignedCount = useMemo(() => currentSubmissions.filter(s => s.isAssignedTarget).length, [currentSubmissions]);
+    const previousBatchCount = useMemo(() => currentSubmissions.filter(s => !s.isAssignedTarget).length, [currentSubmissions]);
     const scores = useMemo(() => submittedSubmissions.map(s => Number(s.score) || 0), [submittedSubmissions]);
     const avgScore = scores.length > 0 ? (scores.reduce((acc, s) => acc + s, 0) / scores.length) : 0;
     const maxScore = scores.length > 0 ? Math.max(...scores) : 0;
@@ -240,6 +267,32 @@ export function SubmissionsManager({
     const passRate = submittedCount > 0 ? (passCount / submittedCount) * 100 : 0;
     const totalExpulsions = currentSubmissions.reduce((acc, s) => acc + (s.expulsions || 0), 0);
     const totalQuestions = attempt.evaluation?.questions?.length || 0;
+
+    // Conteo de estudiantes con alerta de múltiples IPs
+    const studentsWithMultipleIps = useMemo(() => {
+        return currentSubmissions.filter((sub: any) => {
+            const wildcards = typeof sub.wildcardsUsed === 'string'
+                ? JSON.parse(sub.wildcardsUsed)
+                : (sub.wildcardsUsed as any) || {};
+            const ips = Array.isArray(wildcards.effectiveIps || wildcards.detectedIps)
+                ? (wildcards.effectiveIps || wildcards.detectedIps)
+                : [];
+            return Boolean(wildcards.multipleIpAlert || ips.length > 1);
+        });
+    }, [currentSubmissions]);
+    const multipleIpsCount = studentsWithMultipleIps.length;
+
+    // Conteo de estudiantes con intentos de fraude / evasión detectados
+    const studentsWithFraudAttempts = useMemo(() => {
+        return currentSubmissions.filter((sub: any) => {
+            const wildcards = typeof sub.wildcardsUsed === 'string'
+                ? JSON.parse(sub.wildcardsUsed)
+                : (sub.wildcardsUsed as any) || {};
+            const fraudAttempts = Array.isArray(wildcards.fraudAttempts) ? wildcards.fraudAttempts : [];
+            return Boolean(wildcards.hasFraudAlert || fraudAttempts.length > 0);
+        });
+    }, [currentSubmissions]);
+    const fraudAttemptsCount = studentsWithFraudAttempts.length;
 
     // Distribution Buckets
     const buckets = useMemo(() => {
@@ -264,11 +317,30 @@ export function SubmissionsManager({
             const isSubmitted = Boolean(sub.submittedAt);
             const score = Number(sub.score || 0);
 
+            if (statusFilter === "assigned_targets") return Boolean(sub.isAssignedTarget);
+            if (statusFilter === "previous_batch") return !sub.isAssignedTarget;
+            if (statusFilter === "not_started") return Boolean(sub.isNotStarted);
             if (statusFilter === "submitted") return isSubmitted;
-            if (statusFilter === "in_progress") return !isSubmitted;
+            if (statusFilter === "in_progress") return !isSubmitted && !sub.isNotStarted;
             if (statusFilter === "passed") return isSubmitted && score >= 3.0;
             if (statusFilter === "failed") return isSubmitted && score < 3.0;
             if (statusFilter === "expulsions") return (sub.expulsions || 0) > 0;
+            if (statusFilter === "multiple_ips") {
+                const wildcards = typeof sub.wildcardsUsed === 'string'
+                    ? JSON.parse(sub.wildcardsUsed)
+                    : (sub.wildcardsUsed as any) || {};
+                const ips = Array.isArray(wildcards.effectiveIps || wildcards.detectedIps)
+                    ? (wildcards.effectiveIps || wildcards.detectedIps)
+                    : [];
+                return Boolean(wildcards.multipleIpAlert || ips.length > 1);
+            }
+            if (statusFilter === "fraud_attempts") {
+                const wildcards = typeof sub.wildcardsUsed === 'string'
+                    ? JSON.parse(sub.wildcardsUsed)
+                    : (sub.wildcardsUsed as any) || {};
+                const fraudAttempts = Array.isArray(wildcards.fraudAttempts) ? wildcards.fraudAttempts : [];
+                return Boolean(wildcards.hasFraudAlert || fraudAttempts.length > 0);
+            }
             return true;
         });
     }, [currentSubmissions, searchQuery, statusFilter]);
@@ -682,14 +754,18 @@ export function SubmissionsManager({
                                 <CardContent className="p-4 flex items-center justify-between">
                                     <div>
                                         <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Integridad</p>
-                                        <p className={`text-2xl font-black mt-0.5 ${totalExpulsions > 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
-                                            {totalExpulsions}
+                                        <p className={`text-2xl font-black mt-0.5 ${(totalExpulsions > 0 || multipleIpsCount > 0) ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                                            {totalExpulsions + multipleIpsCount}
                                         </p>
                                         <p className="text-[10px] text-muted-foreground mt-0.5">
-                                            {totalExpulsions > 0 ? `${totalExpulsions} salidas / faltas` : "Sin incidentes"}
+                                            {multipleIpsCount > 0 
+                                                ? `${multipleIpsCount} con alerta de IPs` 
+                                                : totalExpulsions > 0 
+                                                    ? `${totalExpulsions} salidas / faltas` 
+                                                    : "Sin incidentes"}
                                         </p>
                                     </div>
-                                    <div className={`p-2.5 rounded-xl border ${totalExpulsions > 0 ? "bg-red-500/10 text-red-600 border-red-500/20" : "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"}`}>
+                                    <div className={`p-2.5 rounded-xl border ${(totalExpulsions > 0 || multipleIpsCount > 0) ? "bg-rose-500/10 text-rose-600 border-rose-500/20" : "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"}`}>
                                         <ShieldAlert className="h-5 w-5" />
                                     </div>
                                 </CardContent>
@@ -751,23 +827,67 @@ export function SubmissionsManager({
                                     </TooltipContent>
                                 </Tooltip>
 
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Button
-                                            type="button"
-                                            size="sm"
-                                            variant={statusFilter === "submitted" ? "default" : "outline"}
-                                            onClick={() => setStatusFilter("submitted")}
-                                            className="h-7 text-xs font-semibold px-2.5 cursor-pointer rounded-lg gap-1"
-                                        >
-                                            <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                                            <span>Enviados ({submittedCount})</span>
-                                        </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="top">
-                                        <p>Filtrar únicamente evaluaciones que ya fueron enviadas</p>
-                                    </TooltipContent>
-                                </Tooltip>
+                                {isSelectiveAssignment && (
+                                    <>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant={statusFilter === "assigned_targets" ? "default" : "outline"}
+                                                    onClick={() => setStatusFilter("assigned_targets")}
+                                                    className="h-7 text-xs font-semibold px-2.5 cursor-pointer rounded-lg gap-1 border-blue-500/40 text-blue-600 dark:text-blue-400 bg-blue-500/5 hover:bg-blue-500/15"
+                                                >
+                                                    <UserCheck className="h-3 w-3 text-blue-500" />
+                                                    <span>Destinatarios Actuales ({currentAssignedCount})</span>
+                                                </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="top">
+                                                <p>Ver exclusivamente los estudiantes asignados a esta programación ({assignedIds.length} alumnos)</p>
+                                            </TooltipContent>
+                                        </Tooltip>
+
+                                        {previousBatchCount > 0 && (
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant={statusFilter === "previous_batch" ? "default" : "outline"}
+                                                        onClick={() => setStatusFilter("previous_batch")}
+                                                        className="h-7 text-xs font-semibold px-2.5 cursor-pointer rounded-lg gap-1 text-muted-foreground"
+                                                    >
+                                                        <History className="h-3 w-3" />
+                                                        <span>Entregas Previas ({previousBatchCount})</span>
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent side="top">
+                                                    <p>Estudiantes que presentaron en una fecha u horario anterior y no están en los destinatarios de hoy</p>
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        )}
+                                    </>
+                                )}
+
+                                {notStartedCount > 0 && (
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant={statusFilter === "not_started" ? "default" : "outline"}
+                                                onClick={() => setStatusFilter("not_started")}
+                                                className="h-7 text-xs font-semibold px-2.5 cursor-pointer rounded-lg gap-1 border-amber-500/30 text-amber-600 dark:text-amber-400"
+                                            >
+                                                <Clock className="h-3 w-3 text-amber-500" />
+                                                <span>Sin iniciar ({notStartedCount})</span>
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top">
+                                            <p>Estudiantes asignados que aún no han ingresado a resolver la prueba</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                )}
 
                                 <Tooltip>
                                     <TooltipTrigger asChild>
@@ -784,6 +904,24 @@ export function SubmissionsManager({
                                     </TooltipTrigger>
                                     <TooltipContent side="top">
                                         <p>Filtrar estudiantes que están presentando la prueba actualmente</p>
+                                    </TooltipContent>
+                                </Tooltip>
+
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant={statusFilter === "submitted" ? "default" : "outline"}
+                                            onClick={() => setStatusFilter("submitted")}
+                                            className="h-7 text-xs font-semibold px-2.5 cursor-pointer rounded-lg gap-1"
+                                        >
+                                            <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                                            <span>Enviados ({submittedCount})</span>
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top">
+                                        <p>Filtrar únicamente evaluaciones que ya fueron enviadas</p>
                                     </TooltipContent>
                                 </Tooltip>
 
@@ -840,6 +978,46 @@ export function SubmissionsManager({
                                         </TooltipContent>
                                     </Tooltip>
                                 )}
+
+                                {multipleIpsCount > 0 && (
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant={statusFilter === "multiple_ips" ? "destructive" : "outline"}
+                                                onClick={() => setStatusFilter("multiple_ips")}
+                                                className="h-7 text-xs font-semibold px-2.5 cursor-pointer rounded-lg gap-1 border-rose-500/40 text-rose-600 dark:text-rose-400"
+                                            >
+                                                <Globe className="h-3 w-3 text-rose-500" />
+                                                <span>Alerta de IPs ({multipleIpsCount})</span>
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top">
+                                            <p>Filtrar pruebas con sospecha de presentación indebida desde 2 o más ubicaciones/IPs</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                )}
+
+                                {fraudAttemptsCount > 0 && (
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant={statusFilter === "fraud_attempts" ? "destructive" : "outline"}
+                                                onClick={() => setStatusFilter("fraud_attempts")}
+                                                className="h-7 text-xs font-semibold px-2.5 cursor-pointer rounded-lg gap-1 border-red-500/50 text-red-600 dark:text-red-400 bg-red-500/10 hover:bg-red-500/20"
+                                            >
+                                                <ShieldAlert className="h-3 w-3 text-red-500" />
+                                                <span>Intentos de Fraude ({fraudAttemptsCount})</span>
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top">
+                                            <p>Filtrar pruebas donde el estudiante solicitó la solución (&quot;dame la respuesta&quot;, &quot;dime la solución&quot;)</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                )}
                             </div>
                         </CardHeader>
 
@@ -893,6 +1071,12 @@ export function SubmissionsManager({
                                                 const penaltyComment = wildcards.penaltyComment || "";
                                                 const tabSwitches = wildcards.tabSwitchesCount || 0;
                                                 const timeAway = wildcards.totalTimeAwaySeconds || 0;
+                                                const subDetectedIps: string[] = Array.isArray(wildcards.effectiveIps || wildcards.detectedIps)
+                                                    ? (wildcards.effectiveIps || wildcards.detectedIps)
+                                                    : wildcards.initialIp ? [wildcards.initialIp] : [];
+                                                const subHasMultipleIps = Boolean(wildcards.multipleIpAlert || subDetectedIps.length > 1);
+                                                const fraudAttempts: any[] = Array.isArray(wildcards.fraudAttempts) ? wildcards.fraudAttempts : [];
+                                                const subHasFraud = Boolean(wildcards.hasFraudAlert || fraudAttempts.length > 0);
 
                                                 return (
                                                     <TableRow key={sub.id} className="hover:bg-muted/30 transition-colors">
@@ -903,7 +1087,20 @@ export function SubmissionsManager({
                                                                     {getInitials(studentName)}
                                                                 </div>
                                                                 <div className="flex flex-col min-w-0">
-                                                                    <span className="font-bold text-sm text-foreground truncate">{studentName}</span>
+                                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                                        <span className="font-bold text-sm text-foreground truncate">{studentName}</span>
+                                                                        {isSelectiveAssignment && (
+                                                                            sub.isAssignedTarget ? (
+                                                                                <Badge variant="outline" className="text-[9px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 py-0 px-1.5">
+                                                                                    Destinatario Actual
+                                                                                </Badge>
+                                                                            ) : (
+                                                                                <Badge variant="outline" className="text-[9px] font-medium text-muted-foreground bg-muted/70 border-border/60 py-0 px-1.5">
+                                                                                    Entrega Previa
+                                                                                </Badge>
+                                                                            )
+                                                                        )}
+                                                                    </div>
                                                                     <span className="text-xs text-muted-foreground truncate">{sub.user?.email}</span>
                                                                 </div>
                                                             </div>
@@ -911,7 +1108,23 @@ export function SubmissionsManager({
 
                                                         {/* Estado de Entrega */}
                                                         <TableCell className="py-3">
-                                                            {isSubmitted ? (
+                                                            {sub.isNotStarted ? (
+                                                                <Tooltip>
+                                                                    <TooltipTrigger asChild>
+                                                                        <div className="flex flex-col cursor-default w-fit">
+                                                                            <Badge variant="outline" className="text-[10px] font-black uppercase text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/30 px-2 py-0.5 w-fit">
+                                                                                Sin Iniciar
+                                                                            </Badge>
+                                                                            <span className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                                                                                Pendiente por entrar
+                                                                            </span>
+                                                                        </div>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent side="top">
+                                                                        <p>El estudiante está convocado a esta prueba pero aún no ha ingresado al examen</p>
+                                                                    </TooltipContent>
+                                                                </Tooltip>
+                                                            ) : isSubmitted ? (
                                                                 <Tooltip>
                                                                     <TooltipTrigger asChild>
                                                                         <div className="flex flex-col cursor-default w-fit">
@@ -1061,13 +1274,79 @@ export function SubmissionsManager({
                                                                     </Tooltip>
                                                                 )}
 
-                                                                {expulsions === 0 && tabSwitches === 0 && (
+                                                                {/* Alerta de Seguridad de Múltiples Direcciones IP */}
+                                                                {subHasMultipleIps ? (
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => setSelectedIpDetails({ studentName, sub, wildcards })}
+                                                                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-black bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 hover:bg-rose-500/25 transition-colors cursor-pointer animate-pulse"
+                                                                            >
+                                                                                <Globe className="w-3.5 h-3.5" />
+                                                                                <span>{subDetectedIps.length} IPs</span>
+                                                                            </button>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent side="top" className="max-w-xs space-y-1 text-left">
+                                                                            <p className="font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1 text-xs">
+                                                                                <Globe className="w-3.5 h-3.5" />
+                                                                                🚨 Alerta: Presentación desde Múltiples Ubicaciones
+                                                                            </p>
+                                                                            <p className="text-[11px] text-muted-foreground">
+                                                                                Se detectaron {subDetectedIps.length} direcciones IP diferentes ({subDetectedIps.join(", ")}). Clic para ver historial forense.
+                                                                            </p>
+                                                                        </TooltipContent>
+                                                                    </Tooltip>
+                                                                ) : subDetectedIps.length > 0 ? (
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => setSelectedIpDetails({ studentName, sub, wildcards })}
+                                                                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-mono text-muted-foreground bg-muted/40 border border-border/50 hover:bg-muted cursor-pointer"
+                                                                            >
+                                                                                <Globe className="w-3 h-3 text-muted-foreground/70" />
+                                                                                <span className="truncate max-w-[75px]">{subDetectedIps[0]}</span>
+                                                                            </button>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent side="top">
+                                                                            <p className="text-xs">IP registrada: {subDetectedIps[0]}</p>
+                                                                        </TooltipContent>
+                                                                    </Tooltip>
+                                                                ) : null}
+
+                                                                {/* Alerta de Intentos de Fraude / Solicitud de Respuesta */}
+                                                                {subHasFraud && (
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => setSelectedFraudDetails({ studentName, sub, fraudAttempts })}
+                                                                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-black bg-red-600/15 text-red-700 dark:text-red-300 border border-red-500/40 hover:bg-red-600/25 transition-colors cursor-pointer"
+                                                                            >
+                                                                                <ShieldAlert className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
+                                                                                <span>{fraudAttempts.length || 1} {fraudAttempts.length === 1 ? "Fraude" : "Fraudes"}</span>
+                                                                            </button>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent side="top" className="max-w-xs space-y-1 text-left">
+                                                                            <p className="font-bold text-red-600 dark:text-red-400 flex items-center gap-1 text-xs">
+                                                                                <ShieldAlert className="w-3.5 h-3.5" />
+                                                                                🚨 Intento de Fraude / Solicitud de Respuesta
+                                                                            </p>
+                                                                            <p className="text-[11px] text-muted-foreground">
+                                                                                El estudiante escribió solicitudes explícitas como &quot;dame la respuesta&quot;. Clic para ver la evidencia forense completa.
+                                                                            </p>
+                                                                        </TooltipContent>
+                                                                    </Tooltip>
+                                                                )}
+
+                                                                {expulsions === 0 && tabSwitches === 0 && !subHasMultipleIps && subDetectedIps.length === 0 && !subHasFraud && (
                                                                     <Tooltip>
                                                                         <TooltipTrigger asChild>
                                                                             <span className="text-xs text-muted-foreground font-mono cursor-default">0</span>
                                                                         </TooltipTrigger>
                                                                         <TooltipContent side="top">
-                                                                            <p>Sin salidas de pestaña ni faltas registradas</p>
+                                                                            <p>Sin salidas de pestaña, alertas de IP ni intentos de fraude</p>
                                                                         </TooltipContent>
                                                                     </Tooltip>
                                                                 )}
@@ -1077,23 +1356,41 @@ export function SubmissionsManager({
                                                         {/* Acciones */}
                                                         <TableCell className="text-right pr-4 sm:pr-6 py-3">
                                                             <div className="flex items-center justify-end gap-1">
-                                                                <Tooltip>
-                                                                    <TooltipTrigger asChild>
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon"
-                                                                            className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg cursor-pointer"
-                                                                            asChild
-                                                                        >
-                                                                            <Link href={`/dashboard/teacher/courses/${courseId}/evaluations/${attempt.id}/submissions/${sub.id}`}>
+                                                                {sub.isNotStarted ? (
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="icon"
+                                                                                disabled
+                                                                                className="h-8 w-8 text-muted-foreground/30 cursor-not-allowed rounded-lg"
+                                                                            >
                                                                                 <Eye className="h-4 w-4" />
-                                                                            </Link>
-                                                                        </Button>
-                                                                    </TooltipTrigger>
-                                                                    <TooltipContent side="top">
-                                                                        <p>{isSubmitted ? "Ver respuestas detalladas y retroalimentación" : "Ver avance actual y respuestas en progreso"}</p>
-                                                                    </TooltipContent>
-                                                                </Tooltip>
+                                                                            </Button>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent side="top">
+                                                                            <p>El estudiante aún no ha iniciado la prueba</p>
+                                                                        </TooltipContent>
+                                                                    </Tooltip>
+                                                                ) : (
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="icon"
+                                                                                className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg cursor-pointer"
+                                                                                asChild
+                                                                            >
+                                                                                <Link href={`/dashboard/teacher/courses/${courseId}/evaluations/${attempt.id}/submissions/${sub.id}`}>
+                                                                                    <Eye className="h-4 w-4" />
+                                                                                </Link>
+                                                                            </Button>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent side="top">
+                                                                            <p>{isSubmitted ? "Ver respuestas detalladas y retroalimentación" : "Ver avance actual y respuestas en progreso"}</p>
+                                                                        </TooltipContent>
+                                                                    </Tooltip>
+                                                                )}
 
                                                                 {/* Botón para enviar mensaje prioritario vía SSE */}
                                                                 <TeacherStudentMessageDialog
@@ -1352,6 +1649,247 @@ export function SubmissionsManager({
                     />
                 </div>
             </div>
+
+            {/* Modal de Detalle Forense de IPs para el Docente */}
+            {selectedIpDetails && (
+                <Dialog open={!!selectedIpDetails} onOpenChange={(open) => { if (!open) setSelectedIpDetails(null); }}>
+                    <DialogContent className="max-w-2xl p-6 bg-card border-border shadow-2xl">
+                        <DialogHeader className="space-y-1">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2.5 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30">
+                                    <Globe className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <DialogTitle className="text-base font-bold text-foreground flex items-center gap-2">
+                                        <span>Historial Forense de Direcciones IP</span>
+                                        {Boolean(selectedIpDetails.wildcards?.multipleIpAlert || (Array.isArray(selectedIpDetails.wildcards?.effectiveIps || selectedIpDetails.wildcards?.detectedIps) && (selectedIpDetails.wildcards?.effectiveIps || selectedIpDetails.wildcards?.detectedIps).length > 1)) && (
+                                            <Badge variant="destructive" className="text-[10px] uppercase font-black">
+                                                🚨 Sospecha de Fraude / Multi-IP
+                                            </Badge>
+                                        )}
+                                    </DialogTitle>
+                                    <DialogDescription className="text-xs text-muted-foreground">
+                                        Estudiante: <strong className="text-foreground">{selectedIpDetails.studentName}</strong> • {selectedIpDetails.sub?.user?.email}
+                                    </DialogDescription>
+                                </div>
+                            </div>
+                        </DialogHeader>
+
+                        <div className="space-y-4 my-2">
+                            {Boolean(selectedIpDetails.wildcards?.multipleIpAlert || (Array.isArray(selectedIpDetails.wildcards?.effectiveIps || selectedIpDetails.wildcards?.detectedIps) && (selectedIpDetails.wildcards?.effectiveIps || selectedIpDetails.wildcards?.detectedIps).length > 1)) && (
+                                <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs space-y-1.5">
+                                    <p className="font-bold flex items-center gap-1.5 text-rose-600 dark:text-rose-400">
+                                        <ShieldAlert className="w-4 h-4 shrink-0" />
+                                        Alerta de Presentación Indebida desde Diferentes Lugares
+                                    </p>
+                                    <p className="leading-relaxed">
+                                        Esta prueba registró conexiones y respuestas desde más de una dirección IP pública. Esto puede evidenciar asistencia de una tercera persona desde otra ubicación o sesión compartida.
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Resumen de IPs */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="p-3 rounded-lg border bg-muted/30">
+                                    <p className="text-[10px] uppercase font-bold text-muted-foreground">IP Inicial Registrada</p>
+                                    <p className="text-sm font-mono font-bold text-foreground mt-0.5">
+                                        {selectedIpDetails.wildcards?.initialIp || selectedIpDetails.wildcards?.detectedIps?.[0] || "No registrada"}
+                                    </p>
+                                </div>
+                                <div className="p-3 rounded-lg border bg-muted/30">
+                                    <p className="text-[10px] uppercase font-bold text-muted-foreground">Total IPs Detectadas</p>
+                                    <p className="text-sm font-mono font-bold text-foreground mt-0.5">
+                                        {(selectedIpDetails.wildcards?.effectiveIps || selectedIpDetails.wildcards?.detectedIps || []).length} direcciones
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Tabla cronológica de IPs */}
+                            <div className="space-y-2">
+                                <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
+                                    Timeline de Actividad por Dirección IP
+                                </h4>
+                                <div className="rounded-lg border overflow-hidden max-h-60 overflow-y-auto">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow className="bg-muted/50 text-[11px]">
+                                                <TableHead className="py-2 font-bold">Dirección IP</TableHead>
+                                                <TableHead className="py-2 font-bold">Primera Vez</TableHead>
+                                                <TableHead className="py-2 font-bold">Última Vez</TableHead>
+                                                <TableHead className="py-2 font-bold text-center">Peticiones</TableHead>
+                                                <TableHead className="py-2 font-bold">Acción</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {Array.isArray(selectedIpDetails.wildcards?.ipHistory) && selectedIpDetails.wildcards.ipHistory.length > 0 ? (
+                                                selectedIpDetails.wildcards.ipHistory.map((entry: any, idx: number) => (
+                                                    <TableRow key={idx} className="text-xs font-mono">
+                                                        <TableCell className="py-2 font-bold text-foreground flex items-center gap-1.5">
+                                                            <Globe className="w-3.5 h-3.5 text-muted-foreground" />
+                                                            <span>{entry.ip}</span>
+                                                        </TableCell>
+                                                        <TableCell className="py-2 text-[11px] text-muted-foreground">
+                                                            {entry.firstSeen ? formatDateTime(entry.firstSeen, "HH:mm:ss") : "—"}
+                                                        </TableCell>
+                                                        <TableCell className="py-2 text-[11px] text-muted-foreground">
+                                                            {entry.lastSeen ? formatDateTime(entry.lastSeen, "HH:mm:ss") : "—"}
+                                                        </TableCell>
+                                                        <TableCell className="py-2 text-center font-bold">
+                                                            {entry.count || 1}
+                                                        </TableCell>
+                                                        <TableCell className="py-2 text-[11px] text-muted-foreground capitalize">
+                                                            {entry.action || "actividad"}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))
+                                            ) : (
+                                                (selectedIpDetails.wildcards?.detectedIps || []).map((ip: string, idx: number) => (
+                                                    <TableRow key={idx} className="text-xs font-mono">
+                                                        <TableCell className="py-2 font-bold text-foreground">
+                                                            {ip}
+                                                        </TableCell>
+                                                        <TableCell colSpan={4} className="py-2 text-muted-foreground text-[11px]">
+                                                            IP registrada durante la evaluación
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <DialogFooter>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setSelectedIpDetails(null)}
+                                className="h-8 text-xs cursor-pointer"
+                            >
+                                Cerrar
+                            </Button>
+                            <Button
+                                size="sm"
+                                className="h-8 text-xs font-bold gap-1.5 cursor-pointer"
+                                asChild
+                            >
+                                <Link href={`/dashboard/teacher/courses/${courseId}/evaluations/${attempt.id}/submissions/${selectedIpDetails.sub?.id}`}>
+                                    <Eye className="w-3.5 h-3.5" />
+                                    <span>Ver Entrega Completa</span>
+                                </Link>
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            )}
+
+            {/* Modal de Detalle Forense de Intentos de Fraude / Solicitud de Respuesta */}
+            {selectedFraudDetails && (
+                <Dialog open={Boolean(selectedFraudDetails)} onOpenChange={() => setSelectedFraudDetails(null)}>
+                    <DialogContent className="sm:max-w-xl max-h-[88vh] overflow-y-auto">
+                        <DialogHeader>
+                            <div className="flex items-center gap-3">
+                                <div className="p-2.5 rounded-xl bg-red-600/15 text-red-600 dark:text-red-400 shrink-0">
+                                    <ShieldAlert className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <DialogTitle className="text-base font-bold flex items-center gap-2">
+                                        <span>Evidencia de Intentos de Fraude / Evasión</span>
+                                        <Badge variant="outline" className="bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30 text-[10px] font-mono">
+                                            {selectedFraudDetails.fraudAttempts.length} {selectedFraudDetails.fraudAttempts.length === 1 ? "Incidente" : "Incidentes"}
+                                        </Badge>
+                                    </DialogTitle>
+                                    <DialogDescription className="text-xs mt-0.5">
+                                        Estudiante: <strong className="text-foreground">{selectedFraudDetails.studentName}</strong> • {selectedFraudDetails.sub?.user?.email}
+                                    </DialogDescription>
+                                </div>
+                            </div>
+                        </DialogHeader>
+
+                        <div className="space-y-4 my-2">
+                            <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-300 text-xs space-y-1.5">
+                                <p className="font-bold flex items-center gap-1.5 text-red-600 dark:text-red-400">
+                                    <ShieldAlert className="w-4 h-4 shrink-0" />
+                                    Detección Activa de Solicitud de Respuestas
+                                </p>
+                                <p className="leading-relaxed">
+                                    El estudiante escribió peticiones explícitas para obtener la solución o respuesta (ej: &quot;dame la respuesta&quot;, &quot;dime la solución&quot; o manipulación del sistema). La plataforma bloqueó la revelación de la respuesta, asignó 0.0 a la pregunta y emitió una detención ética pedagógica.
+                                </p>
+                            </div>
+
+                            {/* Timeline de intentos de fraude */}
+                            <div className="space-y-3">
+                                <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
+                                    Historial Forense de Respuestas del Estudiante
+                                </h4>
+                                <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                                    {selectedFraudDetails.fraudAttempts.map((item: any, idx: number) => (
+                                        <div key={item.id || idx} className="p-3.5 rounded-xl border bg-card/90 space-y-2 text-xs shadow-2xs">
+                                            <div className="flex items-center justify-between gap-2 border-b border-border/50 pb-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-bold text-foreground">
+                                                        {item.questionOrder !== undefined ? `Pregunta #${item.questionOrder + 1}` : `Incidente #${idx + 1}`}
+                                                    </span>
+                                                    <Badge variant="outline" className="text-[10px] bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/25">
+                                                        {item.questionType || "Texto/Código"}
+                                                    </Badge>
+                                                </div>
+                                                <span className="text-[10px] font-mono text-muted-foreground">
+                                                    {item.timestamp ? formatDateTime(item.timestamp, "HH:mm:ss") : "—"}
+                                                </span>
+                                            </div>
+
+                                            {item.questionText && (
+                                                <p className="text-[11px] text-muted-foreground line-clamp-2 italic">
+                                                    Enunciado: {item.questionText}
+                                                </p>
+                                            )}
+
+                                            <div>
+                                                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                                                    Texto exacto escrito por el estudiante (Evidencia):
+                                                </span>
+                                                <div className="p-2.5 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 font-mono text-xs text-red-900 dark:text-red-200 whitespace-pre-wrap break-all">
+                                                    {item.studentAnswer || "(Vacío)"}
+                                                </div>
+                                            </div>
+
+                                            {item.detectedPattern && (
+                                                <div className="text-[10px] text-muted-foreground flex items-center justify-between pt-1">
+                                                    <span>Patrón detectado: <strong className="text-red-600 dark:text-red-400 font-mono">{item.detectedPattern}</strong></span>
+                                                    <span className="font-bold text-red-600 dark:text-red-400">Nota asignada: 0.0</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <DialogFooter>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setSelectedFraudDetails(null)}
+                                className="h-8 text-xs cursor-pointer"
+                            >
+                                Cerrar
+                            </Button>
+                            <Button
+                                size="sm"
+                                className="h-8 text-xs font-bold gap-1.5 cursor-pointer"
+                                asChild
+                            >
+                                <Link href={`/dashboard/teacher/courses/${courseId}/evaluations/${attempt.id}/submissions/${selectedFraudDetails.sub?.id}`}>
+                                    <Eye className="w-3.5 h-3.5" />
+                                    <span>Ver Entrega Completa</span>
+                                </Link>
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            )}
         </div>
     </TooltipProvider>
 );

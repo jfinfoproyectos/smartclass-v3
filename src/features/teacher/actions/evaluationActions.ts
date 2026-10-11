@@ -258,12 +258,30 @@ export async function deleteQuestionAction(formData: FormData) {
     const { evaluationService } = await import("../services/evaluationService");
     await evaluationService.deleteQuestion(questionId, evaluationId, session.user.id);
 
+    // Notificar tanto al canal de evaluación como a todos los intentos activos
     emitEvaluationUpdate({
         evaluationId,
         type: "QUESTION_UPDATED",
         timestamp: Date.now(),
         message: "El profesor ha eliminado una pregunta de la evaluación."
     });
+
+    const attempts = await prisma.evaluationAttempt.findMany({
+        where: { evaluationId },
+        select: { id: true, courseId: true }
+    });
+
+    for (const att of attempts) {
+        emitEvaluationUpdate({
+            attemptId: att.id,
+            evaluationId,
+            type: "QUESTION_UPDATED",
+            timestamp: Date.now(),
+            message: "El profesor ha eliminado una pregunta de la evaluación."
+        });
+        revalidatePath(`/evaluations/${att.id}`);
+        revalidatePath(`/dashboard/teacher/courses/${att.courseId}/evaluations/${att.id}`);
+    }
 
     revalidatePath(`/dashboard/teacher/evaluations/${evaluationId}`);
 }
