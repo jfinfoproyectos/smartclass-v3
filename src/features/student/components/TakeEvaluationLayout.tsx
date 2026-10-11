@@ -301,8 +301,9 @@ export function TakeEvaluationLayout({
     }, [getClientDeviceId]);
 
     // Captura de IP pública WAN, huella digital de dispositivo y latido periódico de seguridad
+    // Activo EXCLUSIVAMENTE durante la presentación de la evaluación (hasStarted === true && !isSubmitted)
     useEffect(() => {
-        if (!mounted || isSubmitted || !submission?.id) return;
+        if (!mounted || !hasStarted || isSubmitted || !submission?.id) return;
 
         let isCancelled = false;
 
@@ -360,7 +361,7 @@ export function TakeEvaluationLayout({
             } catch {}
         };
 
-        // Latido inicial inmediato
+        // Latido inicial inmediato al comenzar la presentación
         syncPublicIp("session_start");
 
         // Latido periódico frecuente (cada 12s) para detección rápida de concurrencia
@@ -399,7 +400,7 @@ export function TakeEvaluationLayout({
             window.removeEventListener("beforeunload", handleUnloadSession);
             window.removeEventListener("pagehide", handleUnloadSession);
         };
-    }, [mounted, isSubmitted, submission?.id, getClientDeviceId]);
+    }, [mounted, hasStarted, isSubmitted, submission?.id, getClientDeviceId]);
 
     // Refs para acceder a las respuestas y pregunta activa en eventos asíncronos
     const answersRef = useRef<Record<string, string>>({});
