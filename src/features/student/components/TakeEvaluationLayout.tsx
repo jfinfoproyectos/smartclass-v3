@@ -266,7 +266,7 @@ export function TakeEvaluationLayout({
         Boolean(initialWildcards.multipleIpAlert || (Array.isArray(initialWildcards.effectiveIps || initialWildcards.detectedIps) && (initialWildcards.effectiveIps || initialWildcards.detectedIps).length > 1))
     );
     const [multipleDevicesAlert, setMultipleDevicesAlert] = useState<boolean>(
-        Boolean(initialWildcards.multipleDevicesAlert || (Array.isArray(initialWildcards.activeDevices) && initialWildcards.activeDevices.length > 1))
+        Boolean(initialWildcards.multipleDevicesAlert)
     );
     const [activeDevicesList, setActiveDevicesList] = useState<any[]>(
         Array.isArray(initialWildcards.activeDevices) ? initialWildcards.activeDevices : []
@@ -346,26 +346,15 @@ export function TakeEvaluationLayout({
                     if (Array.isArray((res as any).activeDevices) && (res as any).activeDevices.length > 0) {
                         setActiveDevicesList((res as any).activeDevices);
                     }
-                    if (res.multipleIpAlert) {
-                        setMultipleIpAlert(true);
-                        setShowIpAlertModal(true);
-                        toast.error("🚨 Alerta: Múltiples Direcciones IP", {
-                            description: "Se detectó la prueba abierta desde distintas direcciones IP o ubicaciones. Tu docente ha sido notificado.",
-                            duration: 10000,
-                        });
-                    }
-                    if (res.multipleDevicesAlert) {
-                        setMultipleDevicesAlert(true);
-                        setShowIpAlertModal(true);
-                        toast.error("🚨 Alerta: Sesiones Simultáneas", {
-                            description: `Se detectó la prueba abierta en más de un dispositivo (${res.activeDevicesCount || 2} equipos/navegadores). Tu docente ha sido notificado.`,
-                            duration: 10000,
-                        });
-                        try {
-                            if (typeof window !== "undefined" && "navigator" in window && navigator.vibrate) {
-                                navigator.vibrate([200, 100, 200, 100, 300]);
-                            }
-                        } catch {}
+                    const hasIpAlert = Boolean(res.multipleIpAlert);
+                    const hasDeviceAlert = Boolean(res.multipleDevicesAlert);
+
+                    setMultipleIpAlert(hasIpAlert);
+                    setMultipleDevicesAlert(hasDeviceAlert);
+
+                    // Si ya no hay alertas de sesiones simultáneas ni IPs, cerrar modal automáticamente para continuar sin interrupción
+                    if (!hasDeviceAlert && !hasIpAlert) {
+                        setShowIpAlertModal(false);
                     }
                 }
             } catch {}
@@ -388,11 +377,27 @@ export function TakeEvaluationLayout({
         window.addEventListener("focus", handleFocusOrVisible);
         document.addEventListener("visibilitychange", handleFocusOrVisible);
 
+        // Notificar al servidor inmediatamente si esta ventana/pestaña se cierra para liberar la sesión
+        const handleUnloadSession = () => {
+            try {
+                recordEvaluationIpAction(
+                    submission.id,
+                    undefined,
+                    "session_close",
+                    getDevicePayload()
+                );
+            } catch {}
+        };
+        window.addEventListener("beforeunload", handleUnloadSession);
+        window.addEventListener("pagehide", handleUnloadSession);
+
         return () => {
             isCancelled = true;
             clearInterval(heartbeatTimer);
             window.removeEventListener("focus", handleFocusOrVisible);
             document.removeEventListener("visibilitychange", handleFocusOrVisible);
+            window.removeEventListener("beforeunload", handleUnloadSession);
+            window.removeEventListener("pagehide", handleUnloadSession);
         };
     }, [mounted, isSubmitted, submission?.id, getClientDeviceId]);
 
@@ -540,34 +545,19 @@ export function TakeEvaluationLayout({
                         if (Array.isArray(data.ips) && data.ips.length > 0) {
                             setDetectedIps(data.ips);
                         }
-                        setShowIpAlertModal(true);
-                        toast.error("🚨 Alerta de Seguridad Crítica", {
-                            description: data.message || "Se ha detectado la presentación de la prueba desde dos lugares o IPs diferentes.",
-                            duration: 10000,
-                        });
-                        try {
-                            if (typeof window !== "undefined" && "navigator" in window && navigator.vibrate) {
-                                navigator.vibrate([200, 100, 200, 100, 300]);
-                            }
-                        } catch {}
                         return;
                     }
                     if (data?.type === "CONCURRENT_SESSION_DETECTED") {
                         if (!isForThisStudent) return;
-                        setMultipleDevicesAlert(true);
+                        const isConcurrent = data.deviceInfo?.isConcurrent !== false;
+                        setMultipleDevicesAlert(isConcurrent);
                         if (Array.isArray(data.deviceInfo?.devices)) {
                             setActiveDevicesList(data.deviceInfo.devices);
                         }
-                        setShowIpAlertModal(true);
-                        toast.error("🚨 Alerta: Sesiones Simultáneas", {
-                            description: data.message || "Se ha detectado la prueba abierta en más de un dispositivo o navegador simultáneamente.",
-                            duration: 10000,
-                        });
-                        try {
-                            if (typeof window !== "undefined" && "navigator" in window && navigator.vibrate) {
-                                navigator.vibrate([200, 100, 200, 100, 300]);
-                            }
-                        } catch {}
+                        // Si las sesiones adicionales se cerraron, ocultar el modal si estaba visible para continuar
+                        if (!isConcurrent) {
+                            setShowIpAlertModal(false);
+                        }
                         return;
                     }
                     if (data?.type === "EVALUATION_LOCKED") {

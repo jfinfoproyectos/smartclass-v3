@@ -367,6 +367,15 @@ export async function recordIpForSubmission(
             }
         }
 
+        // Si se reporta explícitamente el cierre de sesión/pestaña de este dispositivo
+        if (actionName === "session_close" && currentDeviceId) {
+            const cIdx = activeDevices.findIndex((d: any) => d.id === currentDeviceId);
+            if (cIdx >= 0) {
+                activeDevices[cIdx].isClosed = true;
+                activeDevices[cIdx].closedAt = nowIso;
+            }
+        }
+
         const historyIndex = prevHistory.findIndex((h: any) => h.ip === currentIp);
         if (historyIndex >= 0) {
             prevHistory[historyIndex] = {
@@ -396,8 +405,17 @@ export async function recordIpForSubmission(
         const hasMultipleIps = effectiveIps.length > 1;
         const wasAlreadyAlertedIps = Boolean(currentWildcards.multipleIpAlert);
 
-        // Detección de múltiples dispositivos concurrentes (ej. misma red escolar / misma IP institucional pero 2 computadores)
-        const hasMultipleDevices = activeDevices.length > 1;
+        // Detección de dispositivos ACTIVOS en tiempo real (heartbeat en los últimos 28s y no cerrados)
+        const nowMs = Date.now();
+        const liveActiveDevices = activeDevices.filter((d: any) => {
+            if (d.isClosed) return false;
+            const lastSeenMs = d.lastSeen ? new Date(d.lastSeen).getTime() : 0;
+            return (nowMs - lastSeenMs) < 28000;
+        });
+
+        // La alerta activa aplica únicamente si hay 2 o más dispositivos concurrentes EN VIVO en este instante
+        const hasMultipleDevices = liveActiveDevices.length > 1;
+        const hadMultipleDevicesEver = Boolean(currentWildcards.hadHistoricalMultipleDevices || activeDevices.length > 1);
 
         const updatedWildcards = {
             ...currentWildcards,
@@ -406,11 +424,13 @@ export async function recordIpForSubmission(
             detectedIps: rawDetectedIps,
             effectiveIps,
             activeDevices,
+            liveDevicesCount: liveActiveDevices.length,
             multipleIpAlert: hasMultipleIps,
             multipleIpAlertTriggeredAt: (hasMultipleIps && !currentWildcards.multipleIpAlertTriggeredAt)
                 ? nowIso
                 : currentWildcards.multipleIpAlertTriggeredAt,
             multipleDevicesAlert: hasMultipleDevices,
+            hadHistoricalMultipleDevices: hadMultipleDevicesEver,
             multipleDevicesAlertTriggeredAt: (hasMultipleDevices && !currentWildcards.multipleDevicesAlertTriggeredAt)
                 ? nowIso
                 : currentWildcards.multipleDevicesAlertTriggeredAt,
@@ -444,7 +464,7 @@ export async function recordIpForSubmission(
             }
         }
 
-        // Caso B: Alerta de múltiples dispositivos bajo la misma IP (o diferentes)
+        // Caso B: Alerta o cese de múltiples dispositivos bajo la misma IP (o diferentes)
         if (hasMultipleDevices) {
             try {
                 const { emitEvaluationUpdate } = await import("@/lib/evaluationEvents");
@@ -457,10 +477,11 @@ export async function recordIpForSubmission(
                     timestamp: Date.now(),
                     ips: effectiveIps,
                     deviceInfo: {
-                        devicesCount: activeDevices.length,
-                        devices: activeDevices,
+                        isConcurrent: true,
+                        devicesCount: liveActiveDevices.length,
+                        devices: liveActiveDevices,
                     },
-                    message: `🚨 ALERTA DE SESIONES SIMULTÁNEAS: Se ha detectado la prueba abierta en ${activeDevices.length} dispositivos diferentes (misma o diferente IP). Posible duplicación de sesión en la misma red o institución.`,
+                    message: `🚨 ALERTA DE SESIONES SIMULTÁNEAS: Se ha detectado la prueba abierta en ${liveActiveDevices.length} dispositivos diferentes simultáneamente.`,
                 });
             } catch (sseErr) {
                 console.error("Error al emitir evento CONCURRENT_SESSION_DETECTED SSE:", sseErr);
@@ -475,22 +496,44 @@ export async function recordIpForSubmission(
                     userId: submission.user?.id || submission.userId,
                     userName: submission.user?.name || "Estudiante",
                     userRole: submission.user?.role || "student",
-                    description: `ALERTA DE SEGURIDAD: Concurrencia de ${activeDevices.length} dispositivos en la misma evaluación. Entrega: ${submissionId}`,
+                    description: `ALERTA DE SEGURIDAD: Concurrencia de ${liveActiveDevices.length} dispositivos en la misma evaluación. Entrega: ${submissionId}`,
                     success: true,
                     metadata: {
-                        devicesCount: activeDevices.length,
-                        activeDevices,
+                        devicesCount: liveActiveDevices.length,
+                        activeDevices: liveActiveDevices,
                         action: actionName,
                     }
                 });
             } catch (auditErr) {
                 console.error("Error al registrar auditoría de dispositivos concurrentes:", auditErr);
             }
-
-            if (submission.attempt?.courseId) {
-                revalidatePath(`/dashboard/teacher/courses/${submission.attempt.courseId}/evaluations/${submission.attemptId}`);
-                revalidatePath(`/dashboard/teacher/courses/${submission.attempt.courseId}/evaluations/${submission.attemptId}/submissions/${submission.id}`);
+        } else if (currentWildcards.multipleDevicesAlert) {
+            // Las otras sesiones se cerraron: emitir cese de concurrencia para que el estudiante continúe
+            try {
+                const { emitEvaluationUpdate } = await import("@/lib/evaluationEvents");
+                emitEvaluationUpdate({
+                    attemptId: submission.attemptId,
+                    evaluationId: submission.attempt?.evaluationId,
+                    submissionId: submission.id,
+                    studentId: submission.userId,
+                    type: "CONCURRENT_SESSION_DETECTED",
+                    timestamp: Date.now(),
+                    ips: effectiveIps,
+                    deviceInfo: {
+                        isConcurrent: false,
+                        devicesCount: liveActiveDevices.length,
+                        devices: liveActiveDevices,
+                    },
+                    message: "Sesiones adicionales cerradas. Evaluación en curso normal.",
+                });
+            } catch (sseErr) {
+                console.error("Error al emitir cese de alerta SSE:", sseErr);
             }
+        }
+
+        if (submission.attempt?.courseId) {
+            revalidatePath(`/dashboard/teacher/courses/${submission.attempt.courseId}/evaluations/${submission.attemptId}`);
+            revalidatePath(`/dashboard/teacher/courses/${submission.attempt.courseId}/evaluations/${submission.attemptId}/submissions/${submission.id}`);
         }
 
         return {
@@ -498,8 +541,9 @@ export async function recordIpForSubmission(
             detectedIps: effectiveIps,
             multipleIpAlert: hasMultipleIps,
             multipleDevicesAlert: hasMultipleDevices,
-            activeDevicesCount: activeDevices.length,
-            activeDevices,
+            activeDevicesCount: liveActiveDevices.length,
+            totalDevicesCount: activeDevices.length,
+            activeDevices: liveActiveDevices,
             currentIp,
         };
     } catch (err) {

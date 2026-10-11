@@ -1089,7 +1089,9 @@ export function SubmissionsManager({
                                                     : wildcards.initialIp ? [wildcards.initialIp] : [];
                                                 const subHasMultipleIps = Boolean(wildcards.multipleIpAlert || subDetectedIps.length > 1);
                                                 const activeDevices: any[] = Array.isArray(wildcards.activeDevices) ? wildcards.activeDevices : [];
-                                                const subHasMultipleDevices = Boolean(wildcards.multipleDevicesAlert || activeDevices.length > 1);
+                                                const isConcurrentLive = Boolean(wildcards.multipleDevicesAlert);
+                                                const hasHistoricalDevices = Boolean(wildcards.hadHistoricalMultipleDevices || activeDevices.length > 1);
+                                                const subHasMultipleDevices = isConcurrentLive || hasHistoricalDevices;
                                                 const fraudAttempts: any[] = Array.isArray(wildcards.fraudAttempts) ? wildcards.fraudAttempts : [];
                                                 const subHasFraud = Boolean(wildcards.hasFraudAlert || fraudAttempts.length > 0);
 
@@ -1372,19 +1374,31 @@ export function SubmissionsManager({
                                                                             <button
                                                                                 type="button"
                                                                                 onClick={() => setSelectedIpDetails({ studentName, sub, wildcards })}
-                                                                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-black bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/35 hover:bg-amber-500/25 transition-colors cursor-pointer animate-pulse"
+                                                                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-black transition-colors cursor-pointer ${
+                                                                                    isConcurrentLive
+                                                                                        ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/40 hover:bg-rose-500/25 animate-pulse"
+                                                                                        : "bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/25 hover:bg-amber-500/20"
+                                                                                }`}
                                                                             >
                                                                                 <Laptop className="w-3.5 h-3.5" />
-                                                                                <span>{activeDevices.length} Equipos</span>
+                                                                                <span>
+                                                                                    {isConcurrentLive
+                                                                                        ? `${wildcards.liveDevicesCount || activeDevices.length} Equipos Activos`
+                                                                                        : `${activeDevices.length} Equipos (Cerrado)`}
+                                                                                </span>
                                                                             </button>
                                                                         </TooltipTrigger>
                                                                         <TooltipContent side="top" className="max-w-xs space-y-1 text-left">
-                                                                            <p className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1 text-xs">
+                                                                            <p className={`font-bold flex items-center gap-1 text-xs ${isConcurrentLive ? "text-rose-600 dark:text-rose-400" : "text-amber-600 dark:text-amber-400"}`}>
                                                                                 <Laptop className="w-3.5 h-3.5" />
-                                                                                🚨 Alerta: Sesiones Simultáneas / Varios Dispositivos
+                                                                                {isConcurrentLive
+                                                                                    ? "🚨 Alerta Activa: Sesiones Simultáneas en Vivo"
+                                                                                    : "⚠️ Registro: Equipos Concurrentes Detectados (Sesión Cerrada)"}
                                                                             </p>
                                                                             <p className="text-[11px] text-muted-foreground">
-                                                                                Se detectó la prueba abierta en {activeDevices.length} computadores o navegadores distintos (posiblemente bajo la misma IP institucional). Clic para ver detalles.
+                                                                                {isConcurrentLive
+                                                                                    ? `Se detectó la prueba abierta en ${wildcards.liveDevicesCount || activeDevices.length} computadores en tiempo real. Clic para ver detalles.`
+                                                                                    : `Hubo ${activeDevices.length} dispositivos conectados previamente. El estudiante cerró las sesiones adicionales y continuó con su examen.`}
                                                                             </p>
                                                                         </TooltipContent>
                                                                     </Tooltip>
