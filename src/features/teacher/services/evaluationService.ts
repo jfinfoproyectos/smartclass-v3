@@ -627,6 +627,15 @@ export const evaluationService = {
                     answersList: true
                 }
             });
+        } else if (clientIp) {
+            // Registrar conexión / visita para auditoría de IPs y dispositivos concurrentes
+            import("@/features/student/actions/evaluationActions")
+                .then(({ recordIpForSubmission }) => {
+                    recordIpForSubmission(submission!.id, clientIp, "page_load", {
+                        browserInfo: userAgent ? userAgent.substring(0, 150) : undefined,
+                    }).catch(() => {});
+                })
+                .catch(() => {});
         }
 
         return submission;

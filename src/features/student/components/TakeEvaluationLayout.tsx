@@ -279,20 +279,26 @@ export function TakeEvaluationLayout({
     const [showIpAlertModal, setShowIpAlertModal] = useState(false);
 
     // Identificador único de sesión / dispositivo local del navegador
+    const getClientDeviceId = useCallback((): string => {
+        if (typeof window === "undefined") return "";
+        try {
+            let dId = localStorage.getItem(`eval_device_${submission?.id}`) || sessionStorage.getItem(`eval_device_${submission?.id}`);
+            if (!dId) {
+                dId = `dev_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+                try { localStorage.setItem(`eval_device_${submission?.id}`, dId); } catch {}
+                try { sessionStorage.setItem(`eval_device_${submission?.id}`, dId); } catch {}
+            }
+            return dId;
+        } catch {
+            return `dev_${Date.now()}`;
+        }
+    }, [submission?.id]);
+
     const localDeviceIdRef = useRef<string>("");
     useEffect(() => {
         if (typeof window === "undefined") return;
-        try {
-            let dId = sessionStorage.getItem(`eval_device_${submission?.id}`);
-            if (!dId) {
-                dId = `dev_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-                sessionStorage.setItem(`eval_device_${submission?.id}`, dId);
-            }
-            localDeviceIdRef.current = dId;
-        } catch {
-            localDeviceIdRef.current = `dev_${Date.now()}`;
-        }
-    }, [submission?.id]);
+        localDeviceIdRef.current = getClientDeviceId();
+    }, [getClientDeviceId]);
 
     // Captura de IP pública WAN, huella digital de dispositivo y latido periódico de seguridad
     useEffect(() => {
@@ -302,8 +308,9 @@ export function TakeEvaluationLayout({
 
         const getDevicePayload = () => {
             if (typeof window === "undefined") return undefined;
+            const currentId = localDeviceIdRef.current || getClientDeviceId();
             return {
-                deviceId: localDeviceIdRef.current,
+                deviceId: currentId,
                 screenRes: `${window.screen?.width || 0}x${window.screen?.height || 0}`,
                 browserInfo: navigator.userAgent?.substring(0, 150) || "N/A",
                 platform: navigator.platform || "N/A",
@@ -336,27 +343,58 @@ export function TakeEvaluationLayout({
                     if (Array.isArray(res.detectedIps) && res.detectedIps.length > 0) {
                         setDetectedIps(res.detectedIps);
                     }
+                    if (Array.isArray((res as any).activeDevices) && (res as any).activeDevices.length > 0) {
+                        setActiveDevicesList((res as any).activeDevices);
+                    }
                     if (res.multipleIpAlert) {
                         setMultipleIpAlert(true);
+                        setShowIpAlertModal(true);
+                        toast.error("🚨 Alerta: Múltiples Direcciones IP", {
+                            description: "Se detectó la prueba abierta desde distintas direcciones IP o ubicaciones. Tu docente ha sido notificado.",
+                            duration: 10000,
+                        });
                     }
                     if (res.multipleDevicesAlert) {
                         setMultipleDevicesAlert(true);
+                        setShowIpAlertModal(true);
+                        toast.error("🚨 Alerta: Sesiones Simultáneas", {
+                            description: `Se detectó la prueba abierta en más de un dispositivo (${res.activeDevicesCount || 2} equipos/navegadores). Tu docente ha sido notificado.`,
+                            duration: 10000,
+                        });
+                        try {
+                            if (typeof window !== "undefined" && "navigator" in window && navigator.vibrate) {
+                                navigator.vibrate([200, 100, 200, 100, 300]);
+                            }
+                        } catch {}
                     }
                 }
             } catch {}
         };
 
+        // Latido inicial inmediato
         syncPublicIp("session_start");
 
+        // Latido periódico frecuente (cada 12s) para detección rápida de concurrencia
         const heartbeatTimer = setInterval(() => {
             syncPublicIp("heartbeat");
-        }, 45000);
+        }, 12000);
+
+        // Detección al enfocar la ventana o cambiar de pestaña
+        const handleFocusOrVisible = () => {
+            if (document.visibilityState === "visible") {
+                syncPublicIp("focus_sync");
+            }
+        };
+        window.addEventListener("focus", handleFocusOrVisible);
+        document.addEventListener("visibilitychange", handleFocusOrVisible);
 
         return () => {
             isCancelled = true;
             clearInterval(heartbeatTimer);
+            window.removeEventListener("focus", handleFocusOrVisible);
+            document.removeEventListener("visibilitychange", handleFocusOrVisible);
         };
-    }, [mounted, isSubmitted, submission?.id]);
+    }, [mounted, isSubmitted, submission?.id, getClientDeviceId]);
 
     // Refs para acceder a las respuestas y pregunta activa en eventos asíncronos
     const answersRef = useRef<Record<string, string>>({});
@@ -991,6 +1029,9 @@ export function TakeEvaluationLayout({
                 isMaximized={isMaximized}
                 expulsionReason={expulsionReason}
                 expulsionsCount={expulsionsCount}
+                detectedIps={detectedIps}
+                multipleIpAlert={multipleIpAlert}
+                multipleDevicesAlert={multipleDevicesAlert}
                 onStart={() => {
                     setExpulsionReason(null);
                     setHasStarted(true);
@@ -1409,29 +1450,31 @@ export function TakeEvaluationLayout({
                                 onClick={() => setShowIpAlertModal(true)}
                                 className={cn(
                                     "flex items-center gap-1.5 px-2.5 h-8 rounded-lg border text-xs font-bold transition-all shadow-2xs select-none cursor-pointer",
-                                    multipleIpAlert
+                                    (multipleIpAlert || multipleDevicesAlert)
                                         ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/40 animate-pulse"
                                         : "bg-muted/30 text-muted-foreground border-border/50 hover:bg-muted/50"
                                 )}
                             >
-                                <Globe className={cn("w-3.5 h-3.5 shrink-0", multipleIpAlert ? "text-rose-500" : "text-muted-foreground")} />
-                                <span className="text-[10px] uppercase hidden sm:inline">IPs:</span>
-                                <span className="font-mono font-black">{Math.max(1, detectedIps.length)}</span>
-                                {multipleIpAlert && (
+                                <Globe className={cn("w-3.5 h-3.5 shrink-0", (multipleIpAlert || multipleDevicesAlert) ? "text-rose-500" : "text-muted-foreground")} />
+                                <span className="text-[10px] uppercase hidden sm:inline">IP:</span>
+                                <span className="font-mono font-black">{detectedIps[0] || (multipleIpAlert ? "Alerta" : "OK")}</span>
+                                {(multipleIpAlert || multipleDevicesAlert) && (
                                     <span className="text-[9px] uppercase font-black bg-rose-600 text-white px-1 py-0.2 rounded ml-0.5">
-                                        Alerta
+                                        {multipleDevicesAlert ? "Equipos" : "Alerta"}
                                     </span>
                                 )}
                             </button>
                         </TooltipTrigger>
                         <TooltipContent side="bottom" align="end" className="max-w-xs p-3 space-y-1.5 bg-popover/95 backdrop-blur-md shadow-xl border-border text-left">
                             <p className="font-bold text-xs flex items-center gap-1.5 text-foreground">
-                                <Globe className={cn("w-3.5 h-3.5", multipleIpAlert ? "text-rose-500" : "text-primary")} />
-                                {multipleIpAlert ? "🚨 Alerta: Múltiples Ubicaciones Detectadas" : "Supervisión de Ubicación e IP"}
+                                <Globe className={cn("w-3.5 h-3.5", (multipleIpAlert || multipleDevicesAlert) ? "text-rose-500" : "text-primary")} />
+                                {multipleIpAlert ? "🚨 Alerta: Múltiples Ubicaciones Detectadas" : multipleDevicesAlert ? "🚨 Alerta: Múltiples Equipos / Sesiones" : "Supervisión de Red y Dispositivo"}
                             </p>
                             <p className="text-[11px] text-muted-foreground">
                                 {multipleIpAlert 
                                     ? `Se detectaron ${detectedIps.length} direcciones IP distintas (${detectedIps.join(", ")}). Clic para ver detalles.` 
+                                    : multipleDevicesAlert
+                                    ? `Se detectó la evaluación abierta en múltiples dispositivos o navegadores. Clic para ver detalles.`
                                     : `Conexión registrada desde tu dirección IP (${detectedIps[0] || "en supervisión"}).`}
                             </p>
                         </TooltipContent>
@@ -1632,15 +1675,17 @@ export function TakeEvaluationLayout({
             {/* Main Workspace */}
             <div className={`flex flex-col flex-1 overflow-hidden z-10 ${isHelpMode ? 'hidden' : 'flex'}`}>
 
-                {/* Banner de Alerta Crítica: Múltiples Direcciones IP Detectadas */}
-                {multipleIpAlert && (
+                {/* Banner de Alerta Crítica: Múltiples Direcciones IP o Sesiones Concurrentes Detectadas */}
+                {(multipleIpAlert || multipleDevicesAlert) && (
                     <div className="w-full bg-rose-500/15 border-b border-rose-500/30 text-rose-800 dark:text-rose-200 px-4 py-2 flex items-center justify-between gap-3 shrink-0 animate-in fade-in slide-in-from-top-1 z-20">
                         <div className="flex items-center gap-2.5 text-xs sm:text-sm min-w-0">
                             <ShieldAlert className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 animate-pulse" />
                             <div className="truncate">
                                 <span className="font-black text-rose-700 dark:text-rose-300">🚨 ALERTA DE SEGURIDAD:</span>{" "}
                                 <span className="font-medium">
-                                    Se detectó actividad o presentación desde <strong>{detectedIps.length} direcciones IP diferentes</strong> ({detectedIps.join(", ")}).
+                                    {multipleIpAlert
+                                        ? `Se detectó actividad o presentación desde ${detectedIps.length} direcciones IP diferentes (${detectedIps.join(", ")}).`
+                                        : "Se detectó la prueba abierta en más de un computador o navegador simultáneamente."}
                                 </span>
                                 <span className="hidden md:inline text-muted-foreground text-xs ml-1">
                                     Tu docente ha recibido esta notificación en tiempo real.

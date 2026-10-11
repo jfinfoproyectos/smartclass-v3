@@ -12,7 +12,7 @@ import {
     CheckCircle, Clock, AlertTriangle, MessageSquare, ShieldAlert, ShieldCheck, 
     Lightbulb, RotateCcw, ArrowRight, ArrowLeft, BellOff, Monitor, Laptop, 
     Maximize2, Keyboard, SlidersHorizontal, ExternalLink, Calendar, BellRing, 
-    AlertCircle, XCircle, CheckCircle2, BookOpen 
+    AlertCircle, XCircle, CheckCircle2, BookOpen, Globe 
 } from "lucide-react";
 import { ModeToggle } from "@/components/theme/ModeToggle";
 import { ThemeSelector } from "@/components/theme/ThemeSelector";
@@ -41,6 +41,9 @@ export interface EvaluationPreExamBarrierProps {
     isMaximized: boolean;
     expulsionReason: "resize" | "multi_screen" | null;
     expulsionsCount: number;
+    detectedIps?: string[];
+    multipleIpAlert?: boolean;
+    multipleDevicesAlert?: boolean;
     onStart: () => void;
     onBack: () => void;
     onOpenTabSwitchesModal: () => void;
@@ -68,10 +71,28 @@ export function EvaluationPreExamBarrier({
     isMaximized,
     expulsionReason,
     expulsionsCount,
+    detectedIps = [],
+    multipleIpAlert = false,
+    multipleDevicesAlert = false,
     onStart,
     onBack,
     onOpenTabSwitchesModal,
 }: EvaluationPreExamBarrierProps) {
+    const [displayIp, setDisplayIp] = React.useState<string>(detectedIps[0] || "");
+
+    React.useEffect(() => {
+        if (detectedIps && detectedIps.length > 0) {
+            setDisplayIp(detectedIps[0]);
+        } else {
+            fetch("https://api.ipify.org?format=json")
+                .then(res => res.json())
+                .then(data => {
+                    if (data?.ip) setDisplayIp(String(data.ip));
+                })
+                .catch(() => {});
+        }
+    }, [detectedIps]);
+
     const canStart = !surveillanceEnabled || (!isMobile && (!blockMultipleDisplays || !hasMultipleScreens) && (!requireFullscreen || isMaximized));
     const startTime = currentAttempt.startTime ? new Date(currentAttempt.startTime) : null;
     const endTime = currentAttempt.endTime ? new Date(currentAttempt.endTime) : null;
@@ -137,6 +158,31 @@ export function EvaluationPreExamBarrier({
                             <RotateCcw className="w-4 h-4" />
                             <span>Reingresar Ahora</span>
                         </Button>
+                    </div>
+                )}
+
+                {/* Banner Destacado de Alerta de IP o Sesiones Concurrentes */}
+                {(multipleIpAlert || multipleDevicesAlert) && (
+                    <div className="p-4 sm:p-5 rounded-2xl border-2 border-rose-500/40 bg-rose-500/10 text-rose-900 dark:text-rose-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-md animate-in fade-in duration-300">
+                        <div className="flex items-start gap-3">
+                            <ShieldAlert className="w-6 h-6 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                            <div className="space-y-1">
+                                <h3 className="font-bold text-sm sm:text-base flex items-center gap-2">
+                                    Alerta de Seguridad: {multipleIpAlert ? "Acceso desde Múltiples Direcciones IP" : "Múltiples Dispositivos Simultáneos"}
+                                    <Badge variant="destructive" className="text-[10px] font-bold">
+                                        Alerta Registrada
+                                    </Badge>
+                                </h3>
+                                <p className="text-xs sm:text-sm text-rose-800 dark:text-rose-300 leading-relaxed">
+                                    {multipleIpAlert
+                                        ? `Se detectó que tu prueba fue abierta desde más de una ubicación o IP (${detectedIps.join(", ")}). Resolver exámenes desde múltiples conexiones simultáneas está prohibido.`
+                                        : "Se detectó que tu prueba está abierta en más de un navegador o computador al mismo tiempo (incluso en la misma institución educativa)."}
+                                </p>
+                                <p className="text-[11px] text-rose-700 dark:text-rose-400 font-medium mt-1">
+                                    ⚠️ Todas las IPs, marcas de tiempo y huellas de equipo han sido enviadas en tiempo real al panel de control de tu docente.
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 )}
 
@@ -377,6 +423,35 @@ export function EvaluationPreExamBarrier({
                                     </div>
                                 </div>
 
+                                {/* Auditoría de Red y Dispositivo Único */}
+                                <div className={cn(
+                                    "p-3 rounded-xl border flex items-start gap-3",
+                                    multipleIpAlert || multipleDevicesAlert
+                                        ? "bg-rose-500/10 border-rose-500/30"
+                                        : "bg-emerald-500/5 border-emerald-500/25"
+                                )}>
+                                    <Globe className={cn(
+                                        "w-4 h-4 shrink-0 mt-0.5",
+                                        multipleIpAlert || multipleDevicesAlert ? "text-rose-500" : "text-emerald-500"
+                                    )} />
+                                    <div className="space-y-0.5">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className="font-bold text-foreground">Auditoría de IP y Equipo</span>
+                                            <Badge variant="outline" className={cn(
+                                                "text-[10px] px-1.5 py-0 font-bold",
+                                                multipleIpAlert || multipleDevicesAlert
+                                                    ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30"
+                                                    : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
+                                            )}>
+                                                {multipleIpAlert || multipleDevicesAlert ? "Alerta Activa" : "Supervisado"}
+                                            </Badge>
+                                        </div>
+                                        <p className="text-muted-foreground text-[11px] leading-relaxed">
+                                            Tu IP pública {displayIp ? `(${displayIp})` : ""} y este equipo quedan auditados. No abras la prueba en otro dispositivo; las sesiones concurrentes generan alerta inmediata.
+                                        </p>
+                                    </div>
+                                </div>
+
                                 {/* Material de ayuda y comodines */}
                                 {hasHelpUrl && (
                                     <div className="p-3 rounded-xl border bg-primary/5 border-primary/25 flex items-start gap-3">
@@ -482,6 +557,17 @@ export function EvaluationPreExamBarrier({
                                         Si usas laptop, evita deslizar con 3 o 4 dedos en el touchpad para no alternar de escritorio virtual ni minimizar la pantalla sin querer.
                                     </p>
                                 </div>
+
+                                {/* Sugerencia 5: Dispositivo y Red Única */}
+                                <div className="p-3.5 rounded-xl border border-border/80 bg-muted/30 space-y-1.5">
+                                    <div className="flex items-center gap-2 font-bold text-foreground">
+                                        <Globe className="w-4 h-4 text-emerald-500 shrink-0" />
+                                        <span>5. No Abras la Prueba en Otros Equipos ni Redes</span>
+                                    </div>
+                                    <p className="text-muted-foreground text-[11px] leading-relaxed">
+                                        El sistema audita tu <strong>dirección IP pública y huella de equipo</strong>. Si abres el examen en un segundo computador, tableta o ventana de incógnito (incluso en la misma institución), se detectará como <strong>sesión concurrente</strong> y se notificará de inmediato al profesor.
+                                    </p>
+                                </div>
                             </CardContent>
                         </Card>
                     </div>
@@ -552,6 +638,28 @@ export function EvaluationPreExamBarrier({
                                         <span className="font-semibold">Conexión</span>
                                     </div>
                                     <span className="font-bold text-[11px]">En línea ✓</span>
+                                </div>
+
+                                {/* Auditoría de Red e IP */}
+                                <div className={cn(
+                                    "p-2.5 rounded-xl border flex items-center justify-between gap-2",
+                                    (multipleIpAlert || multipleDevicesAlert)
+                                        ? "bg-rose-500/10 border-rose-500/25 text-rose-700 dark:text-rose-300"
+                                        : "bg-emerald-500/10 border-emerald-500/25 text-emerald-700 dark:text-emerald-300"
+                                )}>
+                                    <div className="flex items-center gap-2">
+                                        <Globe className="w-4 h-4 shrink-0" />
+                                        <span className="font-semibold">Red / IP</span>
+                                    </div>
+                                    <span className="font-bold text-[11px] font-mono">
+                                        {multipleIpAlert
+                                            ? "Múltiples IPs ⚠️"
+                                            : multipleDevicesAlert
+                                            ? "Múltiples Equipos ⚠️"
+                                            : displayIp
+                                            ? `${displayIp} ✓`
+                                            : "Auditada ✓"}
+                                    </span>
                                 </div>
 
                                 {/* Estado global */}

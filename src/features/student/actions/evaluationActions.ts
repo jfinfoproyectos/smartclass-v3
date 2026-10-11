@@ -314,7 +314,16 @@ export async function recordIpForSubmission(
             ? [...currentWildcards.activeDevices]
             : [];
 
-        const currentDeviceId = devicePayload?.deviceId || submission.deviceId || null;
+        // Si no viene deviceId explícito, generar huella por navegador y resolución
+        let currentDeviceId = devicePayload?.deviceId || null;
+        if (!currentDeviceId && (userAgent || devicePayload?.screenRes)) {
+            const uaSnippet = userAgent ? userAgent.substring(0, 30).replace(/[^a-zA-Z0-9]/g, "") : "ua";
+            currentDeviceId = `fp_${devicePayload?.screenRes || "res"}_${uaSnippet}`;
+        }
+        if (!currentDeviceId) {
+            currentDeviceId = submission.deviceId || `dev_${Date.now()}`;
+        }
+
         const nowIso = new Date().toISOString();
 
         if (!rawDetectedIps.includes(currentIp)) {
@@ -323,7 +332,17 @@ export async function recordIpForSubmission(
 
         // Registrar / actualizar dispositivo en la lista
         if (currentDeviceId) {
-            const devIdx = activeDevices.findIndex((d: any) => d.id === currentDeviceId);
+            const devIdx = activeDevices.findIndex((d: any) => {
+                if (d.id === currentDeviceId) {
+                    // Si el ID coincide pero la resolución o plataforma es distinta, es otro equipo físico
+                    if (devicePayload?.screenRes && d.screenRes && d.screenRes !== "N/A" && d.screenRes !== devicePayload.screenRes) {
+                        return false;
+                    }
+                    return true;
+                }
+                return false;
+            });
+
             const devInfo = {
                 id: currentDeviceId,
                 ip: currentIp,
@@ -332,6 +351,7 @@ export async function recordIpForSubmission(
                 platform: devicePayload?.platform || "N/A",
                 lastSeen: nowIso,
             };
+
             if (devIdx >= 0) {
                 activeDevices[devIdx] = {
                     ...activeDevices[devIdx],
@@ -378,7 +398,6 @@ export async function recordIpForSubmission(
 
         // Detección de múltiples dispositivos concurrentes (ej. misma red escolar / misma IP institucional pero 2 computadores)
         const hasMultipleDevices = activeDevices.length > 1;
-        const wasAlreadyAlertedDevice = Boolean(currentWildcards.multipleDevicesAlert);
 
         const updatedWildcards = {
             ...currentWildcards,
@@ -426,7 +445,7 @@ export async function recordIpForSubmission(
         }
 
         // Caso B: Alerta de múltiples dispositivos bajo la misma IP (o diferentes)
-        if (hasMultipleDevices && !wasAlreadyAlertedDevice) {
+        if (hasMultipleDevices) {
             try {
                 const { emitEvaluationUpdate } = await import("@/lib/evaluationEvents");
                 emitEvaluationUpdate({
@@ -480,6 +499,7 @@ export async function recordIpForSubmission(
             multipleIpAlert: hasMultipleIps,
             multipleDevicesAlert: hasMultipleDevices,
             activeDevicesCount: activeDevices.length,
+            activeDevices,
             currentIp,
         };
     } catch (err) {

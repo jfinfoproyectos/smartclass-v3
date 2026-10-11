@@ -236,6 +236,11 @@ export function SubmissionsManager({
 
         connectSSE();
 
+        // Polling de respaldo cada 12 segundos para entornos serverless (Vercel)
+        const pollingTimer = setInterval(() => {
+            fetchSubmissions(false);
+        }, 12000);
+
         return () => {
             if (eventSource) {
                 eventSource.close();
@@ -244,6 +249,7 @@ export function SubmissionsManager({
             if (reconnectTimeout) {
                 clearTimeout(reconnectTimeout);
             }
+            clearInterval(pollingTimer);
         };
     }, [isMounted, attempt?.id, fetchSubmissions]);
 
