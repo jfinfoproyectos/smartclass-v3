@@ -31,10 +31,10 @@ interface AudioVoiceRecorderProps {
     url?: string;
     durationSec?: number;
   } | null) => void;
-  onLiveTranscript: (text: string) => void;
+  onTranscriptionComplete?: (text: string) => void;
 }
 
-export function AudioVoiceRecorder({ onAudioReady, onLiveTranscript }: AudioVoiceRecorderProps) {
+export function AudioVoiceRecorder({ onAudioReady, onTranscriptionComplete }: AudioVoiceRecorderProps) {
   const [activeTab, setActiveTab] = useState<"mic" | "upload" | "url">("mic");
 
   // Estados de Grabación en Vivo
@@ -47,6 +47,10 @@ export function AudioVoiceRecorder({ onAudioReady, onLiveTranscript }: AudioVoic
   // Web Speech API
   const [liveTranscriptActive, setLiveTranscriptActive] = useState(true);
   const speechRecognitionRef = useRef<any>(null);
+  const isRecordingRef = useRef(false);
+  const accumulatedTranscriptRef = useRef("");
+  const currentSessionTranscriptRef = useRef("");
+  const [liveTranscriptPreview, setLiveTranscriptPreview] = useState("");
 
   // MediaRecorder refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -64,11 +68,15 @@ export function AudioVoiceRecorder({ onAudioReady, onLiveTranscript }: AudioVoic
   // Limpieza al desmontar
   useEffect(() => {
     return () => {
+      isRecordingRef.current = false;
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
       if (recordedBlobUrl) URL.revokeObjectURL(recordedBlobUrl);
       if (uploadedFileUrl) URL.revokeObjectURL(uploadedFileUrl);
       if (speechRecognitionRef.current) {
-        try { speechRecognitionRef.current.stop(); } catch {}
+        try {
+          speechRecognitionRef.current.onend = null;
+          speechRecognitionRef.current.stop();
+        } catch {}
       }
     };
   }, []);
@@ -104,17 +112,33 @@ export function AudioVoiceRecorder({ onAudioReady, onLiveTranscript }: AudioVoic
       recognition.lang = "es-CO"; // Español Colombia / Latinoamérica
 
       recognition.onresult = (event: any) => {
-        let fullTranscript = "";
+        let sessionTranscript = "";
         for (let i = 0; i < event.results.length; i++) {
-          fullTranscript += event.results[i][0].transcript + " ";
+          sessionTranscript += event.results[i][0].transcript + " ";
         }
-        if (fullTranscript.trim()) {
-          onLiveTranscript(fullTranscript.trim());
-        }
+        const cleaned = sessionTranscript.trim();
+        currentSessionTranscriptRef.current = cleaned;
+        setLiveTranscriptPreview(cleaned);
       };
 
       recognition.onerror = (e: any) => {
         console.warn("[SpeechRecognition] Error o silencio:", e.error);
+      };
+
+      recognition.onend = () => {
+        // Si seguimos grabando (p. ej. silencio prolongado), acumular y reiniciar
+        if (isRecordingRef.current) {
+          if (currentSessionTranscriptRef.current) {
+            accumulatedTranscriptRef.current = [
+              accumulatedTranscriptRef.current,
+              currentSessionTranscriptRef.current
+            ].filter(Boolean).join(" ");
+            currentSessionTranscriptRef.current = "";
+          }
+          try {
+            recognition.start();
+          } catch {}
+        }
       };
 
       recognition.start();
@@ -127,6 +151,7 @@ export function AudioVoiceRecorder({ onAudioReady, onLiveTranscript }: AudioVoic
   const stopSpeechRecognition = () => {
     if (speechRecognitionRef.current) {
       try {
+        speechRecognitionRef.current.onend = null;
         speechRecognitionRef.current.stop();
       } catch {}
       speechRecognitionRef.current = null;
@@ -176,6 +201,10 @@ export function AudioVoiceRecorder({ onAudioReady, onLiveTranscript }: AudioVoic
 
       recorder.start(500); // chunks cada 500ms
       mediaRecorderRef.current = recorder;
+      isRecordingRef.current = true;
+      accumulatedTranscriptRef.current = "";
+      currentSessionTranscriptRef.current = "";
+      setLiveTranscriptPreview("");
       setIsRecording(true);
       setIsPaused(false);
       setRecordSeconds(0);
@@ -204,30 +233,60 @@ export function AudioVoiceRecorder({ onAudioReady, onLiveTranscript }: AudioVoic
       timerIntervalRef.current = setInterval(() => {
         setRecordSeconds((prev) => prev + 1);
       }, 1000);
+      if (liveTranscriptActive) {
+        startSpeechRecognition();
+      }
     } else {
       mediaRecorderRef.current.pause();
       setIsPaused(true);
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      if (currentSessionTranscriptRef.current) {
+        accumulatedTranscriptRef.current = [
+          accumulatedTranscriptRef.current,
+          currentSessionTranscriptRef.current
+        ].filter(Boolean).join(" ");
+        currentSessionTranscriptRef.current = "";
+      }
+      stopSpeechRecognition();
     }
   };
 
   // Detener Grabación
   const stopRecording = () => {
+    isRecordingRef.current = false;
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+
+    const finalTranscript = [
+      accumulatedTranscriptRef.current,
+      currentSessionTranscriptRef.current
+    ].filter(Boolean).join(" ").trim();
+
     stopSpeechRecognition();
+    accumulatedTranscriptRef.current = "";
+    currentSessionTranscriptRef.current = "";
+    setLiveTranscriptPreview("");
+
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
       setIsPaused(false);
     }
+
+    if (finalTranscript && onTranscriptionComplete) {
+      onTranscriptionComplete(finalTranscript);
+    }
   };
 
   // Limpiar Grabación
   const clearRecording = () => {
+    isRecordingRef.current = false;
     if (recordedBlobUrl) URL.revokeObjectURL(recordedBlobUrl);
     setRecordedBlobUrl(null);
     setRecordedFileName(null);
     setRecordSeconds(0);
+    accumulatedTranscriptRef.current = "";
+    currentSessionTranscriptRef.current = "";
+    setLiveTranscriptPreview("");
     onAudioReady(null);
   };
 
@@ -369,8 +428,13 @@ export function AudioVoiceRecorder({ onAudioReady, onLiveTranscript }: AudioVoic
                     )}
                   </div>
                   <p className="text-[11px] text-muted-foreground text-center">
-                    Habla claramente. El audio se grabará y las palabras se transcribirán en tiempo real.
+                    Habla claramente. Al finalizar la grabación, la transcripción se agregará a tus notas.
                   </p>
+                  {liveTranscriptPreview && (
+                    <div className="max-w-xs sm:max-w-md px-3 py-1.5 rounded-lg bg-background/80 border border-border/60 text-[11px] text-muted-foreground italic truncate text-center animate-in fade-in">
+                      🎙️ &quot;{liveTranscriptPreview}&quot;
+                    </div>
+                  )}
                   <div className="flex items-center gap-2 pt-1">
                     <Button
                       type="button"

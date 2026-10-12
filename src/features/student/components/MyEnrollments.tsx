@@ -42,14 +42,6 @@ const getActivityTypeInfo = (type: string) => {
                 accentColor: "from-orange-500/30 via-orange-500/10 to-transparent",
                 iconBg: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
             };
-        case "WORKSHOP_CODE":
-            return {
-                label: "Taller Codelab",
-                icon: Terminal,
-                badgeColor: "bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/25",
-                accentColor: "from-purple-500/30 via-purple-500/10 to-transparent",
-                iconBg: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
-            };
         case "GITHUB":
             return {
                 label: "IA GitHub",

@@ -851,7 +851,6 @@ export function ActivityDetail({
                             {activity.type === "GITHUB" && <Github className="h-3 w-3 text-primary" />}
                             {activity.type === "CODE_PROJECT" && <Code2 className="h-3 w-3 text-primary" />}
                             {activity.type === "CODE_CHALLENGE" && <Terminal className="h-3 w-3 text-primary" />}
-                            {activity.type === "WORKSHOP_CODE" && <Terminal className="h-3 w-3 text-cyan-500" />}
                             {activity.type === "WORKSHOP_GITHUB" && <GitBranch className="h-3 w-3 text-orange-500" />}
                             {activity.type === "VIDEO_PITCH" && <Video className="h-3 w-3 text-primary" />}
                             {activity.type === "AI_INTERVIEW" && <MessageSquareQuote className="h-3 w-3 text-primary" />}
@@ -866,8 +865,6 @@ export function ActivityDetail({
                                     ? "Proyecto de Código"
                                     : activity.type === "CODE_CHALLENGE"
                                     ? "Desafío Sandbox"
-                                    : activity.type === "WORKSHOP_CODE"
-                                    ? "Taller Codelab"
                                     : activity.type === "WORKSHOP_GITHUB"
                                     ? "Taller Git & GitHub"
                                     : activity.type === "VIDEO_PITCH"
@@ -915,7 +912,7 @@ export function ActivityDetail({
                         </Button>
                     )}
 
-                    {(activity.type === "CODE_CHALLENGE" || activity.type === "WORKSHOP_CODE" || activity.type === "WORKSHOP_GITHUB") && (
+                    {(activity.type === "CODE_CHALLENGE" || activity.type === "WORKSHOP_GITHUB") && (
                         <Button
                             variant="outline"
                             size="sm"
@@ -1151,7 +1148,7 @@ export function ActivityDetail({
                                             ) : status === "submitted" ? (
                                                 isRejected ? (
                                                     <Badge className="bg-rose-500/15 text-rose-900 dark:bg-rose-500/20 dark:text-rose-300 border border-rose-500/30 font-semibold hover:bg-rose-500/20">Rechazado</Badge>
-                                                ) : (activity.type === "GITHUB" || activity.type === "PDF_REVIEW" || activity.type === "CODE_PROJECT" || activity.type === "MANUAL" || activity.type === "CODE_CHALLENGE" || activity.type === "WORKSHOP_CODE" || activity.type === "WORKSHOP_GITHUB") ? (
+                                                ) : (activity.type === "GITHUB" || activity.type === "PDF_REVIEW" || activity.type === "CODE_PROJECT" || activity.type === "MANUAL" || activity.type === "CODE_CHALLENGE" || activity.type === "WORKSHOP_GITHUB") ? (
                                                     <Badge className="bg-amber-500/15 text-amber-900 dark:bg-amber-500/20 dark:text-amber-300 border border-amber-500/30 font-semibold gap-1 hover:bg-amber-500/20 shadow-2xs">
                                                         ⭐ Por Calificar
                                                     </Badge>
@@ -2505,7 +2502,7 @@ export function ActivityDetail({
                                 />
                             )}
 
-                            {(activity.type === "CODE_CHALLENGE" || activity.type === "WORKSHOP_CODE") && (
+                            {activity.type === "CODE_CHALLENGE" && (
                                 <CodeChallengeInspector
                                     student={evalStudent}
                                     submission={evalSubmission}
@@ -2652,7 +2649,7 @@ export function ActivityDetail({
                 <Dialog open={showStudentPreview} onOpenChange={setShowStudentPreview}>
                     <DialogContent showCloseButton={false} className="fixed inset-0 top-0 left-0 z-[100] w-screen h-screen max-w-none! sm:max-w-none! max-h-none! border-none rounded-none translate-x-0! translate-y-0! p-0 flex flex-col bg-background overflow-hidden">
                         <DialogTitle className="sr-only">Modo Estudiante - Vista Previa</DialogTitle>
-                        {(activity.type === "WORKSHOP_CODE" || activity.type === "WORKSHOP_GITHUB") ? (
+                        {activity.type === "WORKSHOP_GITHUB" ? (
                             <div className="flex-1 min-h-0 flex flex-col h-full bg-background">
                                 <div className="p-2 border-b bg-muted/40 flex justify-between items-center px-4 shrink-0">
                                     <span className="font-bold text-xs">Vista Previa Docente — {activity.title}</span>

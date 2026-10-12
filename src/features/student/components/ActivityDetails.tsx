@@ -156,7 +156,6 @@ export function ActivityDetails({ activity, userId, studentName }: ActivityDetai
         activity.type === "AUDIO_DEFENSE" ||
         activity.type === "DB_MODELING" ||
         activity.type === "CODE_PROJECT" ||
-        activity.type === "WORKSHOP_CODE" ||
         activity.type === "WORKSHOP_GITHUB";
 
     return (
@@ -197,7 +196,6 @@ function ActivityContent({ activity, userId, studentName }: ActivityDetailsProps
             return <AudioDefenseActivityDetails activity={activity} userId={userId} studentName={studentName} />;
         case "CODE_PROJECT":
             return <CodeProjectActivityDetails activity={activity} userId={userId} studentName={studentName} />;
-        case "WORKSHOP_CODE":
         case "WORKSHOP_GITHUB":
             return <WorkshopActivityDetails activity={activity} userId={userId} studentName={studentName} />;
         default:

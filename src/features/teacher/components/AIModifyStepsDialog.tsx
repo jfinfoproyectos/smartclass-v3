@@ -56,7 +56,7 @@ interface AIModifyStepsDialogProps {
     onClose: () => void;
     steps: WorkshopMilestoneItem[];
     statement?: string;
-    workshopType: "WORKSHOP_CODE" | "WORKSHOP_GITHUB";
+    workshopType?: "WORKSHOP_GITHUB";
     techStack?: string;
     onApply: (updatedSteps: WorkshopMilestoneItem[]) => void;
 }
@@ -218,7 +218,7 @@ export function AIModifyStepsDialog({
                                 <DialogTitle className="text-base font-bold flex items-center gap-2">
                                     <span>Modificar Estructura de Pasos con Chat IA</span>
                                     <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20 font-semibold">
-                                        {workshopType === "WORKSHOP_GITHUB" ? "Tutorial GitHub" : "Codelab Monaco"}
+                                        Tutorial GitHub
                                     </Badge>
                                 </DialogTitle>
                                 <DialogDescription className="text-xs text-muted-foreground line-clamp-1">

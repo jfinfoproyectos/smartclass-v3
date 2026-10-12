@@ -234,20 +234,6 @@ const TEMPLATE_MANUAL = `# Entrega Libre (Evaluación Manual sin IA)
 * **Criterio 1 (50%)**: [Descripción]
 * **Criterio 2 (50%)**: [Descripción]`;
 
-const TEMPLATE_WORKSHOP_CODE = `# Taller Codelab de Programación Paso a Paso
-
-## Objetivo del Taller
-Completar de manera práctica y secuencial los pasos de código propuestos en el entorno interactivo.
-
-## Metodología de Trabajo
-- Lee atentamente las instrucciones de cada paso antes de codificar.
-- Utiliza las pistas disponibles si encuentras dificultades.
-- Valida la solución en el editor interactivo y avanza paso a paso.
-
-## Criterios de Evaluación
-* **Resolución de Pasos (70%)**: Cumplimiento de la lógica, estructura y algoritmos solicitados en cada paso.
-* **Buenas Prácticas y Calidad de Código (30%)**: Nomenclatura, modularización, legibilidad y manejo de casos borde.`;
-
 const TEMPLATE_WORKSHOP_GITHUB = `# Tutorial Práctico con Repositorio GitHub
 
 ## Objetivo del Proyecto
@@ -618,15 +604,6 @@ const ACTIVITY_TYPES = [
         description: "Scripts .sql con DDL, DML (inserts/updates/deletes) y diagrama ER. La IA valida sintaxis, normalización e integridad.",
     },
     {
-        id: "WORKSHOP_CODE",
-        title: "Taller Codelab (Paso a Paso)",
-        shortTitle: "Taller Codelab",
-        badge: "Codelab por Pasos",
-        badgeColor: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800/40",
-        icon: Terminal,
-        description: "Codelab guiado con editor Monaco integrado. El alumno resuelve secuencialmente pasos de código con pistas y validación.",
-    },
-    {
         id: "WORKSHOP_GITHUB",
         title: "Tutorial Git & GitHub de Proyectos",
         shortTitle: "Tutorial GitHub",
@@ -993,7 +970,7 @@ function ActivityFormDialog({
     const [description, setDescription] = useState(activity?.description || "**Instrucciones de la actividad**\n\n...");
     const [statement, setStatement] = useState(
         activity?.statement || (
-            (activity?.type === "WORKSHOP_GITHUB" || activity?.type === "WORKSHOP_CODE") ? "" :
+            (activity?.type === "WORKSHOP_GITHUB") ? "" :
             TEMPLATE_GITHUB
         )
     );
@@ -1208,7 +1185,7 @@ function ActivityFormDialog({
     const [pdfMaxPages, setPdfMaxPages] = useState<number>(5);
     const [pdfPageRange, setPdfPageRange] = useState<string>("1-5");
 
-    // Configuración específica para WORKSHOP_CODE y WORKSHOP_GITHUB
+    // Configuración específica para WORKSHOP_GITHUB
     const [workshopDeliveryMode, setWorkshopDeliveryMode] = useState<"TUTORIAL" | "CHALLENGE">("TUTORIAL");
     const [workshopLanguage, setWorkshopLanguage] = useState<string>("java");
     const [workshopEstimatedMinutes, setWorkshopEstimatedMinutes] = useState<number>(45);
@@ -1390,7 +1367,7 @@ function ActivityFormDialog({
             const result = await generateAllWorkshopStepsAction({
                 title: titleInput,
                 topicPrompt: aiAllStepsTopic.trim() || "Construir e implementar secuencialmente paso a paso la totalidad de los requerimientos y componentes definidos en el Enunciado General de la actividad.",
-                workshopType: selectedType === "WORKSHOP_CODE" ? "WORKSHOP_CODE" : "WORKSHOP_GITHUB",
+                workshopType: "WORKSHOP_GITHUB",
                 statement: statement?.trim() || undefined,
                 language: workshopLanguage,
                 techStack: effectiveStack,
@@ -1471,7 +1448,7 @@ function ActivityFormDialog({
                 prompt: aiSingleStepPrompt.trim(),
                 currentInstructions: currentStep.instructions,
                 targetFilePath: currentStep.targetFilePath,
-                workshopType: selectedType === "WORKSHOP_CODE" ? "WORKSHOP_CODE" : "WORKSHOP_GITHUB",
+                workshopType: "WORKSHOP_GITHUB",
                 statement: statement?.trim() || undefined,
                 language: workshopLanguage,
                 techStack: effectiveStack,
@@ -1851,8 +1828,6 @@ function ActivityFormDialog({
             instructions: selectedType === "WORKSHOP_GITHUB"
                 ? (newOrder === 1 ? "Inicializa la estructura del proyecto y prepara los primeros archivos del repositorio." : "Describe el objetivo e indicaciones para este paso...")
                 : "Describe las instrucciones y consignas para este paso...",
-            starterCode: selectedType === "WORKSHOP_CODE" ? "// Código inicial del estudiante\n" : undefined,
-            expectedSolution: selectedType === "WORKSHOP_CODE" ? "// Solución esperada\n" : undefined,
             requiresFile: true,
             requiresGitCommands: true,
             targetFilePath: selectedType === "WORKSHOP_GITHUB" ? defaultStepPath : undefined,
@@ -1863,7 +1838,7 @@ function ActivityFormDialog({
                 { command: "git push origin main", explanation: "Envía los cambios a la rama principal en GitHub." }
             ] : undefined,
             validationRule: selectedType === "WORKSHOP_GITHUB" ? "El archivo debe existir en la rama y no estar vacío" : undefined,
-            hints: selectedType === "WORKSHOP_GITHUB" ? [] : ["Pista de ayuda inicial"],
+            hints: [],
             order: newOrder
         };
         setWorkshopMilestones([...workshopMilestones, newStep]);
@@ -1875,16 +1850,14 @@ function ActivityFormDialog({
         const deadlineVal = typeof document !== "undefined" ? (document.querySelector('input[name="deadlineLocal"]') as HTMLInputElement)?.value : "";
 
         let descObj: any = {};
-        if (selectedType === "WORKSHOP_CODE" || selectedType === "WORKSHOP_GITHUB") {
+        if (selectedType === "WORKSHOP_GITHUB") {
             descObj = {
                 workshopConfig: {
-                    type: selectedType,
-                    deliveryMode: selectedType === "WORKSHOP_GITHUB" ? "TUTORIAL" : workshopDeliveryMode,
+                    type: "WORKSHOP_GITHUB",
+                    deliveryMode: "TUTORIAL",
                     language: workshopLanguage,
                     estimatedMinutes: Number(workshopEstimatedMinutes) || 45,
-                    milestones: selectedType === "WORKSHOP_GITHUB"
-                        ? workshopMilestones.map(m => ({ ...m, hints: [] }))
-                        : workshopMilestones,
+                    milestones: workshopMilestones.map(m => ({ ...m, hints: [] })),
                 }
             };
         } else {
@@ -1998,7 +1971,6 @@ function ActivityFormDialog({
                  activity?.type === "AI_INTERVIEW" ? TEMPLATE_AI_INTERVIEW :
                  activity?.type === "VIDEO_PITCH" ? TEMPLATE_VIDEO_PITCH :
                  activity?.type === "CODE_CHALLENGE" ? TEMPLATE_CODE_CHALLENGE :
-                 activity?.type === "WORKSHOP_CODE" ? "" :
                  activity?.type === "WORKSHOP_GITHUB" ? "" :
                  activity?.type === "PDF_REVIEW" ? TEMPLATE_PDF_REVIEW :
                  activity?.type === "MANUAL" ? TEMPLATE_MANUAL : TEMPLATE_GITHUB)
@@ -2213,7 +2185,6 @@ function ActivityFormDialog({
             statement === TEMPLATE_AI_INTERVIEW || 
             statement === TEMPLATE_VIDEO_PITCH || 
             statement === TEMPLATE_CODE_CHALLENGE || 
-            statement === TEMPLATE_WORKSHOP_CODE || 
             statement === TEMPLATE_WORKSHOP_GITHUB || 
             statement === TEMPLATE_PDF_REVIEW || 
             statement === TEMPLATE_MANUAL)) {
@@ -2223,10 +2194,6 @@ function ActivityFormDialog({
             else if (selectedType === "AI_INTERVIEW") setStatement(TEMPLATE_AI_INTERVIEW);
             else if (selectedType === "VIDEO_PITCH") setStatement(TEMPLATE_VIDEO_PITCH);
             else if (selectedType === "CODE_CHALLENGE") setStatement(TEMPLATE_CODE_CHALLENGE);
-            else if (selectedType === "WORKSHOP_CODE") {
-                setStatement("");
-                setDescription("");
-            }
             else if (selectedType === "WORKSHOP_GITHUB") {
                 setStatement("");
                 setDescription("");
@@ -2575,25 +2542,21 @@ function ActivityFormDialog({
                 criteria,
                 dbConfig: exportData.dbConfig,
             });
-        } else if (selectedType === "WORKSHOP_CODE" || selectedType === "WORKSHOP_GITHUB") {
-            const cleanedMilestones = selectedType === "WORKSHOP_GITHUB"
-                ? workshopMilestones.map(m => ({ ...m, hints: [] }))
-                : workshopMilestones;
-            exportData.workshopDeliveryMode = selectedType === "WORKSHOP_GITHUB" ? "TUTORIAL" : workshopDeliveryMode;
+        } else if (selectedType === "WORKSHOP_GITHUB") {
+            const cleanedMilestones = workshopMilestones.map(m => ({ ...m, hints: [] }));
+            exportData.workshopDeliveryMode = "TUTORIAL";
             exportData.workshopLanguage = workshopLanguage;
             exportData.workshopEstimatedMinutes = Number(workshopEstimatedMinutes) || 45;
             exportData.workshopMilestones = cleanedMilestones;
             exportData.workshopConfig = {
-                type: selectedType,
-                deliveryMode: selectedType === "WORKSHOP_GITHUB" ? "TUTORIAL" : workshopDeliveryMode,
+                type: "WORKSHOP_GITHUB",
+                deliveryMode: "TUTORIAL",
                 language: workshopLanguage,
                 estimatedMinutes: Number(workshopEstimatedMinutes) || 45,
                 milestones: cleanedMilestones,
             };
-            if (selectedType === "WORKSHOP_GITHUB") {
-                const uniquePaths = Array.from(new Set(cleanedMilestones.map(m => m.targetFilePath?.trim()).filter(Boolean)));
-                exportData.filePaths = uniquePaths.join(',');
-            }
+            const uniquePaths = Array.from(new Set(cleanedMilestones.map(m => m.targetFilePath?.trim()).filter(Boolean)));
+            exportData.filePaths = uniquePaths.join(',');
             exportData.description = JSON.stringify({
                 hasChecklist,
                 aiWeight,
@@ -2819,7 +2782,7 @@ function ActivityFormDialog({
                 if (data.dbIncludeQueries !== undefined) setDbIncludeQueries(Boolean(data.dbIncludeQueries));
                 else if (dbScope?.includeQueries !== undefined) setDbIncludeQueries(Boolean(dbScope.includeQueries));
 
-                // 11. Workshop Codelab y Tutorial GitHub
+                // 11. Workshop Tutorial GitHub
                 const workshopCfg = data.workshopConfig || parsedDesc?.workshopConfig;
                 const wMilestones = data.workshopMilestones || workshopCfg?.milestones;
                 if (Array.isArray(wMilestones)) {
@@ -3018,10 +2981,8 @@ function ActivityFormDialog({
                         pageRange: pdfPageRange,
                     }
                 }));
-            } else if (selectedType === "WORKSHOP_CODE" || selectedType === "WORKSHOP_GITHUB") {
-                const cleanedMilestones = selectedType === "WORKSHOP_GITHUB"
-                    ? workshopMilestones.map(m => ({ ...m, hints: [] }))
-                    : workshopMilestones;
+            } else if (selectedType === "WORKSHOP_GITHUB") {
+                const cleanedMilestones = workshopMilestones.map(m => ({ ...m, hints: [] }));
 
                 formData.set("description", JSON.stringify({
                     hasChecklist: hasChecklist,
@@ -3029,18 +2990,16 @@ function ActivityFormDialog({
                     checklistWeight: checklistWeight,
                     criteria: criteria,
                     workshopConfig: {
-                        type: selectedType,
-                        deliveryMode: selectedType === "WORKSHOP_GITHUB" ? "TUTORIAL" : workshopDeliveryMode,
+                        type: "WORKSHOP_GITHUB",
+                        deliveryMode: "TUTORIAL",
                         language: workshopLanguage,
                         estimatedMinutes: Number(workshopEstimatedMinutes) || 45,
                         milestones: cleanedMilestones,
                     }
                 }));
 
-                if (selectedType === "WORKSHOP_GITHUB") {
-                    const uniquePaths = Array.from(new Set(workshopMilestones.map(m => m.targetFilePath?.trim()).filter(Boolean)));
-                    formData.set("filePaths", uniquePaths.join(','));
-                }
+                const uniquePaths = Array.from(new Set(workshopMilestones.map(m => m.targetFilePath?.trim()).filter(Boolean)));
+                formData.set("filePaths", uniquePaths.join(','));
             } else if (selectedType === "GITHUB") {
                 formData.set("description", JSON.stringify({
                     hasChecklist: Boolean(hasChecklist),
@@ -3083,7 +3042,7 @@ function ActivityFormDialog({
 
             if (isEdit) {
                 await updateActivityAction(formData);
-                if ((selectedType === "WORKSHOP_CODE" || selectedType === "WORKSHOP_GITHUB") && workshopMilestones.length === 0) {
+                if (selectedType === "WORKSHOP_GITHUB" && workshopMilestones.length === 0) {
                     toast.info("✓ Actividad actualizada. Recuerda que no tiene pasos configurados aún; puedes planificarlos con IA o crearlos manualmente.", { duration: 5000 });
                 } else {
                     toast.success("✓ Actividad actualizada exitosamente. Los cambios han sido guardados.");
@@ -3092,7 +3051,7 @@ function ActivityFormDialog({
                 onClose();
             } else {
                 await createActivityAction(formData);
-                if ((selectedType === "WORKSHOP_CODE" || selectedType === "WORKSHOP_GITHUB") && workshopMilestones.length === 0) {
+                if (selectedType === "WORKSHOP_GITHUB" && workshopMilestones.length === 0) {
                     toast.info("✓ Actividad creada. Recuerda que no tiene pasos configurados aún; puedes planificarlos con IA o crearlos manualmente.", { duration: 5000 });
                 } else {
                     toast.success("Actividad creada exitosamente");
@@ -3166,7 +3125,7 @@ function ActivityFormDialog({
 
                             {/* Derecha: Botones de Acción */}
                             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                                {(selectedType === "CODE_CHALLENGE" || selectedType === "WORKSHOP_CODE" || selectedType === "WORKSHOP_GITHUB") && (
+                                {(selectedType === "CODE_CHALLENGE" || selectedType === "WORKSHOP_GITHUB") && (
                                     <Button
                                         type="button"
                                         variant="outline"
@@ -3216,7 +3175,7 @@ function ActivityFormDialog({
                                     <FileText className="h-3.5 w-3.5 shrink-0" />
                                     <span>Contenido y Rúbrica</span>
                                 </TabsTrigger>
-                                {(selectedType === "GITHUB" || selectedType === "PDF_REVIEW" || selectedType === "CODE_CHALLENGE" || selectedType === "VIDEO_PITCH" || selectedType === "AUDIO_DEFENSE" || selectedType === "AI_INTERVIEW" || selectedType === "DB_MODELING" || selectedType === "WORKSHOP_CODE" || selectedType === "WORKSHOP_GITHUB") && hasChecklist && (
+                                {(selectedType === "GITHUB" || selectedType === "PDF_REVIEW" || selectedType === "CODE_CHALLENGE" || selectedType === "VIDEO_PITCH" || selectedType === "AUDIO_DEFENSE" || selectedType === "AI_INTERVIEW" || selectedType === "DB_MODELING" || selectedType === "WORKSHOP_GITHUB") && hasChecklist && (
                                     <TabsTrigger value="checklist" className="text-xs px-2.5 sm:px-3.5 h-7 font-semibold gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-xs">
                                         <ListChecks className="h-3.5 w-3.5 text-primary shrink-0" />
                                         <span>Lista de Chequeo</span>
@@ -3323,10 +3282,6 @@ function ActivityFormDialog({
                                                                     } else if (t.id === "CODE_CHALLENGE") {
                                                                         setStatement(TEMPLATE_CODE_CHALLENGE);
                                                                         setDescription(TEMPLATE_CODE_CHALLENGE);
-                                                                    } else if (t.id === "WORKSHOP_CODE") {
-                                                                        setStatement("");
-                                                                        setDescription("");
-                                                                        setWorkshopContentView("statement");
                                                                     } else if (t.id === "WORKSHOP_GITHUB") {
                                                                         setStatement("");
                                                                         setDescription("");
@@ -4552,33 +4507,17 @@ function ActivityFormDialog({
                                             </div>
                                         )}
 
-                                        {/* Configuración específica para WORKSHOP_CODE y WORKSHOP_GITHUB */}
-                                        {(selectedType === "WORKSHOP_CODE" || selectedType === "WORKSHOP_GITHUB") && (
+                                        {/* Configuración específica para WORKSHOP_GITHUB */}
+                                        {selectedType === "WORKSHOP_GITHUB" && (
                                             <div className="space-y-4 flex-1 flex flex-col">
                                                 {/* Banner informativo */}
-                                                <div className={cn(
-                                                    "p-3.5 rounded-xl border text-xs space-y-1.5",
-                                                    selectedType === "WORKSHOP_CODE" 
-                                                        ? "border-cyan-500/20 bg-cyan-500/5" 
-                                                        : "border-orange-500/20 bg-orange-500/5"
-                                                )}>
+                                                <div className="p-3.5 rounded-xl border text-xs space-y-1.5 border-orange-500/20 bg-orange-500/5">
                                                     <div className="flex items-center gap-2 font-bold text-foreground text-xs">
-                                                        {selectedType === "WORKSHOP_CODE" ? (
-                                                            <>
-                                                                <Terminal className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
-                                                                <span>Taller Codelab de Programación (Paso a Paso)</span>
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <GitBranch className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                                                                <span>Tutorial de Proyectos en Git & GitHub (Paso a Paso)</span>
-                                                            </>
-                                                        )}
+                                                        <GitBranch className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                                                        <span>Tutorial de Proyectos en Git & GitHub (Paso a Paso)</span>
                                                     </div>
                                                     <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                                        {selectedType === "WORKSHOP_CODE"
-                                                            ? "Los estudiantes resuelven pasos secuenciales en el editor integrado Monaco, con código inicial, pistas y validación interactiva paso a paso."
-                                                            : "Los estudiantes vinculan su repositorio de GitHub y construyen un proyecto paso a paso, ejecutando comandos Git explicados y verificando interactivamente cada avance."}
+                                                        Los estudiantes vinculan su repositorio de GitHub y construyen un proyecto paso a paso, ejecutando comandos Git explicados y verificando interactivamente cada avance.
                                                     </p>
                                                 </div>
 
@@ -4596,59 +4535,25 @@ function ActivityFormDialog({
 
                                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                         {/* Modo pedagógico */}
-                                                        {selectedType === "WORKSHOP_GITHUB" ? (
-                                                            <div className="space-y-1.5">
-                                                                <Label className="text-xs font-semibold text-foreground">Tipo de Taller</Label>
-                                                                <div className="p-2.5 rounded-lg border border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-300 text-xs flex items-center gap-2.5">
-                                                                    <GitBranch className="h-4 w-4 text-orange-500 shrink-0" />
-                                                                    <div className="space-y-0.5">
-                                                                        <span className="font-bold block">Tutorial Guiado de Proyecto</span>
-                                                                        <span className="text-[10px] text-muted-foreground block leading-tight">
-                                                                            El estudiante construye el proyecto completo en su repositorio con todas las indicaciones, código fuente y comandos Git en cada paso.
-                                                                        </span>
-                                                                    </div>
+                                                        <div className="space-y-1.5">
+                                                            <Label className="text-xs font-semibold text-foreground">Tipo de Taller</Label>
+                                                            <div className="p-2.5 rounded-lg border border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-300 text-xs flex items-center gap-2.5">
+                                                                <GitBranch className="h-4 w-4 text-orange-500 shrink-0" />
+                                                                <div className="space-y-0.5">
+                                                                    <span className="font-bold block">Tutorial Guiado de Proyecto</span>
+                                                                    <span className="text-[10px] text-muted-foreground block leading-tight">
+                                                                        El estudiante construye el proyecto completo en su repositorio con todas las indicaciones, código fuente y comandos Git en cada paso.
+                                                                    </span>
                                                                 </div>
                                                             </div>
-                                                        ) : (
-                                                            <div className="space-y-1.5">
-                                                                <Label className="text-xs font-semibold text-foreground">Modo de Entrega</Label>
-                                                                <div className="grid grid-cols-2 gap-2">
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => setWorkshopDeliveryMode("TUTORIAL")}
-                                                                        className={cn(
-                                                                            "p-2.5 rounded-lg border text-left transition-all text-xs flex flex-col gap-0.5",
-                                                                            workshopDeliveryMode === "TUTORIAL"
-                                                                                ? "border-primary bg-primary/10 text-primary font-bold ring-1 ring-primary/40"
-                                                                                : "border-border hover:bg-muted/40 text-muted-foreground"
-                                                                        )}
-                                                                    >
-                                                                        <span className="flex items-center gap-1.5">🎓 Tutorial Guiado</span>
-                                                                        <span className="text-[10px] opacity-80">Paso a paso con pistas</span>
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => setWorkshopDeliveryMode("CHALLENGE")}
-                                                                        className={cn(
-                                                                            "p-2.5 rounded-lg border text-left transition-all text-xs flex flex-col gap-0.5",
-                                                                            workshopDeliveryMode === "CHALLENGE"
-                                                                                ? "border-primary bg-primary/10 text-primary font-bold ring-1 ring-primary/40"
-                                                                                : "border-border hover:bg-muted/40 text-muted-foreground"
-                                                                        )}
-                                                                    >
-                                                                        <span className="flex items-center gap-1.5">🏆 Reto / Desafío</span>
-                                                                        <span className="text-[10px] opacity-80">Evaluación secuencial</span>
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        )}
+                                                        </div>
                                                     </div>
 
                                                     {/* Tiempo Estimado y Lenguaje / Stack */}
                                                     <div className="grid grid-cols-2 gap-2">
                                                         <div className="space-y-1.5">
                                                             <Label className="text-xs font-semibold text-foreground">
-                                                                {selectedType === "WORKSHOP_GITHUB" ? "Lenguaje / Stack Tecnológico" : "Lenguaje"}
+                                                                Lenguaje / Stack Tecnológico
                                                             </Label>
                                                             <Select value={workshopLanguage} onValueChange={setWorkshopLanguage}>
                                                                 <SelectTrigger className="h-9 text-xs">
@@ -5816,7 +5721,7 @@ function ActivityFormDialog({
                                 activeTab !== "content" && "!hidden"
                             )}
                         >
-                            {(selectedType === "WORKSHOP_CODE" || selectedType === "WORKSHOP_GITHUB") ? (
+                            {selectedType === "WORKSHOP_GITHUB" ? (
                                 <div className="flex flex-col h-full min-h-0 overflow-hidden space-y-2.5">
                                     {/* Sub-cabecera con pestañas de Pasos vs Enunciado */}
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 shrink-0 px-1 pb-2 border-b border-border/70">
@@ -6378,71 +6283,6 @@ function ActivityFormDialog({
                                                             </div>
                                                         </div>
 
-                                                        {/* Código Inicial y Solución Esperada para WORKSHOP_CODE */}
-                                                        {selectedType === "WORKSHOP_CODE" && (
-                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-                                                                <div className="space-y-1.5 p-3 rounded-xl border border-cyan-500/20 bg-cyan-500/[0.03]">
-                                                                    <div className="flex items-center justify-between">
-                                                                        <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                                                                            <Code2 className="h-3.5 w-3.5 text-cyan-500" />
-                                                                            <span>Código Inicial (Plantilla para el Alumno)</span>
-                                                                        </Label>
-                                                                        <Button
-                                                                            type="button"
-                                                                            size="sm"
-                                                                            variant="ghost"
-                                                                            onClick={() => setIsAiSingleStepOpen(true)}
-                                                                            className="h-6 text-[11px] text-cyan-600 dark:text-cyan-400 gap-1"
-                                                                        >
-                                                                            <Sparkles className="h-3 w-3" />
-                                                                            <span>Generar con IA</span>
-                                                                        </Button>
-                                                                    </div>
-                                                                    <Textarea
-                                                                        rows={8}
-                                                                        value={workshopMilestones[activeWorkshopStepIdx].starterCode || ""}
-                                                                        onChange={(e) => {
-                                                                            const updated = [...workshopMilestones];
-                                                                            updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], starterCode: e.target.value };
-                                                                            setWorkshopMilestones(updated);
-                                                                        }}
-                                                                        placeholder="// Código base que verá el estudiante al iniciar este paso"
-                                                                        className="text-xs font-mono bg-background resize-y leading-relaxed"
-                                                                    />
-                                                                </div>
-
-                                                                <div className="space-y-1.5 p-3 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.03]">
-                                                                    <div className="flex items-center justify-between">
-                                                                        <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                                                                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                                                                            <span>Solución Esperada de Referencia (Docente)</span>
-                                                                        </Label>
-                                                                        <Button
-                                                                            type="button"
-                                                                            size="sm"
-                                                                            variant="ghost"
-                                                                            onClick={() => setIsAiSingleStepOpen(true)}
-                                                                            className="h-6 text-[11px] text-emerald-600 dark:text-emerald-400 gap-1"
-                                                                        >
-                                                                            <Sparkles className="h-3 w-3" />
-                                                                            <span>Generar con IA</span>
-                                                                        </Button>
-                                                                    </div>
-                                                                    <Textarea
-                                                                        rows={8}
-                                                                        value={workshopMilestones[activeWorkshopStepIdx].expectedSolution || ""}
-                                                                        onChange={(e) => {
-                                                                            const updated = [...workshopMilestones];
-                                                                            updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], expectedSolution: e.target.value };
-                                                                            setWorkshopMilestones(updated);
-                                                                        }}
-                                                                        placeholder="// Solución correcta de referencia"
-                                                                        className="text-xs font-mono bg-background resize-y leading-relaxed"
-                                                                    />
-                                                                </div>
-                                                            </div>
-                                                        )}
-
                                                         {/* Archivo Objetivo y Comandos Git para WORKSHOP_GITHUB (Tutorial GitHub) */}
                                                         {selectedType === "WORKSHOP_GITHUB" && (() => {
                                                             const currentMilestone = workshopMilestones[activeWorkshopStepIdx];
@@ -6960,80 +6800,7 @@ function ActivityFormDialog({
                                                             );
                                                         })()}
 
-                                                        {/* Pistas Pedagógicas (solo para Codelab) */}
-                                                        {selectedType === "WORKSHOP_CODE" && (
-                                                            <div className="space-y-2 pt-2 border-t border-border/60">
-                                                                <div className="flex items-center justify-between">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <HelpCircle className="h-3.5 w-3.5 text-amber-500" />
-                                                                        <Label className="text-xs font-semibold text-foreground">
-                                                                            Pistas y Orientaciones ({workshopMilestones[activeWorkshopStepIdx].hints?.length || 0})
-                                                                        </Label>
-                                                                    </div>
-                                                                    <div className="flex items-center gap-2">
-                                                                        <Button
-                                                                            type="button"
-                                                                            size="sm"
-                                                                            variant="outline"
-                                                                            disabled={isGeneratingHints}
-                                                                            onClick={() => handleGenerateHintsForStep(activeWorkshopStepIdx)}
-                                                                            className="h-7 text-xs px-2.5 text-amber-700 dark:text-amber-300 border-amber-500/40 hover:bg-amber-500/10 gap-1 cursor-pointer"
-                                                                        >
-                                                                            {isGeneratingHints ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3 text-amber-500" />}
-                                                                            <span>Sugerir Pistas con IA</span>
-                                                                        </Button>
-                                                                        <Button
-                                                                            type="button"
-                                                                            size="sm"
-                                                                            variant="ghost"
-                                                                            onClick={() => {
-                                                                                const updated = [...workshopMilestones];
-                                                                                const currentHints = updated[activeWorkshopStepIdx].hints || [];
-                                                                                updated[activeWorkshopStepIdx] = {
-                                                                                    ...updated[activeWorkshopStepIdx],
-                                                                                    hints: [...currentHints, `Pista ${currentHints.length + 1}`]
-                                                                                };
-                                                                                setWorkshopMilestones(updated);
-                                                                            }}
-                                                                            className="h-7 text-xs px-2 text-primary hover:text-primary"
-                                                                        >
-                                                                            + Agregar Pista
-                                                                        </Button>
-                                                                    </div>
-                                                                </div>
 
-                                                                <div className="flex flex-wrap gap-2">
-                                                                    {(workshopMilestones[activeWorkshopStepIdx].hints || []).map((hint, hIdx) => (
-                                                                        <div key={hIdx} className="flex items-center gap-1.5 bg-background border border-border rounded-lg px-2.5 py-1 text-xs shadow-2xs">
-                                                                            <span className="text-[10px]">💡</span>
-                                                                            <input
-                                                                                value={hint || ""}
-                                                                                onChange={(e) => {
-                                                                                    const updated = [...workshopMilestones];
-                                                                                    const newHints = [...(updated[activeWorkshopStepIdx].hints || [])];
-                                                                                    newHints[hIdx] = e.target.value;
-                                                                                    updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], hints: newHints };
-                                                                                    setWorkshopMilestones(updated);
-                                                                                }}
-                                                                                className="bg-transparent border-none outline-none text-xs w-60 text-foreground"
-                                                                            />
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => {
-                                                                                    const updated = [...workshopMilestones];
-                                                                                    const newHints = (updated[activeWorkshopStepIdx].hints || []).filter((_, i) => i !== hIdx);
-                                                                                    updated[activeWorkshopStepIdx] = { ...updated[activeWorkshopStepIdx], hints: newHints };
-                                                                                    setWorkshopMilestones(updated);
-                                                                                }}
-                                                                                className="text-muted-foreground hover:text-destructive text-sm ml-1 cursor-pointer"
-                                                                            >
-                                                                                ×
-                                                                            </button>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        )}
 
                                                         {selectedType === "WORKSHOP_GITHUB" && (
                                                             <div className="p-3 rounded-xl border border-blue-500/20 bg-blue-500/5 text-xs flex items-center gap-2.5 text-muted-foreground">
@@ -7198,7 +6965,7 @@ function ActivityFormDialog({
                         </TabsContent>
 
                         {/* Pestaña 3: Lista de Chequeo (Evaluación con Criterios) */}
-                        {(selectedType === "GITHUB" || selectedType === "PDF_REVIEW" || selectedType === "CODE_CHALLENGE" || selectedType === "VIDEO_PITCH" || selectedType === "AUDIO_DEFENSE" || selectedType === "AI_INTERVIEW" || selectedType === "DB_MODELING" || selectedType === "WORKSHOP_CODE" || selectedType === "WORKSHOP_GITHUB") && hasChecklist && (
+                        {(selectedType === "GITHUB" || selectedType === "PDF_REVIEW" || selectedType === "CODE_CHALLENGE" || selectedType === "VIDEO_PITCH" || selectedType === "AUDIO_DEFENSE" || selectedType === "AI_INTERVIEW" || selectedType === "DB_MODELING" || selectedType === "WORKSHOP_GITHUB") && hasChecklist && (
                             <TabsContent 
                                 value="checklist" 
                                 forceMount 
@@ -7623,7 +7390,7 @@ function ActivityFormDialog({
                             }
                         }
 
-                        if (selectedType === "WORKSHOP_GITHUB" || selectedType === "WORKSHOP_CODE") {
+                        if (selectedType === "WORKSHOP_GITHUB") {
                             toast.success("¡Enunciado general generado con éxito! Ahora puedes pasar a configurar o planificar los pasos del proyecto.");
                         }
                     }}
@@ -7635,7 +7402,7 @@ function ActivityFormDialog({
             <Dialog open={showStudentPreview} onOpenChange={setShowStudentPreview}>
                 <DialogContent showCloseButton={false} className="fixed inset-0 top-0 left-0 z-[100] w-screen h-screen max-w-none! sm:max-w-none! max-h-none! border-none rounded-none translate-x-0! translate-y-0! p-0 flex flex-col bg-background overflow-hidden">
                     <DialogTitle className="sr-only">Modo Estudiante - Vista Previa</DialogTitle>
-                    {selectedType === "WORKSHOP_CODE" || selectedType === "WORKSHOP_GITHUB" ? (
+                    {selectedType === "WORKSHOP_GITHUB" ? (
                         <WorkshopActivityDetails
                             activity={previewActivity as any}
                             userId="teacher-preview-id"
@@ -7661,7 +7428,7 @@ function ActivityFormDialog({
             onClose={() => setIsAiModifyStepsOpen(false)}
             steps={workshopMilestones}
             statement={statement}
-            workshopType={selectedType === "WORKSHOP_CODE" ? "WORKSHOP_CODE" : "WORKSHOP_GITHUB"}
+            workshopType="WORKSHOP_GITHUB"
             techStack={statementContext.detectedStack || workshopLanguage}
             onApply={(updatedSteps) => {
                 setWorkshopMilestones(updatedSteps);
@@ -8007,14 +7774,6 @@ const getActivityTypeInfo = (type: string) => {
                 badgeColor: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/25",
                 accentColor: "from-emerald-500/30 via-emerald-500/10 to-transparent",
                 iconBg: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-            };
-        case "WORKSHOP_CODE":
-            return {
-                label: "Taller Codelab",
-                icon: Terminal,
-                badgeColor: "bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border-cyan-500/25",
-                accentColor: "from-cyan-500/30 via-cyan-500/10 to-transparent",
-                iconBg: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400",
             };
         case "WORKSHOP_GITHUB":
             return {

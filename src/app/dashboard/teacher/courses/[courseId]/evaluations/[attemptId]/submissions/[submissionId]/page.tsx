@@ -6,11 +6,12 @@ import { evaluationService } from "@/features/teacher/services/evaluationService
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, CheckCircle2, AlertCircle, Gavel, ExternalLink, Globe, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, AlertCircle, Gavel, ExternalLink, Globe, ShieldAlert, Award, Pencil } from 'lucide-react';
 import { formatDateTime, formatDurationHMS, formatDurationHuman } from '@/lib/dateUtils';
 import { FeedbackViewer } from "@/features/student/components/FeedbackViewer";
 import { DownloadSubmissionPDFWrapper as DownloadSubmissionPDF } from "@/features/teacher/components/DownloadSubmissionPDFWrapper";
 import { SubmissionPenaltyDialog } from "@/features/teacher/components/SubmissionPenaltyDialog";
+import { ManualEvaluationGradeDialog } from "@/features/teacher/components/ManualEvaluationGradeDialog";
 import prisma from "@/lib/prisma";
 import { CodeAnswerViewerWrapper } from "@/features/teacher/components/CodeAnswerViewerWrapper";
 import { cn } from "@/lib/utils";
@@ -107,7 +108,27 @@ export default async function SubmissionDetailsPage(
                         {user.email} &bull; Evaluación: {evaluation.title}
                     </p>
                 </div>
-                <div className="flex items-center gap-2 print:hidden">
+                <div className="flex items-center gap-2 print:hidden flex-wrap">
+                    <ManualEvaluationGradeDialog
+                        courseId={courseId}
+                        attemptId={attempt.id}
+                        submissionId={submission.id}
+                        studentId={user.id}
+                        studentName={user.name}
+                        studentEmail={user.email}
+                        currentScore={submission.score !== undefined ? submission.score : null}
+                        wildcardsUsed={submission.wildcardsUsed}
+                        trigger={
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-8 gap-1.5 font-semibold text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-700/60 hover:bg-blue-500/10 shadow-xs cursor-pointer"
+                            >
+                                <Award className="h-4 w-4" />
+                                <span>{wildcards.isManualGrade ? "Modificar Nota Definitiva" : "Asignar Nota Manual"}</span>
+                            </Button>
+                        }
+                    />
                     <SubmissionPenaltyDialog
                         submission={submission}
                         courseId={courseId}
@@ -198,6 +219,12 @@ export default async function SubmissionDetailsPage(
                                 </span>
                             )}
                         </div>
+                        {wildcards.isManualGrade && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30 w-fit mt-0.5">
+                                <Award className="w-3 h-3 shrink-0" />
+                                Nota Definitiva Manual {wildcards.manualGradedBy ? `(${wildcards.manualGradedBy})` : ""}
+                            </span>
+                        )}
                         {penalty > 0 && (
                             <span className="text-[11px] text-muted-foreground">
                                 Nota original sin sanción: <span className="font-semibold text-foreground">{baseScore.toFixed(2)}</span>

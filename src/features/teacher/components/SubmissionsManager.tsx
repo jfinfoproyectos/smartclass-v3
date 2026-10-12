@@ -31,7 +31,8 @@ import {
     Globe,
     History,
     Laptop,
-    Smartphone
+    Smartphone,
+    Pencil
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -84,6 +85,7 @@ import { toast } from "sonner";
 import { TeacherStudentMessageDialog } from "./TeacherStudentMessageDialog";
 import { TeacherBroadcastMessageDialog } from "./TeacherBroadcastMessageDialog";
 import { EvaluationLockToggleButton } from "./EvaluationLockToggleButton";
+import { ManualEvaluationGradeDialog } from "./ManualEvaluationGradeDialog";
 
 interface SubmissionsManagerProps {
     courseId: string;
@@ -1082,6 +1084,10 @@ export function SubmissionsManager({
                                                 const penalty = wildcards.penalty !== undefined ? Number(wildcards.penalty) : 0;
                                                 const baseScore = wildcards.baseScore !== undefined ? Number(wildcards.baseScore) : score;
                                                 const penaltyComment = wildcards.penaltyComment || "";
+                                                const isManualGrade = Boolean(wildcards.isManualGrade);
+                                                const manualGradedBy = wildcards.manualGradedBy || "";
+                                                const originalScore = wildcards.originalScore !== undefined ? wildcards.originalScore : null;
+                                                const manualGradeComment = wildcards.manualGradeComment || "";
                                                 const tabSwitches = wildcards.tabSwitchesCount || 0;
                                                 const timeAway = wildcards.totalTimeAwaySeconds || 0;
                                                 const subDetectedIps: string[] = Array.isArray(wildcards.effectiveIps || wildcards.detectedIps)
@@ -1232,59 +1238,100 @@ export function SubmissionsManager({
 
                                                         {/* Nota Final */}
                                                         <TableCell className="text-center py-3">
-                                                            {isSubmitted && score !== null ? (
-                                                                <div className="inline-flex flex-col items-center gap-0.5">
+                                                            <div className="inline-flex flex-col items-center gap-1">
+                                                                <ManualEvaluationGradeDialog
+                                                                    courseId={courseId}
+                                                                    attemptId={attempt.id}
+                                                                    submissionId={sub.id}
+                                                                    studentId={sub.userId}
+                                                                    studentName={studentName}
+                                                                    studentEmail={sub.user?.email}
+                                                                    currentScore={score}
+                                                                    wildcardsUsed={sub.wildcardsUsed}
+                                                                    onSuccess={() => fetchSubmissions(false)}
+                                                                    trigger={
+                                                                        score !== null ? (
+                                                                            <button
+                                                                                type="button"
+                                                                                className={`text-sm font-black px-2.5 py-0.5 rounded-lg border cursor-pointer hover:ring-2 hover:ring-primary/30 transition-all ${
+                                                                                    isPassing 
+                                                                                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" 
+                                                                                        : "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20"
+                                                                                }`}
+                                                                            >
+                                                                                {score.toFixed(2)}
+                                                                            </button>
+                                                                        ) : (
+                                                                            <button
+                                                                                type="button"
+                                                                                className="text-xs text-muted-foreground font-mono hover:text-primary hover:bg-primary/10 px-2 py-0.5 rounded border border-dashed border-border/70 hover:border-primary/40 transition-colors cursor-pointer"
+                                                                            >
+                                                                                — <span className="text-[10px] text-primary font-sans font-bold">+ Asignar</span>
+                                                                            </button>
+                                                                        )
+                                                                    }
+                                                                    triggerTooltip={
+                                                                        score !== null ? (
+                                                                            <div>
+                                                                                <p className="font-semibold">{isPassing ? "Nota Aprobatoria (≥ 3.0)" : "Nota Reprobatoria (< 3.0)"}</p>
+                                                                                <p className="text-[11px] text-primary font-bold">Clic para modificar nota definitiva manual</p>
+                                                                                {penalty > 0 && (
+                                                                                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                                                                                        Nota tras descuento: {baseScore?.toFixed(2)} - {penalty.toFixed(2)} = {score.toFixed(2)}
+                                                                                    </p>
+                                                                                )}
+                                                                            </div>
+                                                                        ) : (
+                                                                            <p>Clic para asignar una nota definitiva manual a este estudiante</p>
+                                                                        )
+                                                                    }
+                                                                />
+
+                                                                {isManualGrade && (
                                                                     <Tooltip>
                                                                         <TooltipTrigger asChild>
-                                                                            <span className={`text-sm font-black px-2.5 py-0.5 rounded-lg border cursor-default ${
-                                                                                isPassing 
-                                                                                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" 
-                                                                                    : "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20"
-                                                                            }`}>
-                                                                                {score.toFixed(2)}
+                                                                            <span className="text-[9px] font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 border border-blue-500/25 px-1.5 py-0.2 rounded cursor-default flex items-center gap-0.5">
+                                                                                <Pencil className="w-2.5 h-2.5 shrink-0" />
+                                                                                <span>Nota Manual</span>
                                                                             </span>
                                                                         </TooltipTrigger>
-                                                                        <TooltipContent side="top">
-                                                                            <p className="font-semibold">{isPassing ? "Nota Aprobatoria (≥ 3.0)" : "Nota Reprobatoria (< 3.0)"}</p>
-                                                                            {penalty > 0 && (
-                                                                                <p className="text-[11px] text-muted-foreground mt-0.5">
-                                                                                    Nota final tras descuento: {baseScore?.toFixed(2)} - {penalty.toFixed(2)} = {score.toFixed(2)}
-                                                                                </p>
-                                                                            )}
+                                                                        <TooltipContent side="top" className="max-w-xs space-y-0.5 text-left">
+                                                                            <p className="font-bold text-blue-600 dark:text-blue-400">Calificación Asignada Manualmente</p>
+                                                                            {manualGradedBy && <p className="text-[11px]">Por: {manualGradedBy}</p>}
+                                                                            {originalScore !== null && <p className="text-[11px] text-muted-foreground">Nota previa: {Number(originalScore).toFixed(2)}</p>}
+                                                                            {manualGradeComment && <p className="text-[11px] italic text-foreground pt-0.5">&quot;{manualGradeComment}&quot;</p>}
                                                                         </TooltipContent>
                                                                     </Tooltip>
+                                                                )}
 
-                                                                    {penalty > 0 && (
-                                                                        <Tooltip>
-                                                                            <TooltipTrigger asChild>
-                                                                                <span 
-                                                                                    className="text-[10px] font-bold text-amber-600 dark:text-amber-400 flex items-center gap-0.5 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.2 rounded cursor-default"
-                                                                                >
-                                                                                    <Gavel className="w-2.5 h-2.5 shrink-0" />
-                                                                                    <span>-{penalty.toFixed(1)}</span>
-                                                                                </span>
-                                                                            </TooltipTrigger>
-                                                                            <TooltipContent side="top" className="max-w-xs space-y-1">
-                                                                                <p className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                                                                                    <Gavel className="w-3.5 h-3.5" />
-                                                                                    Descuento por Penalización
-                                                                                </p>
-                                                                                <div className="text-[11px] space-y-0.5">
-                                                                                    <p><span className="text-muted-foreground">Nota base obtenida:</span> <span className="font-mono font-bold">{baseScore?.toFixed(2)}</span></p>
-                                                                                    <p><span className="text-muted-foreground">Descuento aplicado:</span> <span className="font-mono font-bold text-red-500">-{penalty.toFixed(2)}</span></p>
-                                                                                    {penaltyComment && (
-                                                                                        <p className="pt-1 border-t border-border/50 text-muted-foreground italic">
-                                                                                            &quot;{penaltyComment}&quot;
-                                                                                        </p>
-                                                                                    )}
-                                                                                </div>
-                                                                            </TooltipContent>
-                                                                        </Tooltip>
-                                                                    )}
-                                                                </div>
-                                                            ) : (
-                                                                <span className="text-xs text-muted-foreground font-mono">—</span>
-                                                            )}
+                                                                {penalty > 0 && (
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <span 
+                                                                                className="text-[10px] font-bold text-amber-600 dark:text-amber-400 flex items-center gap-0.5 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.2 rounded cursor-default"
+                                                                            >
+                                                                                <Gavel className="w-2.5 h-2.5 shrink-0" />
+                                                                                <span>-{penalty.toFixed(1)}</span>
+                                                                            </span>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent side="top" className="max-w-xs space-y-1">
+                                                                            <p className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                                                                                <Gavel className="w-3.5 h-3.5" />
+                                                                                Descuento por Penalización
+                                                                            </p>
+                                                                            <div className="text-[11px] space-y-0.5">
+                                                                                <p><span className="text-muted-foreground">Nota base obtenida:</span> <span className="font-mono font-bold">{baseScore?.toFixed(2)}</span></p>
+                                                                                <p><span className="text-muted-foreground">Descuento aplicado:</span> <span className="font-mono font-bold text-red-500">-{penalty.toFixed(2)}</span></p>
+                                                                                {penaltyComment && (
+                                                                                    <p className="pt-1 border-t border-border/50 text-muted-foreground italic">
+                                                                                        &quot;{penaltyComment}&quot;
+                                                                                    </p>
+                                                                                )}
+                                                                            </div>
+                                                                        </TooltipContent>
+                                                                    </Tooltip>
+                                                                )}
+                                                            </div>
                                                         </TableCell>
 
                                                         {/* Expulsiones y Salidas a otras pestañas */}
@@ -1488,6 +1535,19 @@ export function SubmissionsManager({
                                                                     submissionId={sub.id}
                                                                     studentId={sub.userId}
                                                                     studentName={studentName}
+                                                                />
+
+                                                                {/* Botón para asignar o modificar nota definitiva manual */}
+                                                                <ManualEvaluationGradeDialog
+                                                                    courseId={courseId}
+                                                                    attemptId={attempt.id}
+                                                                    submissionId={sub.id}
+                                                                    studentId={sub.userId}
+                                                                    studentName={studentName}
+                                                                    studentEmail={sub.user?.email}
+                                                                    currentScore={score}
+                                                                    wildcardsUsed={sub.wildcardsUsed}
+                                                                    onSuccess={() => fetchSubmissions(false)}
                                                                 />
 
                                                                 {isSubmitted && (

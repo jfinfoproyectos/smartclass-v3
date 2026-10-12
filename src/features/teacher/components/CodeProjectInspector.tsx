@@ -1170,7 +1170,6 @@ export function CodeProjectInspector({
                                 {activity.type === "AUDIO_DEFENSE" && <Mic className="h-3 w-3 text-primary" />}
                                 {activity.type === "AI_INTERVIEW" && <MessageSquareQuote className="h-3 w-3 text-primary" />}
                                 {(activity.type === "DB_MODELING" || activity.type === "DATABASE") && <Database className="h-3 w-3 text-primary" />}
-                                {activity.type === "WORKSHOP_CODE" && <Terminal className="h-3 w-3 text-cyan-500" />}
                                 {activity.type === "WORKSHOP_GITHUB" && <GitBranch className="h-3 w-3 text-orange-500" />}
                                 {activity.type === "MANUAL" && <LinkIcon className="h-3 w-3 text-primary" />}
                                 <span>
@@ -1182,8 +1181,6 @@ export function CodeProjectInspector({
                                         ? "PDF"
                                         : activity.type === "CODE_CHALLENGE"
                                         ? "Code Challenge"
-                                        : activity.type === "WORKSHOP_CODE"
-                                        ? "Taller Codelab"
                                         : activity.type === "WORKSHOP_GITHUB"
                                         ? "Taller Git & GitHub"
                                         : activity.type === "VIDEO_PITCH"

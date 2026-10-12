@@ -112,27 +112,6 @@ ESTRUCTURA OBLIGATORIA DEL ENUNCIADO:
 * **Historial de Commits y Flujo Git (25%)**: [Commits semánticos y sincronización correcta con GitHub]`;
             break;
 
-        case "WORKSHOP_CODE":
-            activityTypeGuidance = `
-TIPO DE ACTIVIDAD: Taller de Programación Interactivo Paso a Paso (Codelab Monaco Editor).
-El estudiante resuelve etapas secuenciales directamente en el editor interactivo con código base, pistas y verificación.
-ESTRUCTURA OBLIGATORIA DEL ENUNCIADO:
-# [Título del Taller de Programación Paso a Paso]
-
-## Objetivo del Taller
-[Problema o reto secuencial que el estudiante resolverá etapa por etapa]
-
-## Requerimientos Técnicos
-1. [Requerimiento de la etapa inicial]
-2. [Requerimiento de la etapa intermedia]
-3. [Requerimiento de la etapa final]
-
-## Criterios de Evaluación
-* **Resolución de Etapas Secuenciales (40%)**: [Cumplimiento de los retos programados en cada paso]
-* **Lógica y Buenas Prácticas (35%)**: [Calidad algorítmica, legibilidad y modularidad]
-* **Pruebas y Manejo de Errores (25%)**: [Verificación de casos de prueba y robustez]`;
-            break;
-
         case "CODE_CHALLENGE":
             activityTypeGuidance = `
 TIPO DE ACTIVIDAD: Desafío de Código / Algoritmos en Vivo (Monaco Editor integrado).
@@ -1131,12 +1110,12 @@ ${statement || "Sin enunciado detallado"}`;
 }
 
 /**
- * Genera la secuencia completa de pasos para un taller (WORKSHOP_CODE o WORKSHOP_GITHUB) con IA.
+ * Genera la secuencia completa de pasos para un taller (WORKSHOP_GITHUB) con IA.
  */
 export async function generateAllWorkshopSteps(params: {
     title: string;
     topicPrompt: string;
-    workshopType: "WORKSHOP_CODE" | "WORKSHOP_GITHUB";
+    workshopType?: "WORKSHOP_GITHUB";
     statement?: string;
     language?: string;
     techStack?: string;
@@ -1182,11 +1161,10 @@ export async function generateAllWorkshopSteps(params: {
     const effectiveStepCount = stepCount || promptStepCount;
 
     const model = await getAIModel(userId, aiModelName);
-    const isCode = workshopType === "WORKSHOP_CODE";
     const effectiveStack = techStack?.trim() || "Deducir automáticamente a partir de la temática y prompt del proyecto";
 
     const systemPrompt = `Eres un docente universitario y arquitecto de software de élite.
-Tu objetivo es diseñar la secuencia pedagógica de pasos para el ${isCode ? "Codelab interactivo (Monaco Editor)" : "Tutorial GitHub de Proyectos (Paso a Paso con Verificación)"} "${title}".
+Tu objetivo es diseñar la secuencia pedagógica de pasos para el Tutorial GitHub de Proyectos (Paso a Paso con Verificación) "${title}".
 
 REGLA CRÍTICA Y FUNDAMENTAL DE COHERENCIA CON EL ENUNCIADO:
 ${statement?.trim() ? `TODOS los pasos pedagógicos, rutas de archivo (targetFilePath), instrucciones, código y comandos DEBEN BASARSE ESTRICTAMENTE EN EL ENUNCIADO GENERAL DE LA ACTIVIDAD provisto a continuación.
@@ -1386,7 +1364,7 @@ Modo de generación: ${generateFullContent ? "Tutorial Completo con Código" : "
             explanation: gc.explanation || ""
         })),
         validationRule: s.validationRule || undefined,
-        hints: !isCode ? [] : ((s.hints || []).filter(Boolean) as string[]),
+        hints: (s.hints || []).filter(Boolean) as string[],
         suggestedMinutes: s.suggestedMinutes || undefined
     }));
 
@@ -1404,7 +1382,7 @@ export async function generateSingleWorkshopStep(params: {
     prompt?: string;
     currentInstructions?: string;
     targetFilePath?: string;
-    workshopType: "WORKSHOP_CODE" | "WORKSHOP_GITHUB";
+    workshopType?: "WORKSHOP_GITHUB";
     statement?: string;
     language?: string;
     techStack?: string;
@@ -1443,11 +1421,10 @@ export async function generateSingleWorkshopStep(params: {
     } = params;
 
     const model = await getAIModel(userId, aiModelName);
-    const isCode = workshopType === "WORKSHOP_CODE";
     const effectiveStack = techStack || language;
 
     const systemPrompt = `Eres un docente universitario experto en ${effectiveStack} e ingeniería de software.
-Tu tarea es generar el CONTENIDO COMPLETO, DETALLADO Y 100% FUNCIONAL para el PASO formativo "${stepTitle}" del ${isCode ? "Codelab interactivo" : "Tutorial GitHub de proyecto"} "${workshopTitle}".
+Tu tarea es generar el CONTENIDO COMPLETO, DETALLADO Y 100% FUNCIONAL para el PASO formativo "${stepTitle}" del Tutorial GitHub de proyecto "${workshopTitle}".
 
 ${statement?.trim() ? `REGLA DE COHERENCIA CON EL ENUNCIADO GENERAL:
 El contenido, código fuente, explicaciones didácticas y comandos de este paso DEBEN BASARSE Y RESPONDER DIRECTAMENTE al Enunciado General del Proyecto provisto:
@@ -1457,17 +1434,13 @@ El contenido, código fuente, explicaciones didácticas y comandos de este paso 
 Debes retornar:
 - title: Título conciso del paso.
 - instructions: Explicación didáctica, clara y detallada en formato Markdown describiendo el objetivo, la arquitectura y el propósito. El estudiante NO debe investigar por su cuenta ni resolver enigmas: TODAS las indicaciones deben estar completamente provistas en cada paso.
-${isCode 
-    ? `- starterCode: Código base con comentarios TODO en ${language}.
-- expectedSolution: Solución completa de referencia funcional.
-- hints: 2 a 3 pistas pedagógicas.`
-    : `- targetFilePath: Ruta relativa del archivo que el alumno debe crear o modificar en su repo (ej: "${targetFilePath || 'src/index.js'}").
+- targetFilePath: Ruta relativa del archivo que el alumno debe crear o modificar en su repo (ej: "${targetFilePath || 'src/index.js'}").
 - targetFileContent: Código fuente o contenido 100% COMPLETO, limpio y funcional a ubicar en ese archivo. NO uses comentarios de 'TODO' para que el alumno adivine; el código debe estar completamente provisto para que construya el proyecto y entienda el tutorial.
 - codeExplanation: Desglose didáctico y pedagógico en Markdown explicando imports, clases, métodos y decisiones arquitectónicas de este archivo.
 - localVerification: Indicación o comando exacto de prueba local (ej: compilación, ejecución o prueba con curl) antes de Git.
 - gitCommands: Array de comandos Git necesarios (ej: 'git add ...', 'git commit -m "..."', 'git push origin main') con su explicación clara de lo que hace cada uno.
 - validationRule: Criterio de validación en GitHub (ej: "El archivo debe existir en la rama y no estar vacío").
-- hints: Lista vacía [] (las pistas no aplican en este tipo de tutorial guiado).`}`;
+- hints: Lista vacía [] (las pistas no aplican en este tipo de tutorial guiado).`;
 
     const userPrompt = `Paso a completar: ${stepTitle}
 ${statement?.trim() ? `ENUNCIADO GENERAL DEL PROYECTO (CONTEXTO OBLIGATORIO):\n"""\n${statement.trim()}\n"""\n` : ""}
@@ -1480,8 +1453,6 @@ Stack tecnológico: ${effectiveStack}`;
     const SingleStepSchema = z.object({
         title: z.string().nullish().default("").describe("Título del paso"),
         instructions: z.string().nullish().default("").describe("Instrucciones didácticas y completas en Markdown con todas las explicaciones necesarias"),
-        starterCode: z.string().nullish().describe("Código inicial para Codelab"),
-        expectedSolution: z.string().nullish().describe("Solución de referencia para Codelab"),
         targetFilePath: z.string().nullish().describe("Ruta relativa del archivo a crear en GitHub"),
         targetFileContent: z.string().nullish().default("").describe("Código fuente o contenido 100% completo del archivo a crear en GitHub"),
         codeExplanation: z.string().nullish().describe("Desglose pedagógico del código fuente explicando imports, métodos y arquitectura"),
@@ -1520,8 +1491,6 @@ Stack tecnológico: ${effectiveStack}`;
                     object = {
                         title: rawParsed.title || stepTitle,
                         instructions: rawParsed.instructions || currentInstructions || "Completar las directrices de este paso.",
-                        starterCode: rawParsed.starterCode || null,
-                        expectedSolution: rawParsed.expectedSolution || null,
                         targetFilePath: rawParsed.targetFilePath || targetFilePath || null,
                         targetFileContent: rawParsed.targetFileContent || "",
                         gitCommands: Array.isArray(rawParsed.gitCommands) ? rawParsed.gitCommands : [],
@@ -1549,8 +1518,6 @@ Stack tecnológico: ${effectiveStack}`;
                         object = {
                             title: parsed.title || stepTitle,
                             instructions: parsed.instructions || currentInstructions || "Completar este paso.",
-                            starterCode: parsed.starterCode || null,
-                            expectedSolution: parsed.expectedSolution || null,
                             targetFilePath: parsed.targetFilePath || targetFilePath || null,
                             targetFileContent: parsed.targetFileContent || "",
                             gitCommands: Array.isArray(parsed.gitCommands) ? parsed.gitCommands : [],
@@ -1567,12 +1534,10 @@ Stack tecnológico: ${effectiveStack}`;
         // Tier 3: Fallback determinista seguro para evitar errores 500
         if (!object) {
             const cleanTitle = stepTitle || "Paso formativo";
-            const effectiveFile = targetFilePath || (isCode ? "solucion.js" : "src/index.js");
+            const effectiveFile = targetFilePath || "src/index.js";
             object = {
                 title: cleanTitle,
                 instructions: currentInstructions || `### Objetivo\nImplementar la funcionalidad correspondiente a **${cleanTitle}** en el archivo \`${effectiveFile}\`.\n\n### Indicaciones\n1. Edita o crea el archivo en tu repositorio.\n2. Sigue las convenciones y estándares de código de ${effectiveStack}.\n3. Realiza commit y sincroniza los cambios en GitHub.`,
-                starterCode: isCode ? "// Implementar código aquí" : null,
-                expectedSolution: null,
                 targetFilePath: effectiveFile,
                 targetFileContent: "",
                 gitCommands: [
@@ -1589,8 +1554,6 @@ Stack tecnológico: ${effectiveStack}`;
     return {
         title: object.title || stepTitle || "Paso",
         instructions: object.instructions || currentInstructions || "Completar las directrices de este paso.",
-        starterCode: object.starterCode || undefined,
-        expectedSolution: object.expectedSolution || undefined,
         targetFilePath: object.targetFilePath || undefined,
         targetFileContent: object.targetFileContent || "",
         codeExplanation: (object as any).codeExplanation || undefined,
@@ -1600,7 +1563,7 @@ Stack tecnológico: ${effectiveStack}`;
             explanation: gc.explanation || ""
         })),
         validationRule: object.validationRule || undefined,
-        hints: !isCode ? [] : ((object.hints || []).filter(Boolean) as string[])
+        hints: []
     };
 }
 
@@ -2100,7 +2063,7 @@ export async function refineWorkshopSteps(params: {
     }>;
     instruction: string;
     statement?: string;
-    workshopType: "WORKSHOP_CODE" | "WORKSHOP_GITHUB";
+    workshopType?: "WORKSHOP_GITHUB";
     techStack?: string;
     userId: string;
     aiModelName?: string;
@@ -2135,7 +2098,6 @@ export async function refineWorkshopSteps(params: {
     } = params;
 
     const model = await getAIModel(userId, aiModelName);
-    const isCode = workshopType === "WORKSHOP_CODE";
 
     // Formatear pasos actuales de forma compacta y legible para el prompt
     const stepsSummary = steps.map((s, i) => ({
@@ -2151,7 +2113,7 @@ export async function refineWorkshopSteps(params: {
     }));
 
     const systemPrompt = `Eres un docente universitario y arquitecto de software de élite.
-Tu tarea es MODIFICAR O REFINAR LA SECUENCIA DE PASOS de un ${isCode ? "Codelab interactivo" : "Tutorial de proyecto GitHub paso a paso"} basándote en las instrucciones directas del profesor.
+Tu tarea es MODIFICAR O REFINAR LA SECUENCIA DE PASOS de un Tutorial de proyecto GitHub paso a paso basándote en las instrucciones directas del profesor.
 
 REGLAS FUNDAMENTALES:
 1. El profesor te dará una instrucción (por ejemplo: agregar un paso, eliminar uno existente, dividir un paso, cambiar orden, convertir un paso en solo instructivo sin archivo/git, agregar comandos git, etc.).

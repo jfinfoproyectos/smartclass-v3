@@ -134,13 +134,15 @@ export function QuickReportToolView({ courses }: QuickReportToolViewProps) {
     toast.info("Historial vaciado.");
   };
 
-  // Recibir transcripción en vivo desde Web Speech API
-  const handleLiveTranscript = (transcriptText: string) => {
+  // Recibir transcripción completada desde Web Speech API al finalizar la grabación
+  const handleTranscriptionComplete = (transcriptText: string) => {
+    if (!transcriptText?.trim()) return;
     setQuickNotes((prev) => {
-      if (!prev.trim()) return transcriptText;
-      if (prev.endsWith("\n") || prev.endsWith(" ")) return `${prev}${transcriptText}`;
-      return `${prev} ${transcriptText}`;
+      const clean = transcriptText.trim();
+      if (!prev.trim()) return clean;
+      return `${prev.trim()}\n\n${clean}`;
     });
+    toast.success("Transcripción del audio agregada a las notas.");
   };
 
   // Copiar como Texto Enriquecido / HTML para Word / Google Docs / Teams
@@ -570,7 +572,7 @@ export function QuickReportToolView({ courses }: QuickReportToolViewProps) {
             {/* Grabador de Micrófono & Audio */}
             <AudioVoiceRecorder
               onAudioReady={(data) => setAudioData(data)}
-              onLiveTranscript={handleLiveTranscript}
+              onTranscriptionComplete={handleTranscriptionComplete}
             />
 
             {/* Editor de Notas y Parámetros */}

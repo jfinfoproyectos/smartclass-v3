@@ -6,7 +6,7 @@ import { isValidPdfUrl } from "@/lib/utils";
 const activitiesCache = new Map<string, any>();
 
 export const activityService = {
-    async createActivity(data: { title: string; description?: string; statement?: string; filePaths?: string; deadline: Date; openDate?: Date; courseId: string; type?: "GITHUB" | "MANUAL" | "PDF_REVIEW" | "CODE_PROJECT" | "CODE_CHALLENGE" | "VIDEO_PITCH" | "AI_INTERVIEW" | "DB_MODELING" | "AUDIO_DEFENSE" | "WORKSHOP_CODE" | "WORKSHOP_GITHUB"; weight?: number; maxAttempts?: number; allowLinkSubmission?: boolean; isGroupActivity?: boolean; groupScope?: "COURSE" | "ACTIVITY" }) {
+    async createActivity(data: { title: string; description?: string; statement?: string; filePaths?: string; deadline: Date; openDate?: Date; courseId: string; type?: "GITHUB" | "MANUAL" | "PDF_REVIEW" | "CODE_PROJECT" | "CODE_CHALLENGE" | "VIDEO_PITCH" | "AI_INTERVIEW" | "DB_MODELING" | "AUDIO_DEFENSE" | "WORKSHOP_GITHUB"; weight?: number; maxAttempts?: number; allowLinkSubmission?: boolean; isGroupActivity?: boolean; groupScope?: "COURSE" | "ACTIVITY" }) {
         // Get max order for the course
         const maxOrderActivity = await prisma.activity.findFirst({
             where: { courseId: data.courseId },
@@ -27,7 +27,7 @@ export const activityService = {
         });
     },
 
-    async updateActivity(id: string, data: { title?: string; description?: string; statement?: string; filePaths?: string; deadline?: Date; openDate?: Date; type?: "GITHUB" | "MANUAL" | "PDF_REVIEW" | "CODE_PROJECT" | "CODE_CHALLENGE" | "VIDEO_PITCH" | "AI_INTERVIEW" | "DB_MODELING" | "AUDIO_DEFENSE" | "WORKSHOP_CODE" | "WORKSHOP_GITHUB"; weight?: number; maxAttempts?: number; allowLinkSubmission?: boolean; isGroupActivity?: boolean; groupScope?: "COURSE" | "ACTIVITY" }) {
+    async updateActivity(id: string, data: { title?: string; description?: string; statement?: string; filePaths?: string; deadline?: Date; openDate?: Date; type?: "GITHUB" | "MANUAL" | "PDF_REVIEW" | "CODE_PROJECT" | "CODE_CHALLENGE" | "VIDEO_PITCH" | "AI_INTERVIEW" | "DB_MODELING" | "AUDIO_DEFENSE" | "WORKSHOP_GITHUB"; weight?: number; maxAttempts?: number; allowLinkSubmission?: boolean; isGroupActivity?: boolean; groupScope?: "COURSE" | "ACTIVITY" }) {
         return await prisma.activity.update({
             where: { id },
             data,
@@ -187,7 +187,6 @@ export const activityService = {
             activity.type === "PDF_REVIEW" ||
             activity.type === "CODE_CHALLENGE" ||
             activity.type === "CODE_PROJECT" ||
-            activity.type === "WORKSHOP_CODE" ||
             activity.type === "WORKSHOP_GITHUB";
 
         if (!isTeacherGrading && !isRejected && !isPendingGrading && !isFlexibleSubmissionType && currentAttempts >= activity.maxAttempts) {

@@ -1142,4 +1142,232 @@ export async function toggleEvaluationLockAction({
     }
 }
 
+/**
+ * Asigna, modifica o restablece una calificación definitiva manual para cualquier estudiante en una evaluación
+ */
+export async function updateManualEvaluationGradeAction({
+    attemptId,
+    submissionId,
+    studentId,
+    courseId,
+    manualScore,
+    comment,
+    revertToOriginal = false
+}: {
+    attemptId: string;
+    submissionId?: string;
+    studentId: string;
+    courseId: string;
+    manualScore?: number;
+    comment?: string;
+    revertToOriginal?: boolean;
+}): Promise<
+    | {
+          success: true;
+          submission: any;
+          score: number | null;
+          isManual: boolean;
+      }
+    | {
+          success: false;
+          error: string;
+      }
+> {
+    try {
+        const session = await getSession();
+        if (!session || (session.user.role !== "admin" && session.user.role !== "teacher")) {
+            return { success: false, error: "No autorizado para modificar notas" };
+        }
+
+        const student = await prisma.user.findUnique({
+            where: { id: studentId },
+            select: { id: true, name: true, email: true }
+        });
+        if (!student) {
+            return { success: false, error: "Estudiante no encontrado en el sistema" };
+        }
+
+        const attempt = await prisma.evaluationAttempt.findUnique({
+            where: { id: attemptId },
+            select: { id: true, courseId: true, evaluation: { select: { title: true } } }
+        });
+        if (!attempt) {
+            return { success: false, error: "Convocatoria de evaluación no encontrada" };
+        }
+
+        // Buscar si ya existe la entrega
+        let submission = null;
+        if (submissionId && !submissionId.startsWith("pending-")) {
+            submission = await prisma.evaluationSubmission.findUnique({
+                where: { id: submissionId }
+            });
+        }
+
+        if (!submission) {
+            submission = await prisma.evaluationSubmission.findFirst({
+                where: {
+                    attemptId,
+                    userId: studentId
+                }
+            });
+        }
+
+        if (revertToOriginal) {
+            if (!submission) {
+                return { success: false, error: "No hay entrega previa para restablecer" };
+            }
+
+            const wildcards = (submission.wildcardsUsed as any) || {};
+            const originalScore = wildcards.originalScore !== undefined ? wildcards.originalScore : null;
+
+            const {
+                isManualGrade,
+                manualGrade,
+                manualGradeComment,
+                manualGradedAt,
+                manualGradedBy,
+                ...restWildcards
+            } = wildcards;
+
+            const updated = await prisma.evaluationSubmission.update({
+                where: { id: submission.id },
+                data: {
+                    score: originalScore !== null ? Number(originalScore) : null,
+                    wildcardsUsed: restWildcards
+                }
+            });
+
+            emitEvaluationUpdate({
+                attemptId,
+                type: "SUBMISSION_UPDATED",
+                timestamp: Date.now(),
+                message: `Se restableció la nota original calculada para ${student.name || student.email}.`
+            });
+
+            try {
+                const { auditLogger } = await import("../../admin/services/auditLogger");
+                await auditLogger.log({
+                    action: "UPDATE",
+                    entity: "EVALUATION_SUBMISSION",
+                    entityId: submission.id,
+                    userId: session.user.id,
+                    userName: session.user.name || "Profesor",
+                    userRole: session.user.role,
+                    description: `Restablecimiento de nota calculada original (${originalScore ?? 'N/A'}) para ${student.name || student.email}`,
+                    success: true,
+                });
+            } catch (auditErr) {
+                console.error("Audit log error:", auditErr);
+            }
+
+            const revalidateCourseId = courseId || attempt.courseId;
+            if (revalidateCourseId) {
+                revalidatePath(`/dashboard/teacher/courses/${revalidateCourseId}/evaluations/${attemptId}`);
+                revalidatePath(`/dashboard/teacher/courses/${revalidateCourseId}/evaluations/${attemptId}/submissions/${submission.id}`);
+                revalidatePath(`/dashboard/teacher/courses/${revalidateCourseId}`);
+                revalidatePath(`/dashboard/student?courseId=${revalidateCourseId}&tab=evaluations`);
+            }
+
+            return {
+                success: true,
+                submission: JSON.parse(JSON.stringify(updated)),
+                score: updated.score,
+                isManual: false
+            };
+        }
+
+        // Validar nota manual numérica
+        if (manualScore === undefined || isNaN(manualScore)) {
+            return { success: false, error: "Ingresa una calificación válida entre 0.0 y 5.0" };
+        }
+        const cleanScore = Math.max(0, Math.min(5, Number(Number(manualScore).toFixed(2))));
+
+        let updatedSubmission;
+        if (submission) {
+            const wildcards = (submission.wildcardsUsed as any) || {};
+            const originalScore = wildcards.isManualGrade 
+                ? (wildcards.originalScore !== undefined ? wildcards.originalScore : null)
+                : (submission.score !== null ? Number(submission.score) : null);
+
+            const updatedWildcards = {
+                ...wildcards,
+                isManualGrade: true,
+                manualGrade: cleanScore,
+                originalScore: originalScore !== null && originalScore !== undefined ? Number(originalScore) : null,
+                manualGradeComment: comment?.trim() || "",
+                manualGradedAt: new Date().toISOString(),
+                manualGradedBy: session.user.name || "Profesor"
+            };
+
+            updatedSubmission = await prisma.evaluationSubmission.update({
+                where: { id: submission.id },
+                data: {
+                    score: cleanScore,
+                    submittedAt: submission.submittedAt || new Date(),
+                    wildcardsUsed: updatedWildcards
+                }
+            });
+        } else {
+            // Crear entrega directa para estudiante que no había iniciado
+            updatedSubmission = await prisma.evaluationSubmission.create({
+                data: {
+                    attemptId,
+                    userId: studentId,
+                    score: cleanScore,
+                    submittedAt: new Date(),
+                    wildcardsUsed: {
+                        isManualGrade: true,
+                        manualGrade: cleanScore,
+                        originalScore: null,
+                        manualGradeComment: comment?.trim() || "Nota definitiva asignada manualmente por el docente.",
+                        manualGradedAt: new Date().toISOString(),
+                        manualGradedBy: session.user.name || "Profesor"
+                    }
+                }
+            });
+        }
+
+        emitEvaluationUpdate({
+            attemptId,
+            type: "SUBMISSION_UPDATED",
+            timestamp: Date.now(),
+            message: `Se ha asignado nota definitiva manual a ${student.name || student.email}.`
+        });
+
+        try {
+            const { auditLogger } = await import("../../admin/services/auditLogger");
+            await auditLogger.log({
+                action: "UPDATE",
+                entity: "EVALUATION_SUBMISSION",
+                entityId: updatedSubmission.id,
+                userId: session.user.id,
+                userName: session.user.name || "Profesor",
+                userRole: session.user.role,
+                description: `Asignación de nota definitiva manual (${cleanScore}/5.0) para ${student.name || student.email}: ${comment || "Sin comentario"}`,
+                success: true,
+            });
+        } catch (auditErr) {
+            console.error("Audit log error in updateManualEvaluationGradeAction:", auditErr);
+        }
+
+        const revalidateCourseId = courseId || attempt.courseId;
+        if (revalidateCourseId) {
+            revalidatePath(`/dashboard/teacher/courses/${revalidateCourseId}/evaluations/${attemptId}`);
+            revalidatePath(`/dashboard/teacher/courses/${revalidateCourseId}/evaluations/${attemptId}/submissions/${updatedSubmission.id}`);
+            revalidatePath(`/dashboard/teacher/courses/${revalidateCourseId}`);
+            revalidatePath(`/dashboard/student?courseId=${revalidateCourseId}&tab=evaluations`);
+        }
+
+        return {
+            success: true,
+            submission: JSON.parse(JSON.stringify(updatedSubmission)),
+            score: cleanScore,
+            isManual: true
+        };
+    } catch (err: any) {
+        console.error("Error en updateManualEvaluationGradeAction:", err);
+        return { success: false, error: err?.message || "Error al actualizar la nota definitiva" };
+    }
+}
+
 

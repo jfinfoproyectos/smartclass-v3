@@ -13,7 +13,6 @@ import {
   Lightbulb,
   ExternalLink,
   ChevronRight,
-  Code2,
   Send,
   Loader2,
   RotateCcw,
@@ -126,7 +125,7 @@ export function WorkshopActivityDetails({
     } catch {}
     return {
       workshopConfig: {
-        type: activity?.type || "WORKSHOP_CODE",
+        type: activity?.type || "WORKSHOP_GITHUB",
         deliveryMode: "TUTORIAL",
         language: "javascript",
         estimatedMinutes: 45,
@@ -137,14 +136,11 @@ export function WorkshopActivityDetails({
   }, [activity?.description, activity?.type]);
 
   const milestones: any[] = workshopConfig.milestones || [];
-  const isCodeLab = activity.type === "WORKSHOP_CODE";
 
   const [activeTab, setActiveTab] = useState<"statement" | number>("statement");
   const [activeStepIndex, setActiveStepIndex] = useState(0);
   const [teacherBypassLock, setTeacherBypassLock] = useState(false);
-  const [codePerMilestone, setCodePerMilestone] = useState<Record<number, string>>({});
   const [completedSteps, setCompletedSteps] = useState<Record<number, boolean>>({});
-  const [showHint, setShowHint] = useState<Record<number, boolean>>({});
   
   // GitHub específico
   const [repoUrl, setRepoUrl] = useState("");
@@ -229,17 +225,6 @@ export function WorkshopActivityDetails({
     }
   }, [activity?.id, userId]);
 
-  // Initialize milestone codes
-  useEffect(() => {
-    if (milestones.length > 0) {
-      const initialCode: Record<number, string> = {};
-      milestones.forEach((m, idx) => {
-        const raw = m.starterCode || m.targetFileContent || "";
-        initialCode[idx] = formatCodeString(raw, m.targetFilePath || "");
-      });
-      setCodePerMilestone(initialCode);
-    }
-  }, [milestones]);
 
   const hasMilestones = milestones && milestones.length > 0;
 
@@ -249,19 +234,18 @@ export function WorkshopActivityDetails({
 
   // Verificación de repositorio configurado
   const isRepoConfigured = useMemo(() => {
-    if (isCodeLab) return true;
     if (!repoUrl) return false;
     const clean = repoUrl.trim().toLowerCase();
     return clean.length >= 7 && (clean.includes("github.com") || !!parsedRepoInfo);
-  }, [isCodeLab, repoUrl, parsedRepoInfo]);
+  }, [repoUrl, parsedRepoInfo]);
 
   // Regla de desbloqueo secuencial:
-  // Paso 1 (índice 0): se desbloquea al configurar el repositorio GitHub (o siempre en Codelab)
+  // Paso 1 (índice 0): se desbloquea al configurar el repositorio GitHub
   // Paso i (índice > 0): se desbloquea cuando el paso anterior i - 1 está completado y desbloqueado
   const isStepUnlocked = (stepIdx: number): boolean => {
     if (isTeacherPreview && teacherBypassLock) return true;
     if (stepIdx === 0) {
-      return isCodeLab || isRepoConfigured;
+      return isRepoConfigured;
     }
     return isStepUnlocked(stepIdx - 1) && !!completedSteps[stepIdx - 1];
   };
@@ -368,15 +352,6 @@ export function WorkshopActivityDetails({
     toast.success("Secuencia completa de comandos copiada");
   };
 
-  // Verificación en Codelab
-  const handleValidateCodelabStep = (stepIdx: number) => {
-    markStepAsCompletedInStorage(stepIdx);
-    toast.success(`¡Paso ${stepIdx + 1} completado con éxito!`);
-    if (stepIdx < milestones.length - 1) {
-      setActiveTab(stepIdx + 1);
-      setActiveStepIndex(stepIdx + 1);
-    }
-  };
 
   // Verificación en GitHub (Tutorial GitHub)
   const handleVerifyStepInGitHub = async (stepIdx: number) => {
@@ -454,27 +429,18 @@ export function WorkshopActivityDetails({
       const formData = new FormData();
       formData.set("activityId", activity.id);
 
-      if (!isCodeLab) {
-        if (!repoUrl.trim()) {
-          toast.error("Por favor ingresa la URL de tu repositorio GitHub.");
-          setIsSubmitting(false);
-          return;
-        }
-        let cleanRepo = repoUrl.trim();
-        if (!cleanRepo.startsWith("http://") && !cleanRepo.startsWith("https://")) {
-          cleanRepo = `https://${cleanRepo}`;
-        }
-        const completedKeys = Object.keys(completedSteps).filter(k => !!completedSteps[Number(k)]).join(",");
-        const stepsParam = completedKeys ? `?steps=${completedKeys}` : "";
-        formData.set("url", `${cleanRepo}#${repoBranch.trim() || "main"}${stepsParam}`);
-      } else {
-        const payload = JSON.stringify({
-          completedMilestones: Object.keys(completedSteps).length,
-          totalMilestones: milestones.length,
-          solutions: codePerMilestone
-        });
-        formData.set("url", `code://${activity.id}?data=${encodeURIComponent(payload.slice(0, 500))}`);
+      if (!repoUrl.trim()) {
+        toast.error("Por favor ingresa la URL de tu repositorio GitHub.");
+        setIsSubmitting(false);
+        return;
       }
+      let cleanRepo = repoUrl.trim();
+      if (!cleanRepo.startsWith("http://") && !cleanRepo.startsWith("https://")) {
+        cleanRepo = `https://${cleanRepo}`;
+      }
+      const completedKeys = Object.keys(completedSteps).filter(k => !!completedSteps[Number(k)]).join(",");
+      const stepsParam = completedKeys ? `?steps=${completedKeys}` : "";
+      formData.set("url", `${cleanRepo}#${repoBranch.trim() || "main"}${stepsParam}`);
 
       const result = await submitActivityAction(null, formData);
       if (result?.error) {
@@ -498,24 +464,16 @@ export function WorkshopActivityDetails({
       {/* Top Header Bar */}
       <div className="flex items-center justify-between gap-4 p-3.5 border-b border-border/80 bg-card/60 backdrop-blur-md shrink-0">
         <div className="flex items-center gap-2.5">
-          <div className={cn(
-            "p-2 rounded-xl text-white font-bold shadow-xs",
-            isCodeLab ? "bg-purple-600" : "bg-gradient-to-br from-orange-500 to-amber-600"
-          )}>
-            {isCodeLab ? <Terminal className="w-5 h-5" /> : <GitBranch className="w-5 h-5" />}
+          <div className="p-2 rounded-xl text-white font-bold shadow-xs bg-gradient-to-br from-orange-500 to-amber-600">
+            <GitBranch className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-sm sm:text-base font-black text-foreground truncate max-w-md">
                 {activity.title}
               </h1>
-              <Badge className={cn(
-                "text-[10px] font-mono font-bold",
-                isCodeLab
-                  ? "bg-purple-500/10 text-purple-600 border-purple-500/20"
-                  : "bg-orange-500/10 text-orange-600 border-orange-500/20 dark:text-orange-400"
-              )}>
-                {isCodeLab ? "Monaco Codelab" : "Tutorial GitHub"}
+              <Badge className="text-[10px] font-mono font-bold bg-orange-500/10 text-orange-600 border-orange-500/20 dark:text-orange-400">
+                Tutorial GitHub
               </Badge>
             </div>
             <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-0.5">
@@ -620,7 +578,7 @@ export function WorkshopActivityDetails({
               ) : (
                 <>
                   <Send className="w-3.5 h-3.5" />
-                  <span>{isCodeLab ? "Entregar Codelab" : "Entregar Tutorial GitHub"}</span>
+                  <span>Entregar Tutorial GitHub</span>
                 </>
               )}
             </Button>
@@ -644,12 +602,10 @@ export function WorkshopActivityDetails({
           >
             <BookOpen className="w-3.5 h-3.5" />
             <span>Enunciado General</span>
-            {!isCodeLab && (
-              isRepoConfigured ? (
-                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Repositorio configurado" />
-              ) : (
-                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" title="Pendiente vincular repositorio" />
-              )
+            {isRepoConfigured ? (
+              <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Repositorio configurado" />
+            ) : (
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" title="Pendiente vincular repositorio" />
             )}
           </button>
 
@@ -830,10 +786,9 @@ export function WorkshopActivityDetails({
             </div>
           </div>
 
-          {/* Columna Derecha: Configuración de Repositorio GitHub o Codelab */}
+          {/* Columna Derecha: Configuración de Repositorio GitHub */}
           <div className="w-full md:w-1/2 flex flex-col min-h-0 overflow-y-auto p-4 sm:p-6 space-y-4 custom-scrollbar bg-background/50">
-            {!isCodeLab ? (
-              <div className="p-5 rounded-2xl border border-orange-500/25 bg-gradient-to-br from-orange-500/[0.05] to-amber-500/[0.02] space-y-4 shadow-2xs">
+            <div className="p-5 rounded-2xl border border-orange-500/25 bg-gradient-to-br from-orange-500/[0.05] to-amber-500/[0.02] space-y-4 shadow-2xs">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2.5">
                     <div className="p-2 rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400">
@@ -1008,37 +963,6 @@ export function WorkshopActivityDetails({
                   </div>
                 </div>
               </div>
-            ) : (
-              <div className="p-5 rounded-2xl border border-purple-500/25 bg-gradient-to-br from-purple-500/[0.05] to-indigo-500/[0.02] space-y-4 shadow-2xs">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400">
-                    <Terminal className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-foreground">
-                      Entorno de Código en Vivo
-                    </h3>
-                    <p className="text-[11px] text-muted-foreground">
-                      Codelab interactivo con Monaco Editor integrado en la plataforma.
-                    </p>
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  En este codelab avanzarás de forma guiada resolviendo cada hito de código directamente en tu navegador.
-                </p>
-                <Button
-                  type="button"
-                  onClick={() => {
-                    setActiveTab(0);
-                    setActiveStepIndex(0);
-                  }}
-                  className="w-full h-10 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-xs gap-2 cursor-pointer"
-                >
-                  <span>Ir al Paso 1: {milestones[0]?.title || "Paso Inicial"}</span>
-                  <ArrowRight className="w-4 h-4" />
-                </Button>
-              </div>
-            )}
           </div>
         </div>
       ) : typeof activeTab === "number" && !isStepUnlocked(activeTab) ? (
@@ -1272,121 +1196,12 @@ export function WorkshopActivityDetails({
             </div>
           )}
 
-          {/* Hint Accordion (solo para Codelab interactivo) */}
-          {isCodeLab && currentMilestone.hintText && (
-            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-3.5 space-y-2">
-              <button
-                type="button"
-                onClick={() => setShowHint((prev) => ({ ...prev, [activeStepIndex]: !prev[activeStepIndex] }))}
-                className="flex items-center justify-between w-full text-xs font-bold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
-              >
-                <div className="flex items-center gap-1.5">
-                  <Lightbulb className="w-4 h-4" />
-                  <span>{showHint[activeStepIndex] ? "Ocultar Pista" : "💡 ¿Necesitas una pista?"}</span>
-                </div>
-                <ChevronRight className={cn("w-4 h-4 transition-transform", showHint[activeStepIndex] && "rotate-90")} />
-              </button>
 
-              {showHint[activeStepIndex] && (
-                <p className="text-[11px] text-muted-foreground leading-relaxed pt-1 border-t border-amber-500/10">
-                  {currentMilestone.hintText}
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Codelab validation button (only for WORKSHOP_CODE) */}
-          {isCodeLab && (
-            <div className="pt-4 mt-auto">
-              <Button
-                onClick={() => handleValidateCodelabStep(activeStepIndex)}
-                className={cn(
-                  "w-full rounded-2xl font-bold text-xs gap-2 shadow-sm transition-all cursor-pointer",
-                  isCurrentStepCompleted
-                    ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                    : "bg-primary hover:bg-primary/90 text-primary-foreground"
-                )}
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>
-                  {isCurrentStepCompleted ? "Paso Completado (Revalidar)" : "Marcar Paso como Resuelto"}
-                </span>
-              </Button>
-            </div>
-          )}
         </div>
 
-        {/* Right Column: Code Editor (Codelab) OR Interactive GitHub Step Runner */}
+        {/* Right Column: Interactive GitHub Step Runner */}
         <div className="w-full md:w-1/2 flex flex-col min-h-0 bg-card overflow-hidden">
-          {isCodeLab ? (
-            <div className="flex flex-col h-full min-h-0">
-              {/* Editor Bar */}
-              <div className="flex items-center justify-between px-4 py-2 border-b border-border/70 bg-muted/40 shrink-0 text-xs">
-                <div className="flex items-center gap-2">
-                  <Code2 className="w-3.5 h-3.5 text-primary" />
-                  <span className="font-mono font-bold uppercase text-[11px]">{currentLanguage}</span>
-                </div>
-
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      if (currentMilestone.starterCode) {
-                        setCodePerMilestone((prev) => ({
-                          ...prev,
-                          [activeStepIndex]: currentMilestone.starterCode
-                        }));
-                        toast.info("Código base restaurado.");
-                      }
-                    }}
-                    className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground gap-1 cursor-pointer"
-                    title="Restablecer código base"
-                  >
-                    <RotateCcw className="w-3 h-3" />
-                    <span>Restablecer</span>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleCopyCode(codePerMilestone[activeStepIndex] || "", currentFilePath)}
-                    className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground gap-1 cursor-pointer"
-                    title="Copiar código"
-                  >
-                    {copiedCode ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                    <span>Copiar</span>
-                  </Button>
-                </div>
-              </div>
-
-              {/* Monaco Editor */}
-              <div className="flex-1 min-h-0">
-                <Editor
-                  height="100%"
-                  language={currentLanguage}
-                  theme={editorTheme}
-                  value={codePerMilestone[activeStepIndex] ?? currentMilestone.starterCode ?? ""}
-                  onChange={(val) => {
-                    setCodePerMilestone((prev) => ({
-                      ...prev,
-                      [activeStepIndex]: val || ""
-                    }));
-                  }}
-                  options={{
-                    fontSize: 13,
-                    minimap: { enabled: false },
-                    scrollBeyondLastLine: false,
-                    automaticLayout: true,
-                    tabSize: 2,
-                    lineNumbers: "on",
-                    wordWrap: "on"
-                  }}
-                />
-              </div>
-            </div>
-          ) : (
-            /* Tutorial GitHub Runner */
-            <div className="flex flex-col h-full min-h-0 overflow-y-auto p-4 sm:p-5 space-y-4 custom-scrollbar">
+          <div className="flex flex-col h-full min-h-0 overflow-y-auto p-4 sm:p-5 space-y-4 custom-scrollbar">
               
               {/* Chip de Repositorio Vinculado (Informativo, solo lectura con acceso rápido a la pestaña de Enunciado) */}
               <div className="flex items-center justify-between p-2.5 px-3.5 rounded-2xl bg-card border border-border/80 shadow-2xs text-xs">
@@ -1787,8 +1602,7 @@ export function WorkshopActivityDetails({
                 )}
               </div>
 
-            </div>
-          )}
+          </div>
         </div>
       </div>
       )}

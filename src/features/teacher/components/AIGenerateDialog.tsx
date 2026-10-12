@@ -125,12 +125,6 @@ const ACTIVITY_TYPE_INFO: Record<string, { label: string; icon: any; color: stri
         color: "text-primary dark:text-primary",
         badgeColor: "bg-primary/10 text-primary border-primary/20"
     },
-    WORKSHOP_CODE: {
-        label: "Taller Codelab",
-        icon: Terminal,
-        color: "text-cyan-600 dark:text-cyan-400",
-        badgeColor: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800/40"
-    },
     WORKSHOP_GITHUB: {
         label: "Tutorial GitHub",
         icon: GitBranch,
@@ -190,11 +184,6 @@ const QUICK_SUGGESTIONS: Record<string, string[]> = {
         "Aplicación Frontend con React y Tailwind: componentes atómicos, estado global, consumo de API y ramas de trabajo ordenadas.",
         "Microservicio en Python con FastAPI: modelos Pydantic, endpoints asíncronos, pruebas unitarias y Dockerfile.",
         "Backend empresarial con Java y Spring Boot: entidades JPA, repositorios, servicios y flujo Git profesional."
-    ],
-    WORKSHOP_CODE: [
-        "Codelab interactivo de algoritmos de ordenamiento y búsqueda con Monaco Editor y pistas adaptativas.",
-        "Laboratorio guiado de programación asíncrona: Promesas, Async/Await y manejo de errores paso a paso.",
-        "Taller de estructuras de datos: Implementación guiada de Pilas, Colas y Árboles Binarios con validaciones."
     ]
 };
 
