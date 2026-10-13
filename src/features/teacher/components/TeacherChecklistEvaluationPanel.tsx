@@ -479,9 +479,6 @@ export function TeacherChecklistEvaluationPanel({
 
                                         const combined = calculateCombinedFinalGrade(aiScoreVal, num, aiWeight, checklistWeight);
                                         onSetGradeInput(combined.toFixed(1));
-                                        toast.info(
-                                            `Sustentación asignada: ${num.toFixed(1)} / 5.0 (${checklistWeight}%). Nota final ponderada con IA: ${combined.toFixed(1)}`
-                                        );
                                     } else {
                                         onSetGradeInput(score);
                                     }

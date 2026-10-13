@@ -357,8 +357,9 @@ export const courseService = {
             const remarks = allRemarks.filter(r => r.courseId === enrollment.courseId);
             const attendances = allAttendances.filter(a => a.courseId === enrollment.courseId);
 
-            // Filter evaluationAttempts to only those assigned to all students or this specific student
+            // Filter evaluationAttempts to only those assigned to all students or this specific student and whose evaluation exists
             const filteredEvaluationAttempts = (enrollment.course.evaluationAttempts || []).filter((att: any) => {
+                if (!att?.evaluation?.title) return false;
                 const assignedIds = Array.isArray(att.assignedStudentIds)
                     ? att.assignedStudentIds
                     : typeof att.assignedStudentIds === 'string'
@@ -368,11 +369,32 @@ export const courseService = {
                 return assignedIds.includes(userId);
             });
 
+            // Filter gradeCategories items so ghost/deleted/unassigned activities or evaluations don't appear in grades
+            const validAttemptIds = new Set(filteredEvaluationAttempts.map((a: any) => a.id));
+            const validActivityIds = new Set((enrollment.course.activities || []).map((a: any) => a.id));
+
+            const sanitizedGradeCategories = (enrollment.course.gradeCategories || []).map((cat: any) => ({
+                ...cat,
+                groups: (cat.groups || []).map((group: any) => ({
+                    ...group,
+                    items: (group.items || []).filter((item: any) => {
+                        if (item.evaluationAttemptId) {
+                            return validAttemptIds.has(item.evaluationAttemptId);
+                        }
+                        if (item.activityId) {
+                            return validActivityIds.has(item.activityId);
+                        }
+                        return false;
+                    })
+                }))
+            }));
+
             return {
                 ...enrollment,
                 course: {
                     ...enrollment.course,
-                    evaluationAttempts: filteredEvaluationAttempts
+                    evaluationAttempts: filteredEvaluationAttempts,
+                    gradeCategories: sanitizedGradeCategories
                 },
                 averageGrade: average,
                 remarks,

@@ -140,7 +140,7 @@ export async function deleteEvaluationAction(formData: FormData) {
         select: { title: true }
     });
 
-    await evaluationService.deleteEvaluation(evaluationId, session.user.id);
+    const result = await evaluationService.deleteEvaluation(evaluationId, session.user.id);
 
     // 🎯 AUDIT LOG
     const { auditLogger } = await import("../../admin/services/auditLogger");
@@ -156,6 +156,16 @@ export async function deleteEvaluationAction(formData: FormData) {
     });
 
     revalidatePath("/dashboard/teacher/evaluations");
+    revalidatePath("/dashboard/student");
+    if (result?.courseIds && Array.isArray(result.courseIds)) {
+        for (const cId of result.courseIds) {
+            revalidatePath(`/dashboard/teacher/courses/${cId}`);
+            revalidatePath(`/dashboard/teacher/courses/${cId}/evaluations`);
+            revalidatePath(`/dashboard/teacher/courses/${cId}/grades`);
+            revalidatePath(`/dashboard/student?courseId=${cId}&tab=evaluations`);
+            revalidatePath(`/dashboard/student?courseId=${cId}&tab=grades`);
+        }
+    }
 }
 
 export async function createQuestionAction(formData: FormData) {
@@ -373,6 +383,10 @@ export async function assignEvaluationAction(formData: FormData) {
     });
 
     revalidatePath(`/dashboard/teacher/courses/${courseId}`);
+    revalidatePath(`/dashboard/teacher/courses/${courseId}/evaluations`);
+    revalidatePath("/dashboard/student");
+    revalidatePath(`/dashboard/student?courseId=${courseId}&tab=evaluations`);
+    revalidatePath(`/dashboard/student?courseId=${courseId}&tab=grades`);
 }
 
 export async function unassignEvaluationAction(formData: FormData) {
@@ -389,6 +403,12 @@ export async function unassignEvaluationAction(formData: FormData) {
     await evaluationService.unassignEvaluationAttempt(attemptId);
 
     revalidatePath(`/dashboard/teacher/courses/${courseId}`);
+    revalidatePath(`/dashboard/teacher/courses/${courseId}/evaluations`);
+    revalidatePath(`/dashboard/teacher/courses/${courseId}/grades`);
+    revalidatePath("/dashboard/student");
+    revalidatePath(`/dashboard/student?courseId=${courseId}&tab=evaluations`);
+    revalidatePath(`/dashboard/student?courseId=${courseId}&tab=grades`);
+    revalidatePath(`/evaluations/${attemptId}`);
 }
 
 export async function testQuestionWithAIAction(questionText: string, type: string, answerText: string, referenceAnswer?: string) {
@@ -677,6 +697,10 @@ export async function updateEvaluationAssignmentAction(formData: FormData) {
     });
 
     revalidatePath(`/dashboard/teacher/courses/${courseId}/evaluations`);
+    revalidatePath(`/dashboard/teacher/courses/${courseId}`);
+    revalidatePath("/dashboard/student");
+    revalidatePath(`/dashboard/student?courseId=${courseId}&tab=evaluations`);
+    revalidatePath(`/dashboard/student?courseId=${courseId}&tab=grades`);
 }
 
 export async function deleteEvaluationSubmissionAction(submissionId: string, courseId: string) {

@@ -201,12 +201,13 @@ export function ManualActivityInspector({
             }
             await onGradeManual(gradeInput, fullFeedback, student.id, activity.id);
             setSavedGrade(numericGrade);
-            toast.success("Calificación guardada correctamente");
+            toast.dismiss();
             if (andNext && currentIndex < totalStudents - 1 && onSelectStudent) {
                 onSelectStudent(studentsList[currentIndex + 1].student.id);
             }
         } catch (error: any) {
-            toast.error("Error al guardar la calificación", { description: error.message });
+            console.error("Error al guardar la calificación:", error);
+            toast.dismiss();
         } finally {
             setIsSaving(false);
         }

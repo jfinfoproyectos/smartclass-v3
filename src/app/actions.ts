@@ -40,6 +40,7 @@ export {
     analyzeGitHubFileAction,
     finalizeGitHubGradingAction,
     gradeManualActivityAction,
+    gradeManualActivityBatchAction,
     rejectManualActivityAction,
     improveFeedbackAction,
     gradePdfReviewAction

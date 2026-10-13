@@ -35,6 +35,12 @@ export const activityService = {
     },
 
     async deleteActivity(id: string) {
+        await prisma.gradeGroupItem.deleteMany({
+            where: { activityId: id }
+        });
+        await prisma.gradeGroupItem.deleteMany({
+            where: { activityId: null, evaluationAttemptId: null }
+        });
         return await prisma.activity.delete({
             where: { id },
         });

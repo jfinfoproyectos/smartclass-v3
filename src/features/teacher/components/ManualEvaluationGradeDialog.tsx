@@ -125,7 +125,7 @@ export function ManualEvaluationGradeDialog({
                 return;
             }
 
-            toast.success(`Nota definitiva de ${studentName} actualizada a ${parsedScore.toFixed(2)}`);
+            toast.dismiss();
             setOpen(false);
             if (onSuccess) {
                 onSuccess({
@@ -162,7 +162,7 @@ export function ManualEvaluationGradeDialog({
                 return;
             }
 
-            toast.success(`Nota original restablecida para ${studentName}`);
+            toast.dismiss();
             setOpen(false);
             if (onSuccess) {
                 onSuccess({

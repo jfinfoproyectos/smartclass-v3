@@ -8,7 +8,9 @@ import {
     gitDocsService, 
     RepoAnalysisResult, 
     DocsGenerationOptions, 
-    GeneratedDocsResult 
+    GeneratedDocsResult,
+    ManualProjectInput,
+    createAnalysisFromManualData
 } from "../services/gitDocsService";
 
 async function getSession() {
@@ -97,6 +99,54 @@ export async function generateRepoDocsAction(
     }
 
     return await gitDocsService.generateDocsWithAi(analysis, options, session.user.id);
+}
+
+/**
+ * Genera el paquete de documentación a partir de datos técnicos ingresados manualmente
+ */
+export async function generateDocsFromManualAction(
+    manualData: ManualProjectInput,
+    options: DocsGenerationOptions
+): Promise<{
+    analysis: RepoAnalysisResult;
+    docs: GeneratedDocsResult;
+}> {
+    const session = await getSession();
+    if (!session) {
+        throw new Error("Sesión requerida.");
+    }
+    const userRole = (session.user as any)?.role;
+    if (userRole !== "teacher" && userRole !== "admin") {
+        throw new Error("Acceso no autorizado.");
+    }
+
+    const analysis = createAnalysisFromManualData(manualData);
+    const docs = await gitDocsService.generateDocsWithAi(analysis, options, session.user.id);
+    return { analysis, docs };
+}
+
+/**
+ * Refina o ajusta interactivamente el contenido de un documento con IA
+ */
+export async function refineDocWithAiAction(
+    content: string,
+    instruction: string,
+    language: "es" | "en" = "es"
+): Promise<string> {
+    const session = await getSession();
+    if (!session) {
+        throw new Error("Sesión requerida.");
+    }
+    const userRole = (session.user as any)?.role;
+    if (userRole !== "teacher" && userRole !== "admin") {
+        throw new Error("Acceso no autorizado.");
+    }
+
+    if (!instruction || !instruction.trim()) {
+        throw new Error("Debes indicar una instrucción para refinar el documento.");
+    }
+
+    return await gitDocsService.refineDocWithAi(content, instruction, language, session.user.id);
 }
 
 /**

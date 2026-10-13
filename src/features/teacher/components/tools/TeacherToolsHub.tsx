@@ -127,9 +127,9 @@ export function TeacherToolsHub({ courses }: TeacherToolsHubProps) {
         },
         {
             id: "git-docs",
-            title: "Generador de README & Docs",
-            description: "Genera README profesional con arquitectura Mermaid, licencias oficiales, .gitignore, .env.example y descarga en ZIP.",
-            badge: "Docs & Mermaid IA",
+            title: "Generador de README & Docs Pro",
+            description: "Genera README y suite completa de 11 documentos técnicos con control granular por secciones, diagramas Mermaid, soporte local y refinamiento con IA.",
+            badge: "Docs Pro & Mermaid IA",
             category: "docs",
             icon: BookOpen,
             colorClasses: {
@@ -140,12 +140,35 @@ export function TeacherToolsHub({ courses }: TeacherToolsHubProps) {
                 badge: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20",
             },
             bullets: [
-                "README con diagramas de flujo Mermaid interactivos",
-                "Suite de gobernanza: LICENSE, .gitignore y .env",
-                "Descarga individual o empaquetada en .ZIP"
+                "Control granular: 16 secciones seleccionables y presets rápidos",
+                "Mermaid (Arquitectura, Secuencia, ER) + Suite de 11 documentos",
+                "Modo GitHub o Proyecto Local + Refinamiento interactivo con IA"
             ],
             btnText: "Abrir Generador de Docs",
             route: "/dashboard/teacher/tools/git-docs"
+        },
+        {
+            id: "doc-templates",
+            title: "Diligenciador de Formatos Word IA",
+            description: "Automatiza cualquier documento Word (.docx): marca partes editables (con IA o seleccionando texto) y genera nuevos casos con copiloto de redacción.",
+            badge: "Formatos & Tutelas IA",
+            category: "docs",
+            icon: FileText,
+            colorClasses: {
+                iconBg: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20",
+                iconText: "text-indigo-600 dark:text-indigo-400",
+                borderHover: "hover:border-indigo-500/50",
+                btnHover: "group-hover:bg-indigo-600 group-hover:text-white",
+                badge: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20",
+            },
+            bullets: [
+                "Opción A: Detección automática de variables con IA en 1 clic",
+                "Opción B: Marcado manual seleccionando cualquier texto del Word",
+                "Copiloto IA que redacta los hechos completos por caso libre",
+                "Descarga en .DOCX 100% fiel al formato, márgenes y tipografía original"
+            ],
+            btnText: "Abrir Diligenciador",
+            route: "/dashboard/teacher/tools/doc-templates"
         },
         {
             id: "git-chat",

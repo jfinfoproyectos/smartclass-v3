@@ -35,18 +35,27 @@ export function StudentGradesView({ enrollment }: StudentGradesViewProps) {
 
         group.items.forEach((item: any) => {
             let grade = 0;
+            let exists = false;
             if (item.activityId) {
                 const activity = activities.find((a: any) => a.id === item.activityId);
-                const submission = activity?.submissions[0];
-                grade = submission?.grade || 0;
+                if (activity) {
+                    exists = true;
+                    const submission = activity?.submissions?.[0];
+                    grade = submission?.grade || 0;
+                }
             } else if (item.evaluationAttemptId) {
                 const attempt = evaluationAttempts.find((e: any) => e.id === item.evaluationAttemptId);
-                const submission = attempt?.submissions[0];
-                grade = submission?.score || 0; // Already in 0-5.0 scale
+                if (attempt && attempt.evaluation?.title) {
+                    exists = true;
+                    const submission = attempt?.submissions?.[0];
+                    grade = submission?.score || 0; // Already in 0-5.0 scale
+                }
             }
             
-            totalWeightedGrade += grade * item.weight;
-            totalWeight += item.weight;
+            if (exists) {
+                totalWeightedGrade += grade * item.weight;
+                totalWeight += item.weight;
+            }
         });
 
         return totalWeight > 0 ? totalWeightedGrade / totalWeight : 0;
@@ -257,15 +266,26 @@ export function StudentGradesView({ enrollment }: StudentGradesViewProps) {
                                                         </div>
                                                     </AccordionTrigger>
                                                     <AccordionContent className="pb-4 pt-1">
-                                                        <div className="space-y-3 bg-muted/20 rounded-xl p-3.5 border border-border/40">
-                                                            <div className="text-xs font-semibold text-muted-foreground flex items-center gap-2 mb-1.5">
-                                                                <div className="h-px flex-1 bg-border/40" />
-                                                                <span>Items ({group.items?.length || 0})</span>
-                                                                <div className="h-px flex-1 bg-border/40" />
-                                                            </div>
-                                                            
-                                                            <div className="grid gap-2">
-                                                                {group.items?.map((item: any) => {
+                                                        {(() => {
+                                                            const validItems = (group.items || []).filter((item: any) => {
+                                                                if (item.activityId) return activities.some((a: any) => a.id === item.activityId);
+                                                                if (item.evaluationAttemptId) {
+                                                                    const attempt = evaluationAttempts.find((e: any) => e.id === item.evaluationAttemptId);
+                                                                    return !!(attempt && attempt.evaluation?.title);
+                                                                }
+                                                                return false;
+                                                            });
+
+                                                            return (
+                                                                <div className="space-y-3 bg-muted/20 rounded-xl p-3.5 border border-border/40">
+                                                                    <div className="text-xs font-semibold text-muted-foreground flex items-center gap-2 mb-1.5">
+                                                                        <div className="h-px flex-1 bg-border/40" />
+                                                                        <span>Items ({validItems.length})</span>
+                                                                        <div className="h-px flex-1 bg-border/40" />
+                                                                    </div>
+                                                                    
+                                                                    <div className="grid gap-2">
+                                                                        {validItems.map((item: any) => {
                                                                     let itemTitle = "";
                                                                     let itemGrade = 0;
                                                                     let isCompleted = false;
@@ -313,9 +333,11 @@ export function StudentGradesView({ enrollment }: StudentGradesViewProps) {
                                                                             </div>
                                                                         </div>
                                                                     );
-                                                                })}
-                                                            </div>
-                                                        </div>
+                                                                        })}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })()}
                                                     </AccordionContent>
                                                 </AccordionItem>
                                             );

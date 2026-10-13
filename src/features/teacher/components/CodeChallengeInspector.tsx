@@ -342,14 +342,10 @@ export function CodeChallengeInspector({
                 finalFeedback = embedEvaluationMetadata(finalFeedback, metadata);
             }
             await onGradeManual(finalCombined.toFixed(1), finalFeedback, student.id, activity.id);
-
-            if (checklistConfig) {
-                toast.success(`✓ Código evaluado con IA y nota guardada (${result.grade.toFixed(1)}). Nota ponderada: ${finalCombined.toFixed(1)}`);
-            } else {
-                toast.success(`✓ Código evaluado con IA y nota guardada: ${result.grade.toFixed(1)}`);
-            }
+            toast.dismiss();
         } catch (err: any) {
-            toast.error(err.message || "Error al evaluar el código.");
+            console.error("Error al evaluar el código:", err);
+            toast.dismiss();
         } finally {
             setIsEvaluatingAI(false);
         }
@@ -386,9 +382,10 @@ export function CodeChallengeInspector({
             }
 
             await onGradeManual(gradeToSave, fullFeedback, student.id, activity.id);
-            toast.success("✓ Calificación guardada exitosamente");
+            toast.dismiss();
         } catch (err: any) {
-            toast.error(err.message || "Error al guardar la calificación");
+            console.error("Error al guardar la calificación:", err);
+            toast.dismiss();
         } finally {
             setIsSaving(false);
         }

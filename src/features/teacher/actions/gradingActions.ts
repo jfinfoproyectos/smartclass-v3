@@ -301,6 +301,80 @@ export async function gradeManualActivityAction(formData: FormData) {
     revalidatePath(`/dashboard/teacher/courses/${courseId}/activities/${activityId}`);
 }
 
+export async function gradeManualActivityBatchAction(data: {
+    activityId: string;
+    courseId: string;
+    studentIds: string[];
+    grade: number;
+    feedback?: string;
+}) {
+    const session = await getSession();
+    if (!session || session.user.role !== "teacher") {
+        throw new Error("Unauthorized");
+    }
+
+    const { activityId, courseId, studentIds, grade, feedback } = data;
+
+    if (!activityId) throw new Error("Falta el ID de la actividad");
+    if (!studentIds || studentIds.length === 0) throw new Error("Debe seleccionar al menos un estudiante");
+    if (grade === undefined || grade === null || isNaN(grade) || grade < 0 || grade > 5) {
+        throw new Error("La nota debe estar entre 0.0 y 5.0");
+    }
+
+    for (const userId of studentIds) {
+        const existingSubmission = await activityService.getSubmission(activityId, userId);
+        const url = existingSubmission?.url || "MANUAL";
+
+        await activityService.submitActivity({
+            url,
+            activityId,
+            userId,
+            grade,
+            feedback: feedback || null,
+        });
+    }
+
+    // 🎯 AUDIT LOG
+    try {
+        const { auditLogger } = await import("../../admin/services/auditLogger");
+        await auditLogger.log({
+            action: "GRADE",
+            entity: "SUBMISSION",
+            entityId: `${activityId}_batch_${studentIds.length}`,
+            userId: session.user.id,
+            userName: session.user.name || "Profesor",
+            userRole: session.user.role,
+            description: `Calificación manual en lote (${studentIds.length} estudiantes) en actividad ${activityId}: ${grade}`,
+            success: true,
+        });
+    } catch (e) {
+        console.error("Audit log error:", e);
+    }
+
+    // 🔔 Send push notifications
+    try {
+        const activity = await prisma.activity.findUnique({ where: { id: activityId }, select: { title: true } });
+        const { sendPushNotification } = await import("@/lib/push-notifications");
+        await Promise.allSettled(
+            studentIds.map(userId =>
+                sendPushNotification(userId, {
+                    title: "Actividad Calificada 📝",
+                    body: `Tu entrega para "${activity?.title || 'Actividad'}" ha sido calificada con ${grade}.`,
+                    url: `/dashboard/student/activities`
+                })
+            )
+        );
+    } catch (pushError) {
+        console.error("Failed to send manual batch grading push notifications:", pushError);
+    }
+
+    revalidatePath(`/dashboard/teacher/courses/${courseId}/activities/${activityId}`);
+    revalidatePath(`/dashboard/teacher/courses/${courseId}`);
+    revalidatePath(`/dashboard/student`);
+
+    return { success: true, count: studentIds.length };
+}
+
 
 
 export async function rejectManualActivityAction(formData: FormData) {

@@ -842,10 +842,10 @@ export function CodeProjectInspector({
             router.refresh();
 
             addLog(`🎉 Calificación final completada: ${effectiveCombined.toFixed(1)} / 5.0 (IA: ${rawAi.toFixed(1)})`);
-            toast.success(`Evaluación completada: Nota ${effectiveCombined.toFixed(1)} / 5.0`);
+            toast.dismiss();
         } catch (err: any) {
             addLog(`❌ Error en evaluación: ${err.message}`);
-            toast.error("Error al evaluar con IA", { description: err.message });
+            toast.dismiss();
         } finally {
             setIsEvaluating(false);
         }
@@ -906,10 +906,10 @@ export function CodeProjectInspector({
             router.refresh();
 
             addLog(`🎉 Auditoría completada: ${result.completedSteps}/${result.totalSteps} pasos cumplidos. Nota calculada: ${effectiveCombined.toFixed(1)} / 5.0`);
-            toast.success(`Evaluación de tutorial completada: Nota ${effectiveCombined.toFixed(1)} / 5.0`);
+            toast.dismiss();
         } catch (err: any) {
             addLog(`❌ Error en evaluación del tutorial: ${err.message}`);
-            toast.error("Error al auditar pasos del tutorial", { description: err.message });
+            toast.dismiss();
         } finally {
             setIsEvaluating(false);
         }
@@ -984,9 +984,10 @@ export function CodeProjectInspector({
 
             await onGradeManual(gradeToSave, finalFeedback, student.id, activity.id);
             router.refresh();
-            toast.success("Calificación guardada correctamente.");
+            toast.dismiss();
         } catch (err: any) {
-            toast.error("Error al guardar la nota.", { description: err.message });
+            console.error("Error al guardar la nota:", err);
+            toast.dismiss();
         } finally {
             setIsSavingGrade(false);
         }
@@ -2618,7 +2619,6 @@ export function CodeProjectInspector({
 
                                                             const combined = calculateCombinedFinalGrade(aiGrade, num, aiWeight, checklistWeight);
                                                             setGradeInput(combined.toFixed(1));
-                                                            toast.info(`Sustentación asignada: ${num.toFixed(1)} / 5.0 (${checklistWeight}%). Nota final ponderada con IA: ${combined.toFixed(1)}`);
                                                         } else {
                                                             setGradeInput(score);
                                                         }

@@ -320,14 +320,10 @@ export function AudioDefenseInspector({
                 finalFeedback = embedEvaluationMetadata(finalFeedback, metadata);
             }
             await onGradeManual(finalCombined.toFixed(1), finalFeedback, student.id, activity.id);
-
-            if (checklistConfig) {
-                toast.success(`✓ Evaluación multimodal completada y guardada (${result.grade.toFixed(1)}). Nota ponderada: ${finalCombined.toFixed(1)}`);
-            } else {
-                toast.success(`✓ Evaluación multimodal completada y guardada: ${result.grade.toFixed(1)}`);
-            }
+            toast.dismiss();
         } catch (err: any) {
-            toast.error(err.message || "Error al evaluar con IA.");
+            console.error("Error al evaluar con IA:", err);
+            toast.dismiss();
         } finally {
             setIsEvaluatingAI(false);
         }
@@ -385,9 +381,10 @@ export function AudioDefenseInspector({
             }
 
             await onGradeManual(gradeToSave, finalFeedback, student.id, activity.id);
-            toast.success("✓ Calificación guardada exitosamente");
+            toast.dismiss();
         } catch (err: any) {
-            toast.error(err.message || "Error al guardar la calificación");
+            console.error("Error al guardar calificación:", err);
+            toast.dismiss();
         } finally {
             setIsSaving(false);
         }

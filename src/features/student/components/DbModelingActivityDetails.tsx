@@ -167,40 +167,39 @@ export function DbModelingActivityDetails({
         }
     };
 
-    // Manejador de montaje de Monaco: Anti-Paste estricto
+    // Manejador de montaje de Monaco: Anti-Paste con sobreescritura de portapapeles (como en evaluación)
     const handleEditorMount = (editor: any, monaco: any) => {
-        // 1. Bloquear atajo Ctrl+V / Cmd+V
-        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {
-            toast.warning("El pegado de texto está bloqueado en esta actividad. Debes digitar tus sentencias SQL manualmente.", {
-                icon: "✍️",
-                duration: 4000,
-            });
-        });
+        // Restricción de portapapeles: al enfocar el editor, se sobreescribe el portapapeles
+        const overwriteMonacoClipboard = () => {
+            if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+                navigator.clipboard.writeText("No está permitido pegar contenido externo.").catch(() => {});
+            }
+        };
+        editor.onDidFocusEditorText(overwriteMonacoClipboard);
+        editor.onDidFocusEditorWidget(overwriteMonacoClipboard);
 
-        // 2. Bloquear atajo Shift+Insert
-        editor.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.Insert, () => {
-            toast.warning("El pegado está deshabilitado en esta actividad. Debes digitar tus sentencias SQL manualmente.", {
-                icon: "✍️",
-                duration: 4000,
-            });
-        });
-
-        // 3. Bloquear evento 'paste' nativo del DOM dentro del editor
+        // Bloquear evento 'paste' nativo del DOM dentro del editor sobreescribiendo portapapeles
         const domNode = editor.getDomNode();
         if (domNode) {
             domNode.addEventListener(
                 "paste",
-                (e: ClipboardEvent) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    toast.warning("El pegado de código está bloqueado. Debes redactar cada sentencia manualmente.", {
-                        icon: "✍️",
-                        duration: 4000,
-                    });
+                () => {
+                    overwriteMonacoClipboard();
                 },
                 true
             );
         }
+
+        // Atajos de pegado
+        editor.onKeyDown((e: any) => {
+            const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+            const isVKey = e.keyCode === monaco.KeyCode.KeyV || e.browserEvent?.key?.toLowerCase() === "v";
+            const isShiftInsert = e.shiftKey && (e.keyCode === monaco.KeyCode.Insert || e.browserEvent?.key === "Insert");
+
+            if ((isCtrlOrCmd && isVKey) || isShiftInsert) {
+                overwriteMonacoClipboard();
+            }
+        });
     };
 
     // Métricas en tiempo real de digitación

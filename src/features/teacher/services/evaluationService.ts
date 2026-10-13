@@ -67,16 +67,44 @@ export const evaluationService = {
         // Verify ownership before deleting
         const evaluation = await prisma.evaluation.findUnique({
             where: { id },
-            select: { authorId: true }
+            select: {
+                authorId: true,
+                attempts: {
+                    select: {
+                        id: true,
+                        courseId: true,
+                    }
+                }
+            }
         });
 
         if (!evaluation || evaluation.authorId !== authorId) {
             throw new Error("Unauthorized or evaluation not found");
         }
 
-        return await prisma.evaluation.delete({
+        const attemptIds = evaluation.attempts.map(a => a.id);
+        const courseIds = evaluation.attempts
+            .map(a => a.courseId)
+            .filter((cId): cId is string => Boolean(cId));
+
+        if (attemptIds.length > 0) {
+            await prisma.gradeGroupItem.deleteMany({
+                where: { evaluationAttemptId: { in: attemptIds } }
+            });
+        }
+
+        await prisma.gradeGroupItem.deleteMany({
+            where: {
+                activityId: null,
+                evaluationAttemptId: null
+            }
+        });
+
+        const deleted = await prisma.evaluation.delete({
             where: { id },
         });
+
+        return { deleted, courseIds: Array.from(new Set(courseIds)) };
     },
 
     // Questions
@@ -469,9 +497,28 @@ export const evaluationService = {
     },
 
     async unassignEvaluationAttempt(attemptId: string) {
-        return await prisma.evaluationAttempt.delete({
+        const attempt = await prisma.evaluationAttempt.findUnique({
+            where: { id: attemptId },
+            select: { id: true, courseId: true }
+        });
+
+        if (!attempt) {
+            return null;
+        }
+
+        await prisma.gradeGroupItem.deleteMany({
+            where: { evaluationAttemptId: attemptId }
+        });
+
+        await prisma.gradeGroupItem.deleteMany({
+            where: { activityId: null, evaluationAttemptId: null }
+        });
+
+        const deleted = await prisma.evaluationAttempt.delete({
             where: { id: attemptId }
         });
+
+        return { deleted, courseId: attempt.courseId };
     },
 
     async updateEvaluationAssignment(attemptId: string, data: {
@@ -556,7 +603,7 @@ export const evaluationService = {
 
     // Student Exam Execution
     async getAttemptWithQuestions(attemptId: string) {
-        return await prisma.evaluationAttempt.findUnique({
+        const attempt = await prisma.evaluationAttempt.findUnique({
             where: { id: attemptId },
             include: {
                 evaluation: {
@@ -568,16 +615,32 @@ export const evaluationService = {
                 }
             }
         });
+
+        if (!attempt || !attempt.evaluation) {
+            return null;
+        }
+
+        return attempt;
     },
 
     async getOrCreateSubmission(attemptId: string, userId: string, clientIp?: string, userAgent?: string) {
         // Find attempt to verify student authorization
         const attempt = await prisma.evaluationAttempt.findUnique({
             where: { id: attemptId },
-            select: { assignedStudentIds: true }
+            select: {
+                id: true,
+                assignedStudentIds: true,
+                evaluation: {
+                    select: { id: true }
+                }
+            }
         });
 
-        if (attempt?.assignedStudentIds) {
+        if (!attempt || !attempt.evaluation) {
+            throw new Error("La evaluación no existe o ha sido eliminada por el profesor.");
+        }
+
+        if (attempt.assignedStudentIds) {
             const assignedIds = Array.isArray(attempt.assignedStudentIds)
                 ? (attempt.assignedStudentIds as string[])
                 : typeof attempt.assignedStudentIds === 'string'

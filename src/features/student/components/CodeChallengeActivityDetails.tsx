@@ -189,6 +189,7 @@ export function CodeChallengeActivityDetails({
     onClosePreview,
 }: CodeChallengeActivityDetailsProps) {
     const containerRef = useRef<HTMLDivElement>(null);
+    const statementContainerRef = useRef<HTMLDivElement>(null);
     const submission = activity.submissions?.[0];
     const isSubmitted = !!submission;
     const isGraded = submission && submission.grade !== null && submission.grade !== undefined;
@@ -210,47 +211,59 @@ export function CodeChallengeActivityDetails({
     const mode = mounted && resolvedTheme === "dark" ? "dark" : "light";
     const monacoTheme = mode === "dark" ? "vs-dark" : "light";
 
-    // Bloquear copiado en toda la vista de la actividad (enunciado, archivos y código)
+    // Bloquear copiado exclusivamente en el enunciado e instrucciones (el editor de código sí permite copiar)
     useEffect(() => {
-        if (isTeacherPreview) return; // Permite copiar y atajos al docente en modo de prueba
+        if (isTeacherPreview) return; // Permite copiar al docente en modo de prueba
 
-        const handleCopy = (e: ClipboardEvent) => {
-            const container = containerRef.current;
-            if (!container) return;
+        const isEventInStatement = (e: Event | KeyboardEvent | ClipboardEvent) => {
+            const statementEl = statementContainerRef.current;
+            if (!statementEl) return false;
+
+            const targetNode = e.target instanceof Node ? e.target : null;
+            if (targetNode && statementEl.contains(targetNode)) return true;
+
+            const activeNode = document.activeElement;
+            if (activeNode && statementEl.contains(activeNode)) return true;
 
             const selection = window.getSelection();
-            const targetNode = e.target instanceof Node ? e.target : null;
-            const isTargetInside = targetNode ? container.contains(targetNode) : false;
-            const isSelectionInside = selection?.anchorNode ? container.contains(selection.anchorNode) : false;
-            const isActiveInside = document.activeElement ? container.contains(document.activeElement) : false;
+            if (selection && selection.rangeCount > 0) {
+                const anchor = selection.anchorNode;
+                const focus = selection.focusNode;
+                if ((anchor && statementEl.contains(anchor)) || (focus && statementEl.contains(focus))) {
+                    return true;
+                }
+            }
 
-            if (isTargetInside || isSelectionInside || isActiveInside) {
+            return false;
+        };
+
+        const handleStatementCopy = (e: ClipboardEvent) => {
+            if (isEventInStatement(e)) {
                 e.preventDefault();
                 e.stopPropagation();
+                const selection = window.getSelection();
                 selection?.removeAllRanges();
+                if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+                    navigator.clipboard.writeText("No está permitido copiar el enunciado de esta actividad.").catch(() => {});
+                }
                 toast.warning("Copiado deshabilitado", {
-                    description: "Por políticas académicas, no está permitido copiar el enunciado ni el contenido de este taller.",
+                    description: "Por políticas académicas, no está permitido copiar el enunciado ni las instrucciones de este taller.",
                     duration: 4000,
                 });
             }
         };
 
-        const handleKeyDown = (e: KeyboardEvent) => {
+        const handleStatementKeyDown = (e: KeyboardEvent) => {
             const isCtrlOrCmd = e.ctrlKey || e.metaKey;
-            if (isCtrlOrCmd && (e.key === "c" || e.key === "C")) {
-                const container = containerRef.current;
-                if (!container) return;
-
-                const selection = window.getSelection();
-                const targetNode = e.target instanceof Node ? e.target : null;
-                const isTargetInside = targetNode ? container.contains(targetNode) : false;
-                const isSelectionInside = selection?.anchorNode ? container.contains(selection.anchorNode) : false;
-                const isActiveInside = document.activeElement ? container.contains(document.activeElement) : false;
-
-                if (isTargetInside || isSelectionInside || isActiveInside) {
+            if (isCtrlOrCmd && (e.key === "c" || e.key === "C" || e.key === "x" || e.key === "X")) {
+                if (isEventInStatement(e)) {
                     e.preventDefault();
                     e.stopPropagation();
+                    const selection = window.getSelection();
                     selection?.removeAllRanges();
+                    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+                        navigator.clipboard.writeText("No está permitido copiar el enunciado de esta actividad.").catch(() => {});
+                    }
                     toast.warning("Copiado deshabilitado", {
                         description: "No está permitido copiar el enunciado ni las instrucciones de este taller.",
                         duration: 4000,
@@ -259,13 +272,13 @@ export function CodeChallengeActivityDetails({
             }
         };
 
-        document.addEventListener("copy", handleCopy, true);
-        document.addEventListener("keydown", handleKeyDown, true);
+        document.addEventListener("copy", handleStatementCopy, true);
+        document.addEventListener("keydown", handleStatementKeyDown, true);
         return () => {
-            document.removeEventListener("copy", handleCopy, true);
-            document.removeEventListener("keydown", handleKeyDown, true);
+            document.removeEventListener("copy", handleStatementCopy, true);
+            document.removeEventListener("keydown", handleStatementKeyDown, true);
         };
-    }, []);
+    }, [isTeacherPreview]);
 
     // Extraer configuración del desafío desde activity.description
     const challengeConfig = useMemo(() => {
@@ -424,67 +437,30 @@ export function CodeChallengeActivityDetails({
         setFiles(updated);
     };
 
-    // Bloquear pegado y copiado de contenido para forzar digitación manual
+    // Manejo de portapapeles: copiar permitido, pegar sobreescribe el contenido con texto de restricción (como en la evaluación)
     const handleEditorDidMount = (editor: any, monaco: any) => {
         editorRef.current = editor;
         if (isTeacherPreview) return; // Permitir al profesor pegar y probar libremente
 
-        // 1. Bloquear atajos de teclado de pegado (Ctrl+V, Cmd+V, Shift+Insert) y copiado (Ctrl+C, Cmd+C)
-        editor.onKeyDown((e: any) => {
-            const isCtrlOrCmd = e.ctrlKey || e.metaKey;
-            const isVKey = e.keyCode === monaco.KeyCode.KeyV || e.browserEvent?.key?.toLowerCase() === "v";
-            const isCKey = e.keyCode === monaco.KeyCode.KeyC || e.browserEvent?.key?.toLowerCase() === "c";
-            const isShiftInsert = e.shiftKey && (e.keyCode === monaco.KeyCode.Insert || e.browserEvent?.key === "Insert");
-
-            if ((isCtrlOrCmd && isVKey) || isShiftInsert) {
-                e.preventDefault();
-                e.stopPropagation();
-                toast.warning("Pegado deshabilitado", {
-                    description: "En este taller de código debes digitar el código manualmente. No está permitido pegar contenido.",
-                    duration: 4000,
-                });
+        // Restricción de portapapeles idéntica a las respuestas de la evaluación:
+        // Se permite copiar libremente, pero al enfocar o interactuar con el editor,
+        // se sobreescribe el portapapeles del sistema con el mensaje de restricción.
+        const overwriteMonacoClipboard = () => {
+            if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+                navigator.clipboard.writeText("No está permitido pegar contenido externo.").catch(() => {});
             }
+        };
 
-            if (isCtrlOrCmd && isCKey) {
-                e.preventDefault();
-                e.stopPropagation();
-                toast.warning("Copiado deshabilitado", {
-                    description: "En este taller de código no está permitido copiar código.",
-                    duration: 4000,
-                });
-            }
-        });
+        editor.onDidFocusEditorText(overwriteMonacoClipboard);
+        editor.onDidFocusEditorWidget(overwriteMonacoClipboard);
 
-        // 2. Bloquear evento DOM 'paste' y 'copy' nativo en el contenedor del editor
         const domNode = editor.getDomNode();
         if (domNode) {
-            domNode.addEventListener(
-                "paste",
-                (e: ClipboardEvent) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    toast.warning("Pegado deshabilitado", {
-                        description: "En este taller de código debes digitar el código manualmente. No está permitido pegar contenido.",
-                        duration: 4000,
-                    });
-                },
-                true
-            );
+            domNode.addEventListener("paste", () => {
+                overwriteMonacoClipboard();
+            }, true);
 
-            domNode.addEventListener(
-                "copy",
-                (e: ClipboardEvent) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    toast.warning("Copiado deshabilitado", {
-                        description: "En este taller de código no está permitido copiar código.",
-                        duration: 4000,
-                    });
-                },
-                true
-            );
-
-            // 3. Bloquear arrastrar y soltar texto hacia el editor
+            // Bloquear arrastrar y soltar texto externo hacia el editor
             domNode.addEventListener(
                 "drop",
                 (e: DragEvent) => {
@@ -498,6 +474,17 @@ export function CodeChallengeActivityDetails({
                 true
             );
         }
+
+        // Al intentar pegar con atajo de teclado, asegurar sobreescritura inmediata
+        editor.onKeyDown((e: any) => {
+            const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+            const isVKey = e.keyCode === monaco.KeyCode.KeyV || e.browserEvent?.key?.toLowerCase() === "v";
+            const isShiftInsert = e.shiftKey && (e.keyCode === monaco.KeyCode.Insert || e.browserEvent?.key === "Insert");
+
+            if ((isCtrlOrCmd && isVKey) || isShiftInsert) {
+                overwriteMonacoClipboard();
+            }
+        });
     };
 
 
@@ -819,35 +806,41 @@ export function CodeChallengeActivityDetails({
                                 e.stopPropagation();
                             }}
                         >
-                            {/* Archivos que componen la actividad */}
-                            <div className="p-3 bg-muted/20 rounded-xl border space-y-2 shrink-0 select-none">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-xs font-bold text-foreground block">Archivos del Proyecto:</span>
-                                    <Badge variant="outline" className="text-[10px] font-medium text-amber-600 dark:text-amber-400 border-amber-500/30 bg-amber-500/5 py-0 px-1.5 h-5 gap-1 select-none">
-                                        <Lock className="h-2.5 w-2.5" />
-                                        <span>Copia protegida</span>
-                                    </Badge>
-                                </div>
-                                <div className="flex flex-wrap gap-1.5 select-none">
-                                    {files.map((f) => (
-                                        <div key={f.id} className="flex items-center gap-1.5 text-xs bg-background px-2 py-1 rounded border select-none">
-                                            <FileCode className="h-3.5 w-3.5 text-blue-600 shrink-0" />
-                                            <span className="font-mono text-muted-foreground font-semibold select-none">{f.name}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div
-                                data-color-mode={mode}
-                                className="prose prose-sm dark:prose-invert max-w-none text-xs pb-4 select-none [&_*]:select-none"
+                            <div 
+                                ref={statementContainerRef}
+                                className="space-y-4 select-none [&_*]:select-none"
                                 style={{ userSelect: "none", WebkitUserSelect: "none" }}
                             >
-                                <MDEditor.Markdown
-                                    source={activity.statement || "**No hay enunciado disponible.**"}
-                                    style={{ background: 'transparent', userSelect: 'none' }}
-                                    disableCopy={true}
-                                />
+                                {/* Archivos que componen la actividad */}
+                                <div className="p-3 bg-muted/20 rounded-xl border space-y-2 shrink-0 select-none">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs font-bold text-foreground block">Archivos del Proyecto:</span>
+                                        <Badge variant="outline" className="text-[10px] font-medium text-amber-600 dark:text-amber-400 border-amber-500/30 bg-amber-500/5 py-0 px-1.5 h-5 gap-1 select-none">
+                                            <Lock className="h-2.5 w-2.5" />
+                                            <span>Copia protegida</span>
+                                        </Badge>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5 select-none">
+                                        {files.map((f) => (
+                                            <div key={f.id} className="flex items-center gap-1.5 text-xs bg-background px-2 py-1 rounded border select-none">
+                                                <FileCode className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                                                <span className="font-mono text-muted-foreground font-semibold select-none">{f.name}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div
+                                    data-color-mode={mode}
+                                    className="prose prose-sm dark:prose-invert max-w-none text-xs pb-4 select-none [&_*]:select-none"
+                                    style={{ userSelect: "none", WebkitUserSelect: "none" }}
+                                >
+                                    <MDEditor.Markdown
+                                        source={activity.statement || "**No hay enunciado disponible.**"}
+                                        style={{ background: 'transparent', userSelect: 'none' }}
+                                        disableCopy={true}
+                                    />
+                                </div>
                             </div>
 
                             {/* Botón para pasar al editor directamente en móvil */}
@@ -1083,9 +1076,10 @@ export function CodeChallengeActivityDetails({
                                     tabSize: 4,
                                     readOnly: isDeadlinePassed,
                                     suggestOnTriggerCharacters: true,
-                                    formatOnPaste: false,
+                                    formatOnPaste: true,
                                     dragAndDrop: false,
-                                    contextmenu: false,
+                                    contextmenu: true,
+                                    copyWithSyntaxHighlighting: false,
                                 }}
                             />
                         )}

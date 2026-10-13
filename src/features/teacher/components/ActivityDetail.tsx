@@ -73,6 +73,7 @@ import { ActivitySummaryPDFDocument } from "./ActivitySummaryPDFDocument";
 import { ExportFeedbackButtons } from "@/components/ui/export-feedback-buttons";
 import { CodeChallengeActivityDetails } from "@/features/student/components/CodeChallengeActivityDetails";
 import { WorkshopActivityDetails } from "@/features/student/components/WorkshopActivityDetails";
+import { ManualBatchGradingDialog } from "./ManualBatchGradingDialog";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -129,6 +130,10 @@ export function ActivityDetail({
     const [isGroupsModalOpen, setIsGroupsModalOpen] = useState(false);
     const [activeTab, setActiveTab] = useState("results");
     const [showStudentPreview, setShowStudentPreview] = useState(false);
+    
+    // Estado para calificación masiva en actividades manuales
+    const [manualBatchDialogOpen, setManualBatchDialogOpen] = useState(false);
+    const [manualSelectedIds, setManualSelectedIds] = useState<string[]>([]);
     
     // Refs para captura fiable de valores en formularios manuales
     const gradeRef = useRef<HTMLInputElement>(null);
@@ -434,14 +439,11 @@ export function ActivityDetail({
 
             setGradingResult(result);
             addLog(`✅ Calificación completada. Nota final: ${result.grade.toFixed(1)} / 5.0`);
-            
-            if (!autoApply) {
-                toast.success(`Calificación guardada: ${result.grade.toFixed(1)} / 5.0`);
-            }
+            toast.dismiss();
             return result;
         } catch (error: any) {
             addLog(`❌ Error crítico: ${error.message}`);
-            toast.error("Error al calificar", { description: error.message });
+            toast.dismiss();
         } finally {
             setGradingStudentId(null);
         }
@@ -462,12 +464,10 @@ export function ActivityDetail({
                 gradingMode
             );
             setGradingResult(result);
-            if (!autoApply) {
-                toast.success(`PDF evaluado: ${result.grade.toFixed(1)} / 5.0`);
-            }
+            toast.dismiss();
             return result;
         } catch (error: any) {
-            toast.error("Error al evaluar PDF", { description: error.message });
+            toast.dismiss();
         } finally {
             setIsPdfGrading(null);
         }
@@ -552,11 +552,10 @@ export function ActivityDetail({
 
             setGradingResult(result);
             addLog(`✅ Calificación completada. Nota final: ${result.grade.toFixed(1)} / 5.0`);
-            
-            toast.success(`Calificación guardada: ${result.grade.toFixed(1)} / 5.0`);
+            toast.dismiss();
         } catch (error: any) {
             addLog(`❌ Error: ${error.message}`);
-            toast.error("Error al calificar", { description: error.message });
+            toast.dismiss();
         } finally {
             setIsCodeProjectGrading(null);
         }
@@ -585,10 +584,10 @@ export function ActivityDetail({
 
             setGradingResult(result);
             addLog(`✅ Calificación completada (reintento). Nota final: ${result.grade.toFixed(1)} / 5.0`);
-            toast.success(`Calificación guardada: ${result.grade.toFixed(1)} / 5.0`);
+            toast.dismiss();
         } catch (error: any) {
             addLog(`❌ Error en reintento: ${error.message}`);
-            toast.error("Error al reintentar", { description: error.message });
+            toast.dismiss();
         } finally {
             setGradingStudentId(null);
             setIsFinalizingOnly(false);
@@ -611,7 +610,6 @@ export function ActivityDetail({
 
     const handleGradeManual = async (grade: string, feedback: string, userId: string, activityId: string) => {
         if (!grade) {
-            toast.error("La nota es obligatoria");
             return;
         }
 
@@ -624,10 +622,11 @@ export function ActivityDetail({
             formData.append("courseId", activity.courseId);
 
             await gradeManualActivityAction(formData);
-            toast.success("Calificación guardada");
+            toast.dismiss();
             router.refresh();
         } catch (error: any) {
-            toast.error("Error al guardar nota", { description: error.message });
+            console.error("Error al guardar nota manual:", error);
+            toast.dismiss();
         }
     };
 
@@ -821,11 +820,7 @@ export function ActivityDetail({
         const successCount = report.filter(r => !r.error).length;
         const errorCount = report.length - successCount;
 
-        if (errorCount > 0) {
-            toast.warning(`Evaluación finalizada: ${successCount} exitosos, ${errorCount} con errores.`);
-        } else {
-            toast.success(`Evaluación por lote terminada: ${successCount} estudiantes evaluados.`);
-        }
+        toast.dismiss();
     };
 
     // Prepare data for export
@@ -1036,6 +1031,22 @@ export function ActivityDetail({
                                 )}
                             </Button>
                         )}
+                        {activity.type === "MANUAL" && (
+                            <Button
+                                onClick={() => setManualBatchDialogOpen(true)}
+                                variant="default"
+                                size="sm"
+                                className="h-8 text-xs w-full sm:w-auto font-bold gap-1.5 shadow-sm bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white cursor-pointer"
+                            >
+                                <Users className="w-3.5 h-3.5 mr-1" />
+                                <span>Calificación Masiva / Grupal</span>
+                                {manualSelectedIds.length > 0 && (
+                                    <Badge className="bg-white/20 text-white border-0 text-[10px] px-1.5 py-0 font-bold ml-1">
+                                        {manualSelectedIds.length}
+                                    </Badge>
+                                )}
+                            </Button>
+                        )}
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
@@ -1065,10 +1076,64 @@ export function ActivityDetail({
                         </DropdownMenu>
                     </div>
 
+                    {/* Barra de acción rápida para selección múltiple en actividad manual */}
+                    {activity.type === "MANUAL" && manualSelectedIds.length > 0 && (
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 px-4 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-900 dark:text-emerald-200 animate-in fade-in slide-in-from-top-1 shadow-2xs">
+                            <div className="flex items-center gap-2.5 text-xs font-semibold">
+                                <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                <span>
+                                    <strong>{manualSelectedIds.length}</strong> de {studentStatus.length} estudiante(s) seleccionado(s)
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => setManualSelectedIds([])}
+                                    className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                                >
+                                    Limpiar selección
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={() => setManualBatchDialogOpen(true)}
+                                    className="h-7 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 shadow-2xs cursor-pointer"
+                                >
+                                    <Users className="h-3.5 w-3.5" />
+                                    Calificar a Seleccionados ({manualSelectedIds.length})
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="w-full overflow-x-auto rounded-md border">
                         <Table className="min-w-[700px]">
                             <TableHeader>
                                 <TableRow>
+                                    {activity.type === "MANUAL" && (
+                                        <TableHead className="w-[44px] pl-4 pr-1">
+                                            <Checkbox
+                                                checked={
+                                                    studentStatus.length > 0 &&
+                                                    manualSelectedIds.length === studentStatus.length
+                                                        ? true
+                                                        : manualSelectedIds.length > 0
+                                                            ? "indeterminate"
+                                                            : false
+                                                }
+                                                onCheckedChange={(checked) => {
+                                                    if (checked) {
+                                                        setManualSelectedIds(studentStatus.map(s => s.student.id));
+                                                    } else {
+                                                        setManualSelectedIds([]);
+                                                    }
+                                                }}
+                                                aria-label="Seleccionar todos los estudiantes"
+                                            />
+                                        </TableHead>
+                                    )}
                                     <TableHead>Estudiante</TableHead>
                                     <TableHead>Estado</TableHead>
                                     {activity.type !== "MANUAL" && (
@@ -1090,7 +1155,7 @@ export function ActivityDetail({
                                         <Fragment key={student.id}>
                                             {activity.isGroupActivity && isFirstInGroup && (
                                                 <TableRow className="bg-muted/40 hover:bg-muted/40 border-y border-border/80">
-                                                    <TableCell colSpan={activity.type !== "MANUAL" ? 6 : 4} className="py-2 px-4">
+                                                    <TableCell colSpan={activity.type !== "MANUAL" ? 6 : 5} className="py-2 px-4">
                                                         <div className="flex items-center justify-between">
                                                             <div className="flex items-center gap-2">
                                                                 <Users className="h-3.5 w-3.5 text-primary" />
@@ -1114,6 +1179,21 @@ export function ActivityDetail({
                                                 </TableRow>
                                             )}
                                             <TableRow className={isReevaluationRequested ? "bg-purple-50/50 dark:bg-purple-950/20" : undefined}>
+                                                {activity.type === "MANUAL" && (
+                                                    <TableCell className="w-[44px] pl-4 pr-1">
+                                                        <Checkbox
+                                                            checked={manualSelectedIds.includes(student.id)}
+                                                            onCheckedChange={(checked) => {
+                                                                setManualSelectedIds(prev =>
+                                                                    checked
+                                                                        ? [...prev, student.id]
+                                                                        : prev.filter(id => id !== student.id)
+                                                                );
+                                                            }}
+                                                            aria-label={`Seleccionar a ${student.name}`}
+                                                        />
+                                                    </TableCell>
+                                                )}
                                                 <TableCell>
                                             <div className="flex flex-col gap-0.5">
                                                 <div className="flex items-center gap-1.5 flex-wrap">
@@ -1237,7 +1317,7 @@ export function ActivityDetail({
                         })}
                                 {studentStatus.length === 0 && (
                                     <TableRow>
-                                        <TableCell colSpan={6} className="h-24 text-center">
+                                        <TableCell colSpan={activity.type === "MANUAL" ? 5 : 6} className="h-24 text-center">
                                             No hay estudiantes inscritos en este curso.
                                         </TableCell>
                                     </TableRow>
@@ -2676,6 +2756,22 @@ export function ActivityDetail({
                         )}
                     </DialogContent>
                 </Dialog>
+            )}
+
+            {activity.type === "MANUAL" && (
+                <ManualBatchGradingDialog
+                    isOpen={manualBatchDialogOpen}
+                    onClose={() => setManualBatchDialogOpen(false)}
+                    activity={activity}
+                    studentStatus={studentStatus}
+                    studentGroups={studentGroups}
+                    selectedStudentIds={manualSelectedIds}
+                    onSelectedStudentIdsChange={setManualSelectedIds}
+                    onSuccess={() => {
+                        setManualSelectedIds([]);
+                        router.refresh();
+                    }}
+                />
             )}
         </div>
     );

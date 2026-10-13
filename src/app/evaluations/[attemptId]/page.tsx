@@ -22,7 +22,7 @@ export default async function EvaluationPage({ params }: { params: Promise<{ att
         getAvailableThemes()
     ]);
 
-    if (!attempt) {
+    if (!attempt || !attempt.evaluation) {
         redirect("/dashboard/student");
     }
 

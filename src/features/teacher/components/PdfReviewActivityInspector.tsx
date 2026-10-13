@@ -245,7 +245,6 @@ export function PdfReviewActivityInspector({
         }
 
         setIsEvaluatingAI(true);
-        const toastId = toast.loading("Evaluando documento PDF con IA (Gemini)...");
         try {
             const result = await gradePdfReviewAction(
                 activity.id,
@@ -277,10 +276,10 @@ export function PdfReviewActivityInspector({
                 });
             }
             await onGradeManual(finalCombined.toFixed(1), finalFeedback, student.id, activity.id);
-
-            toast.success(`PDF evaluado y nota guardada con éxito: ${finalCombined.toFixed(1)} / 5.0 (IA: ${rawAi.toFixed(1)})`, { id: toastId });
+            toast.dismiss();
         } catch (error: any) {
-            toast.error("Error al evaluar el PDF con IA", { id: toastId, description: error.message });
+            console.error("Error al evaluar el PDF con IA:", error);
+            toast.dismiss();
         } finally {
             setIsEvaluatingAI(false);
         }
@@ -291,7 +290,7 @@ export function PdfReviewActivityInspector({
             setGradeInput(aiGrade.toFixed(1));
         }
         setRightTab("teacher_grade");
-        toast.success("Nota adoptada en la Evaluación Docente");
+        toast.dismiss();
     };
 
     const handleImproveWithAI = async () => {
@@ -352,12 +351,13 @@ export function PdfReviewActivityInspector({
         setIsSaving(true);
         try {
             await onGradeManual(gradeToSave, finalFeedback, student.id, activity.id);
-            toast.success("Calificación guardada correctamente");
+            toast.dismiss();
             if (andNext && currentIndex < totalStudents - 1 && onSelectStudent) {
                 onSelectStudent(studentsList[currentIndex + 1].student.id);
             }
         } catch (error: any) {
-            toast.error("Error al guardar la calificación", { description: error.message });
+            console.error("Error al guardar la calificación:", error);
+            toast.dismiss();
         } finally {
             setIsSaving(false);
         }

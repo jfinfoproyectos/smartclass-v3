@@ -30,7 +30,17 @@ export const calculateStudentGradeInGroup = (studentId: string, group: GradeGrou
     let totalWeightedGrade = 0;
     let totalWeight = 0;
 
-    const itemsWithGrades = group.items.map((item: any) => {
+    const validItems = group.items.filter((item: any) => {
+        if (item.activityId) {
+            return activities.some((a: any) => a.id === item.activityId);
+        }
+        if (item.evaluationAttemptId) {
+            return evaluations.some((e: any) => e.id === item.evaluationAttemptId && (e.evaluation?.title || e.title));
+        }
+        return false;
+    });
+
+    const itemsWithGrades = validItems.map((item: any) => {
         let grade = 0;
         let title = "S/N";
         let link: string | null = null;
@@ -48,7 +58,7 @@ export const calculateStudentGradeInGroup = (studentId: string, group: GradeGrou
             const attempt = evaluations.find((e: any) => e.id === item.evaluationAttemptId);
             const submission = attempt?.submissions?.find((s: any) => s.userId === studentId);
             grade = submission?.score || 0; // Already in 0-5.0 scale
-            title = attempt?.evaluation?.title || title;
+            title = attempt?.evaluation?.title || attempt?.title || title;
             // Evaluaciones don't have a simple direct submission URL for now
         }
         

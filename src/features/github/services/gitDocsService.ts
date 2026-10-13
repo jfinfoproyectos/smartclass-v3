@@ -34,11 +34,48 @@ export interface RepoAnalysisResult {
     hasCiCd: boolean;
 }
 
+export type ReadmeSectionKey = 
+    | "badges"
+    | "description"
+    | "features"
+    | "architecture"
+    | "techStack"
+    | "projectStructure"
+    | "prerequisites"
+    | "installation"
+    | "environmentVariables"
+    | "scripts"
+    | "apiEndpoints"
+    | "testing"
+    | "troubleshooting"
+    | "roadmap"
+    | "contributing"
+    | "license";
+
+export type MermaidDiagramType = "flowchart" | "sequence" | "erDiagram" | "c4";
+export type DocumentationTone = "professional" | "educational" | "minimal" | "enterprise";
+
+export interface ManualProjectInput {
+    name: string;
+    description: string;
+    primaryLanguage?: string;
+    stacks: string[];
+    frameworks?: string[];
+    databases?: string[];
+    tools?: string[];
+    envVars?: string[];
+    keyDirectories?: string[];
+    author?: string;
+}
+
 export interface DocsGenerationOptions {
     language: "es" | "en";
     licenseType: "MIT" | "Apache-2.0" | "GPL-3.0" | "BSD-3-Clause" | "ISC" | "Unlicense";
     authorName: string;
     includeMermaid: boolean;
+    mermaidType?: MermaidDiagramType;
+    documentationStyle?: DocumentationTone;
+    readmeSections?: Partial<Record<ReadmeSectionKey, boolean>>;
     projectScope?: string;
     targetFiles: {
         readme: boolean;
@@ -47,6 +84,11 @@ export interface DocsGenerationOptions {
         envExample: boolean;
         contributing: boolean;
         codeOfConduct: boolean;
+        architecture?: boolean;
+        apiDocs?: boolean;
+        deployment?: boolean;
+        security?: boolean;
+        changelog?: boolean;
     };
 }
 
@@ -57,6 +99,11 @@ export interface GeneratedDocsResult {
     envExample?: string;
     contributing?: string;
     codeOfConduct?: string;
+    architecture?: string;
+    apiDocs?: string;
+    deployment?: string;
+    security?: string;
+    changelog?: string;
     mermaidDiagram?: string;
 }
 
@@ -354,6 +401,121 @@ Los casos de comportamiento abusivo, acosador o de otra manera inaceptable puede
 Este Código de Conducta es una adaptación del [Contributor Covenant](https://www.contributor-covenant.org), versión 2.1.`;
 }
 
+// Generador de Política de Seguridad Oficial
+export function getSecurityPolicy(
+    author: string = "SmartClass Team", 
+    repoName: string = "Proyecto",
+    contactEmail: string = "security@smartclass.edu.co"
+): string {
+    return `# Política de Seguridad y Reporte de Vulnerabilidades
+
+## Versiones Soportadas
+
+Actualmente proporcionamos actualizaciones de seguridad y parches críticos para las siguientes versiones:
+
+| Versión | Soportada | Estado de Mantenimiento |
+| :--- | :--- | :--- |
+| **v1.x / Main** | :white_check_mark: | Soporte Activo |
+| < v1.0 | :x: | Sin soporte / Obsoleta |
+
+## Reportar una Vulnerabilidad
+
+Nos tomamos muy en serio la seguridad de nuestros usuarios y del software. Si descubres una vulnerabilidad potencial de seguridad en **${repoName}**, por favor repórtala de forma responsable y coordinada.
+
+### Proceso de Reporte
+1. **NO abras un Issue público** en GitHub para reportar vulnerabilidades críticas de seguridad o exposición de credenciales.
+2. Envía un correo electrónico detallado a: **${contactEmail}** (o al responsable: **${author}**).
+3. Incluye en tu reporte:
+   - Descripción clara de la vulnerabilidad y su impacto potencial.
+   - Pasos reproducibles detallados o prueba de concepto (PoC).
+   - Componentes o endpoints afectados.
+   - Si es posible, sugerencias de mitigación o parche.
+
+### Tiempo de Respuesta y Compromiso
+- Acusaremos recibo de tu reporte en un plazo máximo de **48 horas hábiles**.
+- Evaluaremos la severidad y mantendremos al reportador informado del avance de la mitigación.
+- Una vez desplegado el parche, se otorgará el debido crédito al investigador en las notas de lanzamiento si así lo desea.
+
+¡Agradecemos tu colaboración para mantener el ecosistema de software seguro!`;
+}
+
+// Generador de Plantilla Estándar de CHANGELOG (Keep a Changelog)
+export function getChangelogTemplate(projectName: string = "Proyecto", version: string = "1.0.0"): string {
+    const today = new Date().toISOString().split("T")[0];
+    return `# Registro de Cambios (Changelog)
+
+Todos los cambios notables en este proyecto serán documentados en este archivo.
+
+El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/),
+y este proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
+
+## [Sin Publicar] - Unreleased
+### Añadido
+- Mejoras de rendimiento en consultas y optimización de carga.
+- Documentación técnica expandida y cobertura de pruebas.
+
+## [${version}] - ${today}
+### Añadido
+- Versión inicial de producción de **${projectName}**.
+- Arquitectura modular desacoplada con buenas prácticas de ingeniería.
+- Integración de suite de gobernanza (.env.example, .gitignore, licencias).
+- Diagramas de arquitectura y especificación de flujos del sistema.
+
+### Seguridad
+- Configuración de variables de entorno protegidas y políticas de acceso.`;
+}
+
+/**
+ * Convierte datos de un proyecto manual o local a un RepoAnalysisResult
+ * para permitir generar documentación sin necesidad de repositorio remoto en GitHub
+ */
+export function createAnalysisFromManualData(input: ManualProjectInput): RepoAnalysisResult {
+    const primaryLang = input.primaryLanguage || (input.stacks[0] ?? "TypeScript");
+    const safeName = input.name.trim() || "mi-proyecto";
+    const author = input.author?.trim() || "Autor";
+    const stacks = input.stacks && input.stacks.length > 0 ? input.stacks : [primaryLang];
+    const frameworks = input.frameworks || [];
+    const databases = input.databases || [];
+    const tools = input.tools || (stacks.includes("Docker") ? ["Docker"] : []);
+
+    const dirs = input.keyDirectories && input.keyDirectories.length > 0 
+        ? input.keyDirectories 
+        : ["src", "components", "pages", "public", "tests"];
+
+    const snippet = dirs.map(d => `${d}/`).join("\n");
+    const hasDocker = tools.includes("Docker") || stacks.includes("Docker");
+
+    return {
+        owner: author,
+        repo: safeName,
+        branch: "main",
+        fullName: `${author}/${safeName}`,
+        description: input.description.trim() || "Proyecto de software profesional con arquitectura modular y buenas prácticas de ingeniería.",
+        stars: 0,
+        forks: 0,
+        primaryLanguage: primaryLang,
+        detectedStacks: stacks,
+        frameworks,
+        databases,
+        uiLibraries: [],
+        tools,
+        scripts: {
+            "dev": "npm run dev",
+            "build": "npm run build",
+            "start": "npm start",
+            "test": "npm test"
+        },
+        dependencies: {},
+        devDependencies: {},
+        envVars: input.envVars && input.envVars.length > 0 ? input.envVars : ["PORT", "DATABASE_URL", "NODE_ENV"],
+        keyDirectories: dirs,
+        fileStructureSnippet: snippet,
+        hasDocker,
+        hasTests: true,
+        hasCiCd: false
+    };
+}
+
 export const gitDocsService = {
     /**
      * Inspecciona a fondo el repositorio en GitHub y extrae toda la estructura técnica
@@ -593,39 +755,112 @@ export const gitDocsService = {
             result.codeOfConduct = getCodeOfConduct(options.authorName || "SmartClass Community");
         }
 
-        // 2. Generar README.md con Diagrama Mermaid con IA
+        if (options.targetFiles.security) {
+            result.security = getSecurityPolicy(
+                options.authorName || analysis.owner, 
+                analysis.repo, 
+                `security@${(analysis.owner || "smartclass").toLowerCase()}.edu.co`
+            );
+        }
+
+        if (options.targetFiles.changelog) {
+            result.changelog = getChangelogTemplate(analysis.repo, "1.0.0");
+        }
+
+        // 2. Generar README.md con secciones personalizadas y diagrama Mermaid
         if (options.targetFiles.readme) {
+            const sections = options.readmeSections || {
+                badges: true,
+                description: true,
+                features: true,
+                architecture: true,
+                techStack: true,
+                projectStructure: true,
+                prerequisites: true,
+                installation: true,
+                environmentVariables: true,
+                scripts: true,
+                apiEndpoints: true,
+                testing: true,
+                troubleshooting: true,
+                roadmap: true,
+                contributing: true,
+                license: true
+            };
+
+            const diagramType = options.mermaidType || "flowchart";
+            const docStyle = options.documentationStyle || "professional";
+
+            let diagramPrompt = "";
+            if (options.includeMermaid && sections.architecture !== false) {
+                switch (diagramType) {
+                    case "sequence":
+                        diagramPrompt = `Incluye un bloque de código mermaid (\`\`\`mermaid\\nsequenceDiagram ...) que modele el flujo secuencial de extremo a extremo de la interacción principal del usuario o cliente con la API/servicios y base de datos. Asegúrate de que los nombres de los participantes sean claros y no contengan caracteres especiales conflictivos.`;
+                        break;
+                    case "erDiagram":
+                        diagramPrompt = `Incluye un bloque de código mermaid (\`\`\`mermaid\\nerDiagram ...) que represente las entidades principales del modelo de datos del sistema, sus atributos clave y las relaciones con cardinalidad (ej: 1 a N, N a M).`;
+                        break;
+                    case "c4":
+                        diagramPrompt = `Incluye un bloque de código mermaid (\`\`\`mermaid\\nflowchart TB ...) que represente un diagrama C4 de componentes: Usuario -> Frontend Container -> API Gateway/Controllers -> Service Layer -> Database / External APIs, con subgrafos limpios.`;
+                        break;
+                    case "flowchart":
+                    default:
+                        diagramPrompt = `Incluye un bloque de código mermaid (\`\`\`mermaid\\nflowchart TD ...) que modele la arquitectura de alto nivel del sistema en capas: Clientes / UI -> API & Middleware -> Lógica de Negocio / Servicios -> Base de Datos / Almacenamiento. El diagrama debe ser sintácticamente impecable, sin caracteres no escapados dentro de los nodos.`;
+                        break;
+                }
+            }
+
+            let tonePrompt = "";
+            switch (docStyle) {
+                case "educational":
+                    tonePrompt = `El tono debe ser didáctico, claro y pedagógico, excelente para estudiantes y docentes universitarios o del SENA. Explica los conceptos clave con rigor y claridad, guiando al aprendiz en cada paso.`;
+                    break;
+                case "minimal":
+                    tonePrompt = `El tono debe ser conciso, directo y al grano. Evita párrafos largos, prioriza comandos listos para copiar, tablas limpias y viñetas ejecutables.`;
+                    break;
+                case "enterprise":
+                    tonePrompt = `El tono debe ser corporativo de nivel Enterprise. Destaca la robustez, alta disponibilidad, observabilidad, seguridad de datos, diseño desacoplado y estándares de cumplimiento.`;
+                    break;
+                case "professional":
+                default:
+                    tonePrompt = `El tono debe ser de ingeniería de software profesional de clase mundial, similar a los mejores proyectos open source de GitHub (como Next.js, FastAPI, Prisma).`;
+                    break;
+            }
+
+            // Construir lista de secciones activas para el prompt
+            const activeSectionsList: string[] = [];
+            if (sections.badges !== false) activeSectionsList.push("- Badges oficiales con shields.io (Licencia, Versión, Estrellas, Stacks con logos de Simple Icons).");
+            if (sections.description !== false) activeSectionsList.push("- Resumen ejecutivo y propuesta de valor clara (problema que resuelve el proyecto).");
+            if (sections.features !== false) activeSectionsList.push("- Características principales (Key Features) destacadas con viñetas elegantes y emojis contextuales.");
+            if (options.includeMermaid && sections.architecture !== false) activeSectionsList.push(`- Arquitectura del Sistema (Mermaid): ${diagramPrompt}`);
+            if (sections.techStack !== false) activeSectionsList.push("- Stack Tecnológico: Tabla con Categoría, Tecnología, Versión/Uso y Justificación.");
+            if (sections.projectStructure !== false) activeSectionsList.push("- Estructura de Directorios: Árbol ASCII estructurado con comentarios de las carpetas clave.");
+            if (sections.prerequisites !== false) activeSectionsList.push("- Requisitos Previos (Node.js, Python, Docker, Base de datos, etc.).");
+            if (sections.installation !== false) activeSectionsList.push("- Guía de Instalación y Puesta en Marcha paso a paso (git clone, dependencias, levantar servidor).");
+            if (sections.environmentVariables !== false) activeSectionsList.push("- Variables de Entorno: Breve resumen de variables necesarias (hacer referencia a .env.example).");
+            if (sections.scripts !== false) activeSectionsList.push("- Scripts Disponibles: Tabla de comandos (dev, build, start, test, lint).");
+            if (sections.apiEndpoints !== false) activeSectionsList.push("- Endpoints Principales / Rutas de API: Tabla o lista con método HTTP, ruta y breve descripción.");
+            if (sections.testing !== false) activeSectionsList.push("- Pruebas y Calidad de Código: Cómo ejecutar suites de pruebas unitarias o de integración.");
+            if (sections.troubleshooting !== false) activeSectionsList.push("- Solución de Problemas Comunes (FAQ / Troubleshooting).");
+            if (sections.roadmap !== false) activeSectionsList.push("- Hoja de Ruta (Roadmap) con próximas mejoras.");
+            if (sections.contributing !== false) activeSectionsList.push("- Contribución: Enlace e invitación a CONTRIBUTING.md.");
+            if (sections.license !== false) activeSectionsList.push(`- Licencia: Enlace e indicación de licencia ${options.licenseType}.`);
+
             const readmeSystemPrompt = `Eres un Staff Software Engineer, Tech Lead y Experto en Documentación Técnica Open Source.
-Tu objetivo es crear el README.md definitivo para un repositorio de software, con un estándar de calidad igual o superior al de proyectos icónicos de GitHub (como Next.js, FastAPI, Prisma, Tailwind).
+Tu objetivo es crear el README.md definitivo para un repositorio de software.
 
-ESTRUCTURA OBLIGATORIA DEL README.md:
-1. **Encabezado con Badges (shields.io)**:
-   - Badges de licencia, versión, estrellas, tecnologías detectadas con sus logos oficiales de Simple Icons.
-   - Logo / Título centrado con subtítulo de alto impacto.
-2. **Propuesta de Valor y Resumen**:
-   - Qué problema resuelve el proyecto y por qué es relevante.
-3. **Características Principales (Key Features)**:
-   - Lista con viñetas enriquecidas y emojis de las capacidades del sistema.
-4. **Arquitectura del Sistema (Diagrama Mermaid)**:
-   - Incluye un bloque de código mermaid (\`\`\`mermaid) que describa la arquitectura del sistema: Frontend, API / Controladores, Servicios de Negocio, Base de Datos y Servicios Externos. El diagrama DEBE ser sintácticamente perfecto (usar \`flowchart TD\` o \`flowchart LR\`, citas en comillas si hay caracteres especiales).
-5. **Stack Tecnológico**:
-   - Tabla elegante que liste Categoría, Tecnología y Utilidad.
-6. **Estructura del Proyecto**:
-   - Árbol ASCII limpio de las carpetas clave del proyecto (\`src/\`, \`components/\`, etc.) con breve descripción al lado.
-7. **Requisitos Previos y Guía de Instalación Rápida**:
-   - Paso 1: Clonar repositorio (\`git clone\`).
-   - Paso 2: Instalación de dependencias (\`npm install\` o \`pip install\`, etc.).
-   - Paso 3: Configurar variables de entorno (copiar \`.env.example\`).
-   - Paso 4: Ejecución en modo desarrollo (\`npm run dev\`, etc.).
-8. **Scripts Disponibles**:
-   - Tabla o lista con los scripts detectados y su propósito.
-9. **Guía de Contribución y Licencia**:
-   - Mención a CONTRIBUTING.md y LICENSE.
+DIRECTRICES:
+${tonePrompt}
 
-IDIOMA: ${options.language === "es" ? "Español profesional, moderno y riguroso" : "Professional English"}.
-`;
+SECCIONES SOLICITADAS QUE DEBES INCLUIR ESTRICTAMENTE:
+${activeSectionsList.join("\n")}
 
-            const readmeUserPrompt = `Genera el archivo README.md completo para el siguiente repositorio analizado:
+REGLA CRÍTICA:
+- NO agregues secciones que no fueron solicitadas.
+- Si se solicitó diagrama Mermaid, asegúrate de que sea 100% válido sintácticamente. No uses caracteres como paréntesis o llaves dentro de etiquetas de nodo a menos que estén dentro de comillas (ej: A["Texto (detalles)"] --> B).
+- IDIOMA: ${options.language === "es" ? "Español profesional" : "Professional English"}.`;
+
+            const readmeUserPrompt = `Genera el archivo README.md completo para el siguiente repositorio:
 Nombre: ${analysis.fullName}
 Descripción actual: ${analysis.description}
 Rama principal: ${analysis.branch}
@@ -641,9 +876,9 @@ Directorios detectados: ${analysis.keyDirectories.join(", ")}
 Muestra de estructura:
 ${analysis.fileStructureSnippet}
 
-${options.projectScope ? `Contexto o alcance adicional provisto por el docente: "${options.projectScope}"` : ""}
+${options.projectScope ? `Instrucciones o alcance adicional provisto por el usuario: "${options.projectScope}"` : ""}
 
-Entrega ÚNICAMENTE el contenido del README.md en formato Markdown limpio, sin rodeos ni explicaciones fuera del markdown.`;
+Entrega ÚNICAMENTE el contenido del README.md en formato Markdown limpio, sin texto introductorio antes ni después.`;
 
             try {
                 const readmeRes = await generateText({
@@ -655,7 +890,6 @@ Entrega ÚNICAMENTE el contenido del README.md en formato Markdown limpio, sin r
 
                 result.readme = readmeRes.text.trim();
 
-                // Extraer el bloque mermaid si existe para el preview interactivo
                 const mermaidMatch = result.readme.match(/```mermaid\n([\s\S]*?)\n```/);
                 if (mermaidMatch && mermaidMatch[1]) {
                     result.mermaidDiagram = mermaidMatch[1].trim();
@@ -726,7 +960,138 @@ Responde ÚNICAMENTE con el archivo CONTRIBUTING.md en formato Markdown limpio.`
             }
         }
 
+        // 5. Generar ARCHITECTURE.md con IA (si está seleccionado)
+        if (options.targetFiles.architecture) {
+            const archSystemPrompt = `Eres un Principal Enterprise Architect.
+Genera el archivo ARCHITECTURE.md definitivo y de alta profundidad técnica para el proyecto.
+Debe incluir:
+1. Visión y Principios Arquitecturales (patrones de diseño: Clean Architecture, Modular Monolith, Hexagonal, etc.).
+2. Diagrama de Arquitectura Detallado en Mermaid (\`\`\`mermaid) que represente la interacción entre capas de la aplicación.
+3. Desglose de Componentes y Módulos Clave (con justificación del árbol de directorios).
+4. Flujo de Datos y Manejo del Estado (State Management, persistencia, validaciones).
+5. Registro de Decisiones de Arquitectura (ADR - Architectural Decision Records) resumiendo las decisiones tecnológicas tomadas.
+6. Estrategia de Seguridad, Escalabilidad y Resiliencia.
+Idioma: ${options.language === "es" ? "Español técnico riguroso" : "Technical English"}.
+
+Responde ÚNICAMENTE con el Markdown del archivo ARCHITECTURE.md.`;
+
+            try {
+                const archRes = await generateText({
+                    model,
+                    system: archSystemPrompt,
+                    prompt: `Proyecto: ${analysis.fullName}\nStack: ${analysis.detectedStacks.join(", ")}\nFrameworks: ${analysis.frameworks.join(", ")}\nBases de datos: ${analysis.databases.join(", ")}\nCarpetas: ${analysis.keyDirectories.join(", ")}\nEstructura:\n${analysis.fileStructureSnippet}`,
+                    temperature: 0.25,
+                });
+                result.architecture = archRes.text.trim();
+            } catch (err) {
+                console.error("[gitDocsService] Error generando ARCHITECTURE.md:", err);
+                result.architecture = `# Arquitectura de ${analysis.fullName}\n\n## Principios\nArquitectura modular orientada a servicios.`;
+            }
+        }
+
+        // 6. Generar API.md con IA (si está seleccionado)
+        if (options.targetFiles.apiDocs) {
+            const apiSystemPrompt = `Eres un Tech Lead de APIs y Servicios Web.
+Genera el archivo API.md exhaustivo con la especificación de referencia de la API del proyecto.
+Debe incluir:
+1. Especificación general (Base URL, Versión, Cabeceras comunes como Authorization y Content-Type).
+2. Mecanismos de Autenticación (Bearer Token, Cookies, JWT o API Key).
+3. Catálogo de Endpoints organizados por dominio/recurso (ej: Auth, Cursos, Evaluaciones, Repositorios).
+   Para cada endpoint incluir:
+   - Método HTTP y Ruta (ej: \`POST /api/v1/courses\`).
+   - Descripción del propósito.
+   - Headers requeridos.
+   - Cuerpo de la petición (JSON) con tipos y ejemplos.
+   - Respuestas exitosas (\`200 OK\` o \`201 Created\`) con JSON de ejemplo.
+   - Códigos de error estándar (\`400\`, \`401\`, \`403\`, \`404\`, \`500\`).
+4. Manejo de Errores estándar y formato de respuesta ante excepciones.
+5. Ejemplo de llamada mediante cURL.
+Idioma: ${options.language === "es" ? "Español profesional" : "English"}.
+
+Responde ÚNICAMENTE con el Markdown del archivo API.md.`;
+
+            try {
+                const apiRes = await generateText({
+                    model,
+                    system: apiSystemPrompt,
+                    prompt: `Proyecto: ${analysis.fullName}\nStack: ${analysis.detectedStacks.join(", ")}\nFrameworks: ${analysis.frameworks.join(", ")}\nBases de datos: ${analysis.databases.join(", ")}\nDirectorios: ${analysis.keyDirectories.join(", ")}`,
+                    temperature: 0.2,
+                });
+                result.apiDocs = apiRes.text.trim();
+            } catch (err) {
+                console.error("[gitDocsService] Error generando API.md:", err);
+                result.apiDocs = `# Especificación de API - ${analysis.fullName}\n\n## Endpoints\nDocumentación en construcción.`;
+            }
+        }
+
+        // 7. Generar DEPLOYMENT.md con IA (si está seleccionado)
+        if (options.targetFiles.deployment) {
+            const deploySystemPrompt = `Eres un Senior DevOps Engineer y Cloud Specialist.
+Genera una guía de despliegue DEPLOYMENT.md completa y lista para producción.
+Debe incluir:
+1. Requisitos del Entorno de Producción (servidor, memoria, puertos, bases de datos).
+2. Despliegue con Docker y Docker Compose (incluir snippets de Dockerfile multi-etapa y docker-compose.prod.yml).
+3. Despliegue en Plataformas Cloud / PaaS (ej: Vercel, Railway, Render, VPS con Ubuntu / Nginx).
+4. Gestión segura de Variables de Entorno y Secretos en producción.
+5. Base de Datos: Migraciones automáticas (\`prisma migrate\`, scripts SQL, etc.).
+6. Healthchecks, Monitoreo y Estrategia de Respaldos (Backups).
+7. Procedimiento de Rollback en caso de fallos.
+Idioma: ${options.language === "es" ? "Español" : "English"}.
+
+Responde ÚNICAMENTE con el Markdown del archivo DEPLOYMENT.md.`;
+
+            try {
+                const deployRes = await generateText({
+                    model,
+                    system: deploySystemPrompt,
+                    prompt: `Proyecto: ${analysis.fullName}\nStack: ${analysis.detectedStacks.join(", ")}\nFrameworks: ${analysis.frameworks.join(", ")}\nBases de datos: ${analysis.databases.join(", ")}\nTiene Docker: ${analysis.hasDocker ? "Sí" : "No"}\nVariables: ${analysis.envVars.join(", ")}`,
+                    temperature: 0.2,
+                });
+                result.deployment = deployRes.text.trim();
+            } catch (err) {
+                console.error("[gitDocsService] Error generando DEPLOYMENT.md:", err);
+                result.deployment = `# Guía de Despliegue - ${analysis.fullName}\n\n## Pasos\nConfigurar variables y ejecutar build.`;
+            }
+        }
+
         return result;
+    },
+
+    /**
+     * Refina o modifica interactivamente un documento ya generado utilizando IA
+     */
+    async refineDocWithAi(
+        content: string,
+        instruction: string,
+        language: "es" | "en" = "es",
+        userId?: string
+    ): Promise<string> {
+        const model = await getAIModel(userId);
+        const systemPrompt = `Eres un Staff Technical Writer y Tech Lead.
+Tu tarea es modificar, mejorar o ampliar el documento técnico provisto siguiendo estrictamente la instrucción del usuario.
+Reglas:
+- Aplica los cambios solicitados manteniendo el formato Markdown impecable.
+- Conserva el contexto del proyecto y el rigor técnico.
+- Si se solicita añadir o corregir un diagrama Mermaid, asegúrate de que sea sintácticamente perfecto sin caracteres no escapados.
+- Idioma solicitado: ${language === "es" ? "Español" : "Inglés"}.
+- Responde ÚNICAMENTE con el documento Markdown resultante, sin comentarios introductorios ni despedidas.`;
+
+        const userPrompt = `DOCUMENTO ORIGINAL:
+${content}
+
+INSTRUCCIÓN DE MEJORA:
+${instruction}
+
+Devuelve el documento completo refinado:`;
+
+        const response = await generateText({
+            model,
+            system: systemPrompt,
+            prompt: userPrompt,
+            temperature: 0.2,
+        });
+
+        return response.text.trim();
     },
 
     /**

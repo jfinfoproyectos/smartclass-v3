@@ -229,14 +229,10 @@ export function AiInterviewInspector({
                 finalFeedback = embedEvaluationMetadata(finalFeedback, metadata);
             }
             await onGradeManual(finalCombined.toFixed(1), finalFeedback, student.id, activity.id);
-
-            if (checklistConfig) {
-                toast.success(`✓ Entrevista evaluada con IA y nota guardada (${result.grade.toFixed(1)}). Nota ponderada: ${finalCombined.toFixed(1)}`);
-            } else {
-                toast.success(`✓ Entrevista evaluada con IA y nota guardada: ${result.grade.toFixed(1)}`);
-            }
+            toast.dismiss();
         } catch (err: any) {
-            toast.error(err.message || "Error al evaluar entrevista.");
+            console.error("Error al evaluar entrevista:", err);
+            toast.dismiss();
         } finally {
             setIsEvaluatingAI(false);
         }
@@ -273,9 +269,10 @@ export function AiInterviewInspector({
             }
 
             await onGradeManual(gradeToSave, fullFeedback, student.id, activity.id);
-            toast.success("✓ Calificación guardada exitosamente");
+            toast.dismiss();
         } catch (err: any) {
-            toast.error(err.message || "Error al guardar la calificación");
+            console.error("Error al guardar la calificación:", err);
+            toast.dismiss();
         } finally {
             setIsSaving(false);
         }
