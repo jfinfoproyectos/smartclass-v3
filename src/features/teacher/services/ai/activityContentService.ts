@@ -2250,4 +2250,52 @@ ${JSON.stringify(stepsSummary, null, 2)}`;
     };
 }
 
+/**
+ * Proponer un título corto, preciso y pedagógicamente claro para la actividad de acuerdo al contenido.
+ */
+export async function generateActivityShortTitle(
+    statement: string,
+    activityType: string,
+    userId: string,
+    currentTitle?: string,
+    extraContext?: string
+): Promise<string> {
+    const model = await getAIModel(userId);
+
+    const prompt = `Eres un asistente pedagógico experto en diseño curricular universitario y técnico.
+Tu misión es proponer un TÍTULO CORTO, IMPACTANTE, PROFESIONAL Y PEDAGÓGICAMENTE CLARO para una actividad de aprendizaje.
+
+DATOS DE LA ACTIVIDAD:
+- Modalidad / Tipo de evaluación: ${activityType}
+${currentTitle ? `- Título actual previo: "${currentTitle}"` : ""}
+${extraContext ? `- Contexto / Requisitos técnicos: ${extraContext}` : ""}
+
+CONTENIDO / ENUNCIADO DE LA ACTIVIDAD:
+"""
+${(statement || "").slice(0, 5000)}
+"""
+
+CRITERIOS ESTRICTOS PARA EL TÍTULO:
+1. Longitud concisa: Entre 3 y 8 palabras (máximo 65 caracteres).
+2. Directo y técnico: Nombra la tecnología, competencia o entregable central (ejemplos: "API REST con FastAPI y Docker", "Modelado de Base de Datos para E-Commerce", "Algoritmos y Colecciones en Kotlin", "Defensa Oral: Arquitectura MVC", "Pipeline CI/CD con GitHub Actions").
+3. Si el título previo tenía un número o prefijo organizador (ej: "Actividad 1 -", "Taller 2:"), consérvalo al inicio si es conveniente, o genera la frase central limpia para que sea un título corto ideal.
+4. Evita títulos genéricos como "Ejercicio evaluativo" o "Actividad en clase".
+5. Devuelve únicamente el título en texto limpio, sin comillas adicionales ni punto final.
+`;
+
+    const { object } = await generateObject({
+        model,
+        schema: z.object({
+            shortTitle: z.string().describe("Título corto, técnico y conciso de la actividad"),
+        }),
+        prompt,
+    });
+
+    if (!object?.shortTitle) {
+        throw new Error("No se pudo generar el título corto con IA");
+    }
+
+    return object.shortTitle.trim().replace(/^["']|["']$/g, "").replace(/\.$/, "");
+}
+
 

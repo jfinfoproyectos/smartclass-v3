@@ -50,39 +50,112 @@ interface CodeChallengeInspectorProps {
     onReject: (studentId: string, feedback?: string) => Promise<void>;
 }
 
+function getExtensionFromLanguage(lang: string): string {
+    switch (lang) {
+        case "kotlin": return "kt";
+        case "python": return "py";
+        case "typescript": return "ts";
+        case "java": return "java";
+        case "cpp": return "cpp";
+        case "csharp": return "cs";
+        case "php": return "php";
+        case "go": return "go";
+        case "rust": return "rs";
+        case "ruby": return "rb";
+        case "swift": return "swift";
+        case "sql": return "sql";
+        case "html": return "html";
+        case "css": return "css";
+        case "json": return "json";
+        case "xml": return "xml";
+        case "yaml": return "yaml";
+        case "markdown": return "md";
+        case "shell": return "sh";
+        default: return "js";
+    }
+}
+
 function getLanguageFromFileName(filename: string): string {
-    const ext = filename.split('.').pop()?.toLowerCase();
+    if (!filename) return "javascript";
+    const cleanName = filename.toLowerCase();
+    if (cleanName === "dockerfile" || cleanName.startsWith("dockerfile.")) return "dockerfile";
+    if (cleanName === ".env" || cleanName.startsWith(".env.")) return "ini";
+
+    const ext = cleanName.split('.').pop()?.toLowerCase();
     switch (ext) {
+        case "kt":
+        case "kts":
+            return "kotlin";
         case "js":
         case "jsx":
         case "mjs":
+        case "cjs":
             return "javascript";
         case "ts":
         case "tsx":
             return "typescript";
         case "py":
+        case "pyw":
+        case "python":
             return "python";
-        case "html":
-        case "htm":
-            return "html";
-        case "css":
-            return "css";
-        case "json":
-            return "json";
-        case "sql":
-            return "sql";
         case "java":
             return "java";
         case "cpp":
         case "cc":
+        case "cxx":
         case "c":
+        case "h":
+        case "hpp":
             return "cpp";
+        case "cs":
+            return "csharp";
+        case "php":
+            return "php";
+        case "rb":
+            return "ruby";
+        case "go":
+            return "go";
+        case "rs":
+            return "rust";
+        case "swift":
+            return "swift";
+        case "html":
+        case "htm":
+            return "html";
+        case "css":
+        case "scss":
+        case "sass":
+        case "less":
+            return "css";
+        case "json":
+        case "jsonc":
+            return "json";
+        case "sql":
+            return "sql";
+        case "yaml":
+        case "yml":
+            return "yaml";
+        case "xml":
+        case "xsd":
+        case "svg":
+            return "xml";
+        case "sh":
+        case "bash":
+        case "zsh":
+            return "shell";
+        case "ini":
+        case "toml":
+        case "env":
+        case "properties":
+            return "ini";
         case "md":
+        case "markdown":
             return "markdown";
         default:
             return "javascript";
     }
 }
+
 
 // Separar retroalimentación guardada en parte IA y notas docentes
 function parseInitialFeedback(rawFeedback: string | null | undefined) {
@@ -144,10 +217,9 @@ export function CodeChallengeInspector({
         }
     }, [activity?.description]);
 
-    const language = challengeConfig?.language || "javascript";
-
     // Extraer archivos entregados por el estudiante
     const files = useMemo<Array<{ id: string; name: string; content: string }>>(() => {
+        const defaultExt = getExtensionFromLanguage(challengeConfig?.language || "javascript");
         if (!submission?.url) return [];
         try {
             const parsed = JSON.parse(submission.url);
@@ -155,15 +227,32 @@ export function CodeChallengeInspector({
                 return parsed.files;
             }
             if (parsed?.code) {
-                return [{ id: "1", name: "solucion.js", content: parsed.code }];
+                return [{ id: "1", name: `solucion.${defaultExt}`, content: parsed.code }];
             }
         } catch {
             if (typeof submission.url === "string" && submission.url.trim()) {
-                return [{ id: "1", name: "solucion.js", content: submission.url }];
+                return [{ id: "1", name: `solucion.${defaultExt}`, content: submission.url }];
             }
         }
         return [];
-    }, [submission?.url]);
+    }, [submission?.url, challengeConfig?.language]);
+
+    // Detectar lenguaje a partir de las extensiones de los archivos si el configurado es default o no coincide
+    const detectedLanguage = useMemo(() => {
+        if (files.length > 0) {
+            for (const f of files) {
+                const lang = getLanguageFromFileName(f.name);
+                if (lang && lang !== "javascript") return lang;
+            }
+            return getLanguageFromFileName(files[0].name);
+        }
+        return null;
+    }, [files]);
+
+    const language = (challengeConfig?.language && challengeConfig.language !== "javascript")
+        ? challengeConfig.language
+        : (detectedLanguage || challengeConfig?.language || "javascript");
+
 
     const [activeFileId, setActiveFileId] = useState<string>(files[0]?.id || "1");
 

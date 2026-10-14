@@ -90,7 +90,6 @@ function getLanguageFromFileName(filename: string): string {
         case "md":
         case "markdown":
             return "markdown";
-        case "xml":
         case "kt":
         case "kts":
             return "kotlin";
@@ -317,13 +316,14 @@ export function CodeChallengeActivityDetails({
             }));
         }
         if (challengeConfig?.starterCode) {
-            const ext = challengeConfig.language === "python" ? "py" : challengeConfig.language === "typescript" ? "ts" : "js";
+            const ext = getExtensionFromLanguage(challengeConfig.language || "javascript");
             return [
                 { id: "1", name: `solucion.${ext}`, content: challengeConfig.starterCode }
             ];
         }
+        const defaultExt = getExtensionFromLanguage(challengeConfig?.language || "javascript");
         return [
-            { id: "1", name: "solucion.js", content: "// Escribe tu solución aquí\n" }
+            { id: "1", name: `solucion.${defaultExt}`, content: "// Escribe tu solución aquí\n" }
         ];
     }, [challengeConfig, activity?.statement]);
 
@@ -342,8 +342,9 @@ export function CodeChallengeActivityDetails({
             return savedSubmissionData.files;
         }
         if (savedSubmissionData?.code) {
+            const defaultExt = getExtensionFromLanguage(challengeConfig?.language || "javascript");
             return [
-                { id: "1", name: "solucion.js", content: savedSubmissionData.code }
+                { id: "1", name: `solucion.${defaultExt}`, content: savedSubmissionData.code }
             ];
         }
         return initialFiles;
@@ -427,7 +428,20 @@ export function CodeChallengeActivityDetails({
 
     const activeFile = files.find(f => f.id === activeFileId) || files[0];
     const activeFileIndex = files.findIndex(f => f.id === activeFile?.id);
-    const language = challengeConfig?.language || (files[0] ? getLanguageFromFileName(files[0].name) : "javascript");
+    const detectedLanguage = useMemo(() => {
+        if (files.length > 0) {
+            for (const f of files) {
+                const lang = getLanguageFromFileName(f.name);
+                if (lang && lang !== "javascript") return lang;
+            }
+            return getLanguageFromFileName(files[0].name);
+        }
+        return null;
+    }, [files]);
+
+    const language = (challengeConfig?.language && challengeConfig.language !== "javascript")
+        ? challengeConfig.language
+        : (detectedLanguage || challengeConfig?.language || "javascript");
 
     // Actualizar contenido del archivo en edición
     const handleCodeChange = (newCode: string | undefined) => {

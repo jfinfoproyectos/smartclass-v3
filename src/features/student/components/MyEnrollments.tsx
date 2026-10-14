@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { 
-    MessageSquare, Users, ClipboardCheck, Clock, BookOpen, GraduationCap, 
+    MessageSquare, Users, User, ClipboardCheck, Clock, BookOpen, GraduationCap, 
     FileText, AlertCircle, ArrowLeft, Calendar, ArrowRight, LayoutGrid, List,
     Sparkles, FolderGit2, Code2, Terminal, Video, Headphones, MessageSquareQuote, Database, Target, CheckCircle2,
     Layers, GitBranch, ShieldAlert
@@ -499,6 +499,25 @@ export function MyEnrollments({
                                                                     </div>
 
                                                                     <div className="flex items-center gap-1.5 flex-wrap justify-end shrink-0">
+                                                                        {activity.isGroupActivity ? (
+                                                                            <Badge
+                                                                                variant="outline"
+                                                                                className="text-[10px] font-bold px-1.5 py-0 gap-1 border shrink-0 bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/30"
+                                                                                title="Actividad grupal / en equipo"
+                                                                            >
+                                                                                <Users className="h-2.5 w-2.5 text-indigo-500 shrink-0" />
+                                                                                <span>Grupal</span>
+                                                                            </Badge>
+                                                                        ) : (
+                                                                            <Badge
+                                                                                variant="outline"
+                                                                                className="text-[10px] font-bold px-1.5 py-0 gap-1 border shrink-0 bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/30"
+                                                                                title="Actividad individual"
+                                                                            >
+                                                                                <User className="h-2.5 w-2.5 text-slate-500 shrink-0" />
+                                                                                <span>Individual</span>
+                                                                            </Badge>
+                                                                        )}
                                                                         {activity.isGroupActivity && activity.groupScope === "ACTIVITY" && (
                                                                             <Badge
                                                                                 variant="outline"
@@ -650,7 +669,20 @@ export function MyEnrollments({
                                                                                     <typeInfo.icon className="h-3 w-3" />
                                                                                 </div>
                                                                                 <div className="space-y-0.5">
-                                                                                    <div className="font-semibold text-sm text-foreground">{activity.title}</div>
+                                                                                    <div className="flex items-center flex-wrap gap-1.5">
+                                                                                        <span className="font-semibold text-sm text-foreground">{activity.title}</span>
+                                                                                        {activity.isGroupActivity ? (
+                                                                                            <Badge variant="outline" className="text-[10px] font-bold gap-1 px-1.5 py-0 shrink-0 bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/30">
+                                                                                                <Users className="h-2.5 w-2.5 text-indigo-500" />
+                                                                                                <span>Grupal</span>
+                                                                                            </Badge>
+                                                                                        ) : (
+                                                                                            <Badge variant="outline" className="text-[10px] font-bold gap-1 px-1.5 py-0 shrink-0 bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/30">
+                                                                                                <User className="h-2.5 w-2.5 text-slate-500" />
+                                                                                                <span>Individual</span>
+                                                                                            </Badge>
+                                                                                        )}
+                                                                                    </div>
                                                                                     {!isOpen && (
                                                                                         <div className="text-[10px] text-yellow-600 dark:text-yellow-400 font-medium flex items-center">
                                                                                             <Clock className="mr-1 h-3 w-3" />

@@ -22,10 +22,10 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { createActivityAction, updateActivityAction, deleteActivityAction, generateChecklistCriteriaAction, verifyCriterionRelationAction, balanceCriteriaPercentagesAction, generateCodeFileTemplateAction, generateRequiredTopicsAction, generateAllWorkshopStepsAction, generateSingleWorkshopStepAction, generateWorkshopStepHintsAction, generateWorkshopStepInstructionsAction, generateWorkshopStepCodeAction, generateWorkshopStepCodeExplanationAction, suggestWorkshopStepGitCommandsAction } from "@/features/teacher/actions/activityActions";
+import { createActivityAction, updateActivityAction, deleteActivityAction, generateChecklistCriteriaAction, verifyCriterionRelationAction, balanceCriteriaPercentagesAction, generateCodeFileTemplateAction, generateRequiredTopicsAction, generateAllWorkshopStepsAction, generateSingleWorkshopStepAction, generateWorkshopStepHintsAction, generateWorkshopStepInstructionsAction, generateWorkshopStepCodeAction, generateWorkshopStepCodeExplanationAction, suggestWorkshopStepGitCommandsAction, generateActivityShortTitleAction } from "@/features/teacher/actions/activityActions";
 import { scanRepositoryAction } from "@/features/github/actions/githubActions";
 import { getMissingSubmissionsAction } from "@/features/teacher/actions/studentActions";
-import { Plus, Minus, Calendar, FileText, MessageSquare, Pencil, Trash2, Eye, X, ChevronUp, ChevronDown, AlertCircle, Sparkles, Upload, Download, Loader2, Search, UserX, GripVertical, LayoutGrid, List, Save, Settings2, Code2, FolderGit2, CheckCircle2, Clock, SlidersHorizontal, Info, ListChecks, CheckSquare, RefreshCw, Bot, Cpu, HelpCircle, MessageSquareQuote, Shuffle, Scale, Crown, Users, Terminal, Video, Database, Mic, Headphones, FileCode, Target, Layers, FileCheck, BookOpen, GitBranch, ArrowRight, Lock } from "lucide-react";
+import { Plus, Minus, Calendar, FileText, MessageSquare, Pencil, Trash2, Eye, X, ChevronUp, ChevronDown, AlertCircle, Sparkles, Upload, Download, Loader2, Search, UserX, GripVertical, LayoutGrid, List, Save, Settings2, Code2, FolderGit2, CheckCircle2, Clock, SlidersHorizontal, Info, ListChecks, CheckSquare, RefreshCw, Bot, Cpu, HelpCircle, MessageSquareQuote, Shuffle, Scale, Crown, Users, User, Terminal, Video, Database, Mic, Headphones, FileCode, Target, Layers, FileCheck, BookOpen, GitBranch, ArrowRight, Lock } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -1172,6 +1172,68 @@ function ActivityFormDialog({
     const [dbIncludeDdl, setDbIncludeDdl] = useState<boolean>(true);
     const [dbIncludeDml, setDbIncludeDml] = useState<boolean>(true);
     const [dbIncludeQueries, setDbIncludeQueries] = useState<boolean>(true);
+    const [activityTitle, setActivityTitle] = useState<string>(activity?.title || "");
+    const [isGeneratingTitle, setIsGeneratingTitle] = useState<boolean>(false);
+
+    const handleGenerateShortTitleWithAI = async () => {
+        const currentStatement = statement?.trim() || "";
+        
+        let extraContext = "";
+        if (criteria && criteria.length > 0) {
+            extraContext += ` Rúbrica/Criterios: ${criteria.map(c => c.name).join(", ")}.`;
+        }
+        if (selectedType === "WORKSHOP_GITHUB" && workshopMilestones.length > 0) {
+            extraContext += ` Pasos: ${workshopMilestones.map(m => m.title).join(", ")}. Lenguaje: ${workshopLanguage}.`;
+        }
+        if (selectedType === "CODE_CHALLENGE" && challengeFiles.length > 0) {
+            extraContext += ` Archivos: ${challengeFiles.map(f => f.name).join(", ")}. Lenguaje: ${challengeLanguage}.`;
+        }
+        if (selectedType === "DB_MODELING" && dbRequiredEntities.length > 0) {
+            extraContext += ` Entidades: ${dbRequiredEntities.join(", ")}. Motor: ${dbTargetEngine}.`;
+        }
+        if (selectedType === "AUDIO_DEFENSE" && audioRequiredTopics.length > 0) {
+            extraContext += ` Tópicos: ${audioRequiredTopics.join(", ")}.`;
+        }
+        if (selectedType === "VIDEO_PITCH" && pitchRequiredTopics.length > 0) {
+            extraContext += ` Tópicos: ${pitchRequiredTopics.join(", ")}.`;
+        }
+
+        const effectiveContent = currentStatement || extraContext;
+
+        if (!effectiveContent || effectiveContent.length < 15) {
+            toast.error("Contenido insuficiente para la IA", {
+                description: "Agrega primero las instrucciones o contenido de la actividad en la pestaña 'Contenido y Rúbrica'."
+            });
+            return;
+        }
+
+        setIsGeneratingTitle(true);
+        try {
+            const shortTitle = await generateActivityShortTitleAction(
+                currentStatement,
+                selectedType,
+                activityTitle || activity?.title || "",
+                extraContext
+            );
+
+            if (shortTitle) {
+                setActivityTitle(shortTitle);
+                const titleInput = document.getElementById("title") as HTMLInputElement;
+                if (titleInput) {
+                    titleInput.value = shortTitle;
+                }
+                toast.success("✓ Título generado con IA", {
+                    description: shortTitle
+                });
+            }
+        } catch (err: any) {
+            console.error("Error al generar título con IA:", err);
+            toast.error(err.message || "No se pudo generar el título con IA");
+        } finally {
+            setIsGeneratingTitle(false);
+        }
+    };
+
     const [isGroupActivity, setIsGroupActivity] = useState<boolean>(activity?.isGroupActivity || false);
     const [groupScope, setGroupScope] = useState<"COURSE" | "ACTIVITY">((activity as any)?.groupScope === "ACTIVITY" ? "ACTIVITY" : "COURSE");
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1962,6 +2024,7 @@ function ActivityFormDialog({
             loadedActivityIdRef.current = activity?.id;
 
             setActiveTab("config");
+            setActivityTitle(activity?.title || "");
             setSelectedType(activity?.type || "GITHUB");
             setDescription(activity?.description || "**Instrucciones de la actividad**\n\n...");
             const defaultStatement = activity?.statement || (
@@ -2828,6 +2891,7 @@ function ActivityFormDialog({
                 // Sincronizar directamente los inputs DOM si existen
                 setTimeout(() => {
                     if (data.title) {
+                        setActivityTitle(data.title);
                         const titleInput = document.getElementById("title") as HTMLInputElement;
                         if (titleInput) titleInput.value = data.title;
                     }
@@ -3235,16 +3299,66 @@ function ActivityFormDialog({
                                         </div>
                                         
                                         <div className="space-y-1.5">
-                                            <Label htmlFor="title" className="text-xs font-semibold">
-                                                Título de la Actividad <span className="text-destructive">*</span>
-                                            </Label>
-                                            <Input 
-                                                id="title" 
-                                                name="title" 
-                                                placeholder="Ej: Actividad 1 - Fundamentos de Programación" 
-                                                defaultValue={importedData?.title || activity?.title || ""} 
-                                                className="h-10 text-sm font-medium"
-                                            />
+                                            <div className="flex items-center justify-between gap-2">
+                                                <Label htmlFor="title" className="text-xs font-semibold">
+                                                    Título de la Actividad <span className="text-destructive">*</span>
+                                                </Label>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={handleGenerateShortTitleWithAI}
+                                                    disabled={isGeneratingTitle}
+                                                    className="h-6 px-2 text-[11px] font-semibold text-primary hover:text-primary hover:bg-primary/10 gap-1.5 rounded-md transition-all cursor-pointer"
+                                                    title="Generar un título corto y conciso con IA de acuerdo al contenido"
+                                                >
+                                                    {isGeneratingTitle ? (
+                                                        <>
+                                                            <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                                                            <span>Generando título...</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Sparkles className="h-3 w-3 text-primary animate-pulse" />
+                                                            <span className="hidden sm:inline">Generar título con IA</span>
+                                                            <span className="sm:hidden">Título IA</span>
+                                                        </>
+                                                    )}
+                                                </Button>
+                                            </div>
+                                            <div className="relative">
+                                                <Input 
+                                                    id="title" 
+                                                    name="title" 
+                                                    placeholder="Ej: Actividad 1 - Fundamentos de Programación" 
+                                                    value={activityTitle}
+                                                    onChange={(e) => setActivityTitle(e.target.value)}
+                                                    className="h-10 text-sm font-medium pr-10"
+                                                />
+                                                <TooltipProvider>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                onClick={handleGenerateShortTitleWithAI}
+                                                                disabled={isGeneratingTitle}
+                                                                className="absolute right-1 top-1 h-8 w-8 text-primary/70 hover:text-primary hover:bg-primary/10 rounded-lg cursor-pointer transition-colors"
+                                                            >
+                                                                {isGeneratingTitle ? (
+                                                                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                                                ) : (
+                                                                    <Sparkles className="h-4 w-4 text-primary" />
+                                                                )}
+                                                            </Button>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent side="top">
+                                                            <p>Generar título corto con IA según el contenido</p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </TooltipProvider>
+                                            </div>
                                         </div>
 
                                         <div className="space-y-2 pt-1">
@@ -7934,6 +8048,25 @@ export function ActivityManager({
                                     </div>
 
                                     <div className="flex items-center gap-1.5 flex-wrap justify-end shrink-0">
+                                        {activity.isGroupActivity ? (
+                                            <Badge
+                                                variant="outline"
+                                                className="text-[10px] font-bold px-1.5 py-0 gap-1 border shrink-0 bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/30"
+                                                title="Actividad grupal / en equipo"
+                                            >
+                                                <Users className="h-2.5 w-2.5 text-indigo-500 shrink-0" />
+                                                <span>Grupal</span>
+                                            </Badge>
+                                        ) : (
+                                            <Badge
+                                                variant="outline"
+                                                className="text-[10px] font-bold px-1.5 py-0 gap-1 border shrink-0 bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/30"
+                                                title="Actividad individual"
+                                            >
+                                                <User className="h-2.5 w-2.5 text-slate-500 shrink-0" />
+                                                <span>Individual</span>
+                                            </Badge>
+                                        )}
                                         {activity.isGroupActivity && activity.groupScope === "ACTIVITY" && (
                                             <Badge
                                                 variant="outline"
@@ -8172,6 +8305,17 @@ export function ActivityManager({
                                             </div>
                                             <div className="flex items-center flex-wrap gap-1.5">
                                                 <span>{activity.title}</span>
+                                                {activity.isGroupActivity ? (
+                                                    <Badge variant="outline" className="text-[10px] font-bold gap-1 px-1.5 py-0 shrink-0 bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/30">
+                                                        <Users className="h-2.5 w-2.5 text-indigo-500" />
+                                                        <span>Grupal</span>
+                                                    </Badge>
+                                                ) : (
+                                                    <Badge variant="outline" className="text-[10px] font-bold gap-1 px-1.5 py-0 shrink-0 bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/30">
+                                                        <User className="h-2.5 w-2.5 text-slate-500" />
+                                                        <span>Individual</span>
+                                                    </Badge>
+                                                )}
                                                 {activity.isGroupActivity && activity.groupScope === "ACTIVITY" && (
                                                     <Badge variant="outline" className="text-[10px] font-bold gap-1 px-1.5 py-0 shrink-0 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30">
                                                         <Target className="h-2.5 w-2.5 text-amber-500" />

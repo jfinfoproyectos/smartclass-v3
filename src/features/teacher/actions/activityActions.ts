@@ -539,5 +539,26 @@ export async function refineWorkshopStepsAction(params: {
     });
 }
 
+export async function generateActivityShortTitleAction(
+    statement: string,
+    activityType: string,
+    currentTitle?: string,
+    extraContext?: string
+) {
+    const session = await getSession();
+    if (!session || session.user.role !== "teacher") {
+        throw new Error("Unauthorized");
+    }
+
+    const { generateActivityShortTitle } = await import("../services/ai/activityContentService");
+    return await generateActivityShortTitle(
+        statement,
+        activityType,
+        session.user.id,
+        currentTitle,
+        extraContext
+    );
+}
+
 
 
