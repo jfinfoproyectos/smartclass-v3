@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -219,13 +219,23 @@ export function CodeChallengeActivityDetails({
             if (!statementEl) return false;
 
             const targetNode = e.target instanceof Node ? e.target : null;
-            if (targetNode && statementEl.contains(targetNode)) return true;
+            const editorDom = editorRef.current?.getDomNode?.();
+
+            // Si el evento ocurrió dentro del editor Monaco o sus subelementos, pertenece al editor, NO al enunciado
+            if (editorDom && targetNode && editorDom.contains(targetNode)) {
+                return false;
+            }
 
             const activeNode = document.activeElement;
+            if (editorDom && activeNode && editorDom.contains(activeNode)) {
+                return false;
+            }
+
+            if (targetNode && statementEl.contains(targetNode)) return true;
             if (activeNode && statementEl.contains(activeNode)) return true;
 
             const selection = window.getSelection();
-            if (selection && selection.rangeCount > 0) {
+            if (selection && selection.rangeCount > 0 && !selection.isCollapsed) {
                 const anchor = selection.anchorNode;
                 const focus = selection.focusNode;
                 if ((anchor && statementEl.contains(anchor)) || (focus && statementEl.contains(focus))) {
@@ -351,6 +361,38 @@ export function CodeChallengeActivityDetails({
     });
 
     const [activeFileId, setActiveFileId] = useState<string>(files[0]?.id || "1");
+    const activeFileIdRef = useRef<string>(activeFileId);
+    activeFileIdRef.current = activeFileId;
+
+    const filesRef = useRef<StudentFile[]>(files);
+    useEffect(() => {
+        filesRef.current = files;
+    }, [files]);
+
+    const debounceSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const hasUserEditedRef = useRef<boolean>(false);
+    const lastPasteWarningRef = useRef<number>(0);
+
+    const notifyPasteBlocked = useCallback(() => {
+        const now = Date.now();
+        if (now - lastPasteWarningRef.current > 2500) {
+            lastPasteWarningRef.current = now;
+            toast.warning("Pegado deshabilitado", {
+                description: "En este taller debes digitar la solución manualmente. No está permitido pegar código.",
+                duration: 4000,
+            });
+        }
+    }, []);
+
+    // Limpieza de temporizadores al desmontar el componente
+    useEffect(() => {
+        return () => {
+            if (debounceSaveTimerRef.current) {
+                clearTimeout(debounceSaveTimerRef.current);
+            }
+        };
+    }, []);
+
     const [activeRightTab, setActiveRightTab] = useState<"statement" | "results">("statement");
     const [mobileTab, setMobileTab] = useState<"statement" | "code" | "results">(
         isGraded ? "results" : "statement"
@@ -412,10 +454,11 @@ export function CodeChallengeActivityDetails({
         }
     }, [mobileTab]);
 
-    // Sincronizar automáticamente si el docente actualiza los archivos de plantilla y el alumno aún no ha entregado
+    // Sincronizar automáticamente si el docente actualiza los archivos de plantilla y el alumno aún no ha editado
     useEffect(() => {
-        if (!isSubmitted && initialFiles.length > 0) {
+        if (!isSubmitted && !hasUserEditedRef.current && initialFiles.length > 0) {
             setFiles(initialFiles);
+            filesRef.current = initialFiles;
         }
     }, [initialFiles, isSubmitted]);
 
@@ -443,43 +486,55 @@ export function CodeChallengeActivityDetails({
         ? challengeConfig.language
         : (detectedLanguage || challengeConfig?.language || "javascript");
 
-    // Actualizar contenido del archivo en edición
+    // Actualizar contenido del archivo en edición con debounce para garantizar 0ms de latencia en Monaco
     const handleCodeChange = (newCode: string | undefined) => {
-        if (newCode === undefined || activeFileIndex === -1) return;
-        const updated = [...files];
-        updated[activeFileIndex] = { ...activeFile, content: newCode };
-        setFiles(updated);
+        if (newCode === undefined) return;
+        hasUserEditedRef.current = true;
+        const currentActiveId = activeFileIdRef.current;
+        const currentFiles = filesRef.current;
+        const idx = currentFiles.findIndex(f => f.id === currentActiveId);
+        if (idx === -1) return;
+
+        const updated = currentFiles.map((f, i) => i === idx ? { ...f, content: newCode } : f);
+        filesRef.current = updated;
+
+        // Actualización debounced (300ms) del estado React:
+        // Evita re-renderizados continuos en cada pulsación que desincronicen el prop 'value'
+        // con el búfer interno de Monaco y causen saltos o movimientos inesperados del cursor.
+        if (debounceSaveTimerRef.current) {
+            clearTimeout(debounceSaveTimerRef.current);
+        }
+        debounceSaveTimerRef.current = setTimeout(() => {
+            setFiles(updated);
+        }, 300);
     };
 
-    // Manejo de portapapeles: copiar permitido, pegar sobreescribe el contenido con texto de restricción (como en la evaluación)
+    // Manejo de portapapeles: copiar permitido, pegar bloqueado limpiamente sin alterar el cursor ni el código
     const handleEditorDidMount = (editor: any, monaco: any) => {
         editorRef.current = editor;
         if (isTeacherPreview) return; // Permitir al profesor pegar y probar libremente
 
-        // Restricción de portapapeles idéntica a las respuestas de la evaluación:
-        // Se permite copiar libremente, pero al enfocar o interactuar con el editor,
-        // se sobreescribe el portapapeles del sistema con el mensaje de restricción.
-        const overwriteMonacoClipboard = () => {
-            if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-                navigator.clipboard.writeText("No está permitido pegar contenido externo.").catch(() => {});
-            }
-        };
-
-        editor.onDidFocusEditorText(overwriteMonacoClipboard);
-        editor.onDidFocusEditorWidget(overwriteMonacoClipboard);
-
         const domNode = editor.getDomNode();
         if (domNode) {
-            domNode.addEventListener("paste", () => {
-                overwriteMonacoClipboard();
-            }, true);
+            // 1. Bloquear evento nativo 'paste' del DOM en fase de captura (clic derecho -> Pegar, menú contextual, etc.)
+            domNode.addEventListener(
+                "paste",
+                (e: ClipboardEvent) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    notifyPasteBlocked();
+                },
+                true
+            );
 
-            // Bloquear arrastrar y soltar texto externo hacia el editor
+            // 2. Bloquear arrastrar y soltar texto externo hacia el editor
             domNode.addEventListener(
                 "drop",
                 (e: DragEvent) => {
                     e.preventDefault();
                     e.stopPropagation();
+                    e.stopImmediatePropagation();
                     toast.warning("Arrastre deshabilitado", {
                         description: "Debes digitar la solución manualmente en este taller.",
                         duration: 4000,
@@ -489,15 +544,29 @@ export function CodeChallengeActivityDetails({
             );
         }
 
-        // Al intentar pegar con atajo de teclado, asegurar sobreescritura inmediata
+        // 3. Bloquear atajos de pegado (Ctrl+V, Cmd+V, Shift+Insert) antes de que lleguen a Monaco
         editor.onKeyDown((e: any) => {
             const isCtrlOrCmd = e.ctrlKey || e.metaKey;
             const isVKey = e.keyCode === monaco.KeyCode.KeyV || e.browserEvent?.key?.toLowerCase() === "v";
             const isShiftInsert = e.shiftKey && (e.keyCode === monaco.KeyCode.Insert || e.browserEvent?.key === "Insert");
 
             if ((isCtrlOrCmd && isVKey) || isShiftInsert) {
-                overwriteMonacoClipboard();
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.browserEvent) {
+                    e.browserEvent.preventDefault?.();
+                    e.browserEvent.stopPropagation?.();
+                }
+                notifyPasteBlocked();
             }
+        });
+
+        // 4. Interceptar y anular los comandos internos de pegado de Monaco
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {
+            notifyPasteBlocked();
+        });
+        editor.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.Insert, () => {
+            notifyPasteBlocked();
         });
     };
 
@@ -509,7 +578,12 @@ export function CodeChallengeActivityDetails({
 
     // Generar todas las soluciones con IA
     const handleGenerateAllSolutions = async () => {
-        if (files.length === 0) {
+        if (debounceSaveTimerRef.current) {
+            clearTimeout(debounceSaveTimerRef.current);
+            debounceSaveTimerRef.current = null;
+        }
+        const currentFiles = filesRef.current;
+        if (currentFiles.length === 0) {
             toast.error("No hay archivos configurados en la actividad.");
             return;
         }
@@ -518,11 +592,12 @@ export function CodeChallengeActivityDetails({
         try {
             const { generateAllCodeChallengeSolutionsAction } = await import("@/features/teacher/actions/activityActions");
             const updatedFiles = await generateAllCodeChallengeSolutionsAction(
-                files,
+                currentFiles,
                 language,
                 activity.statement || "",
                 activity.title || "Taller de Código"
             );
+            filesRef.current = updatedFiles;
             setFiles(updatedFiles);
             toast.success("✓ Soluciones completas generadas para todos los archivos con IA");
         } catch (err: any) {
@@ -534,7 +609,12 @@ export function CodeChallengeActivityDetails({
 
     // Simular evaluación con IA sin guardar en base de datos
     const handleTestGradeWithAI = async () => {
-        if (files.length === 0) {
+        if (debounceSaveTimerRef.current) {
+            clearTimeout(debounceSaveTimerRef.current);
+            debounceSaveTimerRef.current = null;
+        }
+        const currentFiles = filesRef.current;
+        if (currentFiles.length === 0) {
             toast.error("No hay archivos de código para evaluar.");
             return;
         }
@@ -543,7 +623,7 @@ export function CodeChallengeActivityDetails({
         try {
             const { testGradeCodeChallengeAction } = await import("@/features/teacher/actions/gradingActions");
             const result = await testGradeCodeChallengeAction(
-                files,
+                currentFiles,
                 language,
                 activity.statement || "",
                 "moderate"
@@ -561,11 +641,17 @@ export function CodeChallengeActivityDetails({
 
     // Enviar entrega de la actividad
     const handleSubmit = async () => {
+        if (debounceSaveTimerRef.current) {
+            clearTimeout(debounceSaveTimerRef.current);
+            debounceSaveTimerRef.current = null;
+        }
+        const currentFiles = filesRef.current;
+        setFiles(currentFiles);
         setIsSubmitting(true);
         try {
             const payload = JSON.stringify({
-                files: files,
-                code: files[0]?.content || "",
+                files: currentFiles,
+                code: currentFiles[0]?.content || "",
                 submittedAt: new Date().toISOString(),
             });
 
@@ -1022,13 +1108,24 @@ export function CodeChallengeActivityDetails({
                                 variant="outline"
                                 size="sm"
                                 onClick={() => {
+                                    if (debounceSaveTimerRef.current) {
+                                        clearTimeout(debounceSaveTimerRef.current);
+                                        debounceSaveTimerRef.current = null;
+                                    }
                                     const template = initialFiles.find(f => f.id === activeFile?.id || f.name === activeFile?.name);
                                     if (template) {
-                                        const updated = files.map(f => (f.id === activeFile?.id || f.name === activeFile?.name) ? { ...f, content: template.content } : f);
+                                        const updated = filesRef.current.map(f => (f.id === activeFile?.id || f.name === activeFile?.name) ? { ...f, content: template.content } : f);
+                                        filesRef.current = updated;
                                         setFiles(updated);
+                                        editorRef.current?.setValue(template.content);
                                         toast.success(`Plantilla original restaurada para ${activeFile?.name}`);
                                     } else {
+                                        filesRef.current = initialFiles;
                                         setFiles(initialFiles);
+                                        const curr = initialFiles.find(f => f.id === activeFile?.id || f.name === activeFile?.name);
+                                        if (curr) {
+                                            editorRef.current?.setValue(curr.content);
+                                        }
                                         toast.success("Plantillas originales restauradas");
                                     }
                                 }}
@@ -1054,7 +1151,14 @@ export function CodeChallengeActivityDetails({
                             <button
                                 key={file.id}
                                 type="button"
-                                onClick={() => setActiveFileId(file.id)}
+                                onClick={() => {
+                                    if (debounceSaveTimerRef.current) {
+                                        clearTimeout(debounceSaveTimerRef.current);
+                                        debounceSaveTimerRef.current = null;
+                                    }
+                                    setFiles(filesRef.current);
+                                    setActiveFileId(file.id);
+                                }}
                                 className={cn(
                                     "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono font-medium cursor-pointer border transition-all select-none whitespace-nowrap shrink-0",
                                     activeFileId === file.id
@@ -1090,7 +1194,7 @@ export function CodeChallengeActivityDetails({
                                     tabSize: 4,
                                     readOnly: isDeadlinePassed,
                                     suggestOnTriggerCharacters: true,
-                                    formatOnPaste: true,
+                                    formatOnPaste: false,
                                     dragAndDrop: false,
                                     contextmenu: true,
                                     copyWithSyntaxHighlighting: false,

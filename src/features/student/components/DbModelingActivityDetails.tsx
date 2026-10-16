@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -167,24 +167,43 @@ export function DbModelingActivityDetails({
         }
     };
 
-    // Manejador de montaje de Monaco: Anti-Paste con sobreescritura de portapapeles (como en evaluación)
-    const handleEditorMount = (editor: any, monaco: any) => {
-        // Restricción de portapapeles: al enfocar el editor, se sobreescribe el portapapeles
-        const overwriteMonacoClipboard = () => {
-            if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-                navigator.clipboard.writeText("No está permitido pegar contenido externo.").catch(() => {});
-            }
-        };
-        editor.onDidFocusEditorText(overwriteMonacoClipboard);
-        editor.onDidFocusEditorWidget(overwriteMonacoClipboard);
+    const lastPasteWarningRef = useRef<number>(0);
+    const notifyPasteBlocked = useCallback(() => {
+        const now = Date.now();
+        if (now - lastPasteWarningRef.current > 2500) {
+            lastPasteWarningRef.current = now;
+            toast.warning("Pegado deshabilitado", {
+                description: "En este taller debes digitar la solución SQL manualmente. No está permitido pegar código.",
+                duration: 4000,
+            });
+        }
+    }, []);
 
-        // Bloquear evento 'paste' nativo del DOM dentro del editor sobreescribiendo portapapeles
+    // Manejador de montaje de Monaco: Anti-Paste limpio sin alterar el cursor ni el código
+    const handleEditorMount = (editor: any, monaco: any) => {
         const domNode = editor.getDomNode();
         if (domNode) {
             domNode.addEventListener(
                 "paste",
-                () => {
-                    overwriteMonacoClipboard();
+                (e: ClipboardEvent) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    notifyPasteBlocked();
+                },
+                true
+            );
+
+            domNode.addEventListener(
+                "drop",
+                (e: DragEvent) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    toast.warning("Arrastre deshabilitado", {
+                        description: "Debes digitar la solución SQL manualmente en este taller.",
+                        duration: 4000,
+                    });
                 },
                 true
             );
@@ -197,8 +216,22 @@ export function DbModelingActivityDetails({
             const isShiftInsert = e.shiftKey && (e.keyCode === monaco.KeyCode.Insert || e.browserEvent?.key === "Insert");
 
             if ((isCtrlOrCmd && isVKey) || isShiftInsert) {
-                overwriteMonacoClipboard();
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.browserEvent) {
+                    e.browserEvent.preventDefault?.();
+                    e.browserEvent.stopPropagation?.();
+                }
+                notifyPasteBlocked();
             }
+        });
+
+        // Comandos de Monaco
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {
+            notifyPasteBlocked();
+        });
+        editor.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.Insert, () => {
+            notifyPasteBlocked();
         });
     };
 
