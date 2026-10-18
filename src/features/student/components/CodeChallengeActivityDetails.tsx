@@ -369,28 +369,35 @@ export function CodeChallengeActivityDetails({
         filesRef.current = files;
     }, [files]);
 
-    const debounceSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
     const hasUserEditedRef = useRef<boolean>(false);
-    const lastPasteWarningRef = useRef<number>(0);
 
-    const notifyPasteBlocked = useCallback(() => {
+    const isReplacingPasteRef = useRef<boolean>(false);
+    const lastPasteInsertTimeRef = useRef<number>(0);
+
+    const insertPasteBlockedText = useCallback((editor: any, targetRange?: any) => {
+        if (!editor || isReplacingPasteRef.current) return;
         const now = Date.now();
-        if (now - lastPasteWarningRef.current > 2500) {
-            lastPasteWarningRef.current = now;
-            toast.warning("Pegado deshabilitado", {
-                description: "En este taller debes digitar la solución manualmente. No está permitido pegar código.",
-                duration: 4000,
-            });
-        }
-    }, []);
+        if (!targetRange && now - lastPasteInsertTimeRef.current < 150) return;
+        lastPasteInsertTimeRef.current = now;
 
-    // Limpieza de temporizadores al desmontar el componente
-    useEffect(() => {
-        return () => {
-            if (debounceSaveTimerRef.current) {
-                clearTimeout(debounceSaveTimerRef.current);
-            }
-        };
+        const range = targetRange || editor.getSelection();
+        if (!range) return;
+
+        const blockedText = "No puedes pegar contenido";
+
+        isReplacingPasteRef.current = true;
+        try {
+            editor.executeEdits("paste-blocker", [
+                {
+                    range,
+                    text: blockedText,
+                    forceMoveMarkers: true,
+                },
+            ]);
+            editor.focus();
+        } finally {
+            isReplacingPasteRef.current = false;
+        }
     }, []);
 
     const [activeRightTab, setActiveRightTab] = useState<"statement" | "results">("statement");
@@ -486,7 +493,7 @@ export function CodeChallengeActivityDetails({
         ? challengeConfig.language
         : (detectedLanguage || challengeConfig?.language || "javascript");
 
-    // Actualizar contenido del archivo en edición con debounce para garantizar 0ms de latencia en Monaco
+    // Actualizar contenido del archivo en referencia sin disparar re-renders de React durante la digitación
     const handleCodeChange = (newCode: string | undefined) => {
         if (newCode === undefined) return;
         hasUserEditedRef.current = true;
@@ -497,76 +504,166 @@ export function CodeChallengeActivityDetails({
 
         const updated = currentFiles.map((f, i) => i === idx ? { ...f, content: newCode } : f);
         filesRef.current = updated;
-
-        // Actualización debounced (300ms) del estado React:
-        // Evita re-renderizados continuos en cada pulsación que desincronicen el prop 'value'
-        // con el búfer interno de Monaco y causen saltos o movimientos inesperados del cursor.
-        if (debounceSaveTimerRef.current) {
-            clearTimeout(debounceSaveTimerRef.current);
-        }
-        debounceSaveTimerRef.current = setTimeout(() => {
-            setFiles(updated);
-        }, 300);
     };
 
-    // Manejo de portapapeles: copiar permitido, pegar bloqueado limpiamente sin alterar el cursor ni el código
+    // Manejo de portapapeles: sobrescribir acción de pegar en todas las opciones (teclado y mouse) insertando "No puedes pegar contenido" sin notificaciones ni saltos de cursor
     const handleEditorDidMount = (editor: any, monaco: any) => {
         editorRef.current = editor;
         if (isTeacherPreview) return; // Permitir al profesor pegar y probar libremente
 
+        const blockedText = "No puedes pegar contenido";
+
+        const overwriteClipboard = () => {
+            if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+                navigator.clipboard.writeText(blockedText).catch(() => {});
+            }
+        };
+
+        editor.onDidFocusEditorText(overwriteClipboard);
+        editor.onDidFocusEditorWidget(overwriteClipboard);
+        editor.onContextMenu(() => {
+            overwriteClipboard();
+        });
+        editor.onMouseDown((e: any) => {
+            // Si el estudiante hace clic derecho (rightButton) o botón central (middleButton)
+            if (e?.event?.rightButton || e?.event?.middleButton) {
+                overwriteClipboard();
+            }
+        });
+
+        // Interceptar el comando del menú contextual de Monaco ('Paste' / 'Pegar' con clic derecho)
+        if (monaco?.editor?.addCommand) {
+            // Reemplazar o envolver la acción de pegado del menú contextual de Monaco
+            const originalTrigger = editor.trigger.bind(editor);
+            editor.trigger = (source: string, handlerId: string, payload: any) => {
+                if (handlerId === "editor.action.clipboardPasteAction") {
+                    insertPasteBlockedText(editor);
+                    return;
+                }
+                return originalTrigger(source, handlerId, payload);
+            };
+        }
+
+        // Si por alguna vía nativa Monaco ejecuta un pegado (onDidPaste), reemplazamos inmediatamente el rango pegado con "No puedes pegar contenido"
+        editor.onDidPaste((e: any) => {
+            if (isReplacingPasteRef.current) return;
+            const model = editor.getModel();
+            if (!model || !e?.range) return;
+            const pastedContent = model.getValueInRange(e.range);
+            if (pastedContent !== blockedText) {
+                insertPasteBlockedText(editor, e.range);
+            }
+        });
+
         const domNode = editor.getDomNode();
         if (domNode) {
-            // 1. Bloquear evento nativo 'paste' del DOM en fase de captura (clic derecho -> Pegar, menú contextual, etc.)
+            // Sobrescribir portapapeles al hacer clic derecho sobre el contenedor del editor
             domNode.addEventListener(
-                "paste",
-                (e: ClipboardEvent) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    e.stopImmediatePropagation();
-                    notifyPasteBlocked();
+                "contextmenu",
+                () => {
+                    overwriteClipboard();
                 },
                 true
             );
 
-            // 2. Bloquear arrastrar y soltar texto externo hacia el editor
+            // 1. Interceptar evento nativo 'paste' y 'beforeinput' (insertFromPaste / insertFromDrop) del DOM en fase de captura
+            const handlePasteEvent = (e: ClipboardEvent) => {
+                const target = e.target as Node | null;
+                if (
+                    domNode.contains(target) ||
+                    editor.hasTextFocus?.() ||
+                    editor.hasWidgetFocus?.()
+                ) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    insertPasteBlockedText(editor);
+                }
+            };
+
+            const handleBeforeInput = (e: InputEvent) => {
+                if (e.inputType === "insertFromPaste" || e.inputType === "insertFromDrop" || e.inputType === "insertFromYank") {
+                    const target = e.target as Node | null;
+                    if (
+                        domNode.contains(target) ||
+                        editor.hasTextFocus?.() ||
+                        editor.hasWidgetFocus?.()
+                    ) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.stopImmediatePropagation();
+                        insertPasteBlockedText(editor);
+                    }
+                }
+            };
+
+            // Interceptar clic con el mouse sobre la opción "Paste" / "Pegar" del menú contextual de Monaco
+            const handleContextMenuPasteClick = (e: MouseEvent) => {
+                const target = e.target as HTMLElement | null;
+                if (!target) return;
+                const actionItem = target.closest?.(".monaco-menu .action-item, .context-view .action-item") as HTMLElement | null;
+                if (actionItem) {
+                    const labelEl = actionItem.querySelector(".action-label");
+                    const labelText = (labelEl?.textContent || actionItem.textContent || "").trim().toLowerCase();
+                    if (labelText === "paste" || labelText === "pegar" || labelText.startsWith("paste") || labelText.startsWith("pegar")) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.stopImmediatePropagation();
+                        // Cerrar el menú contextual de Monaco y pegar el texto bloqueado
+                        editor.focus();
+                        insertPasteBlockedText(editor);
+                    }
+                }
+            };
+
+            domNode.addEventListener("paste", handlePasteEvent, true);
+            domNode.addEventListener("beforeinput", handleBeforeInput as any, true);
+            document.addEventListener("paste", handlePasteEvent, true);
+            document.addEventListener("beforeinput", handleBeforeInput as any, true);
+            document.addEventListener("mousedown", handleContextMenuPasteClick, true);
+            document.addEventListener("click", handleContextMenuPasteClick, true);
+
+            editor.onDidDispose?.(() => {
+                document.removeEventListener("paste", handlePasteEvent, true);
+                document.removeEventListener("beforeinput", handleBeforeInput as any, true);
+                document.removeEventListener("mousedown", handleContextMenuPasteClick, true);
+                document.removeEventListener("click", handleContextMenuPasteClick, true);
+            });
+
+            // 2. Interceptar arrastrar y soltar texto externo hacia el editor con el mouse sin notificaciones
             domNode.addEventListener(
                 "drop",
                 (e: DragEvent) => {
                     e.preventDefault();
                     e.stopPropagation();
                     e.stopImmediatePropagation();
-                    toast.warning("Arrastre deshabilitado", {
-                        description: "Debes digitar la solución manualmente en este taller.",
-                        duration: 4000,
-                    });
+                    insertPasteBlockedText(editor);
                 },
                 true
             );
         }
 
-        // 3. Bloquear atajos de pegado (Ctrl+V, Cmd+V, Shift+Insert) antes de que lleguen a Monaco
-        editor.onKeyDown((e: any) => {
-            const isCtrlOrCmd = e.ctrlKey || e.metaKey;
-            const isVKey = e.keyCode === monaco.KeyCode.KeyV || e.browserEvent?.key?.toLowerCase() === "v";
-            const isShiftInsert = e.shiftKey && (e.keyCode === monaco.KeyCode.Insert || e.browserEvent?.key === "Insert");
-
-            if ((isCtrlOrCmd && isVKey) || isShiftInsert) {
-                e.preventDefault();
-                e.stopPropagation();
-                if (e.browserEvent) {
-                    e.browserEvent.preventDefault?.();
-                    e.browserEvent.stopPropagation?.();
-                }
-                notifyPasteBlocked();
+        // 3. Interceptar la acción de menú contextual de Monaco sobreescribiendo su descriptor interno en _actions si existe
+        try {
+            const internalPasteAction = editor._actions?.get?.("editor.action.clipboardPasteAction");
+            if (internalPasteAction && typeof internalPasteAction.run === "function") {
+                internalPasteAction.run = async () => {
+                    insertPasteBlockedText(editor);
+                };
             }
-        });
+        } catch {}
 
-        // 4. Interceptar y anular los comandos internos de pegado de Monaco
+        // 4. Interceptar los comandos de teclado de pegado de Monaco
         editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {
-            notifyPasteBlocked();
+            insertPasteBlockedText(editor);
         });
         editor.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.Insert, () => {
-            notifyPasteBlocked();
+            insertPasteBlockedText(editor);
+        });
+
+        // Sincronizar estado al perder foco del editor
+        editor.onDidBlurEditorText(() => {
+            setFiles([...filesRef.current]);
         });
     };
 
@@ -578,10 +675,6 @@ export function CodeChallengeActivityDetails({
 
     // Generar todas las soluciones con IA
     const handleGenerateAllSolutions = async () => {
-        if (debounceSaveTimerRef.current) {
-            clearTimeout(debounceSaveTimerRef.current);
-            debounceSaveTimerRef.current = null;
-        }
         const currentFiles = filesRef.current;
         if (currentFiles.length === 0) {
             toast.error("No hay archivos configurados en la actividad.");
@@ -599,6 +692,10 @@ export function CodeChallengeActivityDetails({
             );
             filesRef.current = updatedFiles;
             setFiles(updatedFiles);
+            const activeUpdated = updatedFiles.find((f: StudentFile) => f.id === activeFileIdRef.current) || updatedFiles[0];
+            if (activeUpdated && editorRef.current) {
+                editorRef.current.setValue(activeUpdated.content);
+            }
             toast.success("✓ Soluciones completas generadas para todos los archivos con IA");
         } catch (err: any) {
             toast.error(err.message || "Error al generar las respuestas con IA");
@@ -609,10 +706,6 @@ export function CodeChallengeActivityDetails({
 
     // Simular evaluación con IA sin guardar en base de datos
     const handleTestGradeWithAI = async () => {
-        if (debounceSaveTimerRef.current) {
-            clearTimeout(debounceSaveTimerRef.current);
-            debounceSaveTimerRef.current = null;
-        }
         const currentFiles = filesRef.current;
         if (currentFiles.length === 0) {
             toast.error("No hay archivos de código para evaluar.");
@@ -641,10 +734,6 @@ export function CodeChallengeActivityDetails({
 
     // Enviar entrega de la actividad
     const handleSubmit = async () => {
-        if (debounceSaveTimerRef.current) {
-            clearTimeout(debounceSaveTimerRef.current);
-            debounceSaveTimerRef.current = null;
-        }
         const currentFiles = filesRef.current;
         setFiles(currentFiles);
         setIsSubmitting(true);
@@ -1108,10 +1197,6 @@ export function CodeChallengeActivityDetails({
                                 variant="outline"
                                 size="sm"
                                 onClick={() => {
-                                    if (debounceSaveTimerRef.current) {
-                                        clearTimeout(debounceSaveTimerRef.current);
-                                        debounceSaveTimerRef.current = null;
-                                    }
                                     const template = initialFiles.find(f => f.id === activeFile?.id || f.name === activeFile?.name);
                                     if (template) {
                                         const updated = filesRef.current.map(f => (f.id === activeFile?.id || f.name === activeFile?.name) ? { ...f, content: template.content } : f);
@@ -1152,11 +1237,7 @@ export function CodeChallengeActivityDetails({
                                 key={file.id}
                                 type="button"
                                 onClick={() => {
-                                    if (debounceSaveTimerRef.current) {
-                                        clearTimeout(debounceSaveTimerRef.current);
-                                        debounceSaveTimerRef.current = null;
-                                    }
-                                    setFiles(filesRef.current);
+                                    setFiles([...filesRef.current]);
                                     setActiveFileId(file.id);
                                 }}
                                 className={cn(
@@ -1180,7 +1261,7 @@ export function CodeChallengeActivityDetails({
                                 height="100%"
                                 language={getLanguageFromFileName(activeFile.name)}
                                 theme={monacoTheme}
-                                value={activeFile.content}
+                                defaultValue={activeFile.content}
                                 onChange={handleCodeChange}
                                 onMount={handleEditorDidMount}
                                 options={{
