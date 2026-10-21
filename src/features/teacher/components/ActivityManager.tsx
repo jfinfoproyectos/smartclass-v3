@@ -25,7 +25,7 @@ import {
 import { createActivityAction, updateActivityAction, deleteActivityAction, generateChecklistCriteriaAction, verifyCriterionRelationAction, balanceCriteriaPercentagesAction, generateCodeFileTemplateAction, generateRequiredTopicsAction, generateAllWorkshopStepsAction, generateSingleWorkshopStepAction, generateWorkshopStepHintsAction, generateWorkshopStepInstructionsAction, generateWorkshopStepCodeAction, generateWorkshopStepCodeExplanationAction, suggestWorkshopStepGitCommandsAction, generateActivityShortTitleAction } from "@/features/teacher/actions/activityActions";
 import { scanRepositoryAction } from "@/features/github/actions/githubActions";
 import { getMissingSubmissionsAction } from "@/features/teacher/actions/studentActions";
-import { Plus, Minus, Calendar, FileText, MessageSquare, Pencil, Trash2, Eye, X, ChevronUp, ChevronDown, AlertCircle, Sparkles, Upload, Download, Loader2, Search, UserX, GripVertical, LayoutGrid, List, Save, Settings2, Code2, FolderGit2, CheckCircle2, Clock, SlidersHorizontal, Info, ListChecks, CheckSquare, RefreshCw, Bot, Cpu, HelpCircle, MessageSquareQuote, Shuffle, Scale, Crown, Users, User, Terminal, Video, Database, Mic, Headphones, FileCode, Target, Layers, FileCheck, BookOpen, GitBranch, ArrowRight, Lock } from "lucide-react";
+import { Plus, Minus, Calendar, FileText, MessageSquare, Pencil, Trash2, Eye, X, ChevronUp, ChevronDown, AlertCircle, Sparkles, Upload, Download, Loader2, Search, UserX, GripVertical, LayoutGrid, List, Save, Settings2, Code2, FolderGit2, CheckCircle2, Clock, SlidersHorizontal, Info, ListChecks, CheckSquare, RefreshCw, Bot, Cpu, HelpCircle, MessageSquareQuote, Shuffle, Scale, Crown, Users, User, Terminal, Video, Database, Mic, Headphones, FileCode, Target, Layers, FileCheck, BookOpen, GitBranch, ArrowRight, Lock, TrendingUp } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -250,6 +250,24 @@ Construir un proyecto de software paso a paso en tu propio repositorio de GitHub
 ## Criterios de Evaluación
 * **Cumplimiento de Pasos Técnicos y Archivos (60%)**: Implementación correcta del código y estructura en cada paso.
 * **Historial de Versionamiento y Flujo Git (40%)**: Calidad de commits, mensajes semánticos y ramas de trabajo ordenadas.`;
+
+const TEMPLATE_PERFORMANCE = `# Evaluación de Desempeño y Participación en Clase
+
+## Objetivo de la Actividad
+Evaluar de forma continua, objetiva y sistemática el desempeño, participación activa, cumplimiento de compromisos y actitud profesional de cada aprendiz en cada una de las sesiones de clase programadas.
+
+## Conexión y Reglas con Asistencia
+* **Calificación Base Diaria**: Cada sesión de clase inicia con una calificación por defecto de **5.0** (Escala de 0.0 a 5.0).
+* **Inasistencias**: Si el aprendiz registra inasistencia injustificada en la sesión, la calificación automática del día es **0.0**.
+* **Llegadas Tarde (Tardanza)**: Si el aprendiz llega tarde a la sesión, se aplica una penalización sobre la nota del día establecida por la rúbrica/docente.
+* **Calificación Docente**: El docente puede ajustar la calificación y añadir observaciones específicas para cualquier sesión en la que el aprendiz haya asistido.
+* **Nota Promedio Final**: Se calcula automáticamente como el promedio de todas las fechas de clase programadas dentro del periodo.
+
+## Escala de Calificación (0.0 a 5.0)
+* **4.6 - 5.0**: Desempeño Excelente (asistencia puntual, aportes constructivos y trabajo proactivo).
+* **4.0 - 4.5**: Desempeño Bueno (buena participación y cumplimiento de objetivos diarios).
+* **3.0 - 3.9**: Desempeño Aceptable (participación básica, observaciones menores o retardos).
+* **0.0 - 2.9**: Desempeño Deficiente (inasistencias no justificadas o falta de compromiso en el aula).`;
 
 function SortablePathItem({ id, path, index, onRemove }: { id: string; path: string; index: number; onRemove: (index: number) => void }) {
     const {
@@ -620,6 +638,15 @@ const ACTIVITY_TYPES = [
         badgeColor: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/40",
         icon: Pencil,
         description: "Tareas o talleres sin IA. Calificación manual por el docente con posibilidad de adjuntar enlaces externos.",
+    },
+    {
+        id: "PERFORMANCE",
+        title: "Evaluación de Desempeño en Clase",
+        shortTitle: "Desempeño",
+        badge: "Asistencia & Diario",
+        badgeColor: "bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-200 dark:border-teal-800/40",
+        icon: TrendingUp,
+        description: "Evaluación diaria de desempeño por fecha y asistencia. Días con inasistencia califican 0.0, tardanzas penalizadas, base 5.0 y promedio final.",
     },
 ];
 
@@ -1174,6 +1201,36 @@ function ActivityFormDialog({
     const [dbIncludeQueries, setDbIncludeQueries] = useState<boolean>(true);
     const [activityTitle, setActivityTitle] = useState<string>(activity?.title || "");
     const [isGeneratingTitle, setIsGeneratingTitle] = useState<boolean>(false);
+
+    // Configuración para Actividad de Desempeño (PERFORMANCE)
+    const [performanceStartDate, setPerformanceStartDate] = useState<string>(() => {
+        const today = new Date();
+        return today.toISOString().split("T")[0];
+    });
+    const [performanceEndDate, setPerformanceEndDate] = useState<string>(() => {
+        const nextMonth = new Date();
+        nextMonth.setDate(nextMonth.getDate() + 30);
+        return nextMonth.toISOString().split("T")[0];
+    });
+    const [performanceDaysOfWeek, setPerformanceDaysOfWeek] = useState<number[]>([1, 2, 3, 4, 5]); // 1=Lun ... 5=Vie
+    const [performanceDefaultGrade, setPerformanceDefaultGrade] = useState<number>(5.0);
+    const [performanceTardinessPenalty, setPerformanceTardinessPenalty] = useState<number>(1.0);
+
+    const estimatedPerformanceSessions = useMemo(() => {
+        if (!performanceStartDate || !performanceEndDate || performanceDaysOfWeek.length === 0) return 0;
+        const [sy, sm, sd] = performanceStartDate.split("-").map(Number);
+        const [ey, em, ed] = performanceEndDate.split("-").map(Number);
+        const s = new Date(sy, sm - 1, sd);
+        const e = new Date(ey, em - 1, ed);
+        if (isNaN(s.getTime()) || isNaN(e.getTime()) || s > e) return 0;
+        let count = 0;
+        const cur = new Date(s);
+        while (cur <= e) {
+            if (performanceDaysOfWeek.includes(cur.getDay())) count++;
+            cur.setDate(cur.getDate() + 1);
+        }
+        return count;
+    }, [performanceStartDate, performanceEndDate, performanceDaysOfWeek]);
 
     const handleGenerateShortTitleWithAI = async () => {
         const currentStatement = statement?.trim() || "";
@@ -2029,7 +2086,8 @@ function ActivityFormDialog({
             setDescription(activity?.description || "**Instrucciones de la actividad**\n\n...");
             const defaultStatement = activity?.statement || (
                 activity ? "" :
-                (activity?.type === "AUDIO_DEFENSE" ? TEMPLATE_AUDIO_DEFENSE :
+                (activity?.type === "PERFORMANCE" ? TEMPLATE_PERFORMANCE :
+                 activity?.type === "AUDIO_DEFENSE" ? TEMPLATE_AUDIO_DEFENSE :
                  activity?.type === "DB_MODELING" ? TEMPLATE_DB_MODELING :
                  activity?.type === "AI_INTERVIEW" ? TEMPLATE_AI_INTERVIEW :
                  activity?.type === "VIDEO_PITCH" ? TEMPLATE_VIDEO_PITCH :
@@ -2198,6 +2256,25 @@ function ActivityFormDialog({
                             setWorkshopEstimatedMinutes(45);
                             setWorkshopMilestones([]);
                         }
+
+                        // 9. Performance Config (Desempeño)
+                        if (parsedDesc.performanceConfig) {
+                            if (parsedDesc.performanceConfig.startDate) {
+                                setPerformanceStartDate(parsedDesc.performanceConfig.startDate);
+                            }
+                            if (parsedDesc.performanceConfig.endDate) {
+                                setPerformanceEndDate(parsedDesc.performanceConfig.endDate);
+                            }
+                            if (Array.isArray(parsedDesc.performanceConfig.daysOfWeek)) {
+                                setPerformanceDaysOfWeek(parsedDesc.performanceConfig.daysOfWeek);
+                            }
+                            if (typeof parsedDesc.performanceConfig.defaultDailyGrade === "number") {
+                                setPerformanceDefaultGrade(parsedDesc.performanceConfig.defaultDailyGrade);
+                            }
+                            if (typeof parsedDesc.performanceConfig.tardinessPenalty === "number") {
+                                setPerformanceTardinessPenalty(parsedDesc.performanceConfig.tardinessPenalty);
+                            }
+                        }
                     }
                 } catch {
                     // Si hubo error de parseo o era texto plano, recuperar archivos de código del enunciado si aplica
@@ -2244,6 +2321,7 @@ function ActivityFormDialog({
         if (importedData) return;
         if (!activity && (!statement || 
             statement === TEMPLATE_GITHUB || 
+            statement === TEMPLATE_PERFORMANCE ||
             statement === TEMPLATE_DB_MODELING || 
             statement === TEMPLATE_AI_INTERVIEW || 
             statement === TEMPLATE_VIDEO_PITCH || 
@@ -2253,6 +2331,7 @@ function ActivityFormDialog({
             statement === TEMPLATE_MANUAL)) {
             
             if (selectedType === "GITHUB") setStatement(TEMPLATE_GITHUB);
+            else if (selectedType === "PERFORMANCE") setStatement(TEMPLATE_PERFORMANCE);
             else if (selectedType === "DB_MODELING") setStatement(TEMPLATE_DB_MODELING);
             else if (selectedType === "AI_INTERVIEW") setStatement(TEMPLATE_AI_INTERVIEW);
             else if (selectedType === "VIDEO_PITCH") setStatement(TEMPLATE_VIDEO_PITCH);
@@ -2627,6 +2706,21 @@ function ActivityFormDialog({
                 criteria,
                 workshopConfig: exportData.workshopConfig,
             });
+        } else if (selectedType === "PERFORMANCE") {
+            exportData.performanceConfig = {
+                startDate: performanceStartDate,
+                endDate: performanceEndDate,
+                daysOfWeek: performanceDaysOfWeek,
+                defaultDailyGrade: performanceDefaultGrade,
+                absenceGrade: 0.0,
+                tardinessPenalty: performanceTardinessPenalty,
+                scaleMin: 0.0,
+                scaleMax: 5.0,
+            };
+            exportData.description = JSON.stringify({
+                hasChecklist: false,
+                performanceConfig: exportData.performanceConfig,
+            });
         } else if (selectedType === "GITHUB") {
             exportData.description = JSON.stringify({
                 hasChecklist: Boolean(hasChecklist),
@@ -2873,7 +2967,17 @@ function ActivityFormDialog({
                     setWorkshopEstimatedMinutes(Number(wMins));
                 }
 
-                // 12. Fechas locales para inputs
+                // 12. Performance Config (Desempeño)
+                const perfCfg = data.performanceConfig || parsedDesc?.performanceConfig;
+                if (perfCfg) {
+                    if (perfCfg.startDate) setPerformanceStartDate(perfCfg.startDate);
+                    if (perfCfg.endDate) setPerformanceEndDate(perfCfg.endDate);
+                    if (Array.isArray(perfCfg.daysOfWeek)) setPerformanceDaysOfWeek(perfCfg.daysOfWeek);
+                    if (typeof perfCfg.defaultDailyGrade === "number") setPerformanceDefaultGrade(Number(perfCfg.defaultDailyGrade));
+                    if (typeof perfCfg.tardinessPenalty === "number") setPerformanceTardinessPenalty(Number(perfCfg.tardinessPenalty));
+                }
+
+                // 13. Fechas locales para inputs
                 const openDateLocal = data.openDateLocal || (data.openDate ? new Date(new Date(data.openDate).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : undefined);
                 const deadlineLocal = data.deadlineLocal || (data.deadline ? new Date(new Date(data.deadline).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : undefined);
 
@@ -3064,6 +3168,26 @@ function ActivityFormDialog({
 
                 const uniquePaths = Array.from(new Set(workshopMilestones.map(m => m.targetFilePath?.trim()).filter(Boolean)));
                 formData.set("filePaths", uniquePaths.join(','));
+            } else if (selectedType === "PERFORMANCE") {
+                formData.set("description", JSON.stringify({
+                    hasChecklist: false,
+                    performanceConfig: {
+                        startDate: performanceStartDate,
+                        endDate: performanceEndDate,
+                        daysOfWeek: performanceDaysOfWeek,
+                        defaultDailyGrade: performanceDefaultGrade,
+                        absenceGrade: 0.0,
+                        tardinessPenalty: performanceTardinessPenalty,
+                        scaleMin: 0.0,
+                        scaleMax: 5.0,
+                    }
+                }));
+                if (performanceStartDate) {
+                    formData.set("openDate", new Date(`${performanceStartDate}T00:00:00`).toISOString());
+                }
+                if (performanceEndDate) {
+                    formData.set("deadline", new Date(`${performanceEndDate}T23:59:59`).toISOString());
+                }
             } else if (selectedType === "GITHUB") {
                 formData.set("description", JSON.stringify({
                     hasChecklist: Boolean(hasChecklist),
@@ -3406,6 +3530,9 @@ function ActivityFormDialog({
                                                                     } else if (t.id === "MANUAL") {
                                                                         setStatement(TEMPLATE_MANUAL);
                                                                         setDescription(TEMPLATE_MANUAL);
+                                                                    } else if (t.id === "PERFORMANCE") {
+                                                                        setStatement(TEMPLATE_PERFORMANCE);
+                                                                        setDescription(TEMPLATE_PERFORMANCE);
                                                                     } else if (t.id === "GITHUB") {
                                                                         setStatement(TEMPLATE_GITHUB);
                                                                         setDescription(TEMPLATE_GITHUB);
@@ -5821,6 +5948,191 @@ function ActivityFormDialog({
                                                 </div>
                                             </div>
                                         )}
+
+                                        {selectedType === "PERFORMANCE" && (
+                                            <div className="space-y-4 flex-1 flex flex-col">
+                                                {/* Header informativo */}
+                                                <div className="p-3.5 rounded-xl border border-teal-500/20 bg-teal-500/5 text-xs space-y-1.5">
+                                                    <div className="flex items-center gap-2 font-bold text-foreground text-xs">
+                                                        <TrendingUp className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                                                        <span>Configuración de Desempeño y Asistencia</span>
+                                                    </div>
+                                                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                                        Evalúa el desempeño de cada aprendiz por día de clase. Si tiene inasistencia califica <strong>0.0</strong>, si llega tarde aplica penalización, y por defecto los días con asistencia parten en <strong>5.0</strong> con ajuste por el docente.
+                                                    </p>
+                                                </div>
+
+                                                {/* 1. Rango de Fechas */}
+                                                <div className="p-3.5 rounded-xl border border-border bg-background space-y-3">
+                                                    <div className="flex items-center justify-between">
+                                                        <Label className="text-xs font-bold flex items-center gap-1.5 text-foreground">
+                                                            <Calendar className="h-3.5 w-3.5 text-primary" />
+                                                            Periodo de la Actividad (Inicio y Fin)
+                                                        </Label>
+                                                        <Badge variant="outline" className="text-[10px] font-mono font-bold text-primary border-primary/30">
+                                                            {estimatedPerformanceSessions} {estimatedPerformanceSessions === 1 ? "sesión" : "sesiones"}
+                                                        </Badge>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 gap-2.5">
+                                                        <div className="space-y-1">
+                                                            <span className="text-[11px] font-semibold text-muted-foreground">Fecha de Inicio</span>
+                                                            <Input
+                                                                type="date"
+                                                                value={performanceStartDate}
+                                                                onChange={(e) => setPerformanceStartDate(e.target.value)}
+                                                                className="h-8 text-xs font-mono bg-background"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <span className="text-[11px] font-semibold text-muted-foreground">Fecha de Fin</span>
+                                                            <Input
+                                                                type="date"
+                                                                value={performanceEndDate}
+                                                                onChange={(e) => setPerformanceEndDate(e.target.value)}
+                                                                className="h-8 text-xs font-mono bg-background"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* 2. Días de Clase Aplicables (Lunes a Domingo) */}
+                                                <div className="p-3.5 rounded-xl border border-border bg-background space-y-3">
+                                                    <div className="flex items-center justify-between">
+                                                        <Label className="text-xs font-bold flex items-center gap-1.5 text-foreground">
+                                                            <Clock className="h-3.5 w-3.5 text-primary" />
+                                                            Días de Clase Aplicables (Lunes a Domingo)
+                                                        </Label>
+                                                        <div className="flex items-center gap-1">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setPerformanceDaysOfWeek([1, 2, 3, 4, 5])}
+                                                                className="text-[10px] font-semibold px-1.5 py-0.5 rounded border hover:bg-muted text-muted-foreground cursor-pointer"
+                                                            >
+                                                                L - V
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setPerformanceDaysOfWeek([1, 2, 3, 4, 5, 6, 0])}
+                                                                className="text-[10px] font-semibold px-1.5 py-0.5 rounded border hover:bg-muted text-muted-foreground cursor-pointer"
+                                                            >
+                                                                Todos
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Botones interactivos de lunes a domingo */}
+                                                    <div className="grid grid-cols-7 gap-1.5">
+                                                        {[
+                                                            { id: 1, label: "Lun", full: "Lunes" },
+                                                            { id: 2, label: "Mar", full: "Martes" },
+                                                            { id: 3, label: "Mié", full: "Miércoles" },
+                                                            { id: 4, label: "Jue", full: "Jueves" },
+                                                            { id: 5, label: "Vie", full: "Viernes" },
+                                                            { id: 6, label: "Sáb", full: "Sábado" },
+                                                            { id: 0, label: "Dom", full: "Domingo" },
+                                                        ].map(d => {
+                                                            const isChecked = performanceDaysOfWeek.includes(d.id);
+                                                            return (
+                                                                <button
+                                                                    key={d.id}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        if (isChecked) {
+                                                                            if (performanceDaysOfWeek.length > 1) {
+                                                                                setPerformanceDaysOfWeek(performanceDaysOfWeek.filter(x => x !== d.id));
+                                                                            } else {
+                                                                                toast.warning("Debes seleccionar al menos un día de clase.");
+                                                                            }
+                                                                        } else {
+                                                                            setPerformanceDaysOfWeek([...performanceDaysOfWeek, d.id]);
+                                                                        }
+                                                                    }}
+                                                                    className={cn(
+                                                                        "py-2 px-1 text-center rounded-lg border text-xs font-bold transition-all cursor-pointer flex flex-col items-center gap-0.5",
+                                                                        isChecked
+                                                                            ? "bg-teal-600 text-white border-teal-600 shadow-xs"
+                                                                            : "bg-muted/30 text-muted-foreground hover:bg-muted border-border/70"
+                                                                    )}
+                                                                    title={d.full}
+                                                                >
+                                                                    <span className="text-[11px]">{d.label}</span>
+                                                                    <span className="text-[9px] opacity-80">{isChecked ? "✓" : "—"}</span>
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+
+                                                    <p className="text-[11px] text-muted-foreground">
+                                                        Solo se evaluarán las fechas que coincidan con los días marcados dentro del periodo.
+                                                    </p>
+                                                </div>
+
+                                                {/* 3. Reglas de Calificación & Asistencia */}
+                                                <div className="p-3.5 rounded-xl border border-primary/25 bg-primary/5 space-y-3">
+                                                    <div className="flex items-center justify-between">
+                                                        <Label className="text-xs font-bold flex items-center gap-1.5 text-foreground">
+                                                            <SlidersHorizontal className="h-3.5 w-3.5 text-primary" />
+                                                            Reglas de Asistencia y Penalización
+                                                        </Label>
+                                                        <Badge variant="outline" className="text-[10px] font-mono border-primary/30 text-primary">
+                                                            Escala: 0.0 a 5.0
+                                                        </Badge>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 gap-2.5">
+                                                        {/* Base diaria */}
+                                                        <div className="p-2.5 rounded-lg border bg-background/90 space-y-1">
+                                                            <div className="flex items-center justify-between text-[11px]">
+                                                                <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                                                                    Base por Día
+                                                                </span>
+                                                                <span className="font-mono font-bold text-xs">5.0 / 5.0</span>
+                                                            </div>
+                                                            <p className="text-[10px] text-muted-foreground">
+                                                                Día con asistencia arranca calificado en 5.0.
+                                                            </p>
+                                                        </div>
+
+                                                        {/* Penalización por llegada tarde */}
+                                                        <div className="p-2.5 rounded-lg border bg-background/90 space-y-1">
+                                                            <div className="flex items-center justify-between text-[11px]">
+                                                                <span className="font-semibold text-amber-600 dark:text-amber-400">
+                                                                    Penalizar Tardanza
+                                                                </span>
+                                                                <span className="font-mono font-bold text-xs">-{performanceTardinessPenalty.toFixed(1)}</span>
+                                                            </div>
+                                                            <div className="relative">
+                                                                <Input
+                                                                    type="number"
+                                                                    min="0"
+                                                                    max="5"
+                                                                    step="0.5"
+                                                                    value={performanceTardinessPenalty}
+                                                                    onChange={(e) => setPerformanceTardinessPenalty(parseFloat(e.target.value) || 0)}
+                                                                    className="h-7 text-xs font-mono font-bold text-center bg-background"
+                                                                />
+                                                            </div>
+                                                            <p className="text-[10px] text-muted-foreground">
+                                                                Nota día con tardanza: {(Math.max(0, 5.0 - performanceTardinessPenalty)).toFixed(1)} / 5.0
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Inasistencia obligatoria */}
+                                                    <div className="p-2 rounded-lg border border-rose-500/20 bg-rose-500/5 text-[11px] text-rose-700 dark:text-rose-300 flex items-center justify-between">
+                                                        <span className="font-semibold">Inasistencia Registrada:</span>
+                                                        <span className="font-mono font-bold text-xs bg-rose-500/20 px-2 py-0.5 rounded">
+                                                            0.0 Automático
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="text-[10px] text-muted-foreground/90 bg-muted/30 p-2 rounded leading-snug">
+                                                        💡 El profesor puede ajustar libremente la calificación de cada día que no tenga inasistencia, agregar observaciones, calcular el promedio final y visualizar el gráfico de evolución.
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -7896,6 +8208,14 @@ const getActivityTypeInfo = (type: string) => {
                 badgeColor: "bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/25",
                 accentColor: "from-orange-500/30 via-orange-500/10 to-transparent",
                 iconBg: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
+            };
+        case "PERFORMANCE":
+            return {
+                label: "Desempeño",
+                icon: TrendingUp,
+                badgeColor: "bg-teal-500/10 text-teal-700 dark:text-teal-300 border-teal-500/25",
+                accentColor: "from-teal-500/30 via-teal-500/10 to-transparent",
+                iconBg: "bg-teal-500/10 text-teal-600 dark:text-teal-400",
             };
         case "MANUAL":
         default:

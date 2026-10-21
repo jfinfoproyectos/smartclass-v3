@@ -12,6 +12,7 @@ const AiInterviewActivityDetails = dynamic(() => import('./AiInterviewActivityDe
 const DbModelingActivityDetails = dynamic(() => import('./DbModelingActivityDetails').then(m => m.DbModelingActivityDetails), { ssr: false });
 const AudioDefenseActivityDetails = dynamic(() => import('./AudioDefenseActivityDetails').then(m => m.AudioDefenseActivityDetails), { ssr: false });
 const WorkshopActivityDetails = dynamic(() => import('./WorkshopActivityDetails').then(m => m.WorkshopActivityDetails), { ssr: false });
+const PerformanceActivityDetails = dynamic(() => import('./PerformanceActivityDetails').then(m => m.PerformanceActivityDetails), { ssr: false });
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
@@ -198,6 +199,8 @@ function ActivityContent({ activity, userId, studentName }: ActivityDetailsProps
             return <CodeProjectActivityDetails activity={activity} userId={userId} studentName={studentName} />;
         case "WORKSHOP_GITHUB":
             return <WorkshopActivityDetails activity={activity} userId={userId} studentName={studentName} />;
+        case "PERFORMANCE":
+            return <PerformanceActivityDetails activity={activity} userId={userId} studentName={studentName} />;
         default:
             return <div>Tipo de actividad no soportado</div>;
     }

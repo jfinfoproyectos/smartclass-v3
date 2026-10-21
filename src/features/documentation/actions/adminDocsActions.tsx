@@ -1507,6 +1507,229 @@ export async function importProjectStructureAction(
   };
 }
 
+export interface ImportedTopicFile {
+  filename: string;
+  content: string;
+}
+
+export async function importFilesToTopicAction(
+  projectId: string,
+  topicPath: string,
+  rawFiles: ImportedTopicFile[]
+) {
+  const session = await verifyAdmin();
+  const project = await checkProjectOwnership(projectId, session);
+
+  if (!rawFiles || rawFiles.length === 0) {
+    throw new Error("No se proporcionaron archivos para importar.");
+  }
+
+  // 1. Resolve Topic
+  const cleanTopicPath = topicPath.replace(/\/index$/, '').replace(/^\/+/, '');
+  
+  // Find topic in DB or find topic index
+  const topicPage = await prisma.docPage.findFirst({
+    where: {
+      docProjectId: project.id,
+      OR: [
+        { slug: `${cleanTopicPath}/index` },
+        { slug: cleanTopicPath }
+      ]
+    }
+  });
+
+  const topicTitle = topicPage?.title || cleanTopicPath
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+  const topicCategoryOrder = topicPage?.categoryOrder ?? 0;
+  const topicDraft = topicPage?.draft ?? false;
+
+  // Ensure topic index exists so the folder structure is persisted
+  await prisma.docPage.upsert({
+    where: {
+      docProjectId_slug: {
+        docProjectId: project.id,
+        slug: `${cleanTopicPath}/index`
+      }
+    },
+    update: {
+      title: topicTitle,
+      category: topicTitle,
+      categoryOrder: topicCategoryOrder,
+      order: 0,
+      draft: topicDraft,
+      updatedAt: new Date()
+    },
+    create: {
+      docProjectId: project.id,
+      slug: `${cleanTopicPath}/index`,
+      title: topicTitle,
+      category: topicTitle,
+      categoryOrder: topicCategoryOrder,
+      order: 0,
+      content: `# ${topicTitle}\n\nDocumentación para ${topicTitle}.`,
+      draft: topicDraft
+    }
+  });
+
+  // 2. Fetch existing pages inside this topic to determine max order
+  const existingTopicPages = await prisma.docPage.findMany({
+    where: {
+      docProjectId: project.id,
+      slug: { startsWith: `${cleanTopicPath}/` }
+    },
+    select: { slug: true, order: true }
+  });
+
+  const nonIndexPages = existingTopicPages.filter(p => !p.slug.endsWith('/index'));
+  let maxOrder = nonIndexPages.reduce((max, p) => Math.max(max, p.order || 0), 0);
+
+  // Track slugs in current batch to avoid duplicate collisions in same import
+  const batchSlugs = new Set<string>();
+  let importedCount = 0;
+
+  // Sort files naturally by filename (e.g. 01_..., 02_..., 04_..., 10_...)
+  const sortedFiles = [...rawFiles].sort((a, b) => 
+    a.filename.localeCompare(b.filename, undefined, { numeric: true, sensitivity: 'base' })
+  );
+
+  for (let i = 0; i < sortedFiles.length; i++) {
+    const file = sortedFiles[i];
+    let body = file.content;
+    let frontmatter: any = {};
+
+    // Parse Frontmatter
+    if (body.trim().startsWith('---')) {
+      try {
+        const parsed = matter(body);
+        body = parsed.content;
+        frontmatter = parsed.data || {};
+      } catch (err) {
+        console.warn("Error parsing frontmatter for imported topic file:", err);
+      }
+    }
+
+    // Determine Title & Order from filename or content
+    const baseName = file.filename.replace(/\.(md|markdown)$/i, '').trim();
+    let fileOrder: number | null = null;
+    let cleanName = baseName;
+
+    // Check if filename has leading number like "01_...", "01 - ...", "01. ..."
+    const numMatch = baseName.match(/^(\d+)[ -_.]+(.*)$/);
+    if (numMatch) {
+      fileOrder = parseInt(numMatch[1], 10);
+      cleanName = numMatch[2].trim();
+    }
+
+    let fileTitle = "";
+    if (frontmatter.title) {
+      fileTitle = String(frontmatter.title).trim();
+    } else {
+      // Check for first H1 header in markdown content
+      const headingMatch = body.trim().match(/^#\s+([^\n\r]+)/);
+      if (headingMatch && headingMatch[1].trim()) {
+        fileTitle = headingMatch[1].trim();
+      } else {
+        // Beautify filename: e.g. INTRODUCCION_Y_ARQUITECTURA -> Introduccion Y Arquitectura
+        fileTitle = cleanName
+          .split(/[-_ ]+/)
+          .filter(Boolean)
+          .map(w => {
+            if (w.toUpperCase() === w) {
+              return w.charAt(0) + w.slice(1).toLowerCase();
+            }
+            return w.charAt(0).toUpperCase() + w.slice(1);
+          })
+          .join(' ');
+      }
+    }
+
+    if (!fileTitle) {
+      fileTitle = `Documento ${i + 1}`;
+    }
+
+    if (frontmatter.order !== undefined && typeof frontmatter.order === 'number') {
+      fileOrder = frontmatter.order;
+    }
+
+    let finalOrder: number;
+    if (fileOrder !== null) {
+      finalOrder = fileOrder * 10;
+    } else {
+      maxOrder += 10;
+      finalOrder = maxOrder;
+    }
+
+    const baseSlug = stringToDocSlug(fileTitle) || stringToDocSlug(cleanName) || `doc-${i + 1}`;
+    let targetSlug = `${cleanTopicPath}/${baseSlug}`;
+
+    if (baseSlug === 'index') {
+      targetSlug = `${cleanTopicPath}/inicio`;
+    }
+
+    let finalSlug = targetSlug;
+    let counter = 2;
+    while (batchSlugs.has(finalSlug)) {
+      finalSlug = `${targetSlug}-${counter++}`;
+    }
+    batchSlugs.add(finalSlug);
+
+    let publishDate: Date | null = null;
+    if (frontmatter.date) {
+      const d = new Date(frontmatter.date);
+      if (!isNaN(d.getTime())) publishDate = d;
+    }
+
+    const cleanMarkdown = formatToStandardMarkdown(body, fileTitle);
+
+    await prisma.docPage.upsert({
+      where: {
+        docProjectId_slug: {
+          docProjectId: project.id,
+          slug: finalSlug
+        }
+      },
+      update: {
+        title: fileTitle,
+        content: cleanMarkdown,
+        category: topicTitle,
+        categoryOrder: topicCategoryOrder,
+        order: finalOrder,
+        draft: frontmatter.draft === true ? true : topicDraft,
+        publishDate,
+        icon: frontmatter.icon || "",
+        updatedAt: new Date()
+      },
+      create: {
+        docProjectId: project.id,
+        slug: finalSlug,
+        title: fileTitle,
+        content: cleanMarkdown,
+        category: topicTitle,
+        categoryOrder: topicCategoryOrder,
+        order: finalOrder,
+        draft: frontmatter.draft === true ? true : topicDraft,
+        publishDate,
+        icon: frontmatter.icon || ""
+      }
+    });
+
+    importedCount++;
+  }
+
+  revalidatePath(`/dashboard/teacher/docs/${project.slug}`, "page");
+  revalidatePath(`/dashboard/teacher/docs/${project.id}`, "page");
+  revalidatePath("/docs", "layout");
+
+  return {
+    success: true,
+    count: importedCount,
+    topicTitle
+  };
+}
+
 export async function getProjectEditorialBookDataAction(projectId: string) {
   const session = await verifyAdmin();
   const project = await checkProjectOwnership(projectId, session, true);

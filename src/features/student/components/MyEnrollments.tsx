@@ -5,7 +5,7 @@ import {
     MessageSquare, Users, User, ClipboardCheck, Clock, BookOpen, GraduationCap, 
     FileText, AlertCircle, ArrowLeft, Calendar, ArrowRight, LayoutGrid, List,
     Sparkles, FolderGit2, Code2, Terminal, Video, Headphones, MessageSquareQuote, Database, Target, CheckCircle2,
-    Layers, GitBranch, ShieldAlert
+    Layers, GitBranch, ShieldAlert, TrendingUp
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -103,6 +103,14 @@ const getActivityTypeInfo = (type: string) => {
             return {
                 label: "Revisión PDF",
                 icon: FileText,
+                badgeColor: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/25",
+                accentColor: "from-emerald-500/30 via-emerald-500/10 to-transparent",
+                iconBg: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+            };
+        case "PERFORMANCE":
+            return {
+                label: "Desempeño",
+                icon: TrendingUp,
                 badgeColor: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/25",
                 accentColor: "from-emerald-500/30 via-emerald-500/10 to-transparent",
                 iconBg: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { NavItem } from "../../services/public-docs";
@@ -19,17 +19,50 @@ function isMatchingSlug(currentPath: string, targetSlug: string): boolean {
   
   if (cleanCurrent === cleanTarget) return true;
   if (cleanCurrent.endsWith("/" + cleanTarget)) return true;
-  
-  const lastPartCurrent = cleanCurrent.split("/").pop();
-  const lastPartTarget = cleanTarget.split("/").pop();
-  return !!lastPartCurrent && lastPartCurrent === lastPartTarget;
+  return false;
 }
 
-function NavNode({ node, projectId, activeSlug, expandToken }: { 
-  node: NavItem, 
-  projectId: string, 
-  activeSlug: string, 
-  expandToken: number
+function collectActiveFolderIds(nodes: NavItem[], activeSlug: string): string[] {
+  const result: string[] = [];
+  const cleanActive = decodeURIComponent(activeSlug).toLowerCase().replace(/^\//, "").replace(/\/$/, "");
+
+  function traverse(item: NavItem): boolean {
+    const cleanItemSlug = decodeURIComponent(item.slug || "").toLowerCase().replace(/^\//, "").replace(/\/$/, "");
+    const isSelfMatch = cleanItemSlug === cleanActive || (cleanItemSlug !== "" && cleanActive.startsWith(cleanItemSlug + "/"));
+    
+    let hasChildMatch = false;
+    if (item.children && item.children.length > 0) {
+      for (const child of item.children) {
+        if (traverse(child)) {
+          hasChildMatch = true;
+        }
+      }
+    }
+
+    if (item.type === 'folder' && (isSelfMatch || hasChildMatch)) {
+      result.push(item.id || item.slug);
+      return true;
+    }
+
+    return isSelfMatch || hasChildMatch;
+  }
+
+  nodes.forEach(n => traverse(n));
+  return result;
+}
+
+function NavNode({ 
+  node, 
+  projectId, 
+  activeSlug, 
+  expandedTopics,
+  onToggle
+}: { 
+  node: NavItem;
+  projectId: string; 
+  activeSlug: string; 
+  expandedTopics: Set<string>;
+  onToggle: (topicKey: string) => void;
 }) {
   const isActive = isMatchingSlug(activeSlug, node.slug);
 
@@ -43,20 +76,9 @@ function NavNode({ node, projectId, activeSlug, expandToken }: {
     return checkChildren(node.children);
   }, [node.children, activeSlug]);
 
-  const [isOpen, setIsOpen] = useState(true);
+  const topicKey = node.id || node.slug;
+  const isOpen = expandedTopics.has(topicKey);
 
-  useEffect(() => {
-    if (isChildActive || isActive) {
-      setIsOpen(true);
-    }
-  }, [isChildActive, isActive]);
-
-  // Sync with global expand/collapse commands
-  useEffect(() => {
-    if (expandToken > 0) setIsOpen(true);
-    if (expandToken < 0) setIsOpen(false);
-  }, [expandToken]);
-  
   if (node.type === "folder") {
     const hasPage = !node.id.startsWith("folder-");
     const now = new Date();
@@ -68,11 +90,14 @@ function NavNode({ node, projectId, activeSlug, expandToken }: {
       <div className="flex flex-col mb-1.5">
         <div className="flex items-center group w-full pr-2">
           <button 
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
-              setIsOpen(!isOpen);
+              onToggle(topicKey);
             }}
             className="p-1.5 hover:bg-primary/10 rounded-lg transition-colors mr-1 cursor-pointer"
+            title={isOpen ? "Contraer tópico" : "Expandir tópico"}
+            aria-label={isOpen ? "Contraer tópico" : "Expandir tópico"}
           >
             <motion.div
               animate={{ rotate: isOpen ? 0 : -90 }}
@@ -109,7 +134,8 @@ function NavNode({ node, projectId, activeSlug, expandToken }: {
             </Link>
           ) : (
             <button 
-              onClick={() => setIsOpen(!isOpen)}
+              type="button"
+              onClick={() => onToggle(topicKey)}
               className="flex-1 flex items-start gap-2 py-1.5 text-muted-foreground/80 hover:text-primary transition-all text-left cursor-pointer"
             >
               <div className="flex-1 min-w-0 flex flex-col items-start gap-1">
@@ -140,7 +166,14 @@ function NavNode({ node, projectId, activeSlug, expandToken }: {
               className="ml-4 pl-3 border-l border-slate-200/80 dark:border-slate-800/80 hover:border-primary/30 transition-colors duration-300 flex flex-col gap-1 mt-1 overflow-hidden"
             >
               {node.children.map(child => (
-                <NavNode key={child.id} node={child} projectId={projectId} activeSlug={activeSlug} expandToken={expandToken} />
+                <NavNode 
+                  key={child.id} 
+                  node={child} 
+                  projectId={projectId} 
+                  activeSlug={activeSlug} 
+                  expandedTopics={expandedTopics}
+                  onToggle={onToggle}
+                />
               ))}
             </motion.div>
           )}
@@ -214,12 +247,107 @@ export function PublicSidebar({ navTree, projectId, className }: {
   className?: string 
 }) {
   const pathname = usePathname();
-  const [expandToken, setExpandToken] = useState(0);
 
   // Extract active path from URL: /docs/[projectId]/[...slug]
   const basePath = `/docs/${projectId}`;
   let activeSlug = pathname.replace(basePath, "").replace(/^\//, "");
   if (!activeSlug) activeSlug = "index";
+
+  const storageKey = `smartclass_docs_expanded_${projectId}`;
+
+  const [expandedTopics, setExpandedTopics] = useState<Set<string>>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = sessionStorage.getItem(storageKey);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            const set = new Set<string>(parsed);
+            const activeFolders = collectActiveFolderIds(navTree, activeSlug);
+            activeFolders.forEach(id => set.add(id));
+            return set;
+          }
+        }
+      } catch (e) {
+        console.warn("Could not load saved sidebar state:", e);
+      }
+    }
+
+    const initial = new Set<string>();
+    const activeFolders = collectActiveFolderIds(navTree, activeSlug);
+    activeFolders.forEach(id => initial.add(id));
+    
+    // If no active folder found, expand the first folder by default
+    if (initial.size === 0 && navTree.length > 0) {
+      const firstFolder = navTree.find(n => n.type === 'folder');
+      if (firstFolder) initial.add(firstFolder.id || firstFolder.slug);
+    }
+    
+    return initial;
+  });
+
+  useEffect(() => {
+    const activeFolders = collectActiveFolderIds(navTree, activeSlug);
+    if (activeFolders.length > 0) {
+      setExpandedTopics(prev => {
+        let changed = false;
+        const next = new Set(prev);
+        activeFolders.forEach(id => {
+          if (!next.has(id)) {
+            next.add(id);
+            changed = true;
+          }
+        });
+        if (changed) {
+          try {
+            sessionStorage.setItem(storageKey, JSON.stringify(Array.from(next)));
+          } catch {}
+          return next;
+        }
+        return prev;
+      });
+    }
+  }, [activeSlug, navTree, storageKey]);
+
+  const handleToggleTopic = useCallback((topicKey: string) => {
+    setExpandedTopics(prev => {
+      const next = new Set(prev);
+      if (next.has(topicKey)) {
+        next.delete(topicKey);
+      } else {
+        next.add(topicKey);
+      }
+      try {
+        sessionStorage.setItem(storageKey, JSON.stringify(Array.from(next)));
+      } catch {}
+      return next;
+    });
+  }, [storageKey]);
+
+  const handleExpandAll = () => {
+    const allFolderKeys = new Set<string>();
+    const collectAll = (items: NavItem[]) => {
+      items.forEach(item => {
+        if (item.type === 'folder') {
+          allFolderKeys.add(item.id || item.slug);
+          if (item.children) collectAll(item.children);
+        }
+      });
+    };
+    collectAll(navTree);
+    setExpandedTopics(allFolderKeys);
+    try {
+      sessionStorage.setItem(storageKey, JSON.stringify(Array.from(allFolderKeys)));
+    } catch {}
+  };
+
+  const handleCollapseAll = () => {
+    const empty = new Set<string>();
+    setExpandedTopics(empty);
+    try {
+      sessionStorage.setItem(storageKey, JSON.stringify([]));
+    } catch {}
+  };
 
   return (
     <aside className={cn("w-72 border-r border-slate-200/80 dark:border-slate-800/80 h-full bg-background/50 backdrop-blur-xl overflow-hidden flex flex-col", className)}>
@@ -231,8 +359,10 @@ export function PublicSidebar({ navTree, projectId, className }: {
             <Tooltip>
               <TooltipTrigger asChild>
                 <button 
-                  onClick={() => setExpandToken(prev => prev <= 0 ? 1 : prev + 1)}
+                  type="button"
+                  onClick={handleExpandAll}
                   className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                  title="Expandir todo"
                 >
                   <UnfoldVertical size={14} />
                 </button>
@@ -243,8 +373,10 @@ export function PublicSidebar({ navTree, projectId, className }: {
             <Tooltip>
               <TooltipTrigger asChild>
                 <button 
-                  onClick={() => setExpandToken(prev => prev >= 0 ? -1 : prev - 1)}
+                  type="button"
+                  onClick={handleCollapseAll}
                   className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                  title="Contraer todo"
                 >
                   <FoldVertical size={14} />
                 </button>
@@ -268,7 +400,14 @@ export function PublicSidebar({ navTree, projectId, className }: {
           </div>
         ) : (
           navTree.map(node => (
-            <NavNode key={node.id} node={node} projectId={projectId} activeSlug={activeSlug} expandToken={expandToken} />
+            <NavNode 
+              key={node.id} 
+              node={node} 
+              projectId={projectId} 
+              activeSlug={activeSlug} 
+              expandedTopics={expandedTopics}
+              onToggle={handleToggleTopic}
+            />
           ))
         )}
       </div>

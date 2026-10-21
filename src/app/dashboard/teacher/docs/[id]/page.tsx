@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition, useCallback } from "react";
+import { useState, useEffect, useTransition, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { 
   getFileTreeAction, 
@@ -28,7 +28,8 @@ import {
   Edit3,
   Eye,
   X,
-  BookOpen
+  BookOpen,
+  Upload
 } from "lucide-react";
 import { toast } from "sonner";
 import { FileNode } from "@/features/documentation/services/admin-docs";
@@ -77,6 +78,7 @@ export default function DocEditorPage() {
 
   const [isUnsavedDialogOpen, setIsUnsavedDialogOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<{ type: 'select' | 'back', path?: string } | null>(null);
+  const topicImportTriggerRef = useRef<((topicPath: string) => void) | null>(null);
 
   const [themes, setThemes] = useState<any[]>([]);
   const [currentCodeTheme, setCurrentCodeTheme] = useState("one-dark-pro");
@@ -426,6 +428,9 @@ export default function DocEditorPage() {
                   selectedPath={selectedFile} 
                   onSelect={handleFileSelect}
                   onTreeChange={loadTree}
+                  registerTopicImportTrigger={(trigger) => {
+                    topicImportTriggerRef.current = trigger;
+                  }}
                 />
               </div>
             </motion.aside>
@@ -464,6 +469,15 @@ export default function DocEditorPage() {
                            <div className="px-3.5 py-1.5 rounded-full bg-muted border border-border text-xs font-medium text-muted-foreground flex items-center gap-2">
                               {selectedNode.children?.length || 0} Elementos hijos
                            </div>
+                       </div>
+                       <div className="mt-6 flex flex-wrap justify-center gap-3">
+                         <Button
+                           onClick={() => topicImportTriggerRef.current?.(selectedFile)}
+                           className="gap-2 rounded-xl text-xs font-semibold px-4 h-9 shadow-xs"
+                         >
+                           <Upload className="w-3.5 h-3.5" />
+                           Importar Archivos Markdown
+                         </Button>
                        </div>
                     </div>
                   );

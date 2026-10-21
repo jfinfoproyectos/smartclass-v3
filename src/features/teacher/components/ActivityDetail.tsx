@@ -49,7 +49,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { format, formatDistanceToNow, isAfter } from "date-fns";
 import { es } from "date-fns/locale";
-import { Eye, Github, FileText, ClipboardList, Users, Trash2, Sparkles, Search, AlertTriangle, CheckCircle2, Bot, Loader2, ChevronDown, ChevronUp, CheckCircle, ChevronLeft, ChevronRight, ExternalLink, Settings, Link2, Download, FileSpreadsheet, RotateCcw, Code2, Link as LinkIcon, Crown, ArrowLeft, Terminal, Video, MessageSquareQuote, Database, Mic, Target, GitBranch } from "lucide-react";
+import { Eye, Github, FileText, ClipboardList, Users, Trash2, Sparkles, Search, AlertTriangle, CheckCircle2, Bot, Loader2, ChevronDown, ChevronUp, CheckCircle, ChevronLeft, ChevronRight, ExternalLink, Settings, Link2, Download, FileSpreadsheet, RotateCcw, Code2, Link as LinkIcon, Crown, ArrowLeft, Terminal, Video, MessageSquareQuote, Database, Mic, Target, GitBranch, TrendingUp } from "lucide-react";
 import { FeedbackViewer } from '../../student/components/FeedbackViewer';
 import { validateUniqueLinksAction, deleteSubmissionAction, analyzeGitHubFileAction, finalizeGitHubGradingAction, gradePdfReviewAction, gradeManualActivityAction, improveFeedbackAction, rejectManualActivityAction } from "../../../features/teacher/actions/gradingActions";
 import { getGitHubSubmissionDetailsAction, getRepoStructureAction, fetchRepoFilesAction } from "../../../features/github/actions/githubActions";
@@ -66,6 +66,7 @@ import { VideoPitchInspector } from "./VideoPitchInspector";
 import { AiInterviewInspector } from "./AiInterviewInspector";
 import { DbModelingInspector } from "./DbModelingInspector";
 import { AudioDefenseInspector } from "./AudioDefenseInspector";
+import { PerformanceActivityInspector } from "./PerformanceActivityInspector";
 import { GradingModeSelector } from "./GradingModeSelector";
 import { ActivityGroupsModal } from "./ActivityGroupsModal";
 import { pdf } from "@react-pdf/renderer";
@@ -128,7 +129,7 @@ export function ActivityDetail({
     // Estado para calificación por lote
     const [isBatchGrading, setIsBatchGrading] = useState(false);
     const [isGroupsModalOpen, setIsGroupsModalOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState("results");
+    const [activeTab, setActiveTab] = useState(() => activity?.type === "PERFORMANCE" ? "performance" : "results");
     const [showStudentPreview, setShowStudentPreview] = useState(false);
     
     // Estado para calificación masiva en actividades manuales
@@ -233,11 +234,12 @@ export function ActivityDetail({
             const hasSubmitted = Boolean(submission);
 
             // Solo se permite calificar si hay entrega. En actividades grupales únicamente desde el líder del equipo.
-            // Para actividades de tipo MANUAL: el docente siempre debe poder calificar directamente a cualquier estudiante (o al líder en grupos), incluso sin entrega previa.
+            // Para actividades de tipo MANUAL o PERFORMANCE: el docente siempre debe poder calificar directamente a cualquier estudiante (o al líder en grupos), incluso sin entrega previa.
             const isManualActivity = activity.type === "MANUAL";
+            const isPerformanceActivity = activity.type === "PERFORMANCE";
             const hasLeaderInGroup = group ? Boolean(group.leaderId || group.members?.some((m: any) => m.isLeader)) : false;
             const canEvaluateGroupMember = isLeader || !hasLeaderInGroup;
-            const canEvaluate = isManualActivity
+            const canEvaluate = (isManualActivity || isPerformanceActivity)
                 ? (!activity.isGroupActivity || canEvaluateGroupMember || !group)
                 : (hasSubmitted && (!activity.isGroupActivity || isLeader));
 
@@ -852,6 +854,7 @@ export function ActivityDetail({
                             {activity.type === "DB_MODELING" && <Database className="h-3 w-3 text-primary" />}
                             {activity.type === "AUDIO_DEFENSE" && <Mic className="h-3 w-3 text-primary" />}
                             {activity.type === "PDF_REVIEW" && <FileText className="h-3 w-3 text-primary" />}
+                            {activity.type === "PERFORMANCE" && <TrendingUp className="h-3 w-3 text-emerald-500" />}
                             {activity.type === "MANUAL" && <LinkIcon className="h-3 w-3 text-primary" />}
                             <span>
                                 {activity.type === "GITHUB"
@@ -872,6 +875,8 @@ export function ActivityDetail({
                                     ? "Modelado de BD"
                                     : activity.type === "PDF_REVIEW"
                                     ? "Revisión PDF"
+                                    : activity.type === "PERFORMANCE"
+                                    ? "Desempeño en Clase"
                                     : "Actividad Manual"}
                             </span>
                         </Badge>
@@ -933,6 +938,12 @@ export function ActivityDetail({
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <div className="w-full overflow-x-auto scrollbar-none pb-1 shrink-0 -mx-1 px-1">
                     <TabsList className="inline-flex w-max min-w-full sm:w-auto h-auto min-h-9 p-1 gap-1">
+                        {activity.type === "PERFORMANCE" && (
+                            <TabsTrigger value="performance" className="flex items-center gap-1.5 text-xs font-semibold py-1.5 px-3 shrink-0 whitespace-nowrap bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
+                                <TrendingUp className="h-3.5 w-3.5 shrink-0" />
+                                <span>Consola de Desempeño</span>
+                            </TabsTrigger>
+                        )}
                         <TabsTrigger value="statement" className="flex items-center gap-1.5 text-xs font-semibold py-1.5 px-3 shrink-0 whitespace-nowrap">
                             <ClipboardList className="h-3.5 w-3.5 text-amber-500 shrink-0" />
                             <span>Enunciado</span>
@@ -943,6 +954,15 @@ export function ActivityDetail({
                         </TabsTrigger>
                     </TabsList>
                 </div>
+
+                {activity.type === "PERFORMANCE" && (
+                    <TabsContent value="performance" className="space-y-4 mt-3">
+                        <PerformanceActivityInspector
+                            activity={activity}
+                            studentsList={students}
+                        />
+                    </TabsContent>
+                )}
 
                 <TabsContent value="statement" className="space-y-4 mt-3">
                     <div data-color-mode={mode} className="rounded-md border p-4 bg-card w-full max-w-full overflow-x-auto [&_pre]:whitespace-pre-wrap! [&_pre]:wrap-break-word! [&_table]:w-full! [&_td]:wrap-break-word!">
@@ -1268,6 +1288,8 @@ export function ActivityDetail({
                                                         : !hasSubmitted
                                                             ? (activity.type === "MANUAL"
                                                                 ? "Calificar directamente (Actividad Manual)"
+                                                                : activity.type === "PERFORMANCE"
+                                                                ? "Evaluar desempeño y asistencia en clase"
                                                                 : (activity.isGroupActivity ? "El equipo aún no ha realizado la entrega" : "El estudiante aún no ha realizado la entrega"))
                                                             : (submission?.grade !== null && submission?.grade !== undefined ? "Reevaluar entrega" : "Calificar entrega");
 
@@ -2485,11 +2507,11 @@ export function ActivityDetail({
                 if (!evaluatingStudentId) return null;
                 const evalItem = studentStatus.find(s => s.student.id === evaluatingStudentId);
                 if (!evalItem) return null;
-                if (activity.type !== "MANUAL" && !evalItem.submission) return null;
+                if (activity.type !== "MANUAL" && activity.type !== "PERFORMANCE" && !evalItem.submission) return null;
                 const { student: evalStudent, submission: evalSubmission } = evalItem;
 
-                // Si la actividad es grupal, la navegación de evaluación es exclusiva para los líderes de grupo con entrega (o miembros evaluables en manual)
-                const evaluatableStudents = activity.type === "MANUAL"
+                // Si la actividad es grupal, la navegación de evaluación es exclusiva para los líderes de grupo con entrega (o miembros evaluables en manual/desempeño)
+                const evaluatableStudents = (activity.type === "MANUAL" || activity.type === "PERFORMANCE")
                     ? (activity.isGroupActivity
                         ? studentStatus.filter(s => s.isLeader || !s.group)
                         : studentStatus)
@@ -2705,6 +2727,20 @@ export function ActivityDetail({
                                         toast.success("Entrega rechazada");
                                     }}
                                 />
+                            )}
+
+                            {activity.type === "PERFORMANCE" && (
+                                <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-background">
+                                    <PerformanceActivityInspector
+                                        activity={activity}
+                                        studentsList={students}
+                                        initialStudentId={evaluatingStudentId}
+                                        onClose={() => {
+                                            setEvaluatingStudentId(null);
+                                            router.refresh();
+                                        }}
+                                    />
+                                </div>
                             )}
                         </DialogContent>
                     </Dialog>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { 
   Folder as FolderIcon, 
   FolderOpen, 
@@ -37,7 +37,6 @@ import {
   FoldVertical
 } from "lucide-react";
 import JSZip from "jszip";
-import { useRef } from "react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { FileNode } from "@/features/documentation/services/admin-docs";
@@ -58,7 +57,8 @@ import {
   moveAndReorderAction,
   updatePageMetadataAction,
   exportProjectAction,
-  importProjectStructureAction
+  importProjectStructureAction,
+  importFilesToTopicAction
 } from "@/features/documentation/actions/adminDocsActions";
 import { toast } from "sonner";
 
@@ -90,6 +90,7 @@ interface AdminFileExplorerProps {
   selectedPath: string | null;
   onSelect: (path: string) => void;
   onTreeChange: () => void;
+  registerTopicImportTrigger?: (trigger: (topicPath: string) => void) => void;
 }
 
 type DialogType = 'file' | 'folder' | 'rename' | 'delete' | 'settings' | null;
@@ -120,7 +121,8 @@ export function AdminFileExplorer({
   tree, 
   selectedPath, 
   onSelect, 
-  onTreeChange 
+  onTreeChange,
+  registerTopicImportTrigger
 }: AdminFileExplorerProps) {
   const [search, setSearch] = useState("");
   const [dialogState, setDialogState] = useState<{
@@ -140,9 +142,150 @@ export function AdminFileExplorer({
     date: "",
     icon: ""
   });
-  const [expandToken, setExpandToken] = useState(0);
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => new Set());
+  const isInitialTreeLoadedRef = useRef(false);
+
+  useEffect(() => {
+    if (!isInitialTreeLoadedRef.current && tree.length > 0) {
+      isInitialTreeLoadedRef.current = true;
+      setExpandedPaths(prev => {
+        if (prev.size > 0) return prev;
+        const initial = new Set<string>();
+        tree.forEach(n => {
+          if (n.type === 'folder') initial.add(n.path);
+        });
+        if (selectedPath && selectedPath.includes('/')) {
+          const parent = selectedPath.split('/').slice(0, -1).join('/');
+          initial.add(parent);
+        }
+        return initial;
+      });
+    }
+  }, [tree, selectedPath]);
+
+  useEffect(() => {
+    if (selectedPath && selectedPath.includes('/')) {
+      const parent = selectedPath.split('/').slice(0, -1).join('/');
+      if (parent) {
+        setExpandedPaths(prev => {
+          if (prev.has(parent)) return prev;
+          const next = new Set(prev);
+          next.add(parent);
+          return next;
+        });
+      }
+    }
+  }, [selectedPath]);
+
+  const handleToggleExpand = useCallback((path: string) => {
+    setExpandedPaths(prev => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleExpandAll = () => {
+    const allFolders = new Set<string>();
+    const collectFolders = (nodes: FileNode[]) => {
+      nodes.forEach(n => {
+        if (n.type === 'folder') {
+          allFolders.add(n.path);
+          if (n.children) collectFolders(n.children);
+        }
+      });
+    };
+    collectFolders(tree);
+    setExpandedPaths(allFolders);
+  };
+
+  const handleCollapseAll = () => {
+    setExpandedPaths(new Set());
+  };
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const topicFileInputRef = useRef<HTMLInputElement>(null);
+  const targetTopicPathRef = useRef<string | null>(null);
+
+  const handleTriggerTopicImport = (topicPath: string) => {
+    targetTopicPathRef.current = topicPath;
+    if (topicFileInputRef.current) {
+      topicFileInputRef.current.value = "";
+      topicFileInputRef.current.click();
+    }
+  };
+
+  useEffect(() => {
+    if (registerTopicImportTrigger) {
+      registerTopicImportTrigger(handleTriggerTopicImport);
+    }
+  }, [registerTopicImportTrigger]);
+
+  const handleImportFilesToTopic = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileList = e.target.files;
+    const targetTopic = targetTopicPathRef.current;
+    if (!fileList || fileList.length === 0 || !targetTopic) return;
+
+    setIsSubmitting(true);
+    const toastId = toast.loading("Procesando archivos markdown para el tópico...");
+
+    try {
+      const filesToImport: { filename: string; content: string }[] = [];
+
+      for (let i = 0; i < fileList.length; i++) {
+        const file = fileList[i];
+        const fileNameLower = file.name.toLowerCase();
+
+        if (fileNameLower.endsWith('.zip')) {
+          const zip = await JSZip.loadAsync(file);
+          const zipPromises: Promise<void>[] = [];
+
+          zip.forEach((relativePath, zipEntry) => {
+            const entryLower = relativePath.toLowerCase();
+            if (!zipEntry.dir && (entryLower.endsWith('.md') || entryLower.endsWith('.markdown'))) {
+              const baseName = relativePath.split('/').pop() || relativePath;
+              zipPromises.push(
+                zipEntry.async("text").then((content) => {
+                  filesToImport.push({ filename: baseName, content });
+                })
+              );
+            }
+          });
+
+          await Promise.all(zipPromises);
+        } else if (fileNameLower.endsWith('.md') || fileNameLower.endsWith('.markdown')) {
+          const text = await file.text();
+          filesToImport.push({ filename: file.name, content: text });
+        }
+      }
+
+      if (filesToImport.length === 0) {
+        toast.error("No se encontraron archivos markdown (.md) válidos.", { id: toastId });
+        setIsSubmitting(false);
+        if (topicFileInputRef.current) topicFileInputRef.current.value = "";
+        return;
+      }
+
+      const result = await importFilesToTopicAction(projectId, targetTopic, filesToImport);
+      toast.success(
+        `¡Importación completada! Se añadieron ${result.count} páginas a "${result.topicTitle}".`, 
+        { id: toastId }
+      );
+      onTreeChange();
+      onSelect(targetTopic);
+    } catch (err: any) {
+      console.error("Error al importar archivos al tópico:", err);
+      toast.error(err?.message || "Error al importar archivos al tópico.", { id: toastId });
+    } finally {
+      setIsSubmitting(false);
+      targetTopicPathRef.current = null;
+      if (topicFileInputRef.current) topicFileInputRef.current.value = "";
+    }
+  };
 
   const handleImportFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
@@ -447,7 +590,7 @@ export function AdminFileExplorer({
                 variant="ghost" 
                 size="icon" 
                 className="h-7 w-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer" 
-                onClick={() => setExpandToken(prev => prev <= 0 ? 1 : prev + 1)}
+                onClick={handleExpandAll}
                 aria-label="Abrir todos los tópicos"
               >
                 <UnfoldVertical className="w-3.5 h-3.5" />
@@ -464,7 +607,7 @@ export function AdminFileExplorer({
                 variant="ghost" 
                 size="icon" 
                 className="h-7 w-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer" 
-                onClick={() => setExpandToken(prev => prev >= 0 ? -1 : prev - 1)}
+                onClick={handleCollapseAll}
                 aria-label="Cerrar todos los tópicos"
               >
                 <FoldVertical className="w-3.5 h-3.5" />
@@ -547,6 +690,14 @@ export function AdminFileExplorer({
             ref={fileInputRef}
             onChange={handleImportFiles}
           />
+          <input 
+            type="file" 
+            multiple 
+            accept=".md,.markdown,.zip" 
+            className="hidden" 
+            ref={topicFileInputRef}
+            onChange={handleImportFilesToTopic}
+          />
         </div>
       </div>
 
@@ -571,7 +722,9 @@ export function AdminFileExplorer({
             projectId={projectId}
             level={0} 
             tree={tree}
-            expandToken={expandToken}
+            expandedPaths={expandedPaths}
+            onToggleExpand={handleToggleExpand}
+            isSearching={search.trim().length > 0}
             selectedPath={selectedPath} 
             onSelect={onSelect}
             onTreeChange={onTreeChange}
@@ -579,10 +732,7 @@ export function AdminFileExplorer({
             onMove={handleMove}
             onReorder={handleReorder}
             onMoveAndReorder={handleMoveAndReorder}
-            onImport={(parentPath) => {
-              setDialogState(prev => ({ ...prev, parentPath }));
-              fileInputRef.current?.click();
-            }}
+            onImport={handleTriggerTopicImport}
           />
         ))}
       </nav>
@@ -767,7 +917,9 @@ function FileTreeNode({
   projectId,
   level, 
   tree,
-  expandToken,
+  expandedPaths,
+  onToggleExpand,
+  isSearching,
   selectedPath, 
   onSelect, 
   onTreeChange,
@@ -781,7 +933,9 @@ function FileTreeNode({
   projectId: string;
   level: number; 
   tree: FileNode[];
-  expandToken: number;
+  expandedPaths: Set<string>;
+  onToggleExpand: (path: string) => void;
+  isSearching: boolean;
   selectedPath: string | null; 
   onSelect: (path: string) => void;
   onTreeChange: () => void;
@@ -791,31 +945,23 @@ function FileTreeNode({
   onMoveAndReorder: (sourcePath: string, targetPath: string, position: 'before' | 'after' | 'inside') => void;
   onImport: (parentPath: string) => void;
 }) {
-  const [isOpen, setIsOpen] = useState(level === 0);
+  const isSelected = selectedPath === node.path;
+  const isFolder = node.type === "folder";
+  const isOpen = isSearching ? true : expandedPaths.has(node.path);
 
-  useEffect(() => {
-    if (selectedPath && node.type === 'folder') {
-      if (selectedPath === node.path || selectedPath.startsWith(node.path + '/')) {
-        setIsOpen(true);
-      }
-    }
-  }, [selectedPath, node.path, node.type]);
-
-  useEffect(() => {
-    if (expandToken > 0) setIsOpen(true);
-    if (expandToken < 0) setIsOpen(false);
-  }, [expandToken]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [dragOverPos, setDragOverPos] = useState<'top' | 'bottom' | 'middle' | null>(null);
-  const isSelected = selectedPath === node.path;
-  const isFolder = node.type === "folder";
 
-  const handleToggle = (e: React.MouseEvent) => {
+  const handleRowClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     onSelect(node.path);
     if (isFolder) {
-      setIsOpen(!isOpen);
+      if (!isOpen) {
+        onToggleExpand(node.path);
+      } else if (isSelected) {
+        onToggleExpand(node.path);
+      }
     }
   };
 
@@ -926,7 +1072,7 @@ function FileTreeNode({
           isDragging && "opacity-30 border-dashed border-2 border-primary/60 scale-[0.98]",
           "active:scale-[0.99]"
         )}
-        onClick={handleToggle}
+        onClick={handleRowClick}
         draggable
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
@@ -953,12 +1099,29 @@ function FileTreeNode({
           </div>
         )}
         
-        <div className="flex items-start gap-2 flex-1 min-w-0 pointer-events-none">
-          {isFolder ? (
-            <motion.div animate={{ rotate: isOpen ? 90 : 0 }} className="shrink-0 mt-0.5">
-              <ChevronRight className={cn("w-3.5 h-3.5", isSelected ? "text-primary" : "text-muted-foreground/60")} />
+        {isFolder && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleExpand(node.path);
+            }}
+            className="p-1 -ml-1 -my-0.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0 cursor-pointer pointer-events-auto"
+            title={isOpen ? "Colapsar tópico" : "Expandir tópico"}
+            aria-label={isOpen ? "Colapsar tópico" : "Expandir tópico"}
+          >
+            <motion.div 
+              animate={{ rotate: isOpen ? 90 : 0 }} 
+              transition={{ duration: 0.15 }}
+              className="flex items-center justify-center"
+            >
+              <ChevronRight className={cn("w-3.5 h-3.5", isSelected ? "text-primary" : "text-muted-foreground/70")} />
             </motion.div>
-          ) : (
+          </button>
+        )}
+
+        <div className="flex items-start gap-2 flex-1 min-w-0 pointer-events-none">
+          {!isFolder && (
             node.draft ? (
               <span title="Borrador" className="shrink-0 mt-0.5">
                 <EyeOff className="w-3.5 h-3.5 text-muted-foreground/50" />
@@ -1054,16 +1217,16 @@ function FileTreeNode({
             <DropdownMenuContent align="end" className="bg-background border-border rounded-xl shadow-xl">
               {isFolder && (
                 <>
-                  <DropdownMenuItem onClick={() => onOpenDialog('file', node.path, 'file')} className="text-xs gap-2 font-medium">
+                  <DropdownMenuItem onClick={() => onOpenDialog('file', node.path, 'file')} className="text-xs gap-2 font-medium cursor-pointer">
                     <FilePlus className="w-3.5 h-3.5" />
                     Nuevo Archivo
                   </DropdownMenuItem>
                 <DropdownMenuItem 
                   onClick={() => onImport(node.path)} 
-                  className="text-xs gap-2 font-medium text-primary focus:text-primary"
+                  className="text-xs gap-2 font-medium text-primary focus:text-primary cursor-pointer"
                 >
                   <Upload className="w-3.5 h-3.5" />
-                  Importar Archivos
+                  Importar Markdowns (.md)
                 </DropdownMenuItem>
                 </>
               )}
@@ -1096,7 +1259,9 @@ function FileTreeNode({
                 level={level + 1} 
                 projectId={projectId}
                 tree={tree}
-                expandToken={expandToken}
+                expandedPaths={expandedPaths}
+                onToggleExpand={onToggleExpand}
+                isSearching={isSearching}
                 selectedPath={selectedPath} 
                 onSelect={onSelect}
                 onTreeChange={onTreeChange}

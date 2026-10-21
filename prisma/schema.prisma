@@ -206,6 +206,7 @@ enum ActivityType {
   AUDIO_DEFENSE
   WORKSHOP_CODE
   WORKSHOP_GITHUB
+  PERFORMANCE
 }
 
 model Activity {

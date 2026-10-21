@@ -1326,6 +1326,7 @@ function getActivityTypeLabel(type: string) {
         case "DB_MODELING":
         case "DATABASE": return "Base de Datos";
         case "PDF_REVIEW": return "Revisión PDF";
+        case "PERFORMANCE": return "Desempeño";
         case "MANUAL": default: return "Manual";
     }
 }

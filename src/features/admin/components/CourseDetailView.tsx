@@ -404,6 +404,8 @@ export function CourseDetailView({
                 return <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20 text-[10px]">Proyecto Código</Badge>;
             case "CODE_CHALLENGE":
                 return <Badge variant="outline" className="bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20 text-[10px]">Reto Algorítmico</Badge>;
+            case "PERFORMANCE":
+                return <Badge variant="outline" className="bg-teal-500/10 text-teal-700 dark:text-teal-300 border-teal-500/20 text-[10px]">Desempeño</Badge>;
             default:
                 return <Badge variant="outline" className="text-[10px]">{type || "General"}</Badge>;
         }
