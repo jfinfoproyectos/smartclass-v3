@@ -123,6 +123,8 @@ export async function updateCourseAction(formData: FormData) {
 
     revalidatePath("/dashboard/teacher");
     revalidatePath("/dashboard/admin");
+    revalidatePath(`/dashboard/teacher/courses/${courseId}`);
+    revalidatePath("/dashboard/student");
 }
 
 export async function deleteCourseAction(formData: FormData) {

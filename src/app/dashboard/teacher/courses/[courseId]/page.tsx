@@ -112,7 +112,7 @@ export default async function Page({
     return (
         <div className="flex-1 overflow-y-auto p-1 sm:p-2 custom-scrollbar flex flex-col min-h-0">
             <TabsContent value="activities" className="mt-0 outline-none">
-                <ActivityManager courseId={courseId} activities={activities} enrolledStudents={students} />
+                <ActivityManager courseId={courseId} activities={activities} enrolledStudents={students} course={course} />
             </TabsContent>
             <TabsContent value="students" className="mt-0 outline-none">
                 <StudentManager 

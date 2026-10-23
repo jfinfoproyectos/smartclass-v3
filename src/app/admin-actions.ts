@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { adminService } from "@/features/admin/services/adminService";
+import { courseService } from "@/features/teacher/services/courseService";
 import { revalidatePath } from "next/cache";
 import prisma from "@/lib/prisma";
 
@@ -487,6 +488,8 @@ export async function toggleCourseArchivedAdminAction(courseId: string, archive:
         where: { id: courseId },
         data: { endDate: newEndDate }
     });
+
+    await courseService.syncPerformanceActivities(courseId, { endDate: newEndDate });
 
     // 🎯 AUDIT LOG
     const { auditLogger } = await import("@/features/admin/services/auditLogger");

@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import prisma from "@/lib/prisma";
+import { isFutureDate } from "@/lib/dateUtils";
 
 async function getSession() {
     return await auth.api.getSession({ headers: await headers() });
@@ -21,6 +22,10 @@ export async function recordAttendanceAction(
     const session = await getSession();
     if (!session || session.user.role !== "teacher") {
         throw new Error("Unauthorized");
+    }
+
+    if (isFutureDate(date)) {
+        throw new Error("No es posible registrar ni modificar asistencia en fechas posteriores a la fecha actual.");
     }
 
     const { attendanceService } = await import("../../attendance/services/attendanceService");
@@ -92,6 +97,10 @@ export async function recordAttendanceBatchAction(
         throw new Error("Unauthorized");
     }
 
+    if (isFutureDate(date)) {
+        throw new Error("No es posible registrar ni modificar asistencia en fechas posteriores a la fecha actual.");
+    }
+
     const { attendanceService } = await import("../../attendance/services/attendanceService");
     
     const formattedRecords = records.map(r => ({
@@ -155,6 +164,10 @@ export async function deleteAttendanceAction(
     const session = await getSession();
     if (!session || session.user.role !== "teacher") {
         throw new Error("Unauthorized");
+    }
+
+    if (isFutureDate(date)) {
+        throw new Error("No es posible modificar asistencia en fechas posteriores a la fecha actual.");
     }
 
     const { attendanceService } = await import("../../attendance/services/attendanceService");
@@ -290,7 +303,7 @@ export async function getCourseScheduleAction(courseId: string) {
     if (!session || (session.user.role !== "teacher" && session.user.role !== "admin")) {
         throw new Error("Unauthorized");
     }
-    return await prisma.course.findUnique({
+    const course = await prisma.course.findUnique({
         where: { id: courseId },
         select: {
             id: true,
@@ -299,9 +312,25 @@ export async function getCourseScheduleAction(courseId: string) {
             endDate: true,
             startTime: true,
             endTime: true,
-            classDays: true
+            classDays: true,
+            createdAt: true,
         }
     });
+
+    if (!course) return null;
+
+    const attendances = await prisma.attendance.findMany({
+        where: { courseId },
+        select: { date: true },
+        distinct: ["date"],
+    });
+
+    const attendanceDates = attendances.map(a => a.date.toISOString().split("T")[0]);
+
+    return {
+        ...course,
+        attendanceDates,
+    };
 }
 
 /**

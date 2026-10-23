@@ -42,7 +42,9 @@ import {
     TrendingUp,
     Search,
     FileDown,
-    FileSpreadsheet
+    FileSpreadsheet,
+    Unlock,
+    Lock
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -525,15 +527,11 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
     }, []);
 
     const displayDates = useMemo(() => {
-        if (onlyCurrentDate) {
-            const todayStr = getTodayDateString();
-            if (classDates.includes(todayStr)) {
-                return [todayStr];
-            }
-            return [selectedDate];
-        }
-        return classDates;
-    }, [classDates, onlyCurrentDate, selectedDate]);
+        const todayStr = getTodayDateString();
+        const datesSet = new Set(classDates);
+        datesSet.add(todayStr);
+        return Array.from(datesSet).sort();
+    }, [classDates]);
 
     useEffect(() => {
         loadStudents();
@@ -580,20 +578,44 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
             const schedule = await getCourseScheduleAction(courseId);
             if (schedule) {
                 setCourseSchedule(schedule as any);
-                const dates = getCourseClassDates(schedule.startDate, schedule.endDate, schedule.classDays);
+
+                let effStart = schedule.startDate;
+                let effEnd = schedule.endDate;
+                const effClassDays = schedule.classDays || "1,2,3,4,5";
+
+                if (!effStart || !effEnd) {
+                    const today = new Date();
+                    const computedStart = new Date(today);
+                    computedStart.setDate(computedStart.getDate() - 35); // 5 semanas atrás
+                    const computedEnd = new Date(today);
+                    computedEnd.setDate(computedEnd.getDate() + 45); // ~6 semanas adelante
+
+                    if (!effStart) effStart = computedStart;
+                    if (!effEnd) effEnd = computedEnd;
+                }
+
+                let dates = getCourseClassDates(effStart, effEnd, effClassDays);
+
+                if (Array.isArray((schedule as any).attendanceDates) && (schedule as any).attendanceDates.length > 0) {
+                    const allDatesSet = new Set([...dates, ...(schedule as any).attendanceDates]);
+                    dates = Array.from(allDatesSet).sort();
+                }
+
+                if (dates.length === 0) {
+                    dates = [getTodayDateString()];
+                }
+
                 setClassDates(dates);
                 
-                if (dates.length > 0) {
-                    const todayStr = getTodayDateString();
-                    if (dates.includes(todayStr)) {
-                        setSelectedDate(todayStr);
+                const todayStr = getTodayDateString();
+                if (dates.includes(todayStr)) {
+                    setSelectedDate(todayStr);
+                } else {
+                    const pastOrToday = dates.filter(d => d <= todayStr);
+                    if (pastOrToday.length > 0) {
+                        setSelectedDate(pastOrToday[pastOrToday.length - 1]);
                     } else {
-                        const pastOrToday = dates.filter(d => d <= todayStr);
-                        if (pastOrToday.length > 0) {
-                            setSelectedDate(pastOrToday[pastOrToday.length - 1]);
-                        } else {
-                            setSelectedDate(dates[0]);
-                        }
+                        setSelectedDate(dates[0]);
                     }
                 }
             }
@@ -771,7 +793,7 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
         justificationStr: string | null = null
     ) => {
         if (selectedDate > getTodayDateString()) {
-            toast.error("No es posible registrar asistencia en fechas futuras");
+            toast.error("No es posible registrar ni modificar asistencia en fechas posteriores a la fecha actual");
             return;
         }
 
@@ -829,6 +851,15 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
         studentId: string, 
         action: "PRESENT" | "ABSENT" | "LATE" | "LEAVE_EARLY"
     ) => {
+        if (selectedDate > getTodayDateString()) {
+            toast.error("No es posible registrar ni modificar asistencia en fechas posteriores a la fecha actual");
+            return;
+        }
+        if (onlyCurrentDate && selectedDate !== getTodayDateString()) {
+            toast.error("Desactiva 'Solo fecha actual' para modificar fechas pasadas");
+            return;
+        }
+
         const currentRec = attRecords[studentId];
         const closestTime = getClosestTimeOption(scheduleTimeOptions);
 
@@ -919,6 +950,15 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
         field: "arrivalTime" | "departureTime", 
         val: string
     ) => {
+        if (selectedDate > getTodayDateString()) {
+            toast.error("No es posible registrar ni modificar asistencia en fechas posteriores a la fecha actual");
+            return;
+        }
+        if (onlyCurrentDate && selectedDate !== getTodayDateString()) {
+            toast.error("Desactiva 'Solo fecha actual' para modificar fechas pasadas");
+            return;
+        }
+
         const currentRec = attRecords[studentId];
         const currentIsLate = Boolean(currentRec?.arrivalTime) || currentRec?.status === "LATE";
         const currentIsLeaveEarly = Boolean(currentRec?.departureTime) || currentRec?.status === "LEAVE_EARLY";
@@ -968,7 +1008,20 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
         }
     }, [currentIndex]);
 
+    const todayStr = getTodayDateString();
+    const isSelectedDateFuture = selectedDate > todayStr;
+    const isSelectedDateLocked = isSelectedDateFuture || (onlyCurrentDate && selectedDate !== todayStr);
+
     const handleSequentialMark = async (status: "PRESENT" | "ABSENT") => {
+        if (isSelectedDateLocked) {
+            if (isSelectedDateFuture) {
+                toast.error("No es posible registrar ni modificar asistencia en fechas posteriores a la fecha actual");
+            } else {
+                toast.error("Desactiva 'Solo fecha actual' para registrar asistencia en fechas pasadas");
+            }
+            return;
+        }
+
         const student = students[currentIndex];
         if (!student) return;
 
@@ -990,7 +1043,7 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
     // Keyboard navigation for sequential mode
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (attMode !== "sequential" || view !== "take") return;
+            if (attMode !== "sequential" || view !== "take" || isSelectedDateLocked) return;
 
             switch (e.key) {
                 case "ArrowRight":
@@ -1017,11 +1070,12 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
 
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [attMode, currentIndex, students, handleNext, handlePrevious, view]);
+    }, [attMode, currentIndex, students, handleNext, handlePrevious, view, isSelectedDateLocked]);
 
 
     const currentStudent = students[currentIndex];
     const seqRec = currentStudent ? attRecords[currentStudent.id] : null;
+    const isSeqSaving = Boolean(seqRec?.saving);
     const seqStatus = seqRec?.status ?? null;
     const seqIsLate = Boolean(seqRec?.arrivalTime) || seqStatus === "LATE";
     const seqIsLeaveEarly = Boolean(seqRec?.departureTime) || seqStatus === "LEAVE_EARLY";
@@ -1223,13 +1277,13 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
 
                 {/* Main Viewport */}
                 <div className={`flex-1 p-4 bg-muted/10 flex flex-col min-h-0 ${view === "take" && attMode === "sequential" ? "overflow-hidden" : "overflow-y-auto custom-scrollbar"}`}>
-                    {view === "take" && classDates.length > 0 && (
-                        /* Date Selector Strip (Grouped Pills matching user specification) */
-                        <div className="mb-4 shrink-0 space-y-2">
-                            <div className="flex items-center justify-between gap-4 px-1">
-                                <div className="flex items-center gap-4">
+                    {view === "take" && displayDates.length > 0 && (
+                        /* Date Selector Strip (Matching user specification and image) */
+                        <div className="mb-4 shrink-0 rounded-2xl border border-border/70 bg-card/60 backdrop-blur-xs p-3.5 shadow-xs space-y-3">
+                            <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+                                <div className="flex items-center gap-3.5 flex-wrap">
                                     <span className="text-[11px] font-black uppercase tracking-wider text-muted-foreground/90">
-                                        Fecha de Asistencia
+                                        FECHA DE ASISTENCIA
                                     </span>
                                     <label className="flex items-center gap-2 cursor-pointer select-none">
                                         <Switch
@@ -1238,9 +1292,7 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
                                                 setOnlyCurrentDate(checked);
                                                 if (checked) {
                                                     const todayStr = getTodayDateString();
-                                                    if (classDates.includes(todayStr)) {
-                                                        setSelectedDate(todayStr);
-                                                    }
+                                                    setSelectedDate(todayStr);
                                                 }
                                             }}
                                         />
@@ -1248,36 +1300,57 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
                                             Solo fecha actual
                                         </span>
                                     </label>
+                                    {!onlyCurrentDate ? (
+                                        <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-xs font-semibold select-none">
+                                            <Unlock className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                                            <span>Modificación de historial libre</span>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400 text-xs font-semibold select-none">
+                                            <Lock className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                                            <span>Historial bloqueado (Solo fecha actual)</span>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
-                            <div className="w-full bg-card border border-border/70 rounded-2xl p-3 shadow-xs max-h-44 overflow-y-auto custom-scrollbar">
-                                <div className="flex flex-wrap items-center gap-2">
+                            <div className="w-full overflow-x-auto custom-scrollbar pb-1">
+                                <div className="flex items-center gap-2 min-w-max">
                                     {displayDates.map((dateStr) => {
                                         const isSelected = selectedDate === dateStr;
                                         const todayStr = getTodayDateString();
                                         const isToday = dateStr === todayStr;
                                         const isFuture = dateStr > todayStr;
+                                        const isLocked = onlyCurrentDate && !isToday;
+                                        const isDisabled = isFuture || isLocked;
                                         const label = formatDatePillLabel(dateStr);
 
                                         return (
                                             <button
                                                 key={dateStr}
                                                 type="button"
-                                                disabled={isFuture}
+                                                disabled={isDisabled}
                                                 onClick={() => {
-                                                    if (!isFuture) {
+                                                    if (!isDisabled) {
                                                         setSelectedDate(dateStr);
                                                     }
                                                 }}
-                                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 border ${
+                                                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 border whitespace-nowrap ${
                                                     isFuture
-                                                        ? "bg-muted/10 border-dashed border-border/40 text-muted-foreground/35 cursor-not-allowed opacity-45 select-none"
+                                                        ? "bg-muted/10 border-dashed border-border/40 text-muted-foreground/35 cursor-not-allowed opacity-40 select-none"
+                                                        : isLocked
+                                                        ? "bg-muted/10 border-border/40 text-muted-foreground/35 cursor-not-allowed opacity-40 select-none"
                                                         : isSelected
-                                                        ? "bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-500/25 font-black scale-[1.02] cursor-pointer"
-                                                        : "bg-background border-border/80 text-foreground/80 hover:border-primary/50 hover:text-primary hover:bg-primary/5 shadow-2xs cursor-pointer"
-                                                } ${isToday && !isSelected ? "ring-1.5 ring-primary/40 border-primary/40 font-black text-primary" : ""}`}
-                                                title={isFuture ? "No es posible registrar asistencia en fechas futuras" : undefined}
+                                                        ? "bg-emerald-600 border-emerald-600 text-white shadow-md shadow-emerald-500/25 font-black scale-[1.02] cursor-pointer"
+                                                        : "bg-background border-border/80 text-foreground/80 hover:border-emerald-500/50 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-emerald-500/5 shadow-2xs cursor-pointer"
+                                                } ${isToday && !isSelected ? "ring-1.5 ring-emerald-500/40 border-emerald-500/40 font-black text-emerald-700 dark:text-emerald-400" : ""}`}
+                                                title={
+                                                    isFuture
+                                                        ? "No es posible registrar ni modificar asistencia en fechas posteriores a la fecha actual"
+                                                        : isLocked
+                                                        ? "Desactiva 'Solo fecha actual' para modificar fechas pasadas"
+                                                        : undefined
+                                                }
                                             >
                                                 {label}
                                             </button>
@@ -1285,6 +1358,15 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
                                     })}
                                 </div>
                             </div>
+                        </div>
+                    )}
+
+                    {view === "take" && isSelectedDateFuture && (
+                        <div className="mb-4 shrink-0 flex items-center gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 text-xs font-semibold animate-in fade-in">
+                            <Lock className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                            <span>
+                                Esta fecha ({formatDatePillLabel(selectedDate)}) es posterior a la fecha actual. No está permitido registrar ni modificar la asistencia en fechas futuras.
+                            </span>
                         </div>
                     )}
 
@@ -1410,12 +1492,14 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
                                                 <div className="grid grid-cols-2 sm:flex sm:flex-row gap-1.5 w-full">
                                                     <Button
                                                         size="sm"
+                                                        disabled={isSelectedDateLocked || isSaving}
                                                         variant={isPresent ? "default" : "outline"}
                                                         className={`flex-1 h-8 text-[11px] font-black rounded-lg transition-all px-1
+                                                          ${isSelectedDateLocked ? 'opacity-40 cursor-not-allowed' : ''}
                                                           ${isPresent 
                                                             ? 'bg-green-600 hover:bg-green-700 text-white font-extrabold shadow-sm' 
                                                             : 'text-muted-foreground hover:text-green-600 hover:bg-green-500/10'}`}
-                                                        onClick={() => handleToggleStatus(student.id, "PRESENT")}
+                                                        onClick={() => !isSelectedDateLocked && handleToggleStatus(student.id, "PRESENT")}
                                                     >
                                                         <UserCheck className="h-3 w-3 mr-0.5 shrink-0" />
                                                         Presente
@@ -1423,12 +1507,14 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
 
                                                     <Button
                                                         size="sm"
+                                                        disabled={isSelectedDateLocked || isSaving}
                                                         variant={isAbsent ? "default" : "outline"}
                                                         className={`flex-1 h-8 text-[11px] font-black rounded-lg transition-all px-1
+                                                          ${isSelectedDateLocked ? 'opacity-40 cursor-not-allowed' : ''}
                                                           ${isAbsent 
                                                             ? 'bg-red-600 hover:bg-red-700 text-white font-extrabold shadow-sm' 
                                                             : 'text-muted-foreground hover:text-red-600 hover:bg-red-500/10'}`}
-                                                        onClick={() => handleToggleStatus(student.id, "ABSENT")}
+                                                        onClick={() => !isSelectedDateLocked && handleToggleStatus(student.id, "ABSENT")}
                                                     >
                                                         <UserX className="h-3 w-3 mr-0.5 shrink-0" />
                                                         Ausente
@@ -1436,12 +1522,14 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
 
                                                     <Button
                                                         size="sm"
+                                                        disabled={isSelectedDateLocked || isSaving}
                                                         variant={isLate ? "default" : "outline"}
                                                         className={`flex-1 h-8 text-[11px] font-black rounded-lg transition-all px-1
+                                                          ${isSelectedDateLocked ? 'opacity-40 cursor-not-allowed' : ''}
                                                           ${isLate 
                                                             ? 'bg-amber-500 hover:bg-amber-600 text-white font-extrabold shadow-sm' 
                                                             : 'text-muted-foreground hover:text-amber-600 hover:bg-amber-500/10'}`}
-                                                        onClick={() => handleToggleStatus(student.id, "LATE")}
+                                                        onClick={() => !isSelectedDateLocked && handleToggleStatus(student.id, "LATE")}
                                                     >
                                                         <Clock className="h-3 w-3 mr-0.5 shrink-0" />
                                                         Tarde
@@ -1449,12 +1537,14 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
 
                                                     <Button
                                                         size="sm"
+                                                        disabled={isSelectedDateLocked || isSaving}
                                                         variant={isLeaveEarly ? "default" : "outline"}
                                                         className={`flex-1 h-8 text-[11px] font-black rounded-lg transition-all px-1
+                                                          ${isSelectedDateLocked ? 'opacity-40 cursor-not-allowed' : ''}
                                                           ${isLeaveEarly 
                                                             ? 'bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold shadow-sm' 
                                                             : 'text-muted-foreground hover:text-indigo-600 hover:bg-indigo-50/10'}`}
-                                                        onClick={() => handleToggleStatus(student.id, "LEAVE_EARLY")}
+                                                        onClick={() => !isSelectedDateLocked && handleToggleStatus(student.id, "LEAVE_EARLY")}
                                                     >
                                                         <LogOut className="h-3 w-3 mr-0.5 shrink-0" />
                                                         Retiro
@@ -1468,9 +1558,10 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
                                                             <div className="flex items-center justify-between gap-3 p-2 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-700 dark:text-yellow-400 animate-in slide-in-from-top-2 duration-200 shrink-0">
                                                                 <span className="text-[10px] font-bold uppercase tracking-wider pl-1">Hora Llegada:</span>
                                                                 <select
+                                                                    disabled={isSelectedDateLocked || isSaving}
                                                                     value={rec?.arrivalTime || getClosestTimeOption(scheduleTimeOptions)}
-                                                                    onChange={(e) => handleTimeChange(student.id, "arrivalTime", e.target.value)}
-                                                                    className="h-7 w-[105px] rounded-lg border border-yellow-300 dark:border-yellow-900 bg-background text-[11px] font-bold text-foreground px-1.5 outline-none focus:ring-1 focus:ring-yellow-500 cursor-pointer"
+                                                                    onChange={(e) => !isSelectedDateLocked && handleTimeChange(student.id, "arrivalTime", e.target.value)}
+                                                                    className="h-7 w-[105px] rounded-lg border border-yellow-300 dark:border-yellow-900 bg-background text-[11px] font-bold text-foreground px-1.5 outline-none focus:ring-1 focus:ring-yellow-500 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                                                                 >
                                                                     {scheduleTimeOptions.map(t => (
                                                                         <option key={t} value={t}>
@@ -1485,9 +1576,10 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
                                                             <div className="flex items-center justify-between gap-3 p-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-700 dark:text-indigo-400 animate-in slide-in-from-top-2 duration-200 shrink-0">
                                                                 <span className="text-[10px] font-bold uppercase tracking-wider pl-1">Hora Retiro:</span>
                                                                 <select
+                                                                    disabled={isSelectedDateLocked || isSaving}
                                                                     value={rec?.departureTime || getClosestTimeOption(scheduleTimeOptions)}
-                                                                    onChange={(e) => handleTimeChange(student.id, "departureTime", e.target.value)}
-                                                                    className="h-7 w-[105px] rounded-lg border border-indigo-300 dark:border-indigo-900 bg-background text-[11px] font-bold text-foreground px-1.5 outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                                                                    onChange={(e) => !isSelectedDateLocked && handleTimeChange(student.id, "departureTime", e.target.value)}
+                                                                    className="h-7 w-[105px] rounded-lg border border-indigo-300 dark:border-indigo-900 bg-background text-[11px] font-bold text-foreground px-1.5 outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                                                                 >
                                                                     {scheduleTimeOptions.map(t => (
                                                                         <option key={t} value={t}>
@@ -1662,14 +1754,17 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
                                              <div className="flex flex-col gap-3 w-full px-2 max-w-md">
                                                  <div className="flex flex-col sm:flex-row gap-4 w-full">
                                                      <Button
-                                                         size="lg"
-                                                         variant="outline"
-                                                         className={`relative overflow-hidden group flex-1 h-16 md:h-20 text-base md:text-xl font-black border-2 transition-all duration-300 rounded-xl shadow-md hover:shadow-lg hover:-translate-y-1 active:translate-y-0 ${
-                                                             seqIsAbsent 
-                                                             ? "bg-gradient-to-r from-rose-500 to-red-600 text-white border-rose-600 shadow-xl shadow-red-500/20 hover:from-rose-600 hover:to-red-700" 
-                                                             : "border-rose-200 dark:border-rose-950/40 bg-rose-500/[0.02] hover:bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:border-rose-400"
-                                                         }`}
-                                                         onClick={() => handleToggleStatus(currentStudent.id, "ABSENT")}
+                                                        size="lg"
+                                                        disabled={isSelectedDateLocked || isSeqSaving}
+                                                        variant="outline"
+                                                        className={`relative overflow-hidden group flex-1 h-16 md:h-20 text-base md:text-xl font-black border-2 transition-all duration-300 rounded-xl shadow-md hover:shadow-lg hover:-translate-y-1 active:translate-y-0 ${
+                                                            isSelectedDateLocked ? "opacity-40 cursor-not-allowed hover:translate-y-0 shadow-none" : ""
+                                                        } ${
+                                                            seqIsAbsent 
+                                                            ? "bg-gradient-to-r from-rose-500 to-red-600 text-white border-rose-600 shadow-xl shadow-red-500/20 hover:from-rose-600 hover:to-red-700" 
+                                                            : "border-rose-200 dark:border-rose-950/40 bg-rose-500/[0.02] hover:bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:border-rose-400"
+                                                        }`}
+                                                        onClick={() => !isSelectedDateLocked && handleToggleStatus(currentStudent.id, "ABSENT")}
                                                      >
                                                          <div className="flex flex-col items-center gap-1.5">
                                                              <X className="h-6 w-6 transition-transform group-hover:scale-110" />
@@ -1678,14 +1773,17 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
                                                      </Button>
  
                                                      <Button
-                                                         size="lg"
-                                                         variant="outline"
-                                                         className={`relative overflow-hidden group flex-1 h-16 md:h-20 text-base md:text-xl font-black border-2 transition-all duration-300 rounded-xl shadow-md hover:shadow-lg hover:-translate-y-1 active:translate-y-0 ${
-                                                             seqIsPresent 
-                                                             ? "bg-gradient-to-r from-emerald-500 to-green-600 text-white border-emerald-600 shadow-xl shadow-green-500/20 hover:from-emerald-600 hover:to-green-700" 
-                                                             : "border-emerald-200 dark:border-emerald-950/40 bg-emerald-500/[0.02] hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:border-emerald-400"
-                                                         }`}
-                                                         onClick={() => handleToggleStatus(currentStudent.id, "PRESENT")}
+                                                        size="lg"
+                                                        disabled={isSelectedDateLocked || isSeqSaving}
+                                                        variant="outline"
+                                                        className={`relative overflow-hidden group flex-1 h-16 md:h-20 text-base md:text-xl font-black border-2 transition-all duration-300 rounded-xl shadow-md hover:shadow-lg hover:-translate-y-1 active:translate-y-0 ${
+                                                            isSelectedDateLocked ? "opacity-40 cursor-not-allowed hover:translate-y-0 shadow-none" : ""
+                                                        } ${
+                                                            seqIsPresent 
+                                                            ? "bg-gradient-to-r from-emerald-500 to-green-600 text-white border-emerald-600 shadow-xl shadow-green-500/20 hover:from-emerald-600 hover:to-green-700" 
+                                                            : "border-emerald-200 dark:border-emerald-950/40 bg-emerald-500/[0.02] hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:border-emerald-400"
+                                                        }`}
+                                                        onClick={() => !isSelectedDateLocked && handleToggleStatus(currentStudent.id, "PRESENT")}
                                                      >
                                                          <div className="flex flex-col items-center gap-1.5">
                                                              <Check className="h-6 w-6 transition-transform group-hover:scale-110" />
@@ -1697,27 +1795,33 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
                                                  {/* Quick Tarde & Retiro toggles in Sequential mode */}
                                                  <div className="flex gap-2 w-full">
                                                      <Button
-                                                         size="sm"
-                                                         variant={seqIsLate ? "default" : "outline"}
-                                                         className={`flex-1 h-9 text-xs font-bold rounded-xl transition-all ${
-                                                             seqIsLate 
-                                                             ? "bg-amber-500 hover:bg-amber-600 text-white font-extrabold shadow-sm" 
-                                                             : "text-muted-foreground hover:text-amber-600 hover:bg-amber-500/10 border-border"
-                                                         }`}
-                                                         onClick={() => handleToggleStatus(currentStudent.id, "LATE")}
+                                                        size="sm"
+                                                        disabled={isSelectedDateLocked || isSeqSaving}
+                                                        variant={seqIsLate ? "default" : "outline"}
+                                                        className={`flex-1 h-9 text-xs font-bold rounded-xl transition-all ${
+                                                            isSelectedDateLocked ? "opacity-40 cursor-not-allowed" : ""
+                                                        } ${
+                                                            seqIsLate 
+                                                            ? "bg-amber-500 hover:bg-amber-600 text-white font-extrabold shadow-sm" 
+                                                            : "text-muted-foreground hover:text-amber-600 hover:bg-amber-500/10 border-border"
+                                                        }`}
+                                                        onClick={() => !isSelectedDateLocked && handleToggleStatus(currentStudent.id, "LATE")}
                                                      >
                                                          <Clock className="h-3.5 w-3.5 mr-1 shrink-0" />
                                                          Tarde
                                                      </Button>
                                                      <Button
-                                                         size="sm"
-                                                         variant={seqIsLeaveEarly ? "default" : "outline"}
-                                                         className={`flex-1 h-9 text-xs font-bold rounded-xl transition-all ${
-                                                             seqIsLeaveEarly 
-                                                             ? "bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold shadow-sm" 
-                                                             : "text-muted-foreground hover:text-indigo-600 hover:bg-indigo-50/10 border-border"
-                                                         }`}
-                                                         onClick={() => handleToggleStatus(currentStudent.id, "LEAVE_EARLY")}
+                                                        size="sm"
+                                                        disabled={isSelectedDateLocked || isSeqSaving}
+                                                        variant={seqIsLeaveEarly ? "default" : "outline"}
+                                                        className={`flex-1 h-9 text-xs font-bold rounded-xl transition-all ${
+                                                            isSelectedDateLocked ? "opacity-40 cursor-not-allowed" : ""
+                                                        } ${
+                                                            seqIsLeaveEarly 
+                                                            ? "bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold shadow-sm" 
+                                                            : "text-muted-foreground hover:text-indigo-600 hover:bg-indigo-50/10 border-border"
+                                                        }`}
+                                                        onClick={() => !isSelectedDateLocked && handleToggleStatus(currentStudent.id, "LEAVE_EARLY")}
                                                      >
                                                          <LogOut className="h-3.5 w-3.5 mr-1 shrink-0" />
                                                          Retiro
@@ -1731,9 +1835,10 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
                                                              <div className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-yellow-500/10 text-xs">
                                                                  <span className="font-bold text-yellow-700 dark:text-yellow-400">Hora Llegada:</span>
                                                                  <select
-                                                                     value={seqRec?.arrivalTime || getClosestTimeOption(scheduleTimeOptions)}
-                                                                     onChange={(e) => handleTimeChange(currentStudent.id, "arrivalTime", e.target.value)}
-                                                                     className="h-7 w-[105px] rounded-md border border-yellow-300 dark:border-yellow-900 bg-background text-[11px] font-bold text-foreground px-1.5 outline-none cursor-pointer"
+                                                                    disabled={isSelectedDateLocked || isSeqSaving}
+                                                                    value={seqRec?.arrivalTime || getClosestTimeOption(scheduleTimeOptions)}
+                                                                    onChange={(e) => !isSelectedDateLocked && handleTimeChange(currentStudent.id, "arrivalTime", e.target.value)}
+                                                                    className="h-7 w-[105px] rounded-md border border-yellow-300 dark:border-yellow-900 bg-background text-[11px] font-bold text-foreground px-1.5 outline-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                                                                  >
                                                                      {scheduleTimeOptions.map(t => (
                                                                          <option key={t} value={t}>{formatTo12Hour(t)}</option>
@@ -1745,9 +1850,10 @@ export function AttendanceTaker({ courseId, trigger }: AttendanceTakerProps) {
                                                              <div className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-indigo-500/10 text-xs">
                                                                  <span className="font-bold text-indigo-700 dark:text-indigo-400">Hora Retiro:</span>
                                                                  <select
-                                                                     value={seqRec?.departureTime || getClosestTimeOption(scheduleTimeOptions)}
-                                                                     onChange={(e) => handleTimeChange(currentStudent.id, "departureTime", e.target.value)}
-                                                                     className="h-7 w-[105px] rounded-md border border-indigo-300 dark:border-indigo-900 bg-background text-[11px] font-bold text-foreground px-1.5 outline-none cursor-pointer"
+                                                                    disabled={isSelectedDateLocked || isSeqSaving}
+                                                                    value={seqRec?.departureTime || getClosestTimeOption(scheduleTimeOptions)}
+                                                                    onChange={(e) => !isSelectedDateLocked && handleTimeChange(currentStudent.id, "departureTime", e.target.value)}
+                                                                    className="h-7 w-[105px] rounded-md border border-indigo-300 dark:border-indigo-900 bg-background text-[11px] font-bold text-foreground px-1.5 outline-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                                                                  >
                                                                      {scheduleTimeOptions.map(t => (
                                                                          <option key={t} value={t}>{formatTo12Hour(t)}</option>

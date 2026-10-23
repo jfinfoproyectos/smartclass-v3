@@ -47,9 +47,17 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
 import { format, formatDistanceToNow, isAfter } from "date-fns";
 import { es } from "date-fns/locale";
-import { Eye, Github, FileText, ClipboardList, Users, Trash2, Sparkles, Search, AlertTriangle, CheckCircle2, Bot, Loader2, ChevronDown, ChevronUp, CheckCircle, ChevronLeft, ChevronRight, ExternalLink, Settings, Link2, Download, FileSpreadsheet, RotateCcw, Code2, Link as LinkIcon, Crown, ArrowLeft, Terminal, Video, MessageSquareQuote, Database, Mic, Target, GitBranch, TrendingUp } from "lucide-react";
+import { Eye, Github, FileText, ClipboardList, Users, Trash2, Sparkles, Search, AlertTriangle, CheckCircle2, Bot, Loader2, ChevronDown, ChevronUp, CheckCircle, ChevronLeft, ChevronRight, ExternalLink, Settings, Link2, Download, FileSpreadsheet, RotateCcw, Code2, Link as LinkIcon, Crown, ArrowLeft, Terminal, Video, MessageSquareQuote, Database, Mic, Target, GitBranch, TrendingUp, Clock, Award, ShieldAlert } from "lucide-react";
+import { DEFAULT_PERFORMANCE_CRITERIA, PerformancePenaltyCriterion } from "../utils/performanceUtils";
 import { FeedbackViewer } from '../../student/components/FeedbackViewer';
 import { validateUniqueLinksAction, deleteSubmissionAction, analyzeGitHubFileAction, finalizeGitHubGradingAction, gradePdfReviewAction, gradeManualActivityAction, improveFeedbackAction, rejectManualActivityAction } from "../../../features/teacher/actions/gradingActions";
 import { getGitHubSubmissionDetailsAction, getRepoStructureAction, fetchRepoFilesAction } from "../../../features/github/actions/githubActions";
@@ -131,6 +139,42 @@ export function ActivityDetail({
     const [isGroupsModalOpen, setIsGroupsModalOpen] = useState(false);
     const [activeTab, setActiveTab] = useState(() => activity?.type === "PERFORMANCE" ? "performance" : "results");
     const [showStudentPreview, setShowStudentPreview] = useState(false);
+
+    useEffect(() => {
+        if (activity?.type === "PERFORMANCE" && activeTab === "results") {
+            setActiveTab("performance");
+        }
+    }, [activity?.type, activeTab]);
+
+    const performanceConfig = useMemo(() => {
+        if (activity?.type !== "PERFORMANCE") return null;
+        let conf: {
+            criteria: PerformancePenaltyCriterion[];
+            tardinessPenalty: number;
+            defaultDailyGrade: number;
+            absenceGrade: number;
+        } = {
+            criteria: DEFAULT_PERFORMANCE_CRITERIA,
+            tardinessPenalty: 1.0,
+            defaultDailyGrade: 5.0,
+            absenceGrade: 0.0,
+        };
+        if (activity?.description) {
+            try {
+                const parsed = typeof activity.description === "string" ? JSON.parse(activity.description) : activity.description;
+                if (parsed?.performanceConfig) {
+                    conf = {
+                        ...conf,
+                        ...parsed.performanceConfig,
+                        criteria: (Array.isArray(parsed.performanceConfig.criteria) && parsed.performanceConfig.criteria.length > 0)
+                            ? (parsed.performanceConfig.criteria as PerformancePenaltyCriterion[])
+                            : DEFAULT_PERFORMANCE_CRITERIA,
+                    };
+                }
+            } catch {}
+        }
+        return conf;
+    }, [activity?.type, activity?.description]);
     
     // Estado para calificación masiva en actividades manuales
     const [manualBatchDialogOpen, setManualBatchDialogOpen] = useState(false);
@@ -948,10 +992,12 @@ export function ActivityDetail({
                             <ClipboardList className="h-3.5 w-3.5 text-amber-500 shrink-0" />
                             <span>Enunciado</span>
                         </TabsTrigger>
-                        <TabsTrigger value="results" className="flex items-center gap-1.5 text-xs font-semibold py-1.5 px-3 shrink-0 whitespace-nowrap">
-                            <Users className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                            <span>Resultados por Estudiantes</span>
-                        </TabsTrigger>
+                        {activity.type !== "PERFORMANCE" && (
+                            <TabsTrigger value="results" className="flex items-center gap-1.5 text-xs font-semibold py-1.5 px-3 shrink-0 whitespace-nowrap">
+                                <Users className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                                <span>Resultados por Estudiantes</span>
+                            </TabsTrigger>
+                        )}
                     </TabsList>
                 </div>
 
@@ -965,16 +1011,139 @@ export function ActivityDetail({
                 )}
 
                 <TabsContent value="statement" className="space-y-4 mt-3">
-                    <div data-color-mode={mode} className="rounded-md border p-4 bg-card w-full max-w-full overflow-x-auto [&_pre]:whitespace-pre-wrap! [&_pre]:wrap-break-word! [&_table]:w-full! [&_td]:wrap-break-word!">
-                        <h3 className="text-base font-semibold mb-3">Enunciado / Rúbrica de Evaluación</h3>
-                        <MDEditor.Markdown
-                            source={activity.statement || "**No hay enunciado/rúbrica disponible.**"}
-                            style={{ background: 'transparent' }}
-                        />
-                    </div>
+                    {/* PERFORMANCE EVALUATION CRITERIA & PENALTIES RUBRIC */}
+                    {activity.type === "PERFORMANCE" && performanceConfig && (
+                        <Card className="border shadow-xs overflow-hidden">
+                            <CardHeader className="p-4 pb-3 border-b bg-muted/20">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                    <div>
+                                        <CardTitle className="text-sm font-bold flex items-center gap-2">
+                                            <Award className="h-4 w-4 text-primary" />
+                                            Rúbrica de Criterios y Penalizaciones Diarias
+                                        </CardTitle>
+                                        <CardDescription className="text-xs">
+                                            Criterios definidos para la evaluación de desempeño. Cada falta descuenta puntos de la nota diaria base (5.0).
+                                        </CardDescription>
+                                    </div>
+                                    <Badge variant="secondary" className="font-mono text-xs font-bold shrink-0">
+                                        Nota Base Diaria: {performanceConfig.defaultDailyGrade?.toFixed(1) ?? "5.0"}
+                                    </Badge>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="p-0">
+                                <div className="p-3 bg-primary/[0.03] border-b text-xs text-muted-foreground">
+                                    <p>
+                                        Cada sesión de clase inicia con una nota base máxima de <strong>5.0 puntos</strong>. El instructor aplica descuentos directos cuando el aprendiz incurre en los siguientes criterios o conductas durante la jornada.
+                                    </p>
+                                </div>
+
+                                <div className="overflow-x-auto">
+                                    <Table className="text-xs">
+                                        <TableHeader>
+                                            <TableRow className="bg-muted/30">
+                                                <TableHead className="font-bold min-w-[200px]">Criterio de Desempeño</TableHead>
+                                                <TableHead className="w-[140px] text-center font-bold">Penalización</TableHead>
+                                                <TableHead className="w-[150px] text-center font-bold">Nota Resultante (Base 5.0)</TableHead>
+                                                <TableHead className="font-bold min-w-[220px]">Descripción / Alcance</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {performanceConfig.criteria.map((crit, index) => {
+                                                const resultingGrade = Math.max(0.0, (performanceConfig.defaultDailyGrade ?? 5.0) - crit.penalty);
+                                                return (
+                                                    <TableRow key={crit.id || index} className="hover:bg-muted/40 transition-colors">
+                                                        <TableCell className="font-semibold text-foreground">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="h-2 w-2 rounded-full bg-rose-500 shrink-0" />
+                                                                <span>{crit.name}</span>
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell className="text-center font-mono font-bold text-rose-600 dark:text-rose-400">
+                                                            <Badge variant="outline" className="bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/30 text-xs font-bold">
+                                                                -{crit.penalty.toFixed(1)} pts
+                                                            </Badge>
+                                                        </TableCell>
+                                                        <TableCell className="text-center font-mono text-xs">
+                                                            <span className="font-semibold text-muted-foreground">
+                                                                5.0 - {crit.penalty.toFixed(1)} ={" "}
+                                                            </span>
+                                                            <strong className="text-foreground font-bold">
+                                                                {resultingGrade.toFixed(1)} / 5.0
+                                                            </strong>
+                                                        </TableCell>
+                                                        <TableCell className="text-muted-foreground text-xs">
+                                                            {crit.description || "Aplica descuento directo sobre la nota máxima diaria."}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                );
+                                            })}
+
+                                            {/* Standard Institutional Attendance Rules */}
+                                            <TableRow className="bg-muted/15 font-medium">
+                                                <TableCell className="font-semibold text-amber-700 dark:text-amber-300">
+                                                    <div className="flex items-center gap-2">
+                                                        <Clock className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                                                        <span>Llegada Tarde (Tardanza en Asistencia)</span>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-center font-mono font-bold text-amber-600 dark:text-amber-400">
+                                                    <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 text-xs font-bold">
+                                                        -{(performanceConfig.tardinessPenalty ?? 1.0).toFixed(1)} pts
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-center font-mono text-xs">
+                                                    <span className="font-semibold text-muted-foreground">5.0 - {(performanceConfig.tardinessPenalty ?? 1.0).toFixed(1)} = </span>
+                                                    <strong className="text-amber-600 dark:text-amber-400 font-bold">
+                                                        {(Math.max(0.0, 5.0 - (performanceConfig.tardinessPenalty ?? 1.0))).toFixed(1)} / 5.0
+                                                    </strong>
+                                                </TableCell>
+                                                <TableCell className="text-muted-foreground text-xs">
+                                                    Se descuenta automáticamente si el reporte oficial de asistencia del día indica retardo.
+                                                </TableCell>
+                                            </TableRow>
+
+                                            <TableRow className="bg-rose-500/[0.04] font-medium">
+                                                <TableCell className="font-semibold text-rose-700 dark:text-rose-300">
+                                                    <div className="flex items-center gap-2">
+                                                        <ShieldAlert className="h-3.5 w-3.5 text-rose-500 shrink-0" />
+                                                        <span>Inasistencia Injustificada</span>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-center font-mono font-bold text-rose-600 dark:text-rose-400">
+                                                    <Badge variant="destructive" className="text-xs font-bold">
+                                                        0.0 Fijo
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-center font-mono text-xs">
+                                                    <strong className="text-rose-600 dark:text-rose-400 font-bold">0.0 / 5.0 (Bloqueado)</strong>
+                                                </TableCell>
+                                                <TableCell className="text-muted-foreground text-xs">
+                                                    La inasistencia bloquea de forma inamovible la calificación de esa fecha en 0.0.
+                                                </TableCell>
+                                            </TableRow>
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {/* Markdown Statement preview */}
+                    {(!activity.type || activity.type !== "PERFORMANCE" || activity.statement) && (
+                        <div data-color-mode={mode} className="rounded-md border p-4 bg-card w-full max-w-full overflow-x-auto [&_pre]:whitespace-pre-wrap! [&_pre]:wrap-break-word! [&_table]:w-full! [&_td]:wrap-break-word!">
+                            <h3 className="text-base font-semibold mb-3">
+                                {activity.type === "PERFORMANCE" ? "Orientaciones / Enunciado Complementario" : "Enunciado / Rúbrica de Evaluación"}
+                            </h3>
+                            <MDEditor.Markdown
+                                source={activity.statement || "**No hay enunciado/rúbrica disponible.**"}
+                                style={{ background: 'transparent' }}
+                            />
+                        </div>
+                    )}
                 </TabsContent>
 
-                <TabsContent value="results" className="space-y-3 mt-3">
+                {activity.type !== "PERFORMANCE" && (
+                    <TabsContent value="results" className="space-y-3 mt-3">
                     <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
                         <div className="rounded-lg border bg-card/60 backdrop-blur-xs text-card-foreground shadow-2xs px-3.5 py-2 flex items-center justify-between">
                             <div>
@@ -1348,6 +1517,7 @@ export function ActivityDetail({
                         </Table>
                     </div>
                 </TabsContent>
+            )}
             </Tabs>
 
             {/* Panel de detalle controlado — con navegación Anterior / Siguiente */}

@@ -98,7 +98,91 @@ export const courseService = {
             data,
         });
 
+        // Adaptar automáticamente todas las actividades de Desempeño a las nuevas fechas del curso
+        if (data.startDate !== undefined || data.endDate !== undefined || data.classDays !== undefined) {
+            await this.syncPerformanceActivities(courseId, {
+                startDate: course.startDate,
+                endDate: course.endDate,
+                classDays: course.classDays,
+            });
+        }
+
         return course;
+    },
+
+    /**
+     * Sincroniza y adapta todas las actividades de tipo PERFORMANCE de un curso
+     * a las fechas de inicio, fin y días de clase oficiales del curso.
+     */
+    async syncPerformanceActivities(courseId: string, courseDates: {
+        startDate?: Date | null;
+        endDate?: Date | null;
+        classDays?: string | null;
+    }) {
+        try {
+            const performanceActivities = await prisma.activity.findMany({
+                where: {
+                    courseId,
+                    type: "PERFORMANCE",
+                },
+            });
+
+            if (performanceActivities.length === 0) return;
+
+            const startDateStr = courseDates.startDate ? new Date(courseDates.startDate).toISOString().split("T")[0] : null;
+            const endDateStr = courseDates.endDate ? new Date(courseDates.endDate).toISOString().split("T")[0] : null;
+
+            for (const activity of performanceActivities) {
+                const updateData: {
+                    openDate?: Date;
+                    deadline?: Date;
+                    description?: string;
+                } = {};
+
+                if (courseDates.startDate) {
+                    updateData.openDate = courseDates.startDate;
+                }
+                if (courseDates.endDate) {
+                    updateData.deadline = courseDates.endDate;
+                }
+
+                if (activity.description) {
+                    try {
+                        const parsed = JSON.parse(activity.description);
+                        if (parsed && typeof parsed === "object") {
+                            parsed.performanceConfig = parsed.performanceConfig || {};
+                            if (startDateStr) {
+                                parsed.performanceConfig.startDate = startDateStr;
+                            }
+                            if (endDateStr) {
+                                parsed.performanceConfig.endDate = endDateStr;
+                            }
+                            if (courseDates.classDays !== undefined && courseDates.classDays !== null) {
+                                const parsedDays = String(courseDates.classDays)
+                                    .split(",")
+                                    .map(Number)
+                                    .filter((n: number) => !isNaN(n));
+                                if (parsedDays.length > 0) {
+                                    parsed.performanceConfig.daysOfWeek = parsedDays;
+                                }
+                            }
+                            updateData.description = JSON.stringify(parsed);
+                        }
+                    } catch (parseErr) {
+                        console.error(`Error parsing description for activity ${activity.id}:`, parseErr);
+                    }
+                }
+
+                if (Object.keys(updateData).length > 0) {
+                    await prisma.activity.update({
+                        where: { id: activity.id },
+                        data: updateData,
+                    });
+                }
+            }
+        } catch (error) {
+            console.error("Error al sincronizar actividades de desempeño con fechas de curso:", error);
+        }
     },
 
     async getTeacherCourses(teacherId: string) {

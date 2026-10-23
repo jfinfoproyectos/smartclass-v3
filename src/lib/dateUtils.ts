@@ -268,4 +268,20 @@ export function formatDurationHuman(totalSeconds: number): string {
     return `${seconds}s`;
 }
 
+/**
+ * Retorna true si la fecha especificada es estrictamente posterior a la fecha actual (según zona horaria regional).
+ */
+export function isFutureDate(date: Date | string, timeZone: string = DEFAULT_TIMEZONE): boolean {
+    const todayStr = getTodayDateString(timeZone);
+    const dateStr = typeof date === "string" 
+        ? date.split("T")[0] 
+        : new Intl.DateTimeFormat("en-CA", {
+            timeZone,
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit"
+        }).format(date);
+    return dateStr > todayStr;
+}
+
 

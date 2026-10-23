@@ -37,13 +37,48 @@ export async function createActivityAction(formData: FormData) {
     defaultEnd.setDate(defaultEnd.getDate() + 7);
     defaultEnd.setHours(23, 59, 0, 0);
 
+    let finalOpenDate = openDateStr ? new Date(openDateStr) : now;
+    let finalDeadline = deadlineStr ? new Date(deadlineStr) : defaultEnd;
+    let finalDescription = description;
+
+    // Para actividad de tipo PERFORMANCE: sincronizar estrictamente con las fechas del curso
+    if (type === "PERFORMANCE" && courseId) {
+        const course = await prisma.course.findUnique({
+            where: { id: courseId },
+            select: { startDate: true, endDate: true }
+        });
+        if (course) {
+            if (course.startDate) {
+                finalOpenDate = course.startDate;
+            }
+            if (course.endDate) {
+                finalDeadline = course.endDate;
+            }
+            if (finalDescription) {
+                try {
+                    const parsed = JSON.parse(finalDescription);
+                    if (parsed && typeof parsed === "object") {
+                        parsed.performanceConfig = parsed.performanceConfig || {};
+                        if (course.startDate) {
+                            parsed.performanceConfig.startDate = course.startDate.toISOString().split("T")[0];
+                        }
+                        if (course.endDate) {
+                            parsed.performanceConfig.endDate = course.endDate.toISOString().split("T")[0];
+                        }
+                        finalDescription = JSON.stringify(parsed);
+                    }
+                } catch {}
+            }
+        }
+    }
+
     const activity = await activityService.createActivity({
         title,
-        description,
+        description: finalDescription,
         statement,
         filePaths,
-        deadline: deadlineStr ? new Date(deadlineStr) : defaultEnd,
-        openDate: openDateStr ? new Date(openDateStr) : now,
+        deadline: finalDeadline,
+        openDate: finalOpenDate,
         courseId,
         type: type || "GITHUB",
         weight: weightStr ? parseFloat(weightStr) : 1.0,
@@ -110,13 +145,54 @@ export async function updateActivityAction(formData: FormData) {
     const isGroupActivityStr = formData.get("isGroupActivity") as string | null;
     const groupScope = formData.get("groupScope") as string | null;
 
+    let finalOpenDate = openDateStr ? new Date(openDateStr) : undefined;
+    let finalDeadline = deadlineStr ? new Date(deadlineStr) : undefined;
+    let finalDescription = description !== null ? description : undefined;
+
+    const currentActivity = await prisma.activity.findUnique({
+        where: { id },
+        select: { type: true, courseId: true }
+    });
+    const effectiveType = type || currentActivity?.type;
+    const effectiveCourseId = courseId || currentActivity?.courseId;
+
+    if (effectiveType === "PERFORMANCE" && effectiveCourseId) {
+        const course = await prisma.course.findUnique({
+            where: { id: effectiveCourseId },
+            select: { startDate: true, endDate: true }
+        });
+        if (course) {
+            if (course.startDate) {
+                finalOpenDate = course.startDate;
+            }
+            if (course.endDate) {
+                finalDeadline = course.endDate;
+            }
+            if (finalDescription) {
+                try {
+                    const parsed = JSON.parse(finalDescription);
+                    if (parsed && typeof parsed === "object") {
+                        parsed.performanceConfig = parsed.performanceConfig || {};
+                        if (course.startDate) {
+                            parsed.performanceConfig.startDate = course.startDate.toISOString().split("T")[0];
+                        }
+                        if (course.endDate) {
+                            parsed.performanceConfig.endDate = course.endDate.toISOString().split("T")[0];
+                        }
+                        finalDescription = JSON.stringify(parsed);
+                    }
+                } catch {}
+            }
+        }
+    }
+
     const updated = await activityService.updateActivity(id, {
         title: title !== null ? title : undefined,
-        description: description !== null ? description : undefined,
+        description: finalDescription,
         statement: statement !== null ? statement : undefined,
         filePaths: filePaths !== null ? filePaths : undefined,
-        deadline: deadlineStr ? new Date(deadlineStr) : undefined,
-        openDate: openDateStr ? new Date(openDateStr) : undefined,
+        deadline: finalDeadline,
+        openDate: finalOpenDate,
         type: type || undefined,
         weight: weightStr ? parseFloat(weightStr) : undefined,
         maxAttempts: maxAttemptsStr ? parseInt(maxAttemptsStr) : undefined,

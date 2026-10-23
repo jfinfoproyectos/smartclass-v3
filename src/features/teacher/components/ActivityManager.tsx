@@ -78,6 +78,10 @@ import '@uiw/react-markdown-preview/markdown.css';
 import { useTheme } from "next-themes";
 import { CodeChallengeActivityDetails } from "@/features/student/components/CodeChallengeActivityDetails";
 import { WorkshopActivityDetails } from "@/features/student/components/WorkshopActivityDetails";
+import {
+    type PerformancePenaltyCriterion,
+    DEFAULT_PERFORMANCE_CRITERIA,
+} from "../utils/performanceUtils";
 
 const TEMPLATE_GITHUB = `# Evaluación Automática con IA (GitHub)
 
@@ -980,12 +984,14 @@ function ActivityFormDialog({
     activity,
     onClose,
     onOpenActivityGroups,
+    course,
 }: {
     isOpen: boolean;
     courseId: string;
     activity?: any;
     onClose: () => void;
     onOpenActivityGroups?: (activity: any) => void;
+    course?: any;
 }) {
     const isEdit = Boolean(activity);
     const router = useRouter();
@@ -1203,34 +1209,154 @@ function ActivityFormDialog({
     const [isGeneratingTitle, setIsGeneratingTitle] = useState<boolean>(false);
 
     // Configuración para Actividad de Desempeño (PERFORMANCE)
+    const isPerformance = selectedType === "PERFORMANCE";
+
+    const courseStartDateStr = useMemo(() => {
+        if (!course?.startDate) return "";
+        try {
+            const d = new Date(course.startDate);
+            return isNaN(d.getTime()) ? "" : d.toISOString().split("T")[0];
+        } catch {
+            return "";
+        }
+    }, [course?.startDate]);
+
+    const courseEndDateStr = useMemo(() => {
+        if (!course?.endDate) return "";
+        try {
+            const d = new Date(course.endDate);
+            return isNaN(d.getTime()) ? "" : d.toISOString().split("T")[0];
+        } catch {
+            return "";
+        }
+    }, [course?.endDate]);
+
+    const courseStartDateTimeLocal = useMemo(() => {
+        if (!course?.startDate) return "";
+        try {
+            const d = new Date(course.startDate);
+            if (isNaN(d.getTime())) return "";
+            return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+        } catch {
+            return "";
+        }
+    }, [course?.startDate]);
+
+    const courseEndDateTimeLocal = useMemo(() => {
+        if (!course?.endDate) return "";
+        try {
+            const d = new Date(course.endDate);
+            if (isNaN(d.getTime())) return "";
+            const endD = new Date(d);
+            if (endD.getUTCHours() === 0 && endD.getUTCMinutes() === 0) {
+                endD.setHours(23, 59, 0, 0);
+            }
+            return new Date(endD.getTime() - endD.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+        } catch {
+            return "";
+        }
+    }, [course?.endDate]);
+
+    const formatCourseDateOnly = (dateStr: string | null | undefined) => {
+        if (!dateStr) return "No configurada en el curso";
+        try {
+            if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+                const parts = dateStr.split("T")[0].split("-").map(Number);
+                const monthNames = [
+                    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+                    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"
+                ];
+                return `${parts[2]} de ${monthNames[parts[1] - 1]} de ${parts[0]}`;
+            }
+            const d = new Date(dateStr);
+            if (isNaN(d.getTime())) return dateStr;
+            return d.toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" });
+        } catch {
+            return dateStr;
+        }
+    };
+
     const [performanceStartDate, setPerformanceStartDate] = useState<string>(() => {
+        if (course?.startDate) {
+            return new Date(course.startDate).toISOString().split("T")[0];
+        }
+        if (activity?.openDate) {
+            return new Date(activity.openDate).toISOString().split("T")[0];
+        }
         const today = new Date();
         return today.toISOString().split("T")[0];
     });
     const [performanceEndDate, setPerformanceEndDate] = useState<string>(() => {
+        if (course?.endDate) {
+            return new Date(course.endDate).toISOString().split("T")[0];
+        }
+        if (activity?.deadline) {
+            return new Date(activity.deadline).toISOString().split("T")[0];
+        }
         const nextMonth = new Date();
         nextMonth.setDate(nextMonth.getDate() + 30);
         return nextMonth.toISOString().split("T")[0];
     });
-    const [performanceDaysOfWeek, setPerformanceDaysOfWeek] = useState<number[]>([1, 2, 3, 4, 5]); // 1=Lun ... 5=Vie
+    const [performanceDaysOfWeek, setPerformanceDaysOfWeek] = useState<number[]>(() => {
+        if (course?.classDays) {
+            const parsed = String(course.classDays).split(",").map(Number).filter((n: number) => !isNaN(n));
+            if (parsed.length > 0) return parsed;
+        }
+        return [1, 2, 3, 4, 5]; // 1=Lun ... 5=Vie
+    });
     const [performanceDefaultGrade, setPerformanceDefaultGrade] = useState<number>(5.0);
     const [performanceTardinessPenalty, setPerformanceTardinessPenalty] = useState<number>(1.0);
+    const [performanceCriteria, setPerformanceCriteria] = useState<PerformancePenaltyCriterion[]>(() => {
+        const desc = activity?.description;
+        if (desc) {
+            try {
+                const parsed = JSON.parse(desc);
+                if (Array.isArray(parsed?.performanceConfig?.criteria) && parsed.performanceConfig.criteria.length > 0) {
+                    return parsed.performanceConfig.criteria;
+                }
+            } catch {}
+        }
+        return DEFAULT_PERFORMANCE_CRITERIA;
+    });
+    const [newPerformanceCritName, setNewPerformanceCritName] = useState("");
+    const [newPerformanceCritPenalty, setNewPerformanceCritPenalty] = useState(1.0);
+    const [newPerformanceCritDesc, setNewPerformanceCritDesc] = useState("");
+
+    // Sincronización estricta de fechas de desempeño con las del curso cuando el tipo es PERFORMANCE
+    useEffect(() => {
+        if (selectedType === "PERFORMANCE") {
+            if (courseStartDateStr) {
+                setPerformanceStartDate(courseStartDateStr);
+            }
+            if (courseEndDateStr) {
+                setPerformanceEndDate(courseEndDateStr);
+            }
+            if (course?.classDays) {
+                const parsed = String(course.classDays).split(",").map(Number).filter((n: number) => !isNaN(n));
+                if (parsed.length > 0) setPerformanceDaysOfWeek(parsed);
+            }
+        }
+    }, [selectedType, courseStartDateStr, courseEndDateStr, course?.classDays]);
 
     const estimatedPerformanceSessions = useMemo(() => {
-        if (!performanceStartDate || !performanceEndDate || performanceDaysOfWeek.length === 0) return 0;
-        const [sy, sm, sd] = performanceStartDate.split("-").map(Number);
-        const [ey, em, ed] = performanceEndDate.split("-").map(Number);
+        const start = (selectedType === "PERFORMANCE" && courseStartDateStr) ? courseStartDateStr : performanceStartDate;
+        const end = (selectedType === "PERFORMANCE" && courseEndDateStr) ? courseEndDateStr : performanceEndDate;
+        if (!start || !end || performanceDaysOfWeek.length === 0) return 0;
+        const [sy, sm, sd] = start.split("-").map(Number);
+        const [ey, em, ed] = end.split("-").map(Number);
         const s = new Date(sy, sm - 1, sd);
         const e = new Date(ey, em - 1, ed);
         if (isNaN(s.getTime()) || isNaN(e.getTime()) || s > e) return 0;
         let count = 0;
         const cur = new Date(s);
         while (cur <= e) {
-            if (performanceDaysOfWeek.includes(cur.getDay())) count++;
+            const jsDay = cur.getDay(); // 0=Sun, 1=Mon...
+            const normalizedDay = jsDay === 0 ? 7 : jsDay;
+            if (performanceDaysOfWeek.includes(jsDay) || performanceDaysOfWeek.includes(normalizedDay)) count++;
             cur.setDate(cur.getDate() + 1);
         }
         return count;
-    }, [performanceStartDate, performanceEndDate, performanceDaysOfWeek]);
+    }, [selectedType, courseStartDateStr, performanceStartDate, courseEndDateStr, performanceEndDate, performanceDaysOfWeek]);
 
     const handleGenerateShortTitleWithAI = async () => {
         const currentStatement = statement?.trim() || "";
@@ -2097,7 +2223,7 @@ function ActivityFormDialog({
                  activity?.type === "MANUAL" ? TEMPLATE_MANUAL : TEMPLATE_GITHUB)
             );
             setStatement(defaultStatement);
-            setIsGroupActivity(Boolean(activity?.isGroupActivity));
+            setIsGroupActivity(activity?.type === "PERFORMANCE" ? false : Boolean(activity?.isGroupActivity));
             setGroupScope((activity as any)?.groupScope === "ACTIVITY" ? "ACTIVITY" : "COURSE");
             setImportedData(null);
             setFormKey(k => k + 1);
@@ -2261,18 +2387,36 @@ function ActivityFormDialog({
                         if (parsedDesc.performanceConfig) {
                             if (parsedDesc.performanceConfig.startDate) {
                                 setPerformanceStartDate(parsedDesc.performanceConfig.startDate);
+                            } else if (course?.startDate) {
+                                setPerformanceStartDate(new Date(course.startDate).toISOString().split("T")[0]);
                             }
                             if (parsedDesc.performanceConfig.endDate) {
                                 setPerformanceEndDate(parsedDesc.performanceConfig.endDate);
+                            } else if (course?.endDate) {
+                                setPerformanceEndDate(new Date(course.endDate).toISOString().split("T")[0]);
                             }
-                            if (Array.isArray(parsedDesc.performanceConfig.daysOfWeek)) {
+                            if (Array.isArray(parsedDesc.performanceConfig.daysOfWeek) && parsedDesc.performanceConfig.daysOfWeek.length > 0) {
                                 setPerformanceDaysOfWeek(parsedDesc.performanceConfig.daysOfWeek);
+                            } else if (course?.classDays) {
+                                const parsed = String(course.classDays).split(",").map(Number).filter((n: number) => !isNaN(n));
+                                if (parsed.length > 0) setPerformanceDaysOfWeek(parsed);
                             }
                             if (typeof parsedDesc.performanceConfig.defaultDailyGrade === "number") {
                                 setPerformanceDefaultGrade(parsedDesc.performanceConfig.defaultDailyGrade);
                             }
                             if (typeof parsedDesc.performanceConfig.tardinessPenalty === "number") {
                                 setPerformanceTardinessPenalty(parsedDesc.performanceConfig.tardinessPenalty);
+                            }
+                        } else if (!isEdit) {
+                            if (course?.startDate) {
+                                setPerformanceStartDate(new Date(course.startDate).toISOString().split("T")[0]);
+                            }
+                            if (course?.endDate) {
+                                setPerformanceEndDate(new Date(course.endDate).toISOString().split("T")[0]);
+                            }
+                            if (course?.classDays) {
+                                const parsed = String(course.classDays).split(",").map(Number).filter((n: number) => !isNaN(n));
+                                if (parsed.length > 0) setPerformanceDaysOfWeek(parsed);
                             }
                         }
                     }
@@ -2716,6 +2860,7 @@ function ActivityFormDialog({
                 tardinessPenalty: performanceTardinessPenalty,
                 scaleMin: 0.0,
                 scaleMax: 5.0,
+                criteria: performanceCriteria,
             };
             exportData.description = JSON.stringify({
                 hasChecklist: false,
@@ -3050,7 +3195,7 @@ function ActivityFormDialog({
                 }
                 if (deadlineLocal) {
                     formData.set("deadline", new Date(deadlineLocal).toISOString());
-                } else if (!isEdit && !activity?.deadline) {
+                } else if (!isEdit && !activity?.deadline && !isPerformance) {
                     setIsSubmitting(false);
                     setActiveTab("config");
                     toast.error("Por favor define la fecha límite en la pestaña 'Configuración'.");
@@ -3066,7 +3211,7 @@ function ActivityFormDialog({
 
             formData.set("statement", statement);
             formData.set("type", selectedType);
-            formData.set("isGroupActivity", String(isGroupActivity));
+            formData.set("isGroupActivity", isPerformance ? "false" : String(isGroupActivity));
             formData.set("groupScope", groupScope);
 
             // Guardar configuración de Checklist, Code Challenge, Video Pitch, AI Interview, DB Modeling y Ponderación de Nota Final
@@ -3169,25 +3314,52 @@ function ActivityFormDialog({
                 const uniquePaths = Array.from(new Set(workshopMilestones.map(m => m.targetFilePath?.trim()).filter(Boolean)));
                 formData.set("filePaths", uniquePaths.join(','));
             } else if (selectedType === "PERFORMANCE") {
+                const effectiveStartDate = courseStartDateStr || performanceStartDate;
+                const effectiveEndDate = courseEndDateStr || performanceEndDate;
+
                 formData.set("description", JSON.stringify({
                     hasChecklist: false,
                     performanceConfig: {
-                        startDate: performanceStartDate,
-                        endDate: performanceEndDate,
+                        startDate: effectiveStartDate,
+                        endDate: effectiveEndDate,
                         daysOfWeek: performanceDaysOfWeek,
                         defaultDailyGrade: performanceDefaultGrade,
                         absenceGrade: 0.0,
                         tardinessPenalty: performanceTardinessPenalty,
                         scaleMin: 0.0,
                         scaleMax: 5.0,
+                        criteria: performanceCriteria,
                     }
                 }));
-                if (performanceStartDate) {
-                    formData.set("openDate", new Date(`${performanceStartDate}T00:00:00`).toISOString());
+                if (effectiveStartDate) {
+                    formData.set("openDate", new Date(`${effectiveStartDate}T00:00:00`).toISOString());
+                    formData.set("openDateLocal", courseStartDateTimeLocal || `${effectiveStartDate}T00:00`);
                 }
-                if (performanceEndDate) {
-                    formData.set("deadline", new Date(`${performanceEndDate}T23:59:59`).toISOString());
+                if (effectiveEndDate) {
+                    formData.set("deadline", new Date(`${effectiveEndDate}T23:59:59`).toISOString());
+                    formData.set("deadlineLocal", courseEndDateTimeLocal || `${effectiveEndDate}T23:59`);
                 }
+
+                // Sync criteria table into statement
+                const criteriaSectionTitle = "## Criterios de Evaluación y Penalizaciones Diarias (Base: 5.0)";
+                let tableMarkdown = `${criteriaSectionTitle}\n\n`;
+                tableMarkdown += `Cada sesión de clase inicia con una nota base de **5.0**. Si se incurre en una falta disciplinaria o de cumplimiento, se descontará la penalización correspondiente a la nota del día. Las inasistencias injustificadas reciben automáticamente **0.0**.\n\n`;
+                tableMarkdown += `| Criterio de Desempeño | Penalización | Descripción |\n`;
+                tableMarkdown += `| :--- | :---: | :--- |\n`;
+                performanceCriteria.forEach(c => {
+                    tableMarkdown += `| **${c.name}** | \`-${c.penalty.toFixed(1)} pts\` | ${c.description || "Aplica descuento sobre la nota máxima diaria de 5.0"} |\n`;
+                });
+                tableMarkdown += `| **Llegada Tarde (Tardanza)** | \`-${performanceTardinessPenalty.toFixed(1)} pts\` | Retardo en el ingreso a la sesión de clase |\n`;
+                tableMarkdown += `| **Inasistencia a Clase** | \`0.0 Automático\` | Falta no justificada en la sesión |\n`;
+
+                let currentStmt = statement || TEMPLATE_PERFORMANCE;
+                if (currentStmt.includes(criteriaSectionTitle)) {
+                    const regex = new RegExp(`${criteriaSectionTitle}[\\s\\S]*?(?=\\n## |$)`, "g");
+                    currentStmt = currentStmt.replace(regex, tableMarkdown + "\n\n");
+                } else {
+                    currentStmt = currentStmt.trim() + "\n\n" + tableMarkdown;
+                }
+                formData.set("statement", currentStmt);
             } else if (selectedType === "GITHUB") {
                 formData.set("description", JSON.stringify({
                     hasChecklist: Boolean(hasChecklist),
@@ -3533,6 +3705,17 @@ function ActivityFormDialog({
                                                                     } else if (t.id === "PERFORMANCE") {
                                                                         setStatement(TEMPLATE_PERFORMANCE);
                                                                         setDescription(TEMPLATE_PERFORMANCE);
+                                                                        setIsGroupActivity(false);
+                                                                        if (course?.startDate) {
+                                                                            setPerformanceStartDate(new Date(course.startDate).toISOString().split("T")[0]);
+                                                                        }
+                                                                        if (course?.endDate) {
+                                                                            setPerformanceEndDate(new Date(course.endDate).toISOString().split("T")[0]);
+                                                                        }
+                                                                        if (course?.classDays) {
+                                                                            const parsed = String(course.classDays).split(",").map(Number).filter((n: number) => !isNaN(n));
+                                                                            if (parsed.length > 0) setPerformanceDaysOfWeek(parsed);
+                                                                        }
                                                                     } else if (t.id === "GITHUB") {
                                                                         setStatement(TEMPLATE_GITHUB);
                                                                         setDescription(TEMPLATE_GITHUB);
@@ -3573,230 +3756,243 @@ function ActivityFormDialog({
                                     </div>
 
                                     {/* Sección 2: Fechas, Plazos y Parámetros */}
-                                    <div className="p-4 sm:p-5 bg-card rounded-2xl border border-border/70 shadow-xs space-y-4">
-                                        <div className="flex items-center justify-between pb-2 border-b border-border/40">
-                                            <div className="flex items-center gap-2">
-                                                <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
-                                                    <Calendar className="h-4 w-4" />
-                                                </div>
-                                                <div>
-                                                    <h3 className="text-xs sm:text-sm font-bold tracking-tight text-foreground">
-                                                        Fechas y Plazos
-                                                    </h3>
-                                                    <p className="text-[11px] text-muted-foreground">Plazos de apertura y vencimiento de la entrega</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            <div className="space-y-1.5">
-                                                <div className="flex items-center justify-between">
-                                                    <Label htmlFor="openDateLocal" className="text-xs font-semibold flex items-center gap-1.5">
-                                                        <Clock className="h-3.5 w-3.5 text-primary" />
-                                                        Fecha de Apertura (Inicio)
-                                                    </Label>
-                                                    <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded font-medium">Inicio</span>
-                                                </div>
-                                                <Input
-                                                    id="openDateLocal"
-                                                    name="openDateLocal"
-                                                    type="datetime-local"
-                                                    defaultValue={importedData?.openDateLocal || (activity?.openDate ? new Date(new Date(activity.openDate).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : defaultOpenDate)}
-                                                    onChange={handleOpenDateChange}
-                                                    className="h-9 font-mono text-xs"
-                                                />
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <div className="flex items-center justify-between">
-                                                    <Label htmlFor="deadlineLocal" className="text-xs font-semibold flex items-center gap-1.5">
-                                                        <Calendar className="h-3.5 w-3.5 text-primary" />
-                                                        Fecha Límite (Final)
-                                                    </Label>
-                                                    <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded font-semibold">Obligatorio (+7 días)</span>
-                                                </div>
-                                                <Input
-                                                    id="deadlineLocal"
-                                                    name="deadlineLocal"
-                                                    type="datetime-local"
-                                                    defaultValue={importedData?.deadlineLocal || (activity?.deadline ? new Date(new Date(activity.deadline).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : defaultDeadline)}
-                                                    className="h-9 font-mono text-xs"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        {/* Accesos rápidos de fecha límite */}
-                                        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                                            <span className="text-[11px] font-medium text-muted-foreground mr-1">Plazos rápidos:</span>
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => setQuickDeadline(3)}
-                                                className="h-6 text-[10px] px-2 rounded-md hover:bg-primary/10"
-                                            >
-                                                + 3 días
-                                            </Button>
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => setQuickDeadline(7)}
-                                                className="h-6 text-[10px] px-2 rounded-md hover:bg-primary/10"
-                                            >
-                                                + 1 semana
-                                            </Button>
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => setQuickDeadline(14)}
-                                                className="h-6 text-[10px] px-2 rounded-md hover:bg-primary/10"
-                                            >
-                                                + 2 semanas
-                                            </Button>
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => setQuickDeadline(30)}
-                                                className="h-6 text-[10px] px-2 rounded-md hover:bg-primary/10"
-                                            >
-                                                + 1 mes
-                                            </Button>
-                                        </div>
-                                    </div>
-
-                                    {/* Modalidad de Entrega (Individual o Grupal) */}
-                                    <div className="p-4 sm:p-5 bg-card rounded-2xl border border-border/70 shadow-xs space-y-3">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                                <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
-                                                    <Users className="h-4 w-4" />
-                                                </div>
-                                                <div>
-                                                    <h3 className="text-xs sm:text-sm font-bold tracking-tight text-foreground flex items-center gap-1.5">
-                                                        <span>Activar Entrega Grupal</span>
-                                                        {isGroupActivity && (
-                                                            <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/30">
-                                                                Equipos
-                                                            </Badge>
-                                                        )}
-                                                    </h3>
-                                                    <p className="text-[11px] text-muted-foreground">
-                                                        Solo el líder del grupo realiza la entrega; la nota se asigna por igual a todos
-                                                    </p>
-                                                </div>
-                                            </div>
-
-                                            <Switch
-                                                checked={isGroupActivity}
-                                                onCheckedChange={setIsGroupActivity}
-                                            />
-                                        </div>
-
-                                        {isGroupActivity && (
-                                            <div className="space-y-3 pt-1">
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                                    <div
-                                                        onClick={() => setGroupScope("COURSE")}
-                                                        className={cn(
-                                                            "p-3 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between gap-1.5 select-none text-left",
-                                                            groupScope === "COURSE"
-                                                                ? "border-primary bg-primary/5 ring-1 ring-primary/30"
-                                                                : "border-border/60 bg-card/60 hover:bg-muted/40"
-                                                        )}
-                                                    >
-                                                        <div className="flex items-center justify-between">
-                                                            <div className="flex items-center gap-1.5">
-                                                                <Users className="h-3.5 w-3.5 text-primary" />
-                                                                <span className="font-bold text-xs text-foreground">Grupos de la Ficha</span>
-                                                            </div>
-                                                            {groupScope === "COURSE" && (
-                                                                <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/30 font-bold px-1.5 py-0">
-                                                                    Global
-                                                                </Badge>
-                                                            )}
+                                    {isPerformance ? (
+                                        /* Para tipo DESEMPEÑO no se aplican plazos de entrega ni modalidad grupal; las fechas se sincronizan con el curso mediante inputs ocultos */
+                                        <>
+                                            <input type="hidden" name="openDateLocal" value={courseStartDateTimeLocal || defaultOpenDate} />
+                                            <input type="hidden" name="deadlineLocal" value={courseEndDateTimeLocal || defaultDeadline} />
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div className="p-4 sm:p-5 bg-card rounded-2xl border border-border/70 shadow-xs space-y-4">
+                                                <div className="flex items-center justify-between pb-2 border-b border-border/40">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+                                                            <Calendar className="h-4 w-4" />
                                                         </div>
-                                                        <p className="text-[10.5px] text-muted-foreground leading-relaxed">
-                                                            Usa los equipos predeterminados de la ficha/curso.
-                                                        </p>
-                                                    </div>
-
-                                                    <div
-                                                        onClick={() => setGroupScope("ACTIVITY")}
-                                                        className={cn(
-                                                            "p-3 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between gap-1.5 select-none text-left",
-                                                            groupScope === "ACTIVITY"
-                                                                ? "border-amber-500 bg-amber-500/5 ring-1 ring-amber-500/30"
-                                                                : "border-border/60 bg-card/60 hover:bg-muted/40"
-                                                        )}
-                                                    >
-                                                        <div className="flex items-center justify-between">
-                                                            <div className="flex items-center gap-1.5">
-                                                                <Target className="h-3.5 w-3.5 text-amber-500" />
-                                                                <span className="font-bold text-xs text-foreground">Grupos Exclusivos</span>
-                                                            </div>
-                                                            {groupScope === "ACTIVITY" && (
-                                                                <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 font-bold px-1.5 py-0">
-                                                                    Exclusivo
-                                                                </Badge>
-                                                            )}
+                                                        <div>
+                                                            <h3 className="text-xs sm:text-sm font-bold tracking-tight text-foreground">
+                                                                Fechas y Plazos
+                                                            </h3>
+                                                            <p className="text-[11px] text-muted-foreground">Plazos de apertura y vencimiento de la entrega</p>
                                                         </div>
-                                                        <p className="text-[10.5px] text-muted-foreground leading-relaxed">
-                                                            Equipos configurados solo para esta actividad. No altera la ficha.
-                                                        </p>
                                                     </div>
                                                 </div>
-
-                                                <div className="p-3 rounded-xl bg-primary/5 border border-primary/20 space-y-2 text-xs">
-                                                    <div className="flex items-center gap-1.5 font-bold text-foreground text-xs">
-                                                        <Crown className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
-                                                        <span>
-                                                            {groupScope === "ACTIVITY"
-                                                                ? "Equipos Exclusivos de esta Actividad"
-                                                                : "Grupos Generales de la Ficha"}
-                                                        </span>
+                                                
+                                                {/* MODO ESTÁNDAR: Selectores de fecha para el resto de actividades */}
+                                                <div className="space-y-4">
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                        <div className="space-y-1.5">
+                                                            <div className="flex items-center justify-between">
+                                                                <Label htmlFor="openDateLocal" className="text-xs font-semibold flex items-center gap-1.5">
+                                                                    <Clock className="h-3.5 w-3.5 text-primary" />
+                                                                    Fecha de Apertura (Inicio)
+                                                                </Label>
+                                                                <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded font-medium">Inicio</span>
+                                                            </div>
+                                                            <Input
+                                                                id="openDateLocal"
+                                                                name="openDateLocal"
+                                                                type="datetime-local"
+                                                                defaultValue={importedData?.openDateLocal || (activity?.openDate ? new Date(new Date(activity.openDate).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : defaultOpenDate)}
+                                                                onChange={handleOpenDateChange}
+                                                                className="h-9 font-mono text-xs"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-1.5">
+                                                            <div className="flex items-center justify-between">
+                                                                <Label htmlFor="deadlineLocal" className="text-xs font-semibold flex items-center gap-1.5">
+                                                                    <Calendar className="h-3.5 w-3.5 text-primary" />
+                                                                    Fecha Límite (Final)
+                                                                </Label>
+                                                                <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded font-semibold">Obligatorio (+7 días)</span>
+                                                            </div>
+                                                            <Input
+                                                                id="deadlineLocal"
+                                                                name="deadlineLocal"
+                                                                type="datetime-local"
+                                                                defaultValue={importedData?.deadlineLocal || (activity?.deadline ? new Date(new Date(activity.deadline).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : defaultDeadline)}
+                                                                className="h-9 font-mono text-xs"
+                                                            />
+                                                        </div>
                                                     </div>
-                                                    <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                                        {groupScope === "ACTIVITY"
-                                                            ? "Los estudiantes conformarán equipos solo para esta actividad. Podrás configurar o ajustar los miembros y líderes desde la vista de detalle de la actividad usando el botón 'Equipos de la Actividad'."
-                                                            : "Los estudiantes entregarán en los grupos conformados en la pestaña Estudiantes → Grupos de Trabajo. Solo el líder de cada equipo podrá enviar la entrega."}
-                                                    </p>
-                                                    <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                                        Al calificar la entrega del líder, <strong>la misma nota y retroalimentación se replicará automáticamente a todos los integrantes de su grupo</strong>.
-                                                    </p>
+
+                                                    {/* Accesos rápidos de fecha límite */}
+                                                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                                                        <span className="text-[11px] font-medium text-muted-foreground mr-1">Plazos rápidos:</span>
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => setQuickDeadline(3)}
+                                                            className="h-6 text-[10px] px-2 rounded-md hover:bg-primary/10"
+                                                        >
+                                                            + 3 días
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => setQuickDeadline(7)}
+                                                            className="h-6 text-[10px] px-2 rounded-md hover:bg-primary/10"
+                                                        >
+                                                            + 1 semana
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => setQuickDeadline(14)}
+                                                            className="h-6 text-[10px] px-2 rounded-md hover:bg-primary/10"
+                                                        >
+                                                            + 2 semanas
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => setQuickDeadline(30)}
+                                                            className="h-6 text-[10px] px-2 rounded-md hover:bg-primary/10"
+                                                        >
+                                                            + 1 mes
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Modalidad de Entrega (Individual o Grupal) */}
+                                            <div className="p-4 sm:p-5 bg-card rounded-2xl border border-border/70 shadow-xs space-y-3">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+                                                            <Users className="h-4 w-4" />
+                                                        </div>
+                                                        <div>
+                                                            <h3 className="text-xs sm:text-sm font-bold tracking-tight text-foreground flex items-center gap-1.5">
+                                                                <span>Activar Entrega Grupal</span>
+                                                                {isGroupActivity && (
+                                                                    <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/30">
+                                                                        Equipos
+                                                                    </Badge>
+                                                                )}
+                                                            </h3>
+                                                            <p className="text-[11px] text-muted-foreground">
+                                                                Solo el líder del grupo realiza la entrega; la nota se asigna por igual a todos
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    <Switch
+                                                        checked={isGroupActivity}
+                                                        onCheckedChange={setIsGroupActivity}
+                                                    />
                                                 </div>
 
-                                                {groupScope === "ACTIVITY" && (
-                                                    <div className="pt-1">
-                                                        {activity?.id ? (
-                                                            <Button
-                                                                type="button"
-                                                                variant="outline"
-                                                                size="sm"
-                                                                onClick={() => {
-                                                                    if (onOpenActivityGroups) {
-                                                                        onOpenActivityGroups(activity);
-                                                                    }
-                                                                }}
-                                                                className="w-full h-9 font-bold text-xs gap-2 border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 shadow-xs cursor-pointer"
+                                                {isGroupActivity && (
+                                                    <div className="space-y-3 pt-1">
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                            <div
+                                                                onClick={() => setGroupScope("COURSE")}
+                                                                className={cn(
+                                                                    "p-3 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between gap-1.5 select-none text-left",
+                                                                    groupScope === "COURSE"
+                                                                        ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                                                                        : "border-border/60 bg-card/60 hover:bg-muted/40"
+                                                                )}
                                                             >
-                                                                <Users className="h-4 w-4" />
-                                                                <span>Configurar Equipos de esta Actividad (Abrir Gestor)</span>
-                                                            </Button>
-                                                        ) : (
-                                                            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-[11px] flex items-center gap-2.5">
-                                                                <Info className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                                                                <div className="flex items-center justify-between">
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        <Users className="h-3.5 w-3.5 text-primary" />
+                                                                        <span className="font-bold text-xs text-foreground">Grupos de la Ficha</span>
+                                                                    </div>
+                                                                    {groupScope === "COURSE" && (
+                                                                        <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/30 font-bold px-1.5 py-0">
+                                                                            Global
+                                                                        </Badge>
+                                                                    )}
+                                                                </div>
+                                                                <p className="text-[10.5px] text-muted-foreground leading-relaxed">
+                                                                    Usa los equipos predeterminados de la ficha/curso.
+                                                                </p>
+                                                            </div>
+
+                                                            <div
+                                                                onClick={() => setGroupScope("ACTIVITY")}
+                                                                className={cn(
+                                                                    "p-3 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between gap-1.5 select-none text-left",
+                                                                    groupScope === "ACTIVITY"
+                                                                        ? "border-amber-500 bg-amber-500/5 ring-1 ring-amber-500/30"
+                                                                        : "border-border/60 bg-card/60 hover:bg-muted/40"
+                                                                )}
+                                                            >
+                                                                <div className="flex items-center justify-between">
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        <Target className="h-3.5 w-3.5 text-amber-500" />
+                                                                        <span className="font-bold text-xs text-foreground">Grupos Exclusivos</span>
+                                                                    </div>
+                                                                    {groupScope === "ACTIVITY" && (
+                                                                        <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 font-bold px-1.5 py-0">
+                                                                            Exclusivo
+                                                                        </Badge>
+                                                                    )}
+                                                                </div>
+                                                                <p className="text-[10.5px] text-muted-foreground leading-relaxed">
+                                                                    Equipos configurados solo para esta actividad. No altera la ficha.
+                                                                </p>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="p-3 rounded-xl bg-primary/5 border border-primary/20 space-y-2 text-xs">
+                                                            <div className="flex items-center gap-1.5 font-bold text-foreground text-xs">
+                                                                <Crown className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
                                                                 <span>
-                                                                    Al guardar esta nueva actividad, podrás configurar y asignar los integrantes inmediatamente con el botón <strong>"Configurar Equipos"</strong>.
+                                                                    {groupScope === "ACTIVITY"
+                                                                        ? "Equipos Exclusivos de esta Actividad"
+                                                                        : "Grupos Generales de la Ficha"}
                                                                 </span>
+                                                            </div>
+                                                            <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                                                {groupScope === "ACTIVITY"
+                                                                    ? "Los estudiantes conformarán equipos solo para esta actividad. Podrás configurar o ajustar los miembros y líderes desde la vista de detalle de la actividad usando el botón 'Equipos de la Actividad'."
+                                                                    : "Los estudiantes entregarán en los grupos conformados en la pestaña Estudiantes → Grupos de Trabajo. Solo el líder de cada equipo podrá enviar la entrega."}
+                                                            </p>
+                                                            <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                                                Al calificar la entrega del líder, <strong>la misma nota y retroalimentación se replicará automáticamente a todos los integrantes de su grupo</strong>.
+                                                            </p>
+                                                        </div>
+
+                                                        {groupScope === "ACTIVITY" && (
+                                                            <div className="pt-1">
+                                                                {activity?.id ? (
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="outline"
+                                                                        size="sm"
+                                                                        onClick={() => {
+                                                                            if (onOpenActivityGroups) {
+                                                                                onOpenActivityGroups(activity);
+                                                                            }
+                                                                        }}
+                                                                        className="w-full h-9 font-bold text-xs gap-2 border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 shadow-xs cursor-pointer"
+                                                                    >
+                                                                        <Users className="h-4 w-4" />
+                                                                        <span>Configurar Equipos de esta Actividad (Abrir Gestor)</span>
+                                                                    </Button>
+                                                                ) : (
+                                                                    <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-[11px] flex items-center gap-2.5">
+                                                                        <Info className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                                                                        <span>
+                                                                            Al guardar esta nueva actividad, podrás configurar y asignar los integrantes inmediatamente con el botón <strong>"Configurar Equipos"</strong>.
+                                                                        </span>
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         )}
                                                     </div>
                                                 )}
                                             </div>
-                                        )}
-                                    </div>
+                                        </>
+                                    )}
                                 </div>
 
                                 {/* Columna Derecha: Configuración de Entrega (5 columnas) */}
@@ -5969,31 +6165,52 @@ function ActivityFormDialog({
                                                             <Calendar className="h-3.5 w-3.5 text-primary" />
                                                             Periodo de la Actividad (Inicio y Fin)
                                                         </Label>
-                                                        <Badge variant="outline" className="text-[10px] font-mono font-bold text-primary border-primary/30">
-                                                            {estimatedPerformanceSessions} {estimatedPerformanceSessions === 1 ? "sesión" : "sesiones"}
-                                                        </Badge>
+                                                        <div className="flex items-center gap-2">
+                                                            <Badge variant="outline" className="text-[10px] font-semibold text-teal-700 dark:text-teal-400 border-teal-500/30 bg-teal-500/10 flex items-center gap-1">
+                                                                <Lock className="h-3 w-3" /> Vinculado al Curso
+                                                            </Badge>
+                                                            <Badge variant="outline" className="text-[10px] font-mono font-bold text-primary border-primary/30">
+                                                                {estimatedPerformanceSessions} {estimatedPerformanceSessions === 1 ? "sesión" : "sesiones"}
+                                                            </Badge>
+                                                        </div>
                                                     </div>
 
-                                                    <div className="grid grid-cols-2 gap-2.5">
-                                                        <div className="space-y-1">
-                                                            <span className="text-[11px] font-semibold text-muted-foreground">Fecha de Inicio</span>
-                                                            <Input
-                                                                type="date"
-                                                                value={performanceStartDate}
-                                                                onChange={(e) => setPerformanceStartDate(e.target.value)}
-                                                                className="h-8 text-xs font-mono bg-background"
-                                                            />
+                                                    {/* Visualización sin selectores de fecha */}
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                                        <div className="p-3 rounded-lg border border-border/80 bg-muted/20 flex items-center justify-between">
+                                                            <div className="space-y-0.5">
+                                                                <span className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
+                                                                    <Lock className="h-3 w-3 text-teal-600 dark:text-teal-400" /> Fecha de Inicio (Curso)
+                                                                </span>
+                                                                <p className="text-sm font-bold text-foreground capitalize">
+                                                                    {formatCourseDateOnly(courseStartDateStr || performanceStartDate)}
+                                                                </p>
+                                                            </div>
+                                                            <span className="text-xs font-mono text-muted-foreground bg-background px-2 py-1 rounded border border-border/60">
+                                                                {courseStartDateStr || performanceStartDate}
+                                                            </span>
                                                         </div>
-                                                        <div className="space-y-1">
-                                                            <span className="text-[11px] font-semibold text-muted-foreground">Fecha de Fin</span>
-                                                            <Input
-                                                                type="date"
-                                                                value={performanceEndDate}
-                                                                onChange={(e) => setPerformanceEndDate(e.target.value)}
-                                                                className="h-8 text-xs font-mono bg-background"
-                                                            />
+
+                                                        <div className="p-3 rounded-lg border border-border/80 bg-muted/20 flex items-center justify-between">
+                                                            <div className="space-y-0.5">
+                                                                <span className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
+                                                                    <Lock className="h-3 w-3 text-teal-600 dark:text-teal-400" /> Fecha de Fin (Curso)
+                                                                </span>
+                                                                <p className="text-sm font-bold text-foreground capitalize">
+                                                                    {formatCourseDateOnly(courseEndDateStr || performanceEndDate)}
+                                                                </p>
+                                                            </div>
+                                                            <span className="text-xs font-mono text-muted-foreground bg-background px-2 py-1 rounded border border-border/60">
+                                                                {courseEndDateStr || performanceEndDate}
+                                                            </span>
                                                         </div>
                                                     </div>
+                                                    <p className="text-[11px] text-teal-800 dark:text-teal-300 bg-teal-500/10 border border-teal-500/20 rounded-lg p-2.5 flex items-center gap-2">
+                                                        <Lock className="h-3.5 w-3.5 shrink-0 text-teal-600 dark:text-teal-400" />
+                                                        <span>
+                                                            Esta actividad toma automáticamente las fechas del curso. Si se actualiza el periodo en la configuración del curso, la actividad se adaptará sin necesidad de editarla.
+                                                        </span>
+                                                    </p>
                                                 </div>
 
                                                 {/* 2. Días de Clase Aplicables (Lunes a Domingo) */}
@@ -6129,6 +6346,116 @@ function ActivityFormDialog({
 
                                                     <div className="text-[10px] text-muted-foreground/90 bg-muted/30 p-2 rounded leading-snug">
                                                         💡 El profesor puede ajustar libremente la calificación de cada día que no tenga inasistencia, agregar observaciones, calcular el promedio final y visualizar el gráfico de evolución.
+                                                    </div>
+                                                </div>
+
+                                                {/* 4. Criterios de Evaluación y Penalizaciones Diarias (Resta sobre Base 5.0) */}
+                                                <div className="p-3.5 rounded-xl border border-border bg-background space-y-3">
+                                                    <div className="flex items-center justify-between">
+                                                        <Label className="text-xs font-bold flex items-center gap-1.5 text-foreground">
+                                                            <SlidersHorizontal className="h-3.5 w-3.5 text-primary" />
+                                                            Criterios de Evaluación y Penalizaciones Diarias
+                                                        </Label>
+                                                        <Badge variant="outline" className="text-[10px] font-mono font-bold text-primary border-primary/30">
+                                                            {performanceCriteria.length} criterios activos
+                                                        </Badge>
+                                                    </div>
+
+                                                    <p className="text-[11px] text-muted-foreground leading-snug">
+                                                        Define los criterios que el instructor podrá seleccionar para descontar puntos sobre la nota máxima diaria de 5.0 (ej. no usa la camisa institucional, no cumple reglamento). El estudiante los visualizará en el enunciado de la actividad.
+                                                    </p>
+
+                                                    {/* Formulario rápido para añadir criterio */}
+                                                    <div className="p-2.5 rounded-lg border bg-muted/20 space-y-2">
+                                                        <span className="text-[11px] font-bold text-foreground">Añadir Criterio de Penalización:</span>
+                                                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                                                            <div className="sm:col-span-6">
+                                                                <Input
+                                                                    placeholder="Ej: No usa la camisa institucional..."
+                                                                    value={newPerformanceCritName}
+                                                                    onChange={(e) => setNewPerformanceCritName(e.target.value)}
+                                                                    className="h-7 text-xs bg-background"
+                                                                />
+                                                            </div>
+                                                            <div className="sm:col-span-3">
+                                                                <div className="flex items-center gap-1">
+                                                                    <span className="text-[11px] text-rose-600 font-bold">-</span>
+                                                                    <Input
+                                                                        type="number"
+                                                                        min="0.1"
+                                                                        max="5.0"
+                                                                        step="0.1"
+                                                                        placeholder="1.0"
+                                                                        value={newPerformanceCritPenalty}
+                                                                        onChange={(e) => setNewPerformanceCritPenalty(parseFloat(e.target.value) || 0)}
+                                                                        className="h-7 text-xs font-mono font-bold text-center bg-background"
+                                                                    />
+                                                                    <span className="text-[10px] text-muted-foreground">pts</span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="sm:col-span-3 flex justify-end">
+                                                                <Button
+                                                                    type="button"
+                                                                    size="sm"
+                                                                    disabled={!newPerformanceCritName.trim()}
+                                                                    onClick={() => {
+                                                                        if (!newPerformanceCritName.trim()) return;
+                                                                        const newCrit: PerformancePenaltyCriterion = {
+                                                                            id: `crit-${Date.now()}`,
+                                                                            name: newPerformanceCritName.trim(),
+                                                                            penalty: Math.min(5.0, Math.max(0.1, Number(newPerformanceCritPenalty) || 1.0)),
+                                                                            description: newPerformanceCritDesc.trim() || undefined,
+                                                                        };
+                                                                        setPerformanceCriteria(prev => [...prev, newCrit]);
+                                                                        setNewPerformanceCritName("");
+                                                                        setNewPerformanceCritPenalty(1.0);
+                                                                        setNewPerformanceCritDesc("");
+                                                                        toast.success(`Criterio "${newCrit.name}" añadido (-${newCrit.penalty.toFixed(1)} pts)`);
+                                                                    }}
+                                                                    className="h-7 text-xs font-semibold bg-primary text-primary-foreground w-full"
+                                                                >
+                                                                    <Plus className="h-3.5 w-3.5 mr-1" /> Añadir
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Lista de criterios existentes */}
+                                                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                                                        {performanceCriteria.map((crit, idx) => (
+                                                            <div key={crit.id || idx} className="flex items-center justify-between gap-2 p-2 rounded-lg border bg-background text-xs">
+                                                                <div className="flex items-center gap-2 min-w-0">
+                                                                    <span className="font-mono text-[10px] text-muted-foreground w-4 text-center">#{idx + 1}</span>
+                                                                    <span className="font-semibold text-foreground truncate">{crit.name}</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-2 shrink-0">
+                                                                    <Badge variant="outline" className="font-mono text-[10px] bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/30 font-bold">
+                                                                        -{crit.penalty.toFixed(1)} pts
+                                                                    </Badge>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setPerformanceCriteria(prev => prev.filter((_, i) => i !== idx));
+                                                                        }}
+                                                                        className="text-muted-foreground hover:text-destructive p-1 rounded transition-colors"
+                                                                        title="Eliminar criterio"
+                                                                    >
+                                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+
+                                                    {/* Botón para restablecer criterios predeterminados */}
+                                                    <div className="flex items-center justify-between pt-1 border-t border-border/50 text-[11px]">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setPerformanceCriteria(DEFAULT_PERFORMANCE_CRITERIA)}
+                                                            className="text-xs text-primary/80 hover:text-primary underline font-medium cursor-pointer"
+                                                        >
+                                                            Restablecer criterios sugeridos del sistema
+                                                        </button>
                                                     </div>
                                                 </div>
                                             </div>
@@ -8232,11 +8559,13 @@ const getActivityTypeInfo = (type: string) => {
 export function ActivityManager({ 
     courseId, 
     activities, 
-    enrolledStudents = [] 
+    enrolledStudents = [],
+    course,
 }: { 
     courseId: string; 
     activities: any[]; 
     enrolledStudents?: any[]; 
+    course?: any;
 }) {
     const [mounted, setMounted] = useState(false);
     useEffect(() => {
@@ -8791,6 +9120,7 @@ export function ActivityManager({
                 onClose={handleCloseDialog} 
                 courseId={courseId} 
                 activity={editingActivity} 
+                course={course}
                 onOpenActivityGroups={(act) => {
                     setIsDialogOpen(false);
                     setActivityForGroupsModal(act);

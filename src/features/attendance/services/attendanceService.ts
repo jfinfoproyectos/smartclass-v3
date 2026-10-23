@@ -1,6 +1,6 @@
 import { AttendanceStatus } from "@/generated/prisma/client";
 import prisma from "@/lib/prisma";
-import { toUTCStartOfDayFromRegional } from "@/lib/dateUtils";
+import { toUTCStartOfDayFromRegional, isFutureDate } from "@/lib/dateUtils";
 
 
 export const attendanceService = {
@@ -13,6 +13,10 @@ export const attendanceService = {
         justification?: string | null,
         departureTime?: Date | null
     ) {
+        if (isFutureDate(date)) {
+            throw new Error("No es posible registrar ni modificar asistencia en fechas posteriores a la fecha actual.");
+        }
+
         // Normalize date to start of day in UTC using regional timezone to avoid server/local shifts
         const normalizedDate = toUTCStartOfDayFromRegional(date);
 
@@ -71,6 +75,10 @@ export const attendanceService = {
             justification?: string | null 
         }[]
     ) {
+        if (isFutureDate(date)) {
+            throw new Error("No es posible registrar ni modificar asistencia en fechas posteriores a la fecha actual.");
+        }
+
         const normalizedDate = toUTCStartOfDayFromRegional(date);
 
         return await prisma.$transaction(
