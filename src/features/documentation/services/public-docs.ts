@@ -202,7 +202,7 @@ export async function getProjectNavigationTree(projectId: string, includeDrafts 
         if (!map[currentPath]) {
           const node: NavItem & { draft?: boolean } = {
             id: isLast ? page.id : `folder-${currentPath}`,
-            title: isLast ? (page.title || part) : part,
+            title: isLast ? (page.title || part) : part.replace(/^\d+-/, '').split(/[ \-_]/).map(w => w ? (w.charAt(0).toUpperCase() + w.slice(1)) : '').join(' '),
             slug: currentPath,
             type: isLast ? 'file' : 'folder',
             order: isLast ? page.order : (page.categoryOrder || 0),

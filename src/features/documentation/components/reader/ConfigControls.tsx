@@ -3,7 +3,8 @@
 import React from "react";
 import { CodeThemeSelector } from "./CodeThemeSelector";
 import { ModeToggle } from "@/components/theme/ModeToggle";
-import { PaperModeToggle } from "@/components/theme/PaperModeToggle";
+import { PaperModeToggle, PaperSimulationSlider, usePaperMode } from "@/components/theme/PaperModeToggle";
+import { Slider } from "@/components/ui/slider";
 import { ThemeSelector } from "@/components/theme/ThemeSelector";
 import { ThemeInfo } from "@/app/actions/themes";
 import { CreditsModal } from "@/components/CreditsModal";
@@ -54,6 +55,7 @@ export function ConfigControls({
   isSidebarOpen, 
   toggleSidebar
 }: ConfigControlsProps) {
+  const { isPaperMode, paperWarmth, updatePaperWarmth } = usePaperMode();
   const showModeToggle = courseSettings.themeMode === "STUDENT";
   const showCodeThemeSelector = courseSettings.allowCodeThemeChange;
   const showThemeSelector = courseSettings.allowThemeColorChange;
@@ -74,6 +76,7 @@ export function ConfigControls({
     try {
       const { pdf } = await import("@react-pdf/renderer");
       const { DocPagePDF } = await import("./DocPagePDF");
+      const { renderMermaidDiagramsForPdf } = await import("../pdf/mermaidPdfRenderer");
 
       // 1. Obtener el Markdown real de la lección / página
       let markdown = rawContent;
@@ -136,12 +139,16 @@ export function ConfigControls({
         markdown = fallbackLines.join("\n");
       }
 
+      // Pre-renderizar diagramas de arquitectura y flujo Mermaid para incrustar en el PDF
+      const mermaidImages = await renderMermaidDiagramsForPdf(markdown || "");
+
       const blob = await pdf(
         <DocPagePDF
           projectName={projectName || "SmartClass"}
           pageTitle={title}
           category={category}
           markdownContent={markdown}
+          mermaidImages={mermaidImages}
         />
       ).toBlob();
 
@@ -204,9 +211,10 @@ export function ConfigControls({
     <div className="flex items-center gap-1.5 sm:gap-2">
       {/* Desktop Controls (Visible only on lg and up) */}
       <div className="hidden lg:flex items-center gap-1.5 sm:gap-2">
-        {showThemeSelector && <ThemeSelector themes={themes} />}
-        {showCodeThemeSelector && <CodeThemeSelector currentTheme={currentCodeTheme} />}
-        {showModeToggle && <ModeToggle />}
+        {showThemeSelector && !isPaperMode && <ThemeSelector themes={themes} />}
+        {showCodeThemeSelector && !isPaperMode && <CodeThemeSelector currentTheme={currentCodeTheme} />}
+        {showModeToggle && !isPaperMode && <ModeToggle />}
+        {isPaperMode && <PaperSimulationSlider />}
         <PaperModeToggle />
 
         {/* Font Size Accessibility Controls */}
@@ -321,13 +329,38 @@ export function ConfigControls({
         <div className="flex items-center justify-between gap-2">
           <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Apariencia</span>
           <div className="flex items-center gap-1.5">
-            {showThemeSelector && <ThemeSelector themes={themes} />}
-            {showModeToggle && <ModeToggle />}
+            {showThemeSelector && !isPaperMode && <ThemeSelector themes={themes} />}
+            {showModeToggle && !isPaperMode && <ModeToggle />}
+            <PaperModeToggle />
           </div>
         </div>
 
+        {/* Paper Simulation Slider in mobile dropdown */}
+        {isPaperMode && (
+          <div className="flex flex-col gap-1.5 p-2 rounded-xl bg-[#945327]/10 dark:bg-[#945327]/15 border border-[#945327]/25">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#945327]">Simulación de Papel</span>
+              <span className="text-[10px] font-black text-[#945327]">{paperWarmth}%</span>
+            </div>
+            <Slider
+              value={[paperWarmth]}
+              min={0}
+              max={100}
+              step={1}
+              onValueChange={(vals) => updatePaperWarmth(vals[0])}
+              className="cursor-pointer my-1"
+              aria-label="Simulación del papel"
+            />
+            <div className="flex justify-between text-[8px] font-bold uppercase tracking-widest text-[#945327]/70">
+              <span>Natural</span>
+              <span>Sepia</span>
+              <span>Vintage</span>
+            </div>
+          </div>
+        )}
+
         {/* Code Theme selection row */}
-        {showCodeThemeSelector && (
+        {showCodeThemeSelector && !isPaperMode && (
           <div className="flex items-center justify-between gap-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Editor de Código</span>
             <CodeThemeSelector currentTheme={currentCodeTheme} />

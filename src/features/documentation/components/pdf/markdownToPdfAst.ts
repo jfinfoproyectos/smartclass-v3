@@ -582,36 +582,96 @@ export interface InlineToken {
 export function parseInlineFormatting(text: string): InlineToken[] {
   if (!text) return [];
 
-  const sanitized = cleanPdfText(text);
+  // Reemplazar saltos de línea HTML y entidades
+  let sanitized = text
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"');
+
+  sanitized = cleanPdfText(sanitized);
   if (!sanitized) return [];
 
-  // Regex para detectar `código`, **negrita**, *cursiva*, __negrita__, _cursiva_, y [enlace](url)
-  const pattern = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|__[^_]+__|_[^_]+_|\[[^\]]+\]\([^\)]+\))/g;
+  // Regex para detectar `código` (1 a 3 backticks), <code>código</code>, ***negrita cursiva***,
+  // **negrita**, __negrita__, <b>negrita</b>, <strong>negrita</strong>,
+  // *cursiva*, _cursiva_, <i>cursiva</i>, <em>cursiva</em>, y [enlace](url)
+  const pattern = /(<code>[\s\S]*?<\/code>|`{1,3}[^`\n]+`{1,3}|\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|__[^_]+__|<b>[\s\S]*?<\/b>|<strong>[\s\S]*?<\/strong>|\*[^*]+\*|_[^_]+_|<i>[\s\S]*?<\/i>|<em>[\s\S]*?<\/em>|\[[^\]]+\]\([^\)]+\))/g;
   const parts = sanitized.split(pattern);
   const result: InlineToken[] = [];
 
   for (const part of parts) {
     if (!part) continue;
 
-    if (part.startsWith("`") && part.endsWith("`") && part.length > 2) {
-      result.push({ text: part.slice(1, -1), code: true });
-    } else if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
+    // 1. Código HTML <code>...</code>
+    if (part.startsWith("<code>") && part.endsWith("</code>")) {
+      const codeContent = part.slice(6, -7).trim();
+      if (codeContent) result.push({ text: codeContent, code: true });
+      continue;
+    }
+
+    // 2. Bloque de código inline con backticks `...`, ``...`` o ```...```
+    const codeMatch = part.match(/^(`{1,3})([\s\S]+?)\1$/);
+    if (codeMatch) {
+      const codeContent = codeMatch[2].trim();
+      if (codeContent) result.push({ text: codeContent, code: true });
+      continue;
+    }
+
+    // 3. Negrita y Cursiva ***...***
+    if (part.startsWith("***") && part.endsWith("***") && part.length > 6) {
+      result.push({ text: part.slice(3, -3), bold: true, italic: true });
+      continue;
+    }
+
+    // 4. Negrita **...**, __...__, <b>...</b>, <strong>...</strong>
+    if (
+      (part.startsWith("**") && part.endsWith("**") && part.length > 4) ||
+      (part.startsWith("__") && part.endsWith("__") && part.length > 4)
+    ) {
       result.push({ text: part.slice(2, -2), bold: true });
-    } else if (part.startsWith("__") && part.endsWith("__") && part.length > 4) {
-      result.push({ text: part.slice(2, -2), bold: true });
-    } else if (part.startsWith("*") && part.endsWith("*") && part.length > 2) {
+      continue;
+    }
+    if (part.startsWith("<b>") && part.endsWith("</b>")) {
+      result.push({ text: part.slice(3, -4), bold: true });
+      continue;
+    }
+    if (part.startsWith("<strong>") && part.endsWith("</strong>")) {
+      result.push({ text: part.slice(8, -9), bold: true });
+      continue;
+    }
+
+    // 5. Cursiva *...*, _..._, <i>...</i>, <em>...</em>
+    if (
+      (part.startsWith("*") && part.endsWith("*") && part.length > 2) ||
+      (part.startsWith("_") && part.endsWith("_") && part.length > 2)
+    ) {
       result.push({ text: part.slice(1, -1), italic: true });
-    } else if (part.startsWith("_") && part.endsWith("_") && part.length > 2) {
-      result.push({ text: part.slice(1, -1), italic: true });
-    } else if (part.startsWith("[") && part.includes("](") && part.endsWith(")")) {
+      continue;
+    }
+    if (part.startsWith("<i>") && part.endsWith("</i>")) {
+      result.push({ text: part.slice(3, -4), italic: true });
+      continue;
+    }
+    if (part.startsWith("<em>") && part.endsWith("</em>")) {
+      result.push({ text: part.slice(4, -5), italic: true });
+      continue;
+    }
+
+    // 6. Hipervínculos Markdown [texto](url)
+    if (part.startsWith("[") && part.includes("](") && part.endsWith(")")) {
       const linkMatch = part.match(/^\[([^\]]+)\]\(([^\)]+)\)$/);
       if (linkMatch) {
         result.push({ text: linkMatch[1], bold: true });
-      } else {
-        result.push({ text: part });
+        continue;
       }
-    } else {
-      result.push({ text: part });
+    }
+
+    // 7. Texto normal (limpiar backticks sueltos no cerrados si los hubiera)
+    const cleanText = part.replace(/^`+|`+$/g, "");
+    if (cleanText) {
+      result.push({ text: cleanText });
     }
   }
 
@@ -630,6 +690,7 @@ export type SectionType =
   | 'ordered-list' 
   | 'table' 
   | 'image'
+  | 'diagram'
   | 'divider';
 
 export interface EditorialSection {
@@ -645,12 +706,19 @@ export interface EditorialSection {
   items?: Array<{ number?: number; inlineTokens: InlineToken[] }>;
   tableHeaders?: string[];
   tableRows?: string[][];
+  tableHeaderTokens?: InlineToken[][];
+  tableRowTokens?: InlineToken[][][];
+  diagramImageUrl?: string;
+  diagramCode?: string;
 }
 
 /**
  * Parser de Markdown robusto y completo que convierte texto plano en secciones para el PDF editorial y corporativo.
  */
-export function parseMarkdownToEditorialSections(markdown: string): EditorialSection[] {
+export function parseMarkdownToEditorialSections(
+  markdown: string, 
+  mermaidImages?: Record<string, string>
+): EditorialSection[] {
   if (!markdown) return [];
 
   // 0. Quitar Frontmatter (YAML inicial delimitado por ---) si existe
@@ -674,6 +742,231 @@ export function parseMarkdownToEditorialSections(markdown: string): EditorialSec
     // 1. Líneas vacías
     if (!trimmed) {
       i++;
+      continue;
+    }
+
+    // 0. Comentarios HTML y Bloques Interactivos SmartClass (<!-- ... -->)
+    if (trimmed.startsWith("<!--")) {
+      const typeMatch = trimmed.match(/^<!--\s*([a-zA-Z0-9_\-]+)/i);
+      const blockType = typeMatch ? typeMatch[1].toLowerCase() : "comment";
+
+      let commentRaw = "";
+      if (trimmed.endsWith("-->") && trimmed.length > 7 && !trimmed.slice(4, -3).includes("-->")) {
+        commentRaw = trimmed;
+        i++;
+      } else {
+        const commentLines: string[] = [line];
+        i++;
+        
+        let depth = 0;
+        let seenOpenBrace = false;
+        let inString = false;
+        let escape = false;
+        let closed = false;
+
+        // Inspeccionar primera línea
+        for (let c = 0; c < line.length; c++) {
+          const ch = line[c];
+          if (escape) { escape = false; continue; }
+          if (ch === "\\") { escape = true; continue; }
+          if (ch === '"') { inString = !inString; continue; }
+          if (!inString) {
+            if (ch === "{") { depth++; seenOpenBrace = true; }
+            else if (ch === "}") { depth--; }
+          }
+        }
+
+        while (i < rawLines.length && !closed) {
+          const curr = rawLines[i];
+          commentLines.push(curr);
+
+          for (let c = 0; c < curr.length; c++) {
+            const ch = curr[c];
+            if (escape) { escape = false; continue; }
+            if (ch === "\\") { escape = true; continue; }
+            if (ch === '"') { inString = !inString; continue; }
+            if (!inString) {
+              if (ch === "{") { depth++; seenOpenBrace = true; }
+              else if (ch === "}") { depth--; }
+            }
+          }
+
+          i++;
+          if (seenOpenBrace) {
+            if (depth <= 0 && curr.includes("-->")) {
+              closed = true;
+            }
+          } else {
+            if (curr.trim().endsWith("-->")) {
+              closed = true;
+            }
+          }
+        }
+        commentRaw = commentLines.join("\n");
+      }
+
+      // Procesar diagramas Mermaid serializados en comentarios HTML
+      if (blockType === "mermaid") {
+        let chart = "";
+        const braceIdx = commentRaw.indexOf("{");
+        if (braceIdx !== -1) {
+          try {
+            const lastBrace = commentRaw.lastIndexOf("}");
+            if (lastBrace > braceIdx) {
+              const jsonSub = commentRaw.slice(braceIdx, lastBrace + 1);
+              const parsed = JSON.parse(jsonSub);
+              if (parsed?.chart) chart = parsed.chart;
+            }
+          } catch {
+            const chartMatch = commentRaw.match(/"chart"\s*:\s*"((?:\\.|[^"\\])*)"/);
+            if (chartMatch) {
+              try {
+                chart = JSON.parse(`"${chartMatch[1]}"`);
+              } catch {
+                chart = chartMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"');
+              }
+            }
+          }
+        }
+
+        if (!chart) {
+          const m = commentRaw.match(/<!--\s*mermaid\s*([\s\S]*?)-->/i);
+          if (m && m[1].trim()) {
+            chart = m[1].trim();
+          }
+        }
+
+        if (chart) {
+          const normChart = chart.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+          const imgUrl = mermaidImages?.[chart] 
+            || mermaidImages?.[normChart] 
+            || mermaidImages?.[chart.trim()]
+            || Object.entries(mermaidImages || {}).find(([k]) => k.includes(normChart) || normChart.includes(k))?.[1];
+
+          sections.push({
+            type: 'diagram',
+            title: 'Diagrama de Arquitectura / Flujo',
+            diagramCode: normChart,
+            diagramImageUrl: imgUrl,
+          });
+        }
+        continue;
+      }
+
+      // Procesar otros bloques interactivos para que no se pierdan en el PDF
+      try {
+        const braceIdx = commentRaw.indexOf("{");
+        const lastBrace = commentRaw.lastIndexOf("}");
+        if (braceIdx !== -1 && lastBrace > braceIdx) {
+          const jsonSub = commentRaw.slice(braceIdx, lastBrace + 1);
+          const data = JSON.parse(jsonSub);
+
+          if (blockType === "quiz" && data.question) {
+            const options = (data.options || []).map((opt: string, idx: number) => {
+              const letter = String.fromCharCode(65 + idx);
+              return {
+                inlineTokens: parseInlineFormatting(`(${letter}) ${opt}${data.correctIndex === idx ? " (Respuesta correcta)" : ""}`)
+              };
+            });
+
+            sections.push({
+              type: 'callout',
+              calloutType: 'IMPORTANT',
+              calloutTitle: 'CUESTIONARIO DE EVALUACIÓN',
+              calloutTokens: parseInlineFormatting(`**Pregunta:** ${data.question}${data.explanation ? `\n\n*Explicación:* ${data.explanation}` : ""}`),
+            });
+            if (options.length > 0) {
+              sections.push({
+                type: 'list',
+                items: options,
+              });
+            }
+            continue;
+          }
+
+          if (blockType === "accordion" && Array.isArray(data.items)) {
+            data.items.forEach((item: any) => {
+              if (item.title) {
+                sections.push({ type: 'h4', title: cleanPdfText(item.title) });
+              }
+              if (item.content) {
+                sections.push({
+                  type: 'paragraph',
+                  inlineTokens: parseInlineFormatting(item.content),
+                });
+              }
+            });
+            continue;
+          }
+
+          if (blockType === "steplist" && Array.isArray(data.steps)) {
+            const stepItems = data.steps.map((st: any, idx: number) => ({
+              number: idx + 1,
+              inlineTokens: parseInlineFormatting(`**${st.title || `Paso ${idx + 1}`}**: ${st.text || ""}`)
+            }));
+            sections.push({
+              type: 'ordered-list',
+              items: stepItems,
+            });
+            continue;
+          }
+
+          if (blockType === "featuregrid" && Array.isArray(data.items)) {
+            const featItems = data.items.map((it: any) => ({
+              inlineTokens: parseInlineFormatting(`**${it.title || "Característica"}**: ${it.text || ""}`)
+            }));
+            sections.push({
+              type: 'list',
+              items: featItems,
+            });
+            continue;
+          }
+
+          if (blockType === "card" && data.title) {
+            sections.push({
+              type: 'callout',
+              calloutType: 'TIP',
+              calloutTitle: cleanPdfText(data.title),
+              calloutTokens: parseInlineFormatting(`${data.description || ""}${data.url ? `\n\n*Enlace:* ${data.url}` : ""}`),
+            });
+            continue;
+          }
+
+          if (blockType === "codeexplain" && data.code) {
+            const lines = tokenizeCodeToLines(data.code, data.language || "javascript");
+            sections.push({
+              type: 'code',
+              language: (data.language || "CODE").toUpperCase(),
+              codeLines: lines,
+            });
+            if (Array.isArray(data.steps)) {
+              const explainItems = data.steps.map((st: any, idx: number) => ({
+                number: idx + 1,
+                inlineTokens: parseInlineFormatting(`**${st.title || `Paso ${idx + 1}`}**: ${st.content || ""}`)
+              }));
+              sections.push({
+                type: 'ordered-list',
+                items: explainItems,
+              });
+            }
+            continue;
+          }
+
+          if (blockType === "image" && data.url) {
+            sections.push({
+              type: 'image',
+              url: data.url,
+              title: cleanPdfText(data.alt || "Imagen ilustrativa"),
+            });
+            continue;
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to parse custom comment block for PDF:", err);
+      }
+
+      // Si no fue reconocido o es un comentario HTML regular, omitirlo.
+      // NUNCA permitir que se filtre a los párrafos del PDF.
       continue;
     }
 
@@ -712,6 +1005,24 @@ export function parseMarkdownToEditorialSections(markdown: string): EditorialSec
       }
 
       const fullCode = codeLinesRaw.join("\n");
+
+      // Si el bloque de código es de tipo Mermaid (```mermaid ... ```)
+      if (language.toLowerCase() === "mermaid") {
+        const normChart = fullCode.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+        const imgUrl = mermaidImages?.[fullCode]
+          || mermaidImages?.[normChart]
+          || mermaidImages?.[fullCode.trim()]
+          || Object.entries(mermaidImages || {}).find(([k]) => k.includes(normChart) || normChart.includes(k))?.[1];
+
+        sections.push({
+          type: 'diagram',
+          title: 'Diagrama de Arquitectura / Flujo',
+          diagramCode: normChart,
+          diagramImageUrl: imgUrl,
+        });
+        continue;
+      }
+
       const lines = tokenizeCodeToLines(fullCode, language);
 
       sections.push({
@@ -798,17 +1109,23 @@ export function parseMarkdownToEditorialSections(markdown: string): EditorialSec
       }
 
       if (tableLines.length >= 2) {
-        const splitRow = (rowStr: string) => 
-          rowStr.slice(1, -1).split("|").map(cell => cleanPdfText(cell));
+        const splitRow = (rowStr: string) => {
+          const inner = rowStr.replace(/^\|/, "").replace(/\|$/, "");
+          return inner.split("|").map(cell => cleanPdfText(cell));
+        };
 
         const headers = splitRow(tableLines[0]);
         // Ignorar fila de separadores |---|---|
-        const dataRows = tableLines.slice(2).map(splitRow);
+        const hasDivider = /^\|?(\s*:?-+:?\s*\|)+\s*:?-+:?\s*\|?$/.test(tableLines[1]);
+        const dataLines = hasDivider ? tableLines.slice(2) : tableLines.slice(1);
+        const dataRows = dataLines.map(splitRow);
 
         sections.push({
           type: 'table',
           tableHeaders: headers,
           tableRows: dataRows,
+          tableHeaderTokens: headers.map(h => parseInlineFormatting(h)),
+          tableRowTokens: dataRows.map(row => row.map(cell => parseInlineFormatting(cell))),
         });
         continue;
       }
@@ -865,6 +1182,7 @@ export function parseMarkdownToEditorialSections(markdown: string): EditorialSec
       !rawLines[i].trim().startsWith("#") &&
       !rawLines[i].trim().startsWith("```") &&
       !rawLines[i].trim().startsWith(">") &&
+      !rawLines[i].trim().startsWith("<!--") &&
       !/^[\*\-\+]\s+/.test(rawLines[i].trim()) &&
       !/^\d+[\.\)]\s+/.test(rawLines[i].trim()) &&
       !/^(\-{3,}|\*{3,}|_{3,})$/.test(rawLines[i].trim()) &&
@@ -876,10 +1194,14 @@ export function parseMarkdownToEditorialSections(markdown: string): EditorialSec
 
     if (paragraphLines.length > 0) {
       const fullParagraph = paragraphLines.join(" ");
-      sections.push({
-        type: 'paragraph',
-        inlineTokens: parseInlineFormatting(fullParagraph),
-      });
+      // Verificación de seguridad adicional: filtrar cualquier bloque o etiqueta HTML de comentario residual
+      const cleanParagraph = fullParagraph.replace(/<!--[\s\S]*?-->/g, "").trim();
+      if (cleanParagraph) {
+        sections.push({
+          type: 'paragraph',
+          inlineTokens: parseInlineFormatting(cleanParagraph),
+        });
+      }
     }
   }
 

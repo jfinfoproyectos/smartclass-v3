@@ -313,9 +313,28 @@ export function ExportBookDialog({ projectId, projectName, trigger }: ExportBook
       // Carga dinámica de @react-pdf/renderer y el componente del libro
       const { pdf } = await import("@react-pdf/renderer");
       const { EditorialBookPDF } = await import("./EditorialBookPDF");
+      const { renderMermaidDiagramsForPdf } = await import("./mermaidPdfRenderer");
+
+      setProgressStage("Renderizando diagramas de flujo y arquitectura Mermaid...");
+      const allMarkdown = [
+        customizedBookData.intro?.content || "",
+        ...customizedBookData.chapters.flatMap((ch) => [
+          ch.introContent || "",
+          ...ch.lessons.map((les) => les.content || "")
+        ])
+      ].join("\n\n");
+
+      let mermaidImages: Record<string, string> = {};
+      try {
+        mermaidImages = await renderMermaidDiagramsForPdf(allMarkdown);
+      } catch (mErr) {
+        console.warn("Error al renderizar diagramas Mermaid para el libro:", mErr);
+      }
 
       setProgressStage("Generando archivo binario PDF con marcadores e hipervínculos...");
-      const blob = await pdf(<EditorialBookPDF bookData={customizedBookData} />).toBlob();
+      const blob = await pdf(
+        <EditorialBookPDF bookData={customizedBookData} mermaidImages={mermaidImages} />
+      ).toBlob();
 
       // Disparar descarga automática en el navegador
       const url = URL.createObjectURL(blob);

@@ -13,7 +13,7 @@ import {
 import { ThemeSelector } from "@/components/theme/ThemeSelector";
 import { CodeThemeSelector } from "@/components/theme/CodeThemeSelector";
 import { ModeToggle } from "@/components/theme/ModeToggle";
-import { PaperModeToggle } from "@/components/theme/PaperModeToggle";
+import { PaperModeToggle, PaperSimulationSlider, usePaperMode } from "@/components/theme/PaperModeToggle";
 import { CreditsModal } from "@/components/CreditsModal";
 
 interface MobileSettingsMenuProps {
@@ -24,6 +24,7 @@ interface MobileSettingsMenuProps {
 
 export function MobileSettingsMenu({ themes, showThemeSelector, showModeToggle }: MobileSettingsMenuProps) {
   const [mounted, setMounted] = useState(false);
+  const { isPaperMode } = usePaperMode();
 
   useEffect(() => {
     setMounted(true);
@@ -49,13 +50,13 @@ export function MobileSettingsMenu({ themes, showThemeSelector, showModeToggle }
         <DropdownMenuLabel className="text-[10px] uppercase tracking-widest opacity-50">Preferencias</DropdownMenuLabel>
         <DropdownMenuSeparator />
         
-        {showThemeSelector && (
+        {showThemeSelector && !isPaperMode && (
           <ThemeSelector themes={themes} asSubMenu={true} />
         )}
 
-        <CodeThemeSelector asSubMenu={true} />
+        {!isPaperMode && <CodeThemeSelector asSubMenu={true} />}
         
-        {showModeToggle && (
+        {showModeToggle && !isPaperMode && (
           <ModeToggle asMenuItem={true} />
         )}
         
@@ -63,6 +64,12 @@ export function MobileSettingsMenu({ themes, showThemeSelector, showModeToggle }
           <span className="text-xs font-medium">Modo Papel</span>
           <PaperModeToggle />
         </div>
+
+        {isPaperMode && (
+          <div className="px-2 py-1">
+            <PaperSimulationSlider className="w-full justify-between" />
+          </div>
+        )}
         
         <DropdownMenuSeparator />
         

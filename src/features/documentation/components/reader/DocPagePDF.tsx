@@ -1,9 +1,10 @@
 import React from "react";
-import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
+import { Document, Page, Text, View, StyleSheet, Image } from "@react-pdf/renderer";
 import { 
   parseMarkdownToEditorialSections, 
   getTokenColor, 
   cleanPdfText,
+  parseInlineFormatting,
   EditorialSection, 
   InlineToken 
 } from "../pdf/markdownToPdfAst";
@@ -19,6 +20,7 @@ export interface DocPagePDFProps {
   dateStr?: string;
   markdownContent?: string;
   sections?: EditorialSection[];
+  mermaidImages?: Record<string, string>;
 }
 
 const COLORS = {
@@ -381,6 +383,49 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.border,
     marginVertical: 12,
   },
+  // Diagram Card (Mermaid)
+  diagramCard: {
+    backgroundColor: COLORS.surfaceAlt,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: COLORS.borderDark,
+    marginVertical: 10,
+    overflow: "hidden",
+  },
+  diagramHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#f1f5f9",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  diagramBadge: {
+    fontSize: 7.2,
+    fontFamily: "Helvetica-Bold",
+    color: COLORS.accent,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  diagramBody: {
+    padding: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#ffffff",
+  },
+  diagramImage: {
+    maxWidth: 480,
+    maxHeight: 280,
+    objectFit: "contain",
+  },
+  diagramFallbackText: {
+    fontSize: 7.2,
+    fontFamily: "Courier",
+    color: COLORS.textMuted,
+    lineHeight: 1.3,
+  },
   // Repeating Footer
   fixedFooter: {
     position: "absolute",
@@ -408,6 +453,7 @@ export function DocPagePDF({
   dateStr,
   markdownContent,
   sections,
+  mermaidImages,
 }: DocPagePDFProps) {
   const cleanTitle = cleanPdfText(pageTitle) || "Documento Técnico";
   const cleanProject = cleanPdfText(projectName) || "SmartClass";
@@ -419,7 +465,7 @@ export function DocPagePDF({
   });
 
   const parsedSections = markdownContent 
-    ? parseMarkdownToEditorialSections(markdownContent)
+    ? parseMarkdownToEditorialSections(markdownContent, mermaidImages)
     : (sections || []);
 
   return (
@@ -705,11 +751,31 @@ export function DocPagePDF({
                 <View key={idx} style={styles.tableContainer} wrap={true}>
                   {headers.length > 0 && (
                     <View style={styles.tableHeaderRow}>
-                      {headers.map((h, hIdx) => (
-                        <Text key={hIdx} style={[styles.tableHeaderCell, { width: colWidth }]}>
-                          {h}
-                        </Text>
-                      ))}
+                      {headers.map((h, hIdx) => {
+                        const tokens = sec.tableHeaderTokens?.[hIdx] || parseInlineFormatting(h);
+                        return (
+                          <View key={hIdx} style={{ width: colWidth, paddingRight: 4 }}>
+                            <Text style={styles.tableHeaderCell}>
+                              {tokens.map((tok, tIdx) => (
+                                <Text
+                                  key={tIdx}
+                                  style={
+                                    tok.bold
+                                      ? styles.bold
+                                      : tok.italic
+                                      ? styles.italic
+                                      : tok.code
+                                      ? styles.inlineCode
+                                      : undefined
+                                  }
+                                >
+                                  {tok.text}
+                                </Text>
+                              ))}
+                            </Text>
+                          </View>
+                        );
+                      })}
                     </View>
                   )}
                   {rows.map((row, rIdx) => (
@@ -721,13 +787,62 @@ export function DocPagePDF({
                       ]}
                       wrap={false}
                     >
-                      {row.map((cell, cIdx) => (
-                        <Text key={cIdx} style={[styles.tableDataCell, { width: colWidth }]}>
-                          {cell}
-                        </Text>
-                      ))}
+                      {row.map((cell, cIdx) => {
+                        const tokens = sec.tableRowTokens?.[rIdx]?.[cIdx] || parseInlineFormatting(cell);
+                        return (
+                          <View key={cIdx} style={{ width: colWidth, paddingRight: 4 }}>
+                            <Text style={styles.tableDataCell}>
+                              {tokens.map((tok, tIdx) => (
+                                <Text
+                                  key={tIdx}
+                                  style={
+                                    tok.bold
+                                      ? styles.bold
+                                      : tok.italic
+                                      ? styles.italic
+                                      : tok.code
+                                      ? styles.inlineCode
+                                      : undefined
+                                  }
+                                >
+                                  {tok.text}
+                                </Text>
+                              ))}
+                            </Text>
+                          </View>
+                        );
+                      })}
                     </View>
                   ))}
+                </View>
+              );
+            }
+
+            case 'diagram': {
+              return (
+                <View key={idx} style={styles.diagramCard} wrap={false}>
+                  <View style={styles.diagramHeader}>
+                    <Text style={styles.diagramBadge}>
+                      {cleanPdfText(sec.title || "DIAGRAMA CONCEPTUAL / ARQUITECTURA")}
+                    </Text>
+                    <Text style={{ fontSize: 6.5, color: COLORS.textMuted, fontFamily: "Helvetica" }}>
+                      Mermaid Engine
+                    </Text>
+                  </View>
+                  <View style={styles.diagramBody}>
+                    {sec.diagramImageUrl ? (
+                      <Image src={sec.diagramImageUrl} style={styles.diagramImage} />
+                    ) : (
+                      <View style={{ width: "100%", padding: 6, backgroundColor: "#f8fafc", borderRadius: 4 }}>
+                        <Text style={{ fontSize: 7, fontFamily: "Helvetica-Bold", color: COLORS.accent, marginBottom: 4 }}>
+                          Código del Diagrama Mermaid:
+                        </Text>
+                        <Text style={styles.diagramFallbackText}>
+                          {sec.diagramCode || "Diagrama no disponible"}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
               );
             }

@@ -51,6 +51,30 @@ function collectActiveFolderIds(nodes: NavItem[], activeSlug: string): string[] 
   return result;
 }
 
+function formatTopicDisplayTitle(title: string): string {
+  if (!title) return "";
+  // If the title already has lowercase letters, the author intentionally chose its casing
+  if (/[a-z]/.test(title)) {
+    return title;
+  }
+  
+  // If the title is strictly all-uppercase (e.g. "HERRAMIENTAS TIC" or "FUNDAMENTOS DE ARQUITECTURA DE APIS Y COMUNICACIÓN")
+  const stopWords = new Set(["de", "del", "la", "las", "el", "los", "en", "y", "a", "por", "para", "con", "sin", "o", "u"]);
+  const acronyms = new Set(["api", "apis", "tic", "tics", "css", "html", "js", "ts", "sql", "ui", "ux", "ai", "ia", "pdf", "git", "url", "http", "https", "rest", "json"]);
+  
+  const words = title.split(/\s+/);
+  return words.map((w, index) => {
+    const cleanWord = w.toLowerCase().replace(/[^a-záéíóúüñ]/g, "");
+    if (acronyms.has(cleanWord)) {
+      return w.toUpperCase();
+    }
+    if (index > 0 && stopWords.has(cleanWord)) {
+      return w.toLowerCase();
+    }
+    return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+  }).join(" ");
+}
+
 function NavNode({ 
   node, 
   projectId, 
@@ -118,8 +142,8 @@ function NavNode({
             >
               {node.icon && <DynamicIcon icon={node.icon} className="w-3.5 h-3.5 mt-0.5 shrink-0" />}
               <div className="flex-1 min-w-0 flex flex-col items-start gap-1">
-                <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-left whitespace-normal break-words leading-tight">
-                  {node.title}
+                <span className="text-xs font-semibold tracking-tight text-left whitespace-normal break-words leading-snug">
+                  {formatTopicDisplayTitle(node.title)}
                 </span>
                 {isFolderScheduled && (
                   <span 
@@ -139,8 +163,8 @@ function NavNode({
               className="flex-1 flex items-start gap-2 py-1.5 text-muted-foreground/80 hover:text-primary transition-all text-left cursor-pointer"
             >
               <div className="flex-1 min-w-0 flex flex-col items-start gap-1">
-                <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-left whitespace-normal break-words leading-tight">
-                  {node.title}
+                <span className="text-xs font-semibold tracking-tight text-left whitespace-normal break-words leading-snug">
+                  {formatTopicDisplayTitle(node.title)}
                 </span>
                 {isFolderScheduled && (
                   <span 
@@ -217,7 +241,7 @@ function NavNode({
         
         <div className="flex-1 min-w-0 flex flex-col items-start gap-1">
           <span className="tracking-tight text-left whitespace-normal break-words leading-snug w-full">
-            {node.title}
+            {formatTopicDisplayTitle(node.title)}
           </span>
           
           {isScheduled && (

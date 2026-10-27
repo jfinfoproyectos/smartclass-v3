@@ -4,6 +4,7 @@ import {
   parseMarkdownToEditorialSections, 
   getTokenColor, 
   cleanPdfText,
+  parseInlineFormatting,
   EditorialSection, 
   InlineToken,
   getCodeThemePalette,
@@ -33,6 +34,7 @@ export interface EditorialBookData {
   logoUrl?: string;
   createdAt?: string;
   themeConfig?: EditorialThemeConfig;
+  mermaidImages?: Record<string, string>;
   intro?: {
     title: string;
     content: string;
@@ -660,6 +662,66 @@ function buildEditorialStyles(COLORS: EditorialColors) {
     backgroundColor: COLORS.border,
     marginVertical: 12,
   },
+
+  // Tarjeta de Diagramas Mermaid
+  diagramCard: {
+    backgroundColor: COLORS.surfaceAlt,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginVertical: 10,
+    overflow: "hidden",
+  },
+  diagramHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: COLORS.surfaceAlt,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  diagramBadge: {
+    fontSize: 7.5,
+    fontFamily: "Helvetica-Bold",
+    color: COLORS.accent,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  diagramBody: {
+    padding: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#ffffff",
+  },
+  diagramImage: {
+    maxWidth: 480,
+    maxHeight: 280,
+    objectFit: "contain",
+  },
+  diagramHeaderRight: {
+    fontSize: 7,
+    color: COLORS.textMuted,
+  },
+  diagramFallbackContainer: {
+    width: "100%",
+    padding: 6,
+    backgroundColor: COLORS.surfaceAlt,
+    borderRadius: 4,
+  },
+  diagramFallbackTitle: {
+    fontSize: 7,
+    fontFamily: "Helvetica-Bold",
+    color: COLORS.accent,
+    marginBottom: 4,
+  },
+  diagramFallbackText: {
+    fontSize: 7.5,
+    fontFamily: "Courier",
+    color: COLORS.textMuted,
+    lineHeight: 1.3,
+  },
   });
 }
 
@@ -904,11 +966,31 @@ function SectionRenderer({
               <View key={idx} style={styles.tableContainer} wrap={true}>
                 {headers.length > 0 && (
                   <View style={styles.tableHeaderRow}>
-                    {headers.map((h, hIdx) => (
-                      <Text key={hIdx} style={[styles.tableHeaderCell, { width: colWidth }]}>
-                        {h}
-                      </Text>
-                    ))}
+                    {headers.map((h, hIdx) => {
+                      const tokens = sec.tableHeaderTokens?.[hIdx] || parseInlineFormatting(h);
+                      return (
+                        <View key={hIdx} style={{ width: colWidth, paddingRight: 4 }}>
+                          <Text style={styles.tableHeaderCell}>
+                            {tokens.map((tok, tIdx) => (
+                              <Text
+                                key={tIdx}
+                                style={
+                                  tok.bold
+                                    ? styles.bold
+                                    : tok.italic
+                                    ? styles.italic
+                                    : tok.code
+                                    ? styles.inlineCode
+                                    : undefined
+                                }
+                              >
+                                {tok.text}
+                              </Text>
+                            ))}
+                          </Text>
+                        </View>
+                      );
+                    })}
                   </View>
                 )}
                 {rows.map((row, rIdx) => (
@@ -920,13 +1002,62 @@ function SectionRenderer({
                     ]}
                     wrap={false}
                   >
-                    {row.map((cell, cIdx) => (
-                      <Text key={cIdx} style={[styles.tableDataCell, { width: colWidth }]}>
-                        {cell}
-                      </Text>
-                    ))}
+                    {row.map((cell, cIdx) => {
+                      const tokens = sec.tableRowTokens?.[rIdx]?.[cIdx] || parseInlineFormatting(cell);
+                      return (
+                        <View key={cIdx} style={{ width: colWidth, paddingRight: 4 }}>
+                          <Text style={styles.tableDataCell}>
+                            {tokens.map((tok, tIdx) => (
+                              <Text
+                                key={tIdx}
+                                style={
+                                  tok.bold
+                                    ? styles.bold
+                                    : tok.italic
+                                    ? styles.italic
+                                    : tok.code
+                                    ? styles.inlineCode
+                                    : undefined
+                                }
+                              >
+                                {tok.text}
+                              </Text>
+                            ))}
+                          </Text>
+                        </View>
+                      );
+                    })}
                   </View>
                 ))}
+              </View>
+            );
+          }
+
+          case 'diagram': {
+            return (
+              <View key={idx} style={styles.diagramCard} wrap={false}>
+                <View style={styles.diagramHeader}>
+                  <Text style={styles.diagramBadge}>
+                    {cleanPdfText(sec.title || "DIAGRAMA CONCEPTUAL / ARQUITECTURA")}
+                  </Text>
+                  <Text style={styles.diagramHeaderRight}>
+                    Mermaid Engine
+                  </Text>
+                </View>
+                <View style={styles.diagramBody}>
+                  {sec.diagramImageUrl ? (
+                    <Image src={sec.diagramImageUrl} style={styles.diagramImage} />
+                  ) : (
+                    <View style={styles.diagramFallbackContainer}>
+                      <Text style={styles.diagramFallbackTitle}>
+                        Código del Diagrama:
+                      </Text>
+                      <Text style={styles.diagramFallbackText}>
+                        {sec.diagramCode || "Diagrama no disponible"}
+                      </Text>
+                    </View>
+                  )}
+                </View>
               </View>
             );
           }
@@ -951,9 +1082,16 @@ function SectionRenderer({
   );
 }
 
-export function EditorialBookPDF({ bookData }: { bookData: EditorialBookData }) {
+export function EditorialBookPDF({ 
+  bookData, 
+  mermaidImages 
+}: { 
+  bookData: EditorialBookData; 
+  mermaidImages?: Record<string, string>;
+}) {
   const { colors, codePalette } = resolveEditorialTheme(bookData.themeConfig);
   const styles = getEditorialStyles(colors);
+  const resolvedMermaid = mermaidImages || bookData.mermaidImages;
 
   const cleanProjectName = cleanPdfText(bookData.projectName) || "Libro Técnico";
   const cleanSubtitle = cleanPdfText(bookData.subtitle || "Compendio estructurado de lecciones, fundamentos teóricos y ejercicios prácticos de ingeniería.");
@@ -1109,7 +1247,7 @@ export function EditorialBookPDF({ bookData }: { bookData: EditorialBookData }) 
           </View>
 
           <SectionRenderer 
-            sections={parseMarkdownToEditorialSections(intro.content)} 
+            sections={parseMarkdownToEditorialSections(intro.content, resolvedMermaid)} 
             styles={styles} 
             codeTheme={codePalette} 
           />
@@ -1131,7 +1269,7 @@ export function EditorialBookPDF({ bookData }: { bookData: EditorialBookData }) 
         const chTitleClean = cleanPdfText(ch.title);
         const chDescClean = cleanPdfText(ch.description || "");
         const chapterTargetId = `chapter-${ch.number}`;
-        const introSections = ch.introContent ? parseMarkdownToEditorialSections(ch.introContent) : [];
+        const introSections = ch.introContent ? parseMarkdownToEditorialSections(ch.introContent, resolvedMermaid) : [];
 
         return (
           <React.Fragment key={ch.number}>
@@ -1201,7 +1339,7 @@ export function EditorialBookPDF({ bookData }: { bookData: EditorialBookData }) 
             {ch.lessons.map((les) => {
               const lesTitleClean = cleanPdfText(les.title);
               const lessonTargetId = `lesson-${ch.number}-${les.number.replace(/[^a-zA-Z0-9]/g, '_')}`;
-              const lessonSections = parseMarkdownToEditorialSections(les.content);
+              const lessonSections = parseMarkdownToEditorialSections(les.content, resolvedMermaid);
 
               return (
                 <Page 

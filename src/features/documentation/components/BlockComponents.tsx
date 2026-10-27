@@ -210,6 +210,7 @@ export const THEME_STYLES: Record<string, {
   headerText: string;
   border: string;
   textColorHex: string;
+  bgColorHex: string;
   css: string;
 }> = {
   "github-dark": {
@@ -220,6 +221,7 @@ export const THEME_STYLES: Record<string, {
     headerText: "text-[#8b949e]",
     border: "border-[#30363d]",
     textColorHex: "#c9d1d9",
+    bgColorHex: "#0d1117",
     css: `
       .theme-github-dark .token.comment { color: #8b949e; font-style: italic; }
       .theme-github-dark .token.keyword { color: #ff7b72; font-weight: bold; }
@@ -241,6 +243,7 @@ export const THEME_STYLES: Record<string, {
     headerText: "text-[#57606a]",
     border: "border-[#d0d7de]",
     textColorHex: "#24292f",
+    bgColorHex: "#ffffff",
     css: `
       .theme-github-light .token.comment { color: #6e7781; font-style: italic; }
       .theme-github-light .token.keyword { color: #cf222e; font-weight: bold; }
@@ -262,6 +265,7 @@ export const THEME_STYLES: Record<string, {
     headerText: "text-[#6272a4]",
     border: "border-[#44475a]",
     textColorHex: "#f8f8f2",
+    bgColorHex: "#282a36",
     css: `
       .theme-dracula .token.comment { color: #6272a4; font-style: italic; }
       .theme-dracula .token.keyword { color: #ff79c6; }
@@ -283,6 +287,7 @@ export const THEME_STYLES: Record<string, {
     headerText: "text-[#4c566a]",
     border: "border-[#3b4252]",
     textColorHex: "#d8dee9",
+    bgColorHex: "#2e3440",
     css: `
       .theme-nord .token.comment { color: #4c566a; font-style: italic; }
       .theme-nord .token.keyword { color: #81a1c1; }
@@ -304,6 +309,7 @@ export const THEME_STYLES: Record<string, {
     headerText: "text-[#565f89]",
     border: "border-[#24283b]",
     textColorHex: "#a9b1d6",
+    bgColorHex: "#1a1b26",
     css: `
       .theme-tokyo-night .token.comment { color: #565f89; font-style: italic; }
       .theme-tokyo-night .token.keyword { color: #9abdf5; }
@@ -325,6 +331,7 @@ export const THEME_STYLES: Record<string, {
     headerText: "text-[#62605c]",
     border: "border-[#1f2430]",
     textColorHex: "#b3b1ad",
+    bgColorHex: "#0a0e14",
     css: `
       .theme-ayu-dark .token.comment { color: #5c6773; font-style: italic; }
       .theme-ayu-dark .token.keyword { color: #ff7733; }
@@ -346,6 +353,7 @@ export const THEME_STYLES: Record<string, {
     headerText: "text-[#5c6370]",
     border: "border-[#1e2024]",
     textColorHex: "#abb2bf",
+    bgColorHex: "#282c34",
     css: `
       .theme-one-dark-pro .token.comment { color: #5c6370; font-style: italic; }
       .theme-one-dark-pro .token.keyword { color: #c678dd; }
@@ -367,6 +375,7 @@ export const THEME_STYLES: Record<string, {
     headerText: "text-[#a0a1a7]",
     border: "border-[#e5e5e6]",
     textColorHex: "#383a42",
+    bgColorHex: "#fafafa",
     css: `
       .theme-one-light .token.comment { color: #a0a1a7; font-style: italic; }
       .theme-one-light .token.keyword { color: #a626a4; }
@@ -388,6 +397,7 @@ export const THEME_STYLES: Record<string, {
     headerText: "text-[#75715e]",
     border: "border-[#3e3d32]",
     textColorHex: "#f8f8f2",
+    bgColorHex: "#272822",
     css: `
       .theme-monokai .token.comment { color: #75715e; font-style: italic; }
       .theme-monokai .token.keyword { color: #f92672; }
@@ -409,6 +419,7 @@ export const THEME_STYLES: Record<string, {
     headerText: "text-[#585b70]",
     border: "border-[#313244]",
     textColorHex: "#cdd6f4",
+    bgColorHex: "#1e1e2e",
     css: `
       .theme-catppuccin-mocha .token.comment { color: #6c7086; font-style: italic; }
       .theme-catppuccin-mocha .token.keyword { color: #cba6f7; }
@@ -567,14 +578,18 @@ export function CodeBlock({
         activeStyle.bg,
         activeStyle.text,
         activeStyle.border,
-        isFullscreen ? "w-full h-full p-6 md:p-8 bg-zinc-950" : "my-6 shadow-lg group"
+        isFullscreen ? "w-full h-full p-6 md:p-8" : "my-6 shadow-lg group"
       )}
+      style={isFullscreen ? { backgroundColor: activeStyle.bgColorHex || "#282c34" } : undefined}
     >
       <style dangerouslySetInnerHTML={{ __html: `
         ${activeStyle.css}
         pre[class*="language-"], code[class*="language-"], .token.punctuation, .token.operator {
           background: transparent !important;
           color: ${activeStyle.textColorHex} !important;
+        }
+        :fullscreen, ::backdrop {
+          background-color: ${activeStyle.bgColorHex || "#282c34"} !important;
         }
       ` }} />
 
@@ -832,14 +847,18 @@ export function CodeExplainBlock({
         activeStyle.bg,
         activeStyle.text,
         activeStyle.border,
-        isFullscreen ? "w-full h-full p-6 md:p-8 bg-zinc-950 border-none" : "min-h-[480px] md:h-[500px]"
+        isFullscreen ? "w-full h-full p-6 md:p-8 border-none" : "min-h-[480px] md:h-[500px]"
       )}
+      style={isFullscreen ? { backgroundColor: activeStyle.bgColorHex || "#282c34" } : undefined}
     >
       <style dangerouslySetInnerHTML={{ __html: `
         ${activeStyle.css}
         pre[class*="language-"], code[class*="language-"], .token.punctuation, .token.operator {
           background: transparent !important;
           color: ${activeStyle.textColorHex} !important;
+        }
+        :fullscreen, ::backdrop {
+          background-color: ${activeStyle.bgColorHex || "#282c34"} !important;
         }
       ` }} />
 
